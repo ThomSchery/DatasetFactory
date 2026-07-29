@@ -13,3 +13,5 @@ Use native Instatic tools against the live Site workspace. Never mutate SQLite d
 9. Never publish unless the user explicitly requests it.
 
 The adapter must be idempotent. Namespace owned selectors and assets. Re-importing one package version updates owned resources instead of duplicating them or touching unrelated classes.
+
+For versioned experiments, use Instatic's canonical SiteBundle export/import and the repository's `design:iterations` commands. Never use a copied runtime database as an iteration artifact. On a fresh installation, first detect whether these commands exist; if absent, preserve the same package contract manually rather than modifying Instatic internals without approval.

@@ -1,6 +1,6 @@
 ---
 name: immersive-ui-factory
-description: Create reusable, asset-driven visual systems and immersive interfaces from application screenshots, product context, existing designs, or individual UI assets. Use when Codex should analyze visual references, dynamically plan an asset-production workflow, guide a user checkpoint by checkpoint, generate or validate scalable panel/button/input frames, prepare 9-slice assets, create theme variants, design cinematic UI sequences, package a framework-neutral theme, or adapt that package to Instatic or another frontend. Do not assume a fixed aesthetic, component list, image provider, target framework, or mandatory concept-render phase.
+description: Create reusable, asset-driven visual systems and immersive interfaces from application screenshots, product context, existing designs, or individual UI assets. Use when Codex should analyze visual references, dynamically plan an asset-production workflow, guide a user checkpoint by checkpoint, generate or validate scalable panel/button/input frames, prepare 9-slice assets, create theme variants, run and compare versioned design iterations, select a final direction, package a framework-neutral theme, or adapt that package to Instatic or another frontend. Do not assume a fixed aesthetic, component list, image provider, target framework, or mandatory concept-render phase.
 ---
 
 # Immersive UI Factory
@@ -49,6 +49,10 @@ Build a framework-neutral theme package first. Load a target reference only when
 - Other frameworks: inspect their native tokens, components, asset loader, and responsive primitives before defining an adapter.
 
 An adapter may transform the package but must not become its source of truth.
+
+## Iteration laboratory
+
+When the user wants alternatives, comparison, or final-direction selection, read [references/design-iterations.md](references/design-iterations.md). Treat each variant as an independently restorable package. Evaluate against declared criteria and evidence; do not select a winner from visual preference alone.
 
 ## Quality gate
 
