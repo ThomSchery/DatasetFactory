@@ -1,0 +1,22 @@
+# Local and generated work
+tmp/
+.tmp-*
+
+# Source/reference materials are kept locally and can exceed GitHub limits.
+doc/Materials for analyze/
+
+# Common local configuration and build output
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Immersive UI Factory"
+  short_description: "Build reusable asset-driven visual systems"
+  default_prompt: "Use $immersive-ui-factory to analyze this interface and guide me through producing a reusable visual system."
+
+policy:
+  allow_implicit_invocation: true
