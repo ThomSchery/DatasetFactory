@@ -1,0 +1,53 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-background-primary-default);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-sans);
+  font-size: 100%;
+}
+
+body {
+  min-width: var(--workspace-min-width);
+  min-height: 100vh;
+  margin: var(--size-none);
+  background: var(--color-background-primary-default);
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-standard);
+  text-align: left;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable);
+  outline-offset: var(--focus-ring-offset);
+}
+
+::selection {
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-text-strong-default);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+

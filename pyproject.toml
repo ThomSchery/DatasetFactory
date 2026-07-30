@@ -1,0 +1,47 @@
+[project]
+name = "datasetfactory"
+version = "0.1.0"
+description = "Local-first OCR dataset preparation application"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic==1.18.5",
+  "fastapi==0.141.1",
+  "opencv-python-headless==4.13.0.92",
+  "pillow==12.3.0",
+  "pydantic-settings==2.14.2",
+  "sqlalchemy==2.0.51",
+  "uvicorn==0.52.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx2==2.9.1",
+  "mypy==2.3.0",
+  "pip-audit==2.10.1",
+  "pytest==9.1.1",
+  "ruff==0.16.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+addopts = "-ra --basetemp=D:/my/Projects/DatasetFactory/tmp/pytest"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["backend/app", "backend/tests"]
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+ignore_missing_imports = true

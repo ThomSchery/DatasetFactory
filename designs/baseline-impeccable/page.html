@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home — Impeccable</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="./page.css">
+</head>
+<body>
+    <div class="df-app df-impeccable">
+      <aside class="df-sidebar">
+        <div class="df-brand">
+          <div class="df-brand-mark">
+            DF
+          </div>
+          <span>DatasetFactory</span>
+        </div>
+        <div class="df-workspace">
+          <p class="df-eyebrow">Workspace</p>
+          <strong>Local datasets</strong>
+        </div>
+        <nav class="df-nav" aria-label="Główna nawigacja">
+          <a href="#" target="_self" aria-current="page">
+            <span class="df-nav-icon">01</span>
+            <span class="df-nav-label">Dashboard</span>
+          </a>
+          <a href="#" target="_self">
+            <span class="df-nav-icon">02</span>
+            <span class="df-nav-label">Profile gier</span>
+          </a>
+          <a href="#" target="_self">
+            <span class="df-nav-icon">03</span>
+            <span class="df-nav-label">Materiały</span>
+          </a>
+          <a href="#" target="_self">
+            <span class="df-nav-icon">04</span>
+            <span class="df-nav-label">Anotacje</span>
+          </a>
+          <a href="#" target="_self">
+            <span class="df-nav-icon">05</span>
+            <span class="df-nav-label">Eksporty</span>
+          </a>
+        </nav>
+        <div class="df-sidebar-foot">
+          GPU offline
+          <br>
+          Modele uruchamiane lokalnie
+        </div>
+      </aside>
+      <main class="df-main">
+        <header class="df-topbar">
+          <div class="df-breadcrumb">
+            Workspace / 
+            <strong>Dashboard</strong>
+          </div>
+          <div class="df-status">
+            <span class="df-status-dot"></span>
+             System gotowy
+          </div>
+        </header>
+        <div class="df-content">
+          <section class="df-header">
+            <div>
+              <div class="df-kicker">
+                Nowy dataset
+              </div>
+              <h1>Zamień gameplay w dane treningowe.</h1>
+              <p class="df-lede">Zdefiniuj HUD dla konkretnej gry, zaimportuj nagranie i uruchom autolabeling przez OCR oraz SAM 3. Wyniki zatwierdzisz przed eksportem.</p>
+            </div>
+            <button type="button" class="df-secondary">Otwórz ostatni projekt</button>
+          </section>
+          <section class="df-grid" aria-label="Rozpoczęcie pracy">
+            <article class="df-card df-card-primary">
+              <div class="df-step">
+                Najpierw
+                01
+              </div>
+              <h2>Utwórz profil gry</h2>
+              <p>Zdefiniuj regiony HUD, klasy tekstowe, liczby — również ujemne — oraz elementy specyficzne dla gry, takie jak health i armour.</p>
+              <div class="df-card-actions">
+                <button type="button" class="df-button">Nowy profil gry</button>
+                <span class="df-hint">około 3 min</span>
+              </div>
+            </article>
+            <article class="df-card">
+              <div class="df-step">
+                Następnie
+                02
+              </div>
+              <h2>Zaimportuj wideo</h2>
+              <p>Dodaj gameplay, wybierz profil gry i częstotliwość próbkowania. Domyślnie aplikacja wycina jedną klatkę na sekundę.</p>
+              <div class="df-card-actions">
+                <button type="button" class="df-button df-button-muted">Wybierz plik wideo</button>
+                <span class="df-hint">MP4 · MKV · MOV</span>
+              </div>
+            </article>
+          </section>
+          <section class="df-pipeline">
+            <div class="df-section-head">
+              <h2>Pipeline autolabelingu</h2>
+              <span class="df-badge">OCR + SAM 3</span>
+            </div>
+            <div class="df-flow">
+              <div class="df-flow-item">
+                <span class="df-flow-num">01</span>
+                <strong>Próbkowanie</strong>
+                <span>Klatka co 1 s</span>
+              </div>
+              <div class="df-flow-item">
+                <span class="df-flow-num">02</span>
+                <strong>Regiony HUD</strong>
+                <span>Per profil gry</span>
+              </div>
+              <div class="df-flow-item">
+                <span class="df-flow-num">03</span>
+                <strong>OCR</strong>
+                <span>Tekst i liczby</span>
+              </div>
+              <div class="df-flow-item">
+                <span class="df-flow-num">04</span>
+                <strong>SAM 3</strong>
+                <span>Maski i tracking</span>
+              </div>
+              <div class="df-flow-item">
+                <span class="df-flow-num">05</span>
+                <strong>Weryfikacja</strong>
+                <span>Korekta i eksport</span>
+              </div>
+            </div>
+            <div class="df-models">
+              <span class="df-chip">negative-number</span>
+              <span class="df-chip">health</span>
+              <span class="df-chip">armour</span>
+              <span class="df-chip">letters A–Z</span>
+              <span class="df-chip">digits 0–9</span>
+              <span class="df-chip">game-specific classes</span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+</body>
+</html>

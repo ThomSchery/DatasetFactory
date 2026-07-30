@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "glass-control-v2",
+  "mode": "operate",
+  "tokens": {
+    "color": {
+      "canvas": "#edf4f7",
+      "glass": "rgba(255,255,255,.58)",
+      "glassStrong": "rgba(255,255,255,.82)",
+      "ink": "#142238",
+      "muted": "#64738a",
+      "mint": "#22b895",
+      "mintStrong": "#0a8d73",
+      "ice": "#dcecff",
+      "warning": "#b47717",
+      "stroke": "rgba(255,255,255,.86)"
+    },
+    "type": { "ui": "Inter, ui-sans-serif, system-ui, sans-serif" },
+    "radius": { "control": 14, "panel": 24, "shell": 30 },
+    "blur": { "panel": 24, "shell": 32 }
+  },
+  "adapter": { "target": "Instatic", "selectorNamespace": "gcv2-", "assets": [] }
+}

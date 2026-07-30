@@ -1,0 +1,753 @@
+{
+  "schema_version": "tk003-ocr-evaluation-observation-v1",
+  "evaluator_version": "ocr-evaluator-v1",
+  "fixture_kind": "synthetic",
+  "fixture_sha256": "7195b86c23e5f582db9e4a2b32bc2d2c210abfa262b34f05ba2dadb83f67287b",
+  "runtime": {
+    "engine_id": "tesseract",
+    "engine_version": "v5.5.3.20260724",
+    "runtime_sha256": "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420",
+    "model_sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "config_hash": "a292adef2584c495e4a35050bf8672537ec1ea9413560324326e8cca46f5550f",
+    "experimental": true,
+    "quality_gate": "failed"
+  },
+  "thresholds": {
+    "char_accuracy": 0.98,
+    "exact_text_crop_rate": 0.9,
+    "bbox_precision": 0.9,
+    "bbox_recall": 0.9,
+    "exact_char_bbox_crop_rate": 0.9,
+    "iou_at_0_90_rate": 0.9,
+    "bbox_match_iou": 0.5,
+    "exact_bbox_iou": 0.9
+  },
+  "expected_quality_gate": "failed",
+  "observations": [
+    {
+      "id": "health",
+      "text": "HP100",
+      "characters": [
+        {
+          "char": "H",
+          "bbox": [
+            26,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.98171677
+        },
+        {
+          "char": "P",
+          "bbox": [
+            89,
+            14,
+            24,
+            36
+          ],
+          "confidence": 0.98934311
+        },
+        {
+          "char": "1",
+          "bbox": [
+            150,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.9891932699999999
+        },
+        {
+          "char": "0",
+          "bbox": [
+            210,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.9876319100000001
+        },
+        {
+          "char": "0",
+          "bbox": [
+            272,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.9682030500000001
+        }
+      ]
+    },
+    {
+      "id": "armour",
+      "text": "ARO75",
+      "characters": [
+        {
+          "char": "A",
+          "bbox": [
+            23,
+            14,
+            31,
+            36
+          ],
+          "confidence": 0.98470428
+        },
+        {
+          "char": "R",
+          "bbox": [
+            89,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.99032394
+        },
+        {
+          "char": "O",
+          "bbox": [
+            148,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.19730606
+        },
+        {
+          "char": "7",
+          "bbox": [
+            212,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.98645027
+        },
+        {
+          "char": "5",
+          "bbox": [
+            275,
+            14,
+            24,
+            37
+          ],
+          "confidence": 0.9873398600000001
+        }
+      ]
+    },
+    {
+      "id": "negative",
+      "text": "25",
+      "characters": [
+        {
+          "char": "2",
+          "bbox": [
+            30,
+            14,
+            83,
+            37
+          ],
+          "confidence": 0.49108028
+        },
+        {
+          "char": "5",
+          "bbox": [
+            151,
+            14,
+            24,
+            37
+          ],
+          "confidence": 0.96506264
+        }
+      ]
+    },
+    {
+      "id": "score",
+      "text": "SCORE9Q",
+      "characters": [
+        {
+          "char": "S",
+          "bbox": [
+            26,
+            14,
+            25,
+            38
+          ],
+          "confidence": 0.9876316799999999
+        },
+        {
+          "char": "C",
+          "bbox": [
+            87,
+            14,
+            25,
+            38
+          ],
+          "confidence": 0.98790421
+        },
+        {
+          "char": "O",
+          "bbox": [
+            148,
+            14,
+            29,
+            38
+          ],
+          "confidence": 0.98686417
+        },
+        {
+          "char": "R",
+          "bbox": [
+            213,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.99040031
+        },
+        {
+          "char": "E",
+          "bbox": [
+            276,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.98970482
+        },
+        {
+          "char": "9",
+          "bbox": [
+            302,
+            14,
+            20,
+            38
+          ],
+          "confidence": 0.89373741
+        },
+        {
+          "char": "Q",
+          "bbox": [
+            335,
+            14,
+            26,
+            37
+          ],
+          "confidence": 0.9277196499999999
+        }
+      ]
+    },
+    {
+      "id": "level",
+      "text": "LEVEL/7",
+      "characters": [
+        {
+          "char": "L",
+          "bbox": [
+            28,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.98173569
+        },
+        {
+          "char": "E",
+          "bbox": [
+            90,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.98653908
+        },
+        {
+          "char": "V",
+          "bbox": [
+            147,
+            14,
+            31,
+            36
+          ],
+          "confidence": 0.990364
+        },
+        {
+          "char": "E",
+          "bbox": [
+            214,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.98863174
+        },
+        {
+          "char": "L",
+          "bbox": [
+            276,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.98911926
+        },
+        {
+          "char": "/",
+          "bbox": [
+            299,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.92888779
+        },
+        {
+          "char": "7",
+          "bbox": [
+            336,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.86919662
+        }
+      ]
+    },
+    {
+      "id": "ammo",
+      "text": "AMMO42",
+      "characters": [
+        {
+          "char": "A",
+          "bbox": [
+            23,
+            14,
+            31,
+            36
+          ],
+          "confidence": 0.9871736900000001
+        },
+        {
+          "char": "M",
+          "bbox": [
+            86,
+            14,
+            29,
+            36
+          ],
+          "confidence": 0.99019432
+        },
+        {
+          "char": "M",
+          "bbox": [
+            148,
+            14,
+            29,
+            36
+          ],
+          "confidence": 0.99024422
+        },
+        {
+          "char": "O",
+          "bbox": [
+            210,
+            14,
+            29,
+            38
+          ],
+          "confidence": 0.9885907
+        },
+        {
+          "char": "4",
+          "bbox": [
+            272,
+            14,
+            29,
+            36
+          ],
+          "confidence": 0.9688588
+        },
+        {
+          "char": "2",
+          "bbox": [
+            337,
+            14,
+            24,
+            37
+          ],
+          "confidence": 0.98887398
+        }
+      ]
+    },
+    {
+      "id": "xp",
+      "text": "XP001",
+      "characters": [
+        {
+          "char": "X",
+          "bbox": [
+            23,
+            14,
+            30,
+            36
+          ],
+          "confidence": 0.98486122
+        },
+        {
+          "char": "P",
+          "bbox": [
+            89,
+            14,
+            24,
+            36
+          ],
+          "confidence": 0.9886380800000001
+        },
+        {
+          "char": "0",
+          "bbox": [
+            148,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.8655024
+        },
+        {
+          "char": "0",
+          "bbox": [
+            210,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.9080124700000001
+        },
+        {
+          "char": "1",
+          "bbox": [
+            274,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.9865731
+        }
+      ]
+    },
+    {
+      "id": "wave",
+      "text": "WAVE3",
+      "characters": [
+        {
+          "char": "W",
+          "bbox": [
+            24,
+            14,
+            29,
+            36
+          ],
+          "confidence": 0.9894110899999999
+        },
+        {
+          "char": "A",
+          "bbox": [
+            85,
+            14,
+            31,
+            36
+          ],
+          "confidence": 0.99033157
+        },
+        {
+          "char": "V",
+          "bbox": [
+            147,
+            14,
+            31,
+            36
+          ],
+          "confidence": 0.9898272699999999
+        },
+        {
+          "char": "E",
+          "bbox": [
+            214,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.9824076100000001
+        },
+        {
+          "char": "3",
+          "bbox": [
+            275,
+            14,
+            24,
+            38
+          ],
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "id": "kills",
+      "text": "KILLS8",
+      "characters": [
+        {
+          "char": "K",
+          "bbox": [
+            27,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.98905037
+        },
+        {
+          "char": "I",
+          "bbox": [
+            89,
+            14,
+            23,
+            36
+          ],
+          "confidence": 0.9846231799999999
+        },
+        {
+          "char": "L",
+          "bbox": [
+            152,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.9864053300000001
+        },
+        {
+          "char": "L",
+          "bbox": [
+            214,
+            14,
+            22,
+            36
+          ],
+          "confidence": 0.9878026599999999
+        },
+        {
+          "char": "S",
+          "bbox": [
+            274,
+            14,
+            25,
+            38
+          ],
+          "confidence": 0.9903593399999999
+        },
+        {
+          "char": "8",
+          "bbox": [
+            336,
+            14,
+            25,
+            38
+          ],
+          "confidence": 0.9658209200000001
+        }
+      ]
+    },
+    {
+      "id": "mixed",
+      "text": "A1B2C3",
+      "characters": [
+        {
+          "char": "A",
+          "bbox": [
+            23,
+            14,
+            31,
+            36
+          ],
+          "confidence": 0.9821202099999999
+        },
+        {
+          "char": "1",
+          "bbox": [
+            88,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.82488167
+        },
+        {
+          "char": "B",
+          "bbox": [
+            151,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.93513115
+        },
+        {
+          "char": "2",
+          "bbox": [
+            213,
+            14,
+            24,
+            37
+          ],
+          "confidence": 0.98900215
+        },
+        {
+          "char": "C",
+          "bbox": [
+            273,
+            14,
+            25,
+            38
+          ],
+          "confidence": 0.98819626
+        },
+        {
+          "char": "3",
+          "bbox": [
+            337,
+            14,
+            24,
+            38
+          ],
+          "confidence": 0.93574623
+        }
+      ]
+    },
+    {
+      "id": "ratio",
+      "text": "77/100",
+      "characters": [
+        {
+          "char": "7",
+          "bbox": [
+            26,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.9942408
+        },
+        {
+          "char": "7",
+          "bbox": [
+            88,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.99557007
+        },
+        {
+          "char": "/",
+          "bbox": [
+            149,
+            14,
+            25,
+            45
+          ],
+          "confidence": 0.9898000299999999
+        },
+        {
+          "char": "1",
+          "bbox": [
+            212,
+            14,
+            25,
+            36
+          ],
+          "confidence": 0.99392616
+        },
+        {
+          "char": "0",
+          "bbox": [
+            272,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.99184357
+        },
+        {
+          "char": "0",
+          "bbox": [
+            334,
+            14,
+            28,
+            38
+          ],
+          "confidence": 0.9815985899999999
+        }
+      ]
+    }
+  ],
+  "evaluation": {
+    "quality_gate": "failed",
+    "metrics": {
+      "crop_count": 11,
+      "expected_character_count": 59,
+      "observed_character_count": 60,
+      "edit_count": 4,
+      "char_accuracy": 0.9322033898305084,
+      "exact_text_crop_rate": 0.6363636363636364,
+      "bbox_precision": 0.9166666666666666,
+      "bbox_recall": 0.9322033898305084,
+      "exact_char_bbox_crop_rate": 0.6363636363636364,
+      "iou_at_0_90_rate": 0.9322033898305084,
+      "iou_minimum": 0.0,
+      "iou_p10": 0.9253561253561253,
+      "iou_p25": 0.96,
+      "iou_p50": 0.9655172413793104,
+      "iou_p75": 1.0,
+      "iou_p90": 1.0
+    },
+    "checks": [
+      {
+        "metric": "char_accuracy",
+        "value": 0.9322033898305084,
+        "minimum": 0.98,
+        "passed": false
+      },
+      {
+        "metric": "exact_text_crop_rate",
+        "value": 0.6363636363636364,
+        "minimum": 0.9,
+        "passed": false
+      },
+      {
+        "metric": "bbox_precision",
+        "value": 0.9166666666666666,
+        "minimum": 0.9,
+        "passed": true
+      },
+      {
+        "metric": "bbox_recall",
+        "value": 0.9322033898305084,
+        "minimum": 0.9,
+        "passed": true
+      },
+      {
+        "metric": "exact_char_bbox_crop_rate",
+        "value": 0.6363636363636364,
+        "minimum": 0.9,
+        "passed": false
+      },
+      {
+        "metric": "iou_at_0_90_rate",
+        "value": 0.9322033898305084,
+        "minimum": 0.9,
+        "passed": true
+      }
+    ]
+  }
+}

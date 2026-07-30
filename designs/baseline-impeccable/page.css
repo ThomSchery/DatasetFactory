@@ -1,0 +1,1210 @@
+/* Extracted from Instatic page 'impeccable' (Home — Impeccable).
+   Source: D:/my/Projects/Instatic/.tmp/dev.db  page updated_at=2026-07-29 10:29:33 status=draft
+   Generated artifact — do not hand-edit; re-run extract.ts instead. */
+
+/* ---------- colour + typography tokens (site settings) ---------- */
+:root {
+  --df-canvas: #090B10;
+  --df-surface: #11141B;
+  --df-surface-raised: #171B24;
+  --df-border: #2A303C;
+  --df-text: #F5F7FA;
+  --df-text-muted: #929AA8;
+  --df-accent: #43E7C3;
+  --df-accent-strong: #18BFA1;
+  --df-info: #6EA8FE;
+  --df-warning: #F5B942;
+  --df-danger: #FF667D;
+  --color-background-primary-default: hsl(222 9% 10%);
+  --color-surface-neutral-default: hsl(222 10% 14%);
+  --color-surface-neutral-raised: hsl(222 11% 18%);
+  --color-stroke-weak-default: hsl(216 18% 92% / 0.12);
+  --color-stroke-strong-default: hsl(216 18% 82%);
+  --color-text-strong-default: hsl(216 22% 96%);
+  --color-text-weak-default: hsl(216 10% 70%);
+  --color-fill-brand-default: hsl(190 76% 56%);
+  --color-fill-brand-hover: hsl(190 76% 56% / 0.8);
+  --color-status-success-default: hsl(150 62% 52%);
+  --color-status-warning-default: hsl(40 84% 58%);
+  --color-status-error-default: hsl(355 78% 64%);
+  --color-overlay-scrim: hsl(222 9% 8% / 0.72);
+  --color-fill-brand-impeccable: hsl(24 84% 62%);
+  --gc-canvas: #13202d;
+  --gc-glass: rgba(24,38,52,.72);
+  --gc-glass-strong: rgba(28,43,58,.88);
+  --gc-ink: #edf7fb;
+  --gc-muted: #a9bac8;
+  --gc-mint: #45d5b4;
+  --gc-mint-strong: #75e1c7;
+  --gc-ice: #213b55;
+  --gc-warning: #f0bd5e;
+  --gc-stroke: rgba(215,235,245,.16);
+  --text-1-xs: clamp(10.13px, 10.13px + 1vw, 12.64px);
+  --text-1-s: clamp(13.5px, 13.5px + 1vw, 14.22px);
+  --text-1-m: clamp(16px, 16px + 1vw, 18px);
+  --text-1-l: clamp(18px, 18px + 1vw, 23.99px);
+  --text-1-xl: clamp(20.25px, 20.25px + 1vw, 31.98px);
+  --text-1-2xl: clamp(22.78px, 22.78px + 1vw, 42.63px);
+  --text-1-3xl: clamp(25.63px, 25.63px + 1vw, 56.83px);
+  --text-1-4xl: clamp(28.83px, 28.83px + 1vw, 75.76px);
+  --font-df-sans: "Inter", system-ui, sans-serif;
+  --font-df-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-df-ui: "Manrope", system-ui, sans-serif;
+}
+
+/* light values, kept for reference — the shell is dark by design */
+[data-theme="light"] {
+  --df-canvas: #090B10;
+  --df-surface: #11141B;
+  --df-surface-raised: #171B24;
+  --df-border: #2A303C;
+  --df-text: #F5F7FA;
+  --df-text-muted: #929AA8;
+  --df-accent: #43E7C3;
+  --df-accent-strong: #18BFA1;
+  --df-info: #6EA8FE;
+  --df-warning: #F5B942;
+  --df-danger: #FF667D;
+  --color-background-primary-default: hsl(222 9% 10%);
+  --color-surface-neutral-default: hsl(222 10% 14%);
+  --color-surface-neutral-raised: hsl(222 11% 18%);
+  --color-stroke-weak-default: hsl(216 18% 92% / 0.12);
+  --color-stroke-strong-default: hsl(216 18% 82%);
+  --color-text-strong-default: hsl(216 22% 96%);
+  --color-text-weak-default: hsl(216 10% 70%);
+  --color-fill-brand-default: hsl(190 76% 56%);
+  --color-fill-brand-hover: hsl(190 76% 56% / 0.8);
+  --color-status-success-default: hsl(150 62% 52%);
+  --color-status-warning-default: hsl(40 84% 58%);
+  --color-status-error-default: hsl(355 78% 64%);
+  --color-overlay-scrim: hsl(222 9% 8% / 0.72);
+  --color-fill-brand-impeccable: hsl(24 84% 62%);
+  --gc-canvas: #edf4f7;
+  --gc-glass: rgba(255,255,255,.58);
+  --gc-glass-strong: rgba(255,255,255,.82);
+  --gc-ink: #142238;
+  --gc-muted: #64738a;
+  --gc-mint: #22b895;
+  --gc-mint-strong: #0a8d73;
+  --gc-ice: #dcecff;
+  --gc-warning: #b47717;
+  --gc-stroke: rgba(255,255,255,.86);
+}
+
+/* ---------- global rules ---------- */
+:root {
+  --size-xs: 8px;
+  --size-sm: 16px;
+  --size-md: 24px;
+  --size-lg: 32px;
+  --size-xl: 48px;
+  --size-xxl: 64px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+  --shadow-elevation-low: 0 1px 2px -1px hsl(222 9% 4% / .48), 0 8px 24px -16px hsl(222 9% 4% / .72);
+  --shadow-elevation-high: 0 4px 8px -4px hsl(222 9% 4% / .56), 0 24px 48px -24px hsl(222 9% 4% / .8);
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin-top: 0px;
+  margin-right: 0px;
+  margin-bottom: 0px;
+  margin-left: 0px;
+  background: var(--color-background-primary-default);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-df-sans);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.df-workspace strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.df-nav a {
+  text-decoration-line: none;
+  text-decoration-thickness: initial;
+  text-decoration-style: initial;
+  text-decoration-color: initial;
+  padding-top: 10px;
+  padding-right: 12px;
+  padding-bottom: 10px;
+  padding-left: 12px;
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+  border-bottom-right-radius: 9px;
+  border-bottom-left-radius: 9px;
+  font-weight: 500;
+  display: flex;
+  row-gap: 10px;
+  column-gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  color: var(--color-text-weak-default);
+  padding: 0 var(--size-sm);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  gap: var(--size-xs);
+}
+
+.df-nav a:media:(max-width: 900px) {
+  justify-content: center;
+}
+.df-nav a[aria-current="page"] {
+  color: var(--color-text-strong-default);
+  background: var(--color-surface-neutral-raised);
+  box-shadow: inset 2px 0 0 var(--color-fill-brand-default);
+  font-weight: 600;
+}
+.df-breadcrumb strong {
+  color: var(--color-text-strong-default);
+}
+h1 {
+  margin-top: 10px;
+  margin-right: 0px;
+  margin-bottom: 8px;
+  margin-left: 0px;
+  margin: var(--size-xs) 0 var(--size-sm);
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.df-card h2 {
+  margin: var(--size-md) 0 var(--size-xs);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.df-card p {
+  margin-top: 0px;
+  margin-right: 0px;
+  margin-bottom: 0px;
+  margin-left: 0px;
+  color: var(--color-text-weak-default);
+  line-height: 1.5;
+  max-width: 50ch;
+}
+.df-section-head h2 {
+  margin-top: 0px;
+  margin-right: 0px;
+  margin-bottom: 0px;
+  margin-left: 0px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+.df-flow-item strong {
+  display: block;
+  margin-top: 9px;
+  margin-right: 0px;
+  margin-bottom: 5px;
+  margin-left: 0px;
+  margin: var(--size-xs) 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.df-flow-item span {
+  display: block;
+  color: var(--color-text-weak-default);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.df-brand span, .df-workspace, .df-nav-label, .df-sidebar-foot:media:(max-width: 900px) {
+  display: none;
+}
+.df-nav a:not([aria-current="page"]):media:(max-width: 620px) {
+  display: none;
+}
+.df-nav a:hover {
+  color: var(--color-text-strong-default);
+  background: var(--color-surface-neutral-raised);
+  text-decoration-line: underline;
+  text-decoration-thickness: initial;
+  text-decoration-style: initial;
+  text-decoration-color: initial;
+  text-underline-offset: 4px;
+}
+.df-nav a:focus-visible {
+  outline: 2px solid var(--color-fill-brand-default);
+  outline-offset: 2px;
+}
+.df-secondary, .df-button {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  padding: 0 var(--size-sm);
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.df-secondary:hover, .df-button:hover {
+  opacity: 0.8;
+}
+.df-secondary:focus-visible, .df-button:focus-visible {
+  outline: 2px solid var(--color-fill-brand-default);
+  outline-offset: 2px;
+}
+.df-impeccable .df-sidebar {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgb(28, 29, 33);
+  gap: var(--size-xl);
+}
+.df-impeccable .df-brand-mark {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  color: var(--variant-brand);
+  border-top-width: 1px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+  border-top-style: solid;
+  border-right-style: solid;
+  border-bottom-style: solid;
+  border-left-style: solid;
+  border-top-color: rgba(239, 142, 77, 0.48);
+  border-right-color: rgba(239, 142, 77, 0.48);
+  border-bottom-color: rgba(239, 142, 77, 0.48);
+  border-left-color: rgba(239, 142, 77, 0.48);
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  font-family: var(--font-df-ui);
+}
+.df-impeccable .df-workspace {
+  padding-top: 0px;
+  padding-right: 0px;
+  padding-bottom: 0px;
+  padding-left: 0px;
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  box-shadow: none;
+}
+.df-impeccable .df-eyebrow {
+  color: var(--color-text-weak-default);
+  font-family: var(--font-df-ui);
+  text-transform: none;
+  letter-spacing: 0px;
+}
+.df-impeccable .df-nav a {
+  font-family: var(--font-df-ui);
+}
+.df-impeccable .df-nav-icon {
+  color: var(--color-text-weak-default);
+  font-family: var(--font-df-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+.df-impeccable .df-nav a[aria-current="page"] {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(231, 234, 238, 0.08);
+  box-shadow: none;
+}
+.df-impeccable .df-nav a[aria-current="page"] .df-nav-icon {
+  color: var(--variant-brand);
+}
+.df-impeccable .df-nav a:hover {
+  text-decoration-line: none;
+  text-decoration-thickness: initial;
+  text-decoration-style: initial;
+  text-decoration-color: initial;
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(231, 234, 238, 0.06);
+}
+.df-impeccable .df-nav a:focus-visible, .df-impeccable .df-secondary:focus-visible, .df-impeccable .df-button:focus-visible {
+  outline-color: var(--variant-brand);
+}
+.df-impeccable .df-topbar {
+  background: var(--color-background-primary-default);
+}
+.df-impeccable .df-status {
+  font-family: var(--font-df-ui);
+}
+.df-impeccable .df-content {
+  padding-top: var(--size-xxl);
+}
+
+.df-impeccable .df-content:media:(max-width: 620px) {
+  padding-top: var(--size-xl);
+}
+.df-impeccable .df-header {
+  align-items: flex-start;
+  margin-bottom: var(--size-xxl);
+}
+
+.df-impeccable .df-header:media:(max-width: 620px) {
+  margin-bottom: var(--size-xl);
+}
+.df-impeccable .df-kicker {
+  color: var(--variant-brand);
+  font-family: var(--font-df-ui);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0px;
+  text-transform: none;
+}
+.df-impeccable h1 {
+  max-width: 18ch;
+  font-size: clamp(40px, 4.5vw, 56px);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  text-wrap-mode: initial;
+  text-wrap-style: balance;
+}
+
+.df-impeccable h1:media:(max-width: 620px) {
+  font-size: 38px;
+}
+.df-impeccable .df-lede {
+  max-width: 62ch;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.df-impeccable .df-secondary {
+  border-color: var(--color-stroke-weak-default);
+}
+.df-impeccable .df-secondary:hover {
+  opacity: 1;
+  border-color: var(--color-stroke-strong-default);
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(231, 234, 238, 0.05);
+}
+.df-impeccable .df-grid {
+  grid-template-columns: minmax(0px, 1.45fr) minmax(320px, 0.75fr);
+  gap: var(--size-lg);
+}
+
+.df-impeccable .df-grid:media:(max-width: 900px) {
+  grid-template-columns: 1fr;
+}
+.df-impeccable .df-card {
+  min-height: 288px;
+  padding: var(--size-lg);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+}
+
+.df-impeccable .df-card:media:(max-width: 620px) {
+  min-height: 280px;
+}
+.df-impeccable .df-card-primary {
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  background: var(--variant-warm-surface);
+  box-shadow: var(--shadow-elevation-high);
+}
+.df-impeccable .df-card-primary p {
+  color: var(--variant-warm-text);
+}
+.df-impeccable .df-card:not(.df-card-primary) {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  border: 1px solid var(--color-stroke-weak-default);
+  box-shadow: none;
+}
+
+.df-impeccable .df-card:not(.df-card-primary):media:(max-width: 900px) {
+  min-height: 240px;
+}
+.df-impeccable .df-step {
+  width: auto;
+  height: auto;
+  display: block;
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+  border-bottom-left-radius: 0px;
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  color: var(--variant-brand);
+  font: 600 13px/1.5 var(--font-df-ui);
+}
+.df-impeccable .df-card h2 {
+  margin-top: var(--size-sm);
+  font-size: 26px;
+  text-wrap-mode: initial;
+  text-wrap-style: balance;
+}
+.df-impeccable .df-card-actions {
+  position: static;
+  margin-top: auto;
+  padding-top: var(--size-lg);
+}
+.df-impeccable .df-button {
+  background: var(--variant-brand);
+  color: rgb(23, 25, 28);
+}
+.df-impeccable .df-button:hover {
+  opacity: 1;
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(239, 142, 77, 0.8);
+}
+.df-impeccable .df-button-muted {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  color: var(--color-text-strong-default);
+  border-color: var(--color-stroke-strong-default);
+}
+.df-impeccable .df-button-muted:hover {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(231, 234, 238, 0.06);
+}
+.df-impeccable .df-button:disabled, .df-impeccable .df-secondary:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+.df-impeccable .df-button[aria-busy="true"] {
+  cursor: wait;
+}
+.df-impeccable .df-pipeline {
+  margin-top: var(--size-xl);
+  padding: var(--size-lg) 0 0;
+  border-top: 1px solid var(--color-stroke-weak-default);
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+  border-bottom-left-radius: 0px;
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  box-shadow: none;
+}
+.df-impeccable .df-badge {
+  color: var(--variant-brand);
+  background: var(--variant-brand-soft);
+  font-family: var(--font-df-ui);
+}
+.df-impeccable .df-flow {
+  gap: var(--size-md);
+}
+
+.df-impeccable .df-flow:media:(max-width: 900px) {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.df-impeccable .df-flow:media:(max-width: 620px) {
+  grid-template-columns: 1fr;
+  gap: var(--size-sm);
+}
+.df-impeccable .df-flow-item {
+  padding: var(--size-sm) var(--size-sm) 0 0;
+  border-top: 2px solid var(--color-stroke-weak-default);
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+  border-bottom-left-radius: 0px;
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+}
+
+.df-impeccable .df-flow-item:media:(max-width: 620px) {
+  padding: var(--size-sm) 0 var(--size-sm) var(--size-sm);
+  border-top-width: 0px;
+  border-top-style: none;
+  border-top-color: currentcolor;
+  border-left: 2px solid var(--color-stroke-weak-default);
+}
+.df-impeccable .df-flow-item:nth-child(4) {
+  border-top-color: var(--variant-brand);
+}
+
+.df-impeccable .df-flow-item:nth-child(4):media:(max-width: 620px) {
+  border-left-color: var(--variant-brand);
+}
+.df-impeccable .df-flow-num {
+  color: var(--color-text-weak-default);
+  font-family: var(--font-df-ui);
+}
+.df-impeccable .df-flow-item strong {
+  margin: var(--size-sm) 0 var(--size-xs);
+}
+.df-impeccable .df-models {
+  margin-top: var(--size-lg);
+}
+.df-impeccable .df-chip {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  border: 1px solid var(--color-stroke-weak-default);
+}
+
+/* ---------- classes used by this page ---------- */
+.df-app {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: 240px minmax(0px, 1fr);
+  background: var(--color-background-primary-default);
+}
+
+.df-app:media:(max-width: 900px) {
+  grid-template-columns: 80px minmax(0px, 1fr);
+}
+
+.df-app:media:(max-width: 620px) {
+  display: block;
+}
+.df-sidebar {
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgb(13, 16, 22);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: var(--size-md);
+  border-right: 1px solid var(--color-stroke-weak-default);
+  background: var(--color-surface-neutral-default);
+  gap: var(--size-lg);
+}
+
+.df-sidebar:media:(max-width: 900px) {
+  padding-top: 14px;
+  padding-right: 12px;
+  padding-bottom: 14px;
+  padding-left: 12px;
+  padding: var(--size-sm);
+}
+
+.df-sidebar:media:(max-width: 620px) {
+  min-height: auto;
+  flex-direction: row;
+  align-items: center;
+  border-right-width: 0px;
+  border-right-style: none;
+  border-right-color: currentcolor;
+  height: 64px;
+  padding: var(--size-xs) var(--size-md);
+  border-bottom: 1px solid var(--color-stroke-weak-default);
+}
+.df-brand {
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  gap: var(--size-xs);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.df-brand-mark {
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+  border-bottom-right-radius: 9px;
+  border-bottom-left-radius: 9px;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  font-family: var(--font-df-mono);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-fill-brand-default);
+  color: var(--color-background-primary-default);
+  font-size: 12px;
+}
+.df-workspace {
+  padding-top: 12px;
+  padding-right: 12px;
+  padding-bottom: 12px;
+  padding-left: 12px;
+  border: 1px solid var(--df-border);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  padding: var(--size-sm);
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  box-shadow: var(--shadow-elevation-low);
+}
+.df-eyebrow {
+  margin-top: 0px;
+  margin-right: 0px;
+  margin-bottom: 6px;
+  margin-left: 0px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin: 0 0 var(--size-xs);
+  color: var(--color-text-weak-default);
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
+}
+.df-nav {
+  display: grid;
+  row-gap: 5px;
+  column-gap: 5px;
+  gap: var(--size-xs);
+}
+
+.df-nav:media:(max-width: 620px) {
+  margin-left: auto;
+  display: flex;
+}
+.df-nav-icon {
+  font-family: var(--font-df-mono);
+  text-align: center;
+  width: 24px;
+  color: var(--color-fill-brand-default);
+}
+.df-sidebar-foot {
+  margin-top: auto;
+  padding-top: var(--size-sm);
+  border-top: 1px solid var(--color-stroke-weak-default);
+  color: var(--color-text-weak-default);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.df-main {
+  min-width: 0px;
+}
+.df-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 var(--size-lg);
+  border-bottom: 1px solid var(--color-stroke-weak-default);
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(23, 25, 28, 0.88);
+}
+
+.df-topbar:media:(max-width: 620px) {
+  padding: 0 var(--size-md);
+}
+.df-breadcrumb {
+  color: var(--color-text-weak-default);
+  font-size: 14px;
+}
+.df-status {
+  display: flex;
+  align-items: center;
+  row-gap: 8px;
+  column-gap: 8px;
+  gap: var(--size-xs);
+  color: var(--color-text-weak-default);
+  font: 12px/1.5 var(--font-df-mono);
+}
+.df-status-dot {
+  border-top-left-radius: 50%;
+  border-top-right-radius: 50%;
+  border-bottom-right-radius: 50%;
+  border-bottom-left-radius: 50%;
+  width: 8px;
+  height: 8px;
+  background: var(--color-status-success-default);
+  box-shadow: rgba(57, 208, 133, 0.12) 0px 0px 0px 4px;
+}
+.df-content {
+  margin-top: 0px;
+  margin-right: auto;
+  margin-bottom: 0px;
+  margin-left: auto;
+  width: min(1200px, 100%);
+  padding: var(--size-xl) var(--size-lg) var(--size-xxl);
+}
+
+.df-content:media:(max-width: 620px) {
+  padding: var(--size-lg) var(--size-md) var(--size-xl);
+}
+.df-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--size-lg);
+  margin-bottom: var(--size-xl);
+}
+
+.df-header:media:(max-width: 620px) {
+  align-items: start;
+  flex-direction: column;
+  gap: var(--size-md);
+}
+.df-kicker {
+  text-transform: uppercase;
+  color: var(--color-fill-brand-default);
+  font: 600 12px/1.2 var(--font-df-mono);
+  letter-spacing: 0.05em;
+}
+.df-lede {
+  margin-top: 0px;
+  margin-right: 0px;
+  margin-bottom: 0px;
+  margin-left: 0px;
+  max-width: 65ch;
+  color: var(--color-text-weak-default);
+  line-height: 1.5;
+}
+.df-secondary {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  border-bottom-left-radius: 10px;
+  padding-top: 10px;
+  padding-right: 14px;
+  padding-bottom: 10px;
+  padding-left: 14px;
+  font-weight: 600;
+  border: 1px solid var(--color-stroke-strong-default);
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: transparent;
+  color: var(--color-text-strong-default);
+}
+.df-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0px, 1fr));
+  gap: var(--size-md);
+}
+
+.df-grid:media:(max-width: 900px) {
+  grid-template-columns: 1fr;
+}
+.df-card {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  border: 1px solid var(--df-border);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: 18px;
+  padding: var(--size-lg);
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-neutral-default);
+  min-height: 256px;
+  box-shadow: var(--shadow-elevation-low);
+}
+
+.df-card:media:(max-width: 620px) {
+  padding: var(--size-md);
+  min-height: 272px;
+}
+.df-card-primary {
+  border-top-color: rgba(67, 231, 195, 0.45);
+  border-right-color: rgba(67, 231, 195, 0.45);
+  border-bottom-color: rgba(67, 231, 195, 0.45);
+  border-left-color: rgba(67, 231, 195, 0.45);
+  border-top: 2px solid var(--color-fill-brand-default);
+  background: linear-gradient(180deg,hsl(190 76% 46% / .1),transparent 48%),var(--color-surface-neutral-default);
+}
+.df-step {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+  border-bottom-right-radius: 9px;
+  border-bottom-left-radius: 9px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--color-background-primary-default);
+  background: var(--color-fill-brand-default);
+  font: 700 12px/1.2 var(--font-df-mono);
+}
+.df-card-actions {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  row-gap: 12px;
+  column-gap: 12px;
+  left: var(--size-lg);
+  right: var(--size-lg);
+  bottom: var(--size-lg);
+  gap: var(--size-sm);
+}
+
+.df-card-actions:media:(max-width: 620px) {
+  left: var(--size-md);
+  right: var(--size-md);
+  bottom: var(--size-md);
+}
+.df-button {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  border-bottom-left-radius: 10px;
+  padding-top: 11px;
+  padding-right: 15px;
+  padding-bottom: 11px;
+  padding-left: 15px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+  border-top-style: solid;
+  border-right-style: solid;
+  border-bottom-style: solid;
+  border-left-style: solid;
+  border-top-color: transparent;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  background: var(--color-fill-brand-default);
+  color: var(--color-background-primary-default);
+  font-weight: 700;
+}
+.df-button-muted {
+  border: 1px solid var(--df-border);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  border-color: var(--color-stroke-strong-default);
+}
+.df-hint {
+  color: var(--color-text-weak-default);
+  font: 12px/1.5 var(--font-df-mono);
+}
+.df-pipeline {
+  border: 1px solid var(--df-border);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: 18px;
+  margin-top: var(--size-md);
+  padding: var(--size-lg);
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-neutral-default);
+  box-shadow: var(--shadow-elevation-low);
+}
+.df-section-head {
+  display: flex;
+  justify-content: space-between;
+  row-gap: 20px;
+  column-gap: 20px;
+  align-items: center;
+  gap: var(--size-md);
+  margin-bottom: var(--size-md);
+}
+.df-badge {
+  padding-top: 6px;
+  padding-right: 9px;
+  padding-bottom: 6px;
+  padding-left: 9px;
+  border-top-left-radius: 999px;
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+  border-bottom-left-radius: 999px;
+  padding: var(--size-xs) var(--size-sm);
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-strong-default);
+  background-image: initial;
+  background-position-x: initial;
+  background-position-y: initial;
+  background-size: initial;
+  background-repeat: initial;
+  background-attachment: initial;
+  background-origin: initial;
+  background-clip: initial;
+  background-color: rgba(58, 200, 228, 0.12);
+  font: 12px/1.2 var(--font-df-mono);
+}
+.df-flow {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  row-gap: 10px;
+  column-gap: 10px;
+  gap: var(--size-xs);
+}
+
+.df-flow:media:(max-width: 900px) {
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--size-sm);
+}
+
+.df-flow:media:(max-width: 620px) {
+  grid-template-columns: 1fr;
+}
+.df-flow-item {
+  min-width: 0px;
+  padding-top: 14px;
+  padding-right: 14px;
+  padding-bottom: 14px;
+  padding-left: 14px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  border: 1px solid var(--df-border);
+  padding: var(--size-sm);
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+}
+.df-flow-num {
+  color: var(--color-fill-brand-default);
+  font: 600 12px/1.2 var(--font-df-mono);
+}
+.df-models {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  column-gap: 8px;
+  margin-top: var(--size-md);
+  gap: var(--size-xs);
+}
+.df-chip {
+  padding-top: 7px;
+  padding-right: 10px;
+  padding-bottom: 7px;
+  padding-left: 10px;
+  border: 1px solid var(--df-border);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  border-bottom-left-radius: 8px;
+  padding: var(--size-xs) var(--size-sm);
+  border-top-width: 0px;
+  border-right-width: 0px;
+  border-bottom-width: 0px;
+  border-left-width: 0px;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-style: none;
+  border-left-style: none;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+  border-left-color: currentcolor;
+  border-image-source: none;
+  border-image-slice: 100%;
+  border-image-width: 1;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-radius: var(--radius-md);
+  color: var(--color-text-weak-default);
+  background: var(--color-surface-neutral-raised);
+  font: 12px/1.5 var(--font-df-mono);
+}
+.df-impeccable {
+  isolation: isolate;
+  --variant-brand: var(--color-fill-brand-impeccable);
+  --variant-brand-soft: hsl(24 84% 62% / .12);
+  --variant-warm-surface: hsl(24 28% 17%);
+  --variant-warm-text: hsl(24 24% 82%);
+  font-family: var(--font-df-ui);
+}

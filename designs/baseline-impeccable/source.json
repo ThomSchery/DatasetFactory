@@ -1,0 +1,253 @@
+{
+  "extractedAt": "2026-07-30T08:28:07.618Z",
+  "source": {
+    "db": "D:/my/Projects/Instatic/.tmp/dev.db",
+    "table": "data_rows",
+    "slug": "impeccable",
+    "title": "Home — Impeccable",
+    "pageUpdatedAt": "2026-07-29 10:29:33",
+    "status": "draft"
+  },
+  "counts": {
+    "nodes": 95,
+    "usedClasses": 37,
+    "globalRules": 62,
+    "colorTokens": 35,
+    "typographySteps": 8
+  },
+  "breakpoints": [
+    {
+      "id": "mobile",
+      "label": "Mobile",
+      "width": 375,
+      "mediaQuery": "(max-width: 375px)",
+      "icon": "smartphone"
+    },
+    {
+      "id": "tablet",
+      "label": "Tablet",
+      "width": 768,
+      "mediaQuery": "(max-width: 768px)",
+      "icon": "tablet"
+    },
+    {
+      "id": "desktop",
+      "label": "Desktop",
+      "width": 1440,
+      "mediaQuery": "(max-width: 1440px)",
+      "icon": "monitor"
+    }
+  ],
+  "responsiveOverrides": 0,
+  "unresolvedCssVars": [],
+  "classInventory": [
+    {
+      "name": "df-app",
+      "selector": ".df-app",
+      "contexts": [
+        "media:(max-width: 900px)",
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-sidebar",
+      "selector": ".df-sidebar",
+      "contexts": [
+        "media:(max-width: 900px)",
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-brand",
+      "selector": ".df-brand",
+      "contexts": []
+    },
+    {
+      "name": "df-brand-mark",
+      "selector": ".df-brand-mark",
+      "contexts": []
+    },
+    {
+      "name": "df-workspace",
+      "selector": ".df-workspace",
+      "contexts": []
+    },
+    {
+      "name": "df-eyebrow",
+      "selector": ".df-eyebrow",
+      "contexts": []
+    },
+    {
+      "name": "df-nav",
+      "selector": ".df-nav",
+      "contexts": [
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-nav-icon",
+      "selector": ".df-nav-icon",
+      "contexts": []
+    },
+    {
+      "name": "df-sidebar-foot",
+      "selector": ".df-sidebar-foot",
+      "contexts": []
+    },
+    {
+      "name": "df-main",
+      "selector": ".df-main",
+      "contexts": []
+    },
+    {
+      "name": "df-topbar",
+      "selector": ".df-topbar",
+      "contexts": [
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-breadcrumb",
+      "selector": ".df-breadcrumb",
+      "contexts": []
+    },
+    {
+      "name": "df-status",
+      "selector": ".df-status",
+      "contexts": []
+    },
+    {
+      "name": "df-status-dot",
+      "selector": ".df-status-dot",
+      "contexts": []
+    },
+    {
+      "name": "df-content",
+      "selector": ".df-content",
+      "contexts": [
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-header",
+      "selector": ".df-header",
+      "contexts": [
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-kicker",
+      "selector": ".df-kicker",
+      "contexts": []
+    },
+    {
+      "name": "df-lede",
+      "selector": ".df-lede",
+      "contexts": []
+    },
+    {
+      "name": "df-secondary",
+      "selector": ".df-secondary",
+      "contexts": []
+    },
+    {
+      "name": "df-grid",
+      "selector": ".df-grid",
+      "contexts": [
+        "media:(max-width: 900px)"
+      ]
+    },
+    {
+      "name": "df-card",
+      "selector": ".df-card",
+      "contexts": [
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-card-primary",
+      "selector": ".df-card-primary",
+      "contexts": []
+    },
+    {
+      "name": "df-step",
+      "selector": ".df-step",
+      "contexts": []
+    },
+    {
+      "name": "df-card-actions",
+      "selector": ".df-card-actions",
+      "contexts": [
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-button",
+      "selector": ".df-button",
+      "contexts": []
+    },
+    {
+      "name": "df-button-muted",
+      "selector": ".df-button-muted",
+      "contexts": []
+    },
+    {
+      "name": "df-hint",
+      "selector": ".df-hint",
+      "contexts": []
+    },
+    {
+      "name": "df-pipeline",
+      "selector": ".df-pipeline",
+      "contexts": []
+    },
+    {
+      "name": "df-section-head",
+      "selector": ".df-section-head",
+      "contexts": []
+    },
+    {
+      "name": "df-badge",
+      "selector": ".df-badge",
+      "contexts": []
+    },
+    {
+      "name": "df-flow",
+      "selector": ".df-flow",
+      "contexts": [
+        "media:(max-width: 900px)",
+        "media:(max-width: 620px)"
+      ]
+    },
+    {
+      "name": "df-flow-item",
+      "selector": ".df-flow-item",
+      "contexts": []
+    },
+    {
+      "name": "df-flow-num",
+      "selector": ".df-flow-num",
+      "contexts": []
+    },
+    {
+      "name": "df-models",
+      "selector": ".df-models",
+      "contexts": []
+    },
+    {
+      "name": "df-chip",
+      "selector": ".df-chip",
+      "contexts": []
+    },
+    {
+      "name": "df-nav-label",
+      "selector": ".df-nav-label",
+      "contexts": []
+    },
+    {
+      "name": "df-impeccable",
+      "selector": ".df-impeccable",
+      "contexts": []
+    }
+  ]
+}
