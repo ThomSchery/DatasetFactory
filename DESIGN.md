@@ -1,5 +1,11 @@
 # DatasetFactory — Signal Rack
 
+> **Status (2026-07-30): not the v1 baseline.** The user chose `Home — Impeccable`
+> as the implementation baseline for v1; the extracted artifact lives in
+> `designs/baseline-impeccable/` and the decision is recorded in `docs/CONTEXT.md`.
+> This direction contract stays on file as a design candidate, not as the
+> constraint implementation follows.
+
 ## Direction contract
 
 **THESIS:** Autolabeling is a signal chain, not a grid of dashboard cards. The interface refuses the familiar sidebar-plus-metrics arrangement.

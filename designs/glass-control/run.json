@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "run-2026-07-30T07-54-09-038Z",
+  "goal": "Alternatywny jasny glassmorphismowy dashboard DatasetFactory w Instatic",
+  "target": "Instatic page: glass-control",
+  "createdAt": "2026-07-30T07:54:09.052Z",
+  "inputs": [
+    { "kind": "brief", "source": "user conversation", "role": "approved visual direction" },
+    { "kind": "product", "source": "PRODUCT.md", "role": "product truth" },
+    { "kind": "incumbent", "source": "Instatic /glass-control", "role": "replaceable implementation evidence" }
+  ],
+  "capabilities": [
+    { "id": "inspect-product", "dependsOn": [], "status": "complete", "output": "analysis/product-constraints.md", "approvalRequired": false },
+    { "id": "analyze-references", "dependsOn": ["inspect-product"], "status": "complete", "output": "analysis/visual-evidence.md", "approvalRequired": false },
+    { "id": "map-components", "dependsOn": ["analyze-references"], "status": "complete", "output": "artifacts/component-map.md", "approvalRequired": false },
+    { "id": "package-theme", "dependsOn": ["map-components"], "status": "complete", "output": "artifacts/theme.json", "approvalRequired": false },
+    { "id": "adapt-target", "dependsOn": ["package-theme"], "status": "complete", "output": "Instatic page /glass-control", "approvalRequired": false },
+    { "id": "render-qa", "dependsOn": ["adapt-target"], "status": "blocked", "output": "reports/render-qa.md", "approvalRequired": true }
+  ],
+  "artifacts": [
+    { "path": "analysis/product-constraints.md", "status": "accepted" },
+    { "path": "analysis/visual-evidence.md", "status": "accepted" },
+    { "path": "artifacts/direction.md", "status": "accepted" },
+    { "path": "artifacts/component-map.md", "status": "accepted" },
+    { "path": "artifacts/theme.json", "status": "accepted" }
+  ],
+  "decisions": [
+    { "at": "2026-07-30T07:52:00.000Z", "gate": "direction", "state": "accepted", "reason": "User approved the capability graph and Glass Control rebuild." },
+    { "at": "2026-07-30T07:55:00.000Z", "decision": "Use semantic HTML/CSS; omit raster masters, 9-slice, and motion assets." },
+    { "at": "2026-07-30T07:55:00.000Z", "decision": "Keep the variant draft-only; do not publish." }
+  ],
+  "status": "awaiting_integration_gate"
+}
