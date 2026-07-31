@@ -19,14 +19,18 @@ from backend.app.access.store.migrations import upgrade_database
 from backend.app.access.store.reconciliation import ReferenceAssetReconciler
 from backend.app.access.store.reference_assets import ReferenceAssetStore
 from backend.app.access.store.repositories.assets import AssetRepository
+from backend.app.access.store.repositories.checkpoints import CheckpointRepository
+from backend.app.access.store.repositories.frames import FrameRepository
 from backend.app.access.store.repositories.materials import MaterialRepository
 from backend.app.access.store.repositories.profiles import ProfileRepository
 from backend.app.access.store.repositories.projects import ProjectRepository
+from backend.app.access.store.repositories.runs import RunRepository
 from backend.app.access.store.repository import ProjectStore
 from backend.app.access.store.workspace import Workspace
 from backend.app.config import Settings
 from backend.app.engines.definition import DatasetDefinitionEngine
 from backend.app.logging import close_json_logging, configure_json_logging
+from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import (
     DiskSpaceReader,
     MaterialProbe,
@@ -34,6 +38,8 @@ from backend.app.managers.workflow.material_use_cases import (
     SystemDiskSpaceReader,
 )
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCases
+from backend.app.managers.workflow.recovery import WorkflowRecovery
+from backend.app.managers.workflow.worker import WorkflowWorker
 
 
 @dataclass
@@ -47,10 +53,12 @@ class CompositionRoot:
     ocr_engine: OcrEngine
     profile_use_cases: ProfileUseCases
     material_use_cases: MaterialUseCases
+    dataset_workflow: DatasetWorkflow
     logger: logging.Logger
     log_path: Path
 
     def close(self) -> None:
+        self.dataset_workflow.shutdown()
         self.database.dispose()
         close_json_logging(self.logger, self.log_path)
 
@@ -129,6 +137,35 @@ def build_composition(
         settings.tesseract_timeout_seconds,
         TesseractProcessRunner(),
     )
+    runs = RunRepository(database)
+    frames = FrameRepository(database)
+    checkpoints = CheckpointRepository(database, workspace)
+    workflow_recovery = WorkflowRecovery(runs, checkpoints)
+    workflow_worker = WorkflowWorker(
+        runs,
+        frames,
+        checkpoints,
+        workflow_recovery,
+        media_processing,
+        ocr_engine,
+        DatasetDefinitionEngine(),
+        logger,
+    )
+    dataset_workflow = DatasetWorkflow(
+        runs,
+        frames,
+        workflow_recovery,
+        workflow_worker,
+        ocr_engine,
+    )
+    recovery_result = dataset_workflow.recover_startup()
+    logger.info(
+        "workflow_recovery_completed",
+        extra={
+            "paused_runs": recovery_result.paused_runs,
+            "invalidated_frames": recovery_result.invalidated_frames,
+        },
+    )
     return CompositionRoot(
         settings,
         workspace,
@@ -139,6 +176,7 @@ def build_composition(
         ocr_engine,
         profile_use_cases,
         material_use_cases,
+        dataset_workflow,
         logger,
         log_path,
     )

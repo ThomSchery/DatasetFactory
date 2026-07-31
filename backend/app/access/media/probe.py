@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import subprocess
+import threading
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -42,6 +43,9 @@ class ProcessTreeRunner:
 
     def __init__(self, *, cleanup_timeout_seconds: int = 2) -> None:
         self._cleanup_timeout_seconds = cleanup_timeout_seconds
+        self._lock = threading.Lock()
+        self._active: subprocess.Popen[str] | None = None
+        self._cancelled_pid: int | None = None
 
     def run(self, arguments: list[str], *, timeout_seconds: int) -> ProcessResult:
         creation_flags = 0
@@ -62,16 +66,38 @@ class ProcessTreeRunner:
             )
         except OSError as exc:
             raise MediaProbeError("ffprobe_unavailable") from exc
+        with self._lock:
+            self._active = process
+            self._cancelled_pid = None
         try:
-            stdout, _ = process.communicate(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired as exc:
-            self._terminate_tree(process)
             try:
-                process.communicate(timeout=self._cleanup_timeout_seconds)
-            except subprocess.TimeoutExpired:
-                self._close_pipes(process)
-            raise MediaProbeError("ffprobe_timeout") from exc
-        return ProcessResult(process.returncode, stdout)
+                stdout, _ = process.communicate(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired as exc:
+                self._terminate_tree(process)
+                try:
+                    process.communicate(timeout=self._cleanup_timeout_seconds)
+                except subprocess.TimeoutExpired:
+                    self._close_pipes(process)
+                raise MediaProbeError("ffprobe_timeout") from exc
+            with self._lock:
+                cancelled = self._cancelled_pid == process.pid
+            if cancelled:
+                raise MediaProbeError("process_cancelled")
+            return ProcessResult(process.returncode, stdout)
+        finally:
+            with self._lock:
+                if self._active is process:
+                    self._active = None
+                if self._cancelled_pid == process.pid:
+                    self._cancelled_pid = None
+
+    def cancel(self) -> None:
+        with self._lock:
+            process = self._active
+            if process is not None:
+                self._cancelled_pid = process.pid
+        if process is not None:
+            self._terminate_tree(process)
 
     @staticmethod
     def _terminate_tree(process: subprocess.Popen[str]) -> None:

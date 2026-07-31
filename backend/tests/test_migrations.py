@@ -30,6 +30,22 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     assert "normalized_name" in profile_columns
     category_columns = {column["name"] for column in inspector.get_columns("categories")}
     assert "ordinal" in category_columns
+    run_columns = {column["name"] for column in inspector.get_columns("pipeline_runs")}
+    checkpoint_columns = {column["name"] for column in inspector.get_columns("stage_checkpoints")}
+    observation_columns = {column["name"] for column in inspector.get_columns("ocr_observations")}
+    assert {
+        "current_stage",
+        "current_frame_index",
+        "control_requested",
+        "ocr_engine",
+        "experimental",
+        "quality_gate",
+        "warning",
+    } <= run_columns
+    assert {"ocr_engine", "experimental", "quality_gate", "warning"} <= checkpoint_columns
+    assert {"runtime_sha256", "experimental", "quality_gate", "warning"} <= (observation_columns)
+    run_indexes = {index["name"]: index for index in inspector.get_indexes("pipeline_runs")}
+    assert run_indexes["uq_pipeline_runs_single_running"]["unique"] == 1
 
     foreign_keys = inspector.get_foreign_keys("hud_regions")
     assert any(
@@ -238,7 +254,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0003"
+            "0004"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -249,4 +265,103 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
             ("g-foo-lower", "quux"),
             ("g-foo-upper", "foo"),
         ]
+    engine.dispose()
+
+
+def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Settings) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0003")
+    engine = create_engine(settings.database_url)
+    now = "2026-07-31T12:00:00+00:00"
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects (id,name,workspace_path,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reference_assets "
+                "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+                "VALUES ('a','assets/references/a.png','image/png',1,'ready',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO game_profiles "
+                "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+                "source_height,version,created_at,updated_at) "
+                "VALUES ('g','p','Profile','profile','a',32,24,1,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO video_assets "
+                "(id,project_id,local_path,size_bytes,duration_ms,width,height,fingerprint,"
+                "created_at,updated_at) "
+                "VALUES ('v','p','D:/video.mp4',1,1000,32,24,'fingerprint',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO pipeline_runs "
+                "(id,profile_id,video_id,interval_ms,status,error_code,last_heartbeat_at,"
+                "attempt,total_frames,version,created_at,updated_at) "
+                "VALUES ('r','g','v',1000,'queued',NULL,NULL,1,1,1,:now,:now)"
+            ),
+            {"now": now},
+        )
+    with engine.connect() as connection:
+        schema_before = [
+            tuple(row)
+            for row in connection.execute(
+                text("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name,tbl_name")
+            )
+        ]
+    engine.dispose()
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError) as error:
+            command.upgrade(config, "head")
+        diagnostic = str(error.value)
+        assert "no schema changes were made" in diagnostic
+        assert "pipeline_runs=1" in diagnostic
+        engine = create_engine(settings.database_url)
+        with engine.connect() as connection:
+            schema_after = [
+                tuple(row)
+                for row in connection.execute(
+                    text(
+                        "SELECT type,name,tbl_name,sql FROM sqlite_master "
+                        "ORDER BY type,name,tbl_name"
+                    )
+                )
+            ]
+            assert schema_after == schema_before
+            assert connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one() == ("0003")
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM sqlite_master WHERE name LIKE '_alembic_tmp_%'")
+                ).scalar_one()
+                == 0
+            )
+        engine.dispose()
+
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM pipeline_runs WHERE id='r'"))
+    engine.dispose()
+    command.upgrade(config, "head")
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
+            "0004"
+        )
     engine.dispose()

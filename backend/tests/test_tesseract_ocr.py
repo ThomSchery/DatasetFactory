@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -329,6 +330,41 @@ def test_real_process_runner_times_out_and_kills_process_tree() -> None:
     assert error.value.code == "ocr_timeout"
     assert error.value.retryable is True
     assert time.monotonic() - started < 10
+
+
+def test_real_process_runner_cancel_kills_active_process_with_stable_code(
+    tmp_path: Path,
+) -> None:
+    runner = TesseractProcessRunner()
+    sentinel = tmp_path / "ocr-runner-started"
+    failures: list[OcrProcessError] = []
+
+    def run() -> None:
+        try:
+            runner.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path; import sys,time; "
+                    "Path(sys.argv[1]).write_text('started'); time.sleep(60)",
+                    str(sentinel),
+                ],
+                timeout_seconds=30,
+            )
+        except OcrProcessError as error:
+            failures.append(error)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not sentinel.is_file():
+        time.sleep(0.01)
+    assert sentinel.is_file()
+    runner.cancel()
+    thread.join(timeout=10)
+
+    assert not thread.is_alive()
+    assert [error.code for error in failures] == ["ocr_cancelled"]
 
 
 def test_real_tesseract_returns_native_slash_box_and_pinned_provenance(tmp_path: Path) -> None:

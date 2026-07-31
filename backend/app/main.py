@@ -17,8 +17,10 @@ from backend.app.api.health import SystemStatusReader, create_health_router
 from backend.app.api.materials import create_materials_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.profiles import create_profiles_router
+from backend.app.api.runs import create_runs_router
 from backend.app.composition import CompositionRoot, build_composition
 from backend.app.config import Settings
+from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import MaterialUseCases
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCases
 
@@ -66,10 +68,15 @@ def create_app(
         active_composition: CompositionRoot = application.state.composition
         return active_composition.material_use_cases
 
+    def get_dataset_workflow() -> DatasetWorkflow:
+        active_composition: CompositionRoot = application.state.composition
+        return active_composition.dataset_workflow
+
     application.include_router(create_health_router(get_system_status))
     application.include_router(create_profiles_router(get_profile_use_cases))
     application.include_router(create_materials_router(get_material_use_cases))
     application.include_router(create_assets_router(get_profile_use_cases))
+    application.include_router(create_runs_router(get_dataset_workflow))
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

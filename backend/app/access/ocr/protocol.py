@@ -4,13 +4,17 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from backend.app.engines.definition.ocr_mapping import OcrCandidate
+from backend.app.engines.definition.ocr_mapping import OcrCandidate, OcrProvenance
 
 
 @runtime_checkable
 class OcrEngine(Protocol):
+    def describe(self, allowed_chars: Collection[str]) -> OcrProvenance: ...
+
     def detect_characters(
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
     ) -> tuple[OcrCandidate, ...]: ...
+
+    def cancel_current(self) -> None: ...

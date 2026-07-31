@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -177,6 +178,41 @@ def test_process_runner_times_out_and_terminates_process() -> None:
 
     assert error.value.code == "ffprobe_timeout"
     assert time.monotonic() - started < 10
+
+
+def test_process_runner_cancel_terminates_active_process_with_stable_code(
+    tmp_path: Path,
+) -> None:
+    runner = ProcessTreeRunner()
+    sentinel = tmp_path / "media-runner-started"
+    failures: list[MediaProbeError] = []
+
+    def run() -> None:
+        try:
+            runner.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path; import sys,time; "
+                    "Path(sys.argv[1]).write_text('started'); time.sleep(60)",
+                    str(sentinel),
+                ],
+                timeout_seconds=30,
+            )
+        except MediaProbeError as error:
+            failures.append(error)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not sentinel.is_file():
+        time.sleep(0.01)
+    assert sentinel.is_file()
+    runner.cancel()
+    thread.join(timeout=10)
+
+    assert not thread.is_alive()
+    assert [error.code for error in failures] == ["process_cancelled"]
 
 
 def test_timeout_cleanup_never_uses_unbounded_communicate(

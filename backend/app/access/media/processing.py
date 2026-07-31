@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import cv2
 
-from backend.app.access.media.probe import CommandRunner, MediaProbeError
+from backend.app.access.media.probe import CommandRunner, MediaProbeError, ProcessTreeRunner
 from backend.app.access.store.workspace import Workspace, WorkspaceError
 from backend.app.engines.definition import BBox
 
@@ -59,6 +59,10 @@ class MediaProcessingAccess:
         self._timeout_seconds = timeout_seconds
         self._runner = runner
 
+    def cancel_current(self) -> None:
+        if isinstance(self._runner, ProcessTreeRunner):
+            self._runner.cancel()
+
     def sample_frame(
         self,
         video: Path,
@@ -102,6 +106,7 @@ class MediaProcessingAccess:
                 code = {
                     "ffprobe_unavailable": "ffmpeg_unavailable",
                     "ffprobe_timeout": "frame_extraction_timeout",
+                    "process_cancelled": "frame_cancelled",
                 }.get(exc.code, "frame_extraction_failed")
                 raise MediaProcessingError(code) from exc
             if result.returncode != 0 or not temporary.is_file():

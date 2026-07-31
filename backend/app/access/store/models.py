@@ -141,6 +141,14 @@ class PipelineRun(TimestampMixin, Base):
         CheckConstraint("total_frames >= 0", name="ck_pipeline_total_frames"),
         CheckConstraint("version >= 1", name="ck_pipeline_version"),
         CheckConstraint(
+            "control_requested IS NULL OR control_requested IN ('pause','cancel')",
+            name="ck_pipeline_control_requested",
+        ),
+        CheckConstraint(
+            "quality_gate IN ('passed','failed','unknown')",
+            name="ck_pipeline_quality_gate",
+        ),
+        CheckConstraint(
             "status IN ('queued','running','paused','review_ready','completed','failed',"
             "'cancelled')",
             name="ck_pipeline_status",
@@ -160,6 +168,19 @@ class PipelineRun(TimestampMixin, Base):
     last_heartbeat_at: Mapped[datetime | None] = mapped_column()
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     total_frames: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    current_stage: Mapped[str | None] = mapped_column(String(40))
+    current_frame_index: Mapped[int | None] = mapped_column(Integer)
+    control_requested: Mapped[str | None] = mapped_column(String(20))
+    ocr_engine: Mapped[str] = mapped_column(String(100), nullable=False)
+    ocr_engine_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    ocr_runtime_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    ocr_model_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    ocr_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    ocr_language: Mapped[str] = mapped_column(String(40), nullable=False)
+    ocr_page_segmentation_mode: Mapped[int] = mapped_column(Integer, nullable=False)
+    experimental: Mapped[bool] = mapped_column(nullable=False)
+    quality_gate: Mapped[str] = mapped_column(String(20), nullable=False)
+    warning: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
 
@@ -220,6 +241,10 @@ class OcrObservation(TimestampMixin, Base):
         CheckConstraint("x >= 0 AND y >= 0", name="ck_ocr_origin"),
         CheckConstraint("width > 0 AND height > 0", name="ck_ocr_size"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_ocr_confidence"),
+        CheckConstraint(
+            "quality_gate IN ('passed','failed','unknown')",
+            name="ck_ocr_quality_gate",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -234,7 +259,14 @@ class OcrObservation(TimestampMixin, Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     engine: Mapped[str] = mapped_column(String(100), nullable=False)
     engine_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    runtime_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    language: Mapped[str] = mapped_column(String(40), nullable=False)
+    page_segmentation_mode: Mapped[int] = mapped_column(Integer, nullable=False)
+    experimental: Mapped[bool] = mapped_column(nullable=False)
+    quality_gate: Mapped[str] = mapped_column(String(20), nullable=False)
+    warning: Mapped[str] = mapped_column(Text, nullable=False)
     valid: Mapped[bool] = mapped_column(nullable=False)
     rejection_code: Mapped[str | None] = mapped_column(String(100))
 
@@ -281,6 +313,10 @@ class StageCheckpoint(TimestampMixin, Base):
         CheckConstraint(
             "status IN ('pending','running','completed','failed')", name="ck_checkpoint_status"
         ),
+        CheckConstraint(
+            "quality_gate IN ('passed','failed','unknown')",
+            name="ck_checkpoint_quality_gate",
+        ),
     )
 
     run_id: Mapped[str] = mapped_column(
@@ -293,6 +329,16 @@ class StageCheckpoint(TimestampMixin, Base):
     artifact_relpath: Mapped[str | None] = mapped_column(Text)
     artifact_hash: Mapped[str | None] = mapped_column(String(128))
     error_code: Mapped[str | None] = mapped_column(String(100))
+    ocr_engine: Mapped[str] = mapped_column(String(100), nullable=False)
+    ocr_engine_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    ocr_runtime_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    ocr_model_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    ocr_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    ocr_language: Mapped[str] = mapped_column(String(40), nullable=False)
+    ocr_page_segmentation_mode: Mapped[int] = mapped_column(Integer, nullable=False)
+    experimental: Mapped[bool] = mapped_column(nullable=False)
+    quality_gate: Mapped[str] = mapped_column(String(20), nullable=False)
+    warning: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class Export(TimestampMixin, Base):

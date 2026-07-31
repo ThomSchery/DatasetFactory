@@ -7,6 +7,7 @@ import re
 import shutil
 import signal
 import subprocess
+import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable, Collection
@@ -49,6 +50,9 @@ class TesseractProcessRunner:
 
     def __init__(self, *, cleanup_timeout_seconds: int = 2) -> None:
         self._cleanup_timeout_seconds = cleanup_timeout_seconds
+        self._lock = threading.Lock()
+        self._active: subprocess.Popen[str] | None = None
+        self._cancelled_pid: int | None = None
 
     def run(self, arguments: list[str], *, timeout_seconds: int) -> OcrProcessResult:
         creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
@@ -66,16 +70,38 @@ class TesseractProcessRunner:
             )
         except OSError as exc:
             raise OcrProcessError("ocr_unavailable") from exc
+        with self._lock:
+            self._active = process
+            self._cancelled_pid = None
         try:
-            stdout, stderr = process.communicate(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired as exc:
-            self._terminate_tree(process)
             try:
-                process.communicate(timeout=self._cleanup_timeout_seconds)
-            except subprocess.TimeoutExpired:
-                self._close_pipes(process)
-            raise OcrProcessError("ocr_timeout", retryable=True) from exc
-        return OcrProcessResult(process.returncode, stdout, stderr)
+                stdout, stderr = process.communicate(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired as exc:
+                self._terminate_tree(process)
+                try:
+                    process.communicate(timeout=self._cleanup_timeout_seconds)
+                except subprocess.TimeoutExpired:
+                    self._close_pipes(process)
+                raise OcrProcessError("ocr_timeout", retryable=True) from exc
+            with self._lock:
+                cancelled = self._cancelled_pid == process.pid
+            if cancelled:
+                raise OcrProcessError("ocr_cancelled")
+            return OcrProcessResult(process.returncode, stdout, stderr)
+        finally:
+            with self._lock:
+                if self._active is process:
+                    self._active = None
+                if self._cancelled_pid == process.pid:
+                    self._cancelled_pid = None
+
+    def cancel(self) -> None:
+        with self._lock:
+            process = self._active
+            if process is not None:
+                self._cancelled_pid = process.pid
+        if process is not None:
+            self._terminate_tree(process)
 
     @staticmethod
     def _terminate_tree(process: subprocess.Popen[str]) -> None:
@@ -116,13 +142,17 @@ class TesseractRuntimeIdentity:
     experimental: bool = True
     quality_gate: Literal["passed", "failed", "unknown"] = "failed"
 
-    def verified_hashes(self, *, language: str) -> tuple[str, str]:
+    def configured_hashes(self, *, language: str) -> tuple[str, str]:
         if self.model.name != f"{language}.traineddata":
             raise OcrProcessError("ocr_provenance_mismatch")
         runtime_pin = self._normalize_pin(self.expected_runtime_sha256)
         model_pin = self._normalize_pin(self.expected_model_sha256)
         if runtime_pin is None or model_pin is None or not self.expected_version.strip():
             raise OcrProcessError("ocr_provenance_unknown")
+        return runtime_pin, model_pin
+
+    def verified_hashes(self, *, language: str) -> tuple[str, str]:
+        runtime_pin, model_pin = self.configured_hashes(language=language)
         runtime_hash = self._file_sha256(self.executable)
         model_hash = self._file_sha256(self.model)
         if runtime_hash != runtime_pin or model_hash != model_pin:
@@ -318,6 +348,23 @@ class TesseractOcrEngine:
         self._page_segmentation_mode = page_segmentation_mode
         self._retry_backoff_seconds = retry_backoff_seconds
         self._sleeper = sleeper
+
+    def describe(self, allowed_chars: Collection[str]) -> OcrProvenance:
+        allowed = self._normalize_allowed_chars(allowed_chars)
+        whitelist = "".join(allowed)
+        runtime_pin, model_pin = self._runtime.configured_hashes(language=self._language)
+        return self._runtime.provenance(
+            self._runtime.expected_version,
+            runtime_sha256=runtime_pin,
+            model_sha256=model_pin,
+            config_hash=self._config_hash(whitelist),
+            language=self._language,
+            page_segmentation_mode=self._page_segmentation_mode,
+        )
+
+    def cancel_current(self) -> None:
+        if isinstance(self._runner, TesseractProcessRunner):
+            self._runner.cancel()
 
     def detect_characters(
         self,
