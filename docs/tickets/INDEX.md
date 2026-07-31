@@ -5,8 +5,8 @@
 | TK-001 | Fundament aplikacji i trwały workspace | wykonany | — | Gate 1 backend ✓ |
 | FE-SETUP | Bootstrap systemu designu Impeccable | wykonany warunkowo | — | Gate 1; screenshot odroczony do Gate 3 |
 | TK-002 | Profil gry i import lokalnego materiału | wykonany | TK-001 | Gate TK-002 ✓ |
-| TK-003 | Media i eksperymentalny adapter OCR | poprawka F2 oczekuje | TK-001, TK-002 | Gate 2 review: 2 findings otwarte; quality FAIL→TD-014 |
-| TK-004 | Trwały workflow, checkpointy i odzyskiwanie | zablokowany | TK-003-F2 | Tesseract tylko experimental |
+| TK-003 | Media i eksperymentalny adapter OCR | wykonany | TK-001, TK-002 | Gate 2 techniczny ✓; quality FAIL→TD-014 |
+| TK-004 | Trwały workflow, checkpointy i odzyskiwanie | gotowy | TK-003-F2 | Tesseract tylko `experimental`, `quality_gate=failed` |
 | TK-005 | Weryfikacja anotacji i eksport COCO | gotowy | TK-004 | Gate 3 |
 | FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005 | Gate 3 |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
@@ -17,11 +17,11 @@ Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,
 Fixupy `TK-002-F1` i `TK-002-F2` wykonane; końcowy niezależny review zamknął
 wszystkie findings. Pełny suite wykonawcy: 72/72; final targeted review: 18/18.
 
-Rewizja OCR i `TK-003-F1` wykonane 2026-07-30: wydzielony `OcrEngine`, klasa `/`,
-Tesseract wyłącznie jako adapter experimental, pinowane provenance, confinement
-oraz trwały `ocr-evaluator-v1`. Quality pozostaje oczekiwanym FAIL, a docelowy
-engine pozostaje TD-014. Końcowy review F1 wykrył dwa otwarte problemy techniczne
-opisane w `TK-003-F2`; do ich zamknięcia TK-004 nie jest rozpoczynany.
+Rewizja OCR oraz `TK-003-F1/F2` wykonane: wydzielony `OcrEngine`, klasa `/`,
+Tesseract wyłącznie jako adapter experimental, pinowane provenance, confinement,
+model/language binding, `ocr-evaluator-v2` i manifest GT+cropów. Quality pozostaje
+oczekiwanym FAIL, a docelowy engine pozostaje TD-014. TK-004 jest odblokowany,
+ale musi przenosić `experimental=true` i `quality_gate=failed`.
 
 ## Graf zależności
 

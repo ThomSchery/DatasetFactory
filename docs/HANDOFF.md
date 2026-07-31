@@ -75,8 +75,11 @@ upoważnia do implementowania rozwiązania docelowego w MVP.
 - Tesseract z `D:\tools\tesseract-5.5.3` to wyłącznie zewnętrzny build Windows
   UB Mannheim do dev/spike (TD-015), nie oficjalna binarka upstream. Adapter
   wymaga pełnego buildu oraz zgodnych pinów SHA-256 runtime/modelu przed OCR.
-- `ocr-evaluator-v1` utrwala quality FAIL (aktualnie 93,22%, 7/11 exact,
+- `ocr-evaluator-v2` utrwala quality FAIL (aktualnie 93,22%, 7/11 exact,
   minimum IoU 0); zielony test oczekuje klasyfikacji `failed`, nie jakości PASS.
+- Alignment v2 wybiera minimalny koszt edycji, a przy remisie maksymalny łączny
+  IoU. Raport pinuje GT i wszystkie cropy. Model v1 musi mieć dokładną nazwę
+  `{language}.traineddata`; wielomodelowe `eng+...` wymaga przyszłej mapy hashy.
 - Każda nowa zależność: stabilność, utrzymanie, licencja i podatności sprawdzone
   przed dodaniem; lockfile obowiązkowy.
 

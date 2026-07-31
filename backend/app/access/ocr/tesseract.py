@@ -116,7 +116,9 @@ class TesseractRuntimeIdentity:
     experimental: bool = True
     quality_gate: Literal["passed", "failed", "unknown"] = "failed"
 
-    def verified_hashes(self) -> tuple[str, str]:
+    def verified_hashes(self, *, language: str) -> tuple[str, str]:
+        if self.model.name != f"{language}.traineddata":
+            raise OcrProcessError("ocr_provenance_mismatch")
         runtime_pin = self._normalize_pin(self.expected_runtime_sha256)
         model_pin = self._normalize_pin(self.expected_model_sha256)
         if runtime_pin is None or model_pin is None or not self.expected_version.strip():
@@ -326,7 +328,7 @@ class TesseractOcrEngine:
         allowed = self._normalize_allowed_chars(allowed_chars)
         if not allowed:
             return ()
-        runtime_hash, model_hash = self._runtime.verified_hashes()
+        runtime_hash, model_hash = self._runtime.verified_hashes(language=self._language)
         crop_width, crop_height = self._image_size(crop)
         temporary = crop.parent / f".ocr-{uuid4().hex}"
         try:

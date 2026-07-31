@@ -77,6 +77,9 @@ Współrzędne COCO są globalne względem pełnej klatki w formacie `[x,y,w,h]`
 Każdy adapter odpowiada za konwersję własnego układu współrzędnych na top-left.
 Tesseract jest adapterem `experimental`; brak/`unknown` hash runtime/modelu jest
 błędem konfiguracji, nie akceptowanym provenance produkcyjnym.
+W v1 `model.name` musi być dokładnie `{language}.traineddata` przed hashowaniem;
+`eng+...` wymaga przyszłej mapy pinów wszystkich ładowanych modeli i jest obecnie
+odrzucane jako `ocr_provenance_mismatch`.
 Engine definicji translatuje bbox cropu o offset regionu i ponownie waliduje.
 
 ## 5. API HTTP `/api/v1`
@@ -183,6 +186,8 @@ startup błędem w v1. Brak sekretów.
 - Gate 1: bootstrap, migracja, health i composition-root smoke test.
 - Gate 2: profil + materiał + pojedyncza klatka przechodzą FFmpeg i techniczny
   kontrakt OCR (char boxes, confinement, retry, hashes, wersjonowana ewaluacja).
+  Evaluator minimalizuje edit cost i rozstrzyga remisy maksymalnym łącznym IoU;
+  manifest raportu pinuje ground truth oraz każdy referencjonowany crop.
   Tesseract quality FAIL jest jawnie utrwalony i klasyfikowany jako TD-014.
 - Gate 3: pełen workflow API z restartem/checkpointem i poprawnym COCO.
 - Gate 4: lint, format, typecheck, wszystkie testy, build SPA, Playwright i render

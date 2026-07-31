@@ -258,6 +258,22 @@ def test_unknown_or_mismatched_runtime_identity_is_rejected_before_ocr(
     assert not tuple(workspace.resolve_relpath("runs/test").glob(".ocr-*"))
 
 
+def test_language_model_mismatch_is_rejected_before_hashing_or_ocr(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    crop_relpath = _copy_crop(workspace)
+    runtime = _fake_runtime(tmp_path)
+    (runtime.model.parent / "deu.traineddata").write_bytes(b"untrusted unpinned model")
+    runner = FixtureWritingRunner()
+    engine = TesseractOcrEngine(workspace, runtime, 30, runner, language="deu")
+
+    with pytest.raises(OcrProcessError) as error:
+        engine.detect_characters(crop_relpath, ["A"])
+
+    assert error.value.code == "ocr_provenance_mismatch"
+    assert runner.calls == 0
+    assert not tuple(workspace.resolve_relpath("runs/test").glob(".ocr-*"))
+
+
 @pytest.mark.parametrize("escape_kind", ["absolute", "symlink"])
 def test_crop_path_escape_is_rejected_before_temp_or_subprocess(
     tmp_path: Path,

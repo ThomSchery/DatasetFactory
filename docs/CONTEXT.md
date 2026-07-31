@@ -205,7 +205,7 @@ Pragmatycznej (Boring Technology):
   próbkowanie F04, a OpenCV wycinanie i przygotowanie regionów HUD dla F05/F06.
 - **OCR:** wymienialny interfejs `OcrEngine` z natywnymi boksami pojedynczych
   znaków. Tesseract pozostaje eksperymentalnym adapterem dev/spike po negatywnym
-  Gate 2 (94,34% char accuracy, zgubiony minus); nie jest zatwierdzonym silnikiem
+  Gate 2 (93,22% char accuracy, 7/11 exact, minimum IoU 0); nie jest zatwierdzonym silnikiem
   produkcyjnym. Wybór docelowego adaptera jest TD-014.
 - **Testy:** pytest po stronie Python oraz Vitest + Testing Library po stronie
   React — lekkie, dojrzałe narzędzia zgodne z wybranymi ekosystemami.

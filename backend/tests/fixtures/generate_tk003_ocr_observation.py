@@ -23,12 +23,33 @@ from backend.app.engines.definition import (
 
 ROOT = Path(__file__).resolve().parent
 GROUND_TRUTH = ROOT / "expected-ocr" / "synthetic-hud.json"
-OUTPUT = ROOT / "expected-ocr" / "tesseract-5.5.3-evaluation-v1.json"
+OUTPUT = ROOT / "expected-ocr" / "tesseract-5.5.3-evaluation-v2.json"
 RUNTIME = Path("D:/tools/tesseract-5.5.3/tesseract.exe")
 MODEL = Path("D:/tools/tesseract-5.5.3/tessdata/eng.traineddata")
 RUNTIME_SHA256 = "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420"
 MODEL_SHA256 = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
 ENGINE_VERSION = "v5.5.3.20260724"
+
+
+def _fixture_manifest(ground_truth: dict[str, object]) -> dict[str, object]:
+    samples = ground_truth["samples"]
+    if not isinstance(samples, list):
+        raise TypeError("ground truth samples must be a list")
+    payload: dict[str, object] = {
+        "ground_truth_sha256": hashlib.sha256(GROUND_TRUTH.read_bytes()).hexdigest(),
+        "crops": [
+            {
+                "path": sample["crop"],
+                "sha256": hashlib.sha256((ROOT / sample["crop"]).read_bytes()).hexdigest(),
+            }
+            for sample in samples
+        ],
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return {
+        **payload,
+        "manifest_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    }
 
 
 def main() -> None:
@@ -76,10 +97,10 @@ def main() -> None:
         result = evaluate_ocr(tuple(crops), thresholds)
         first_candidate = next(candidate for crop in crops for candidate in crop.observed)
         report = {
-            "schema_version": "tk003-ocr-evaluation-observation-v1",
+            "schema_version": "tk003-ocr-evaluation-observation-v2",
             "evaluator_version": EVALUATOR_VERSION,
             "fixture_kind": "synthetic",
-            "fixture_sha256": hashlib.sha256(GROUND_TRUTH.read_bytes()).hexdigest(),
+            "fixture_manifest": _fixture_manifest(expected),
             "runtime": {
                 "engine_id": first_candidate.provenance.engine_id,
                 "engine_version": first_candidate.provenance.engine_version,

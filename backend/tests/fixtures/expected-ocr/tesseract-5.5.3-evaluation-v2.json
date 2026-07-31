@@ -1,8 +1,57 @@
 {
-  "schema_version": "tk003-ocr-evaluation-observation-v1",
-  "evaluator_version": "ocr-evaluator-v1",
+  "schema_version": "tk003-ocr-evaluation-observation-v2",
+  "evaluator_version": "ocr-evaluator-v2",
   "fixture_kind": "synthetic",
-  "fixture_sha256": "7195b86c23e5f582db9e4a2b32bc2d2c210abfa262b34f05ba2dadb83f67287b",
+  "fixture_manifest": {
+    "ground_truth_sha256": "7195b86c23e5f582db9e4a2b32bc2d2c210abfa262b34f05ba2dadb83f67287b",
+    "crops": [
+      {
+        "path": "hud-crops/00-health.png",
+        "sha256": "7d99c389ff084443a91598c2c45f012c69cd61301785e6439ad800978c926d2b"
+      },
+      {
+        "path": "hud-crops/01-armour.png",
+        "sha256": "a21d0a7b23756f117e49e9e35665c80400aead9dec22bd07afb248c5b511e91a"
+      },
+      {
+        "path": "hud-crops/02-negative.png",
+        "sha256": "5ac4b4f35b518aca4def12f8c2f68521686930c149749b88d129a2eec7a0a5b7"
+      },
+      {
+        "path": "hud-crops/03-score.png",
+        "sha256": "128f6a6d413fcfef9e862c646d0a6e042a3eb64a13d6c2b60ea85a216face4f4"
+      },
+      {
+        "path": "hud-crops/04-level.png",
+        "sha256": "710e17c6b2890d29c83ed2e423c2cd040fbe60afd5ebbf3c156b3d2fad417fcb"
+      },
+      {
+        "path": "hud-crops/05-ammo.png",
+        "sha256": "b018d00045100bfaa29b2552cf33daa140785838c99284ea8d4cbf9ef9d5729c"
+      },
+      {
+        "path": "hud-crops/06-xp.png",
+        "sha256": "9ea83c72aa8dfa4fd4cdb4bf7a5346c7464ebebfe816ef11d1cb511c5b555e3d"
+      },
+      {
+        "path": "hud-crops/07-wave.png",
+        "sha256": "184d4a035fd1c4b6c9b2ce724f1d2107e6a8fc3e412f30eafa5199901cc37747"
+      },
+      {
+        "path": "hud-crops/08-kills.png",
+        "sha256": "2017ca3914593b1ffa672d69e182018d95ba6007b420ba13f66608749c50ab32"
+      },
+      {
+        "path": "hud-crops/09-mixed.png",
+        "sha256": "ae6bb0d127ded7a132614c1b99930646c07e27701df5ab67679b234d1f4994c7"
+      },
+      {
+        "path": "hud-crops/10-ratio.png",
+        "sha256": "d363a3e91d8dd46842f269cf107f3ffc733de080578b1e0421fe4f74ccecf2ac"
+      }
+    ],
+    "manifest_sha256": "1538ebd70cc5ef88f83cd5baf89e8ea09883cc29489459ac8d5721ce0c44aeac"
+  },
   "runtime": {
     "engine_id": "tesseract",
     "engine_version": "v5.5.3.20260724",

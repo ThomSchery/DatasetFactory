@@ -6,7 +6,7 @@ from typing import Literal
 from backend.app.engines.definition.engine import BBox
 from backend.app.engines.definition.ocr_mapping import OcrCandidate
 
-EVALUATOR_VERSION = "ocr-evaluator-v1"
+EVALUATOR_VERSION = "ocr-evaluator-v2"
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,13 @@ class OcrEvaluationResult:
     checks: tuple[OcrQualityCheck, ...]
 
 
+@dataclass(frozen=True)
+class _AlignmentResult:
+    edit_cost: int
+    total_iou: float
+    matches: tuple[tuple[int, int, float], ...]
+
+
 def evaluate_ocr(
     crops: tuple[OcrEvaluationCrop, ...],
     thresholds: OcrQualityThresholds | None = None,
@@ -91,11 +98,13 @@ def evaluate_ocr(
     for crop in crops:
         expected_text = "".join(character.char for character in crop.expected)
         observed_text = "".join(candidate.char for candidate in crop.observed)
-        edits += _edit_distance(expected_text, observed_text)
         exact_text += expected_text == observed_text
 
         aligned = _align_same_characters(crop.expected, crop.observed)
-        iou_by_expected = {expected_index: iou for expected_index, _observed_index, iou in aligned}
+        edits += aligned.edit_cost
+        iou_by_expected = {
+            expected_index: iou for expected_index, _observed_index, iou in aligned.matches
+        }
         expected_ious.extend(iou_by_expected.get(index, 0.0) for index in range(len(crop.expected)))
         bbox_true_positives += sum(
             iou >= thresholds.bbox_match_iou for iou in iou_by_expected.values()
@@ -152,73 +161,59 @@ def evaluate_ocr(
 def _align_same_characters(
     expected: tuple[ExpectedOcrCharacter, ...],
     observed: tuple[OcrCandidate, ...],
-) -> tuple[tuple[int, int, float], ...]:
-    expected_text = "".join(character.char for character in expected)
-    observed_text = "".join(candidate.char for candidate in observed)
-    rows = len(expected_text) + 1
-    columns = len(observed_text) + 1
-    costs = [[0] * columns for _ in range(rows)]
-    for index in range(rows):
-        costs[index][0] = index
-    for index in range(columns):
-        costs[0][index] = index
+) -> _AlignmentResult:
+    rows = len(expected) + 1
+    columns = len(observed) + 1
+    states = [
+        [_AlignmentResult(0, 0.0, ()) for _observed_index in range(columns)]
+        for _expected_index in range(rows)
+    ]
+    for expected_index in range(1, rows):
+        previous = states[expected_index - 1][0]
+        states[expected_index][0] = _AlignmentResult(previous.edit_cost + 1, 0.0, ())
+    for observed_index in range(1, columns):
+        previous = states[0][observed_index - 1]
+        states[0][observed_index] = _AlignmentResult(previous.edit_cost + 1, 0.0, ())
+
     for expected_index in range(1, rows):
         for observed_index in range(1, columns):
-            costs[expected_index][observed_index] = min(
-                costs[expected_index - 1][observed_index] + 1,
-                costs[expected_index][observed_index - 1] + 1,
-                costs[expected_index - 1][observed_index - 1]
-                + (expected_text[expected_index - 1] != observed_text[observed_index - 1]),
-            )
-
-    aligned: list[tuple[int, int, float]] = []
-    expected_index = len(expected_text)
-    observed_index = len(observed_text)
-    while expected_index > 0 or observed_index > 0:
-        if (
-            expected_index > 0
-            and observed_index > 0
-            and costs[expected_index][observed_index]
-            == costs[expected_index - 1][observed_index - 1]
-            + (expected_text[expected_index - 1] != observed_text[observed_index - 1])
-        ):
-            if expected_text[expected_index - 1] == observed_text[observed_index - 1]:
-                aligned.append(
-                    (
-                        expected_index - 1,
-                        observed_index - 1,
-                        _bbox_iou(
-                            expected[expected_index - 1].bbox,
-                            observed[observed_index - 1].bbox_local,
-                        ),
-                    )
+            expected_character = expected[expected_index - 1]
+            observed_candidate = observed[observed_index - 1]
+            diagonal = states[expected_index - 1][observed_index - 1]
+            if expected_character.char == observed_candidate.char:
+                iou = _bbox_iou(expected_character.bbox, observed_candidate.bbox_local)
+                diagonal = _AlignmentResult(
+                    diagonal.edit_cost,
+                    diagonal.total_iou + iou,
+                    (*diagonal.matches, (expected_index - 1, observed_index - 1, iou)),
                 )
-            expected_index -= 1
-            observed_index -= 1
-        elif expected_index > 0 and costs[expected_index][observed_index] == (
-            costs[expected_index - 1][observed_index] + 1
-        ):
-            expected_index -= 1
-        else:
-            observed_index -= 1
-    aligned.reverse()
-    return tuple(aligned)
-
-
-def _edit_distance(left: str, right: str) -> int:
-    previous = list(range(len(right) + 1))
-    for left_index, left_char in enumerate(left, start=1):
-        current = [left_index]
-        for right_index, right_char in enumerate(right, start=1):
-            current.append(
-                min(
-                    current[-1] + 1,
-                    previous[right_index] + 1,
-                    previous[right_index - 1] + (left_char != right_char),
+            else:
+                diagonal = _AlignmentResult(
+                    diagonal.edit_cost + 1,
+                    diagonal.total_iou,
+                    diagonal.matches,
                 )
+            deletion = states[expected_index - 1][observed_index]
+            deletion = _AlignmentResult(
+                deletion.edit_cost + 1,
+                deletion.total_iou,
+                deletion.matches,
             )
-        previous = current
-    return previous[-1]
+            insertion = states[expected_index][observed_index - 1]
+            insertion = _AlignmentResult(
+                insertion.edit_cost + 1,
+                insertion.total_iou,
+                insertion.matches,
+            )
+            states[expected_index][observed_index] = min(
+                (diagonal, deletion, insertion),
+                key=lambda result: (
+                    result.edit_cost,
+                    -result.total_iou,
+                    -len(result.matches),
+                ),
+            )
+    return states[-1][-1]
 
 
 def _bbox_iou(left: BBox, right: BBox) -> float:

@@ -11,8 +11,8 @@ syntetycznym. Pozostaje wyłącznie adapterem `experimental` z
 `quality_gate=failed`; docelowy silnik jest odroczony jako TD-014.
 
 Negatywny werdykt jest trwałą, oczekiwaną klasyfikacją testu, a nie czerwonym
-testem. `backend/tests/fixtures/expected-ocr/tesseract-5.5.3-evaluation-v1.json`
-zapisuje obserwacje i wynik, a `ocr-evaluator-v1` przelicza go niezależnie od
+testem. `backend/tests/fixtures/expected-ocr/tesseract-5.5.3-evaluation-v2.json`
+zapisuje obserwacje i wynik, a `ocr-evaluator-v2` przelicza go niezależnie od
 lokalnej binarki. Regresja potwierdza też, że wcześniejsze **94,34%** jest FAIL
 wobec progu 98%.
 
@@ -34,7 +34,7 @@ Obserwację adaptera odtwarza moduł
 Natywne `.box` jest konwertowane z bottom-left do top-left i łączone z
 per-character `x_conf` po `(znak, bbox)` — nie ma równego dzielenia word boxes.
 
-## Wersjonowane kryteria `ocr-evaluator-v1`
+## Wersjonowane kryteria `ocr-evaluator-v2`
 
 | Metryka | Próg |
 |---|---:|
@@ -49,7 +49,13 @@ Brakujący albo błędnie sklasyfikowany znak otrzymuje IoU 0. Nadmiarowe boksy
 obniżają precision. Raport pokazuje minimum i percentyle, więc dobry średni IoU
 nie może ukryć słabego pojedynczego boksu.
 
-## Wynik aktualnego fixture v1
+Alignment najpierw minimalizuje koszt Levenshteina, a wśród ścieżek o tym samym
+koszcie maksymalizuje łączny IoU zgodnych znaków przy zachowaniu kolejności.
+Zapobiega to arbitralnemu przypisaniu nadmiarowego `A`, `7` albo `0` do bboxu GT.
+Manifest raportu pinuje SHA-256 pliku ground truth oraz każdego z 11
+referencjonowanych cropów; zmiana obrazu bez zmiany JSON unieważnia manifest.
+
+## Wynik aktualnego fixture (evaluator v2)
 
 | Metryka | Wynik | Status |
 |---|---:|---|
@@ -101,6 +107,11 @@ porównuje je z `DF_TESSERACT_RUNTIME_SHA256` i
 stabilnym błędem. `OcrProvenance` zawiera pełny build, oba hashe, config hash,
 `experimental=true` i `quality_gate=failed`.
 
+Ograniczenie v1: adapter przyjmuje jeden język i wymaga dokładnej zgodności
+`model.name == f"{language}.traineddata"` przed hashowaniem i subprocessem.
+Konfiguracje wielomodelowe, np. `eng+pol`, są odrzucane; ich przyszła obsługa
+wymaga mapy pinów SHA-256 wszystkich modeli faktycznie ładowanych przez `-l`.
+
 ### OpenCV
 
 - `opencv-python-headless==4.13.0.92`, pośrednio `numpy==2.5.1`;
@@ -127,12 +138,13 @@ TK-004 może używać Tesseract wyłącznie jako adaptera eksperymentalnego i mu
 przenosić `quality_gate=failed`. Przed produkcyjnym autolabelingiem albo packaged
 v1 trzeba wykonać TD-014 i TD-015 na reprezentatywnych cropach prawdziwych HUD-ów.
 
-## Weryfikacja repozytorium po TK-003-F1
+## Weryfikacja repozytorium po TK-003-F2
 
-- backend `pytest`: **106 passed** (w tym realny FFmpeg/Tesseract, confinement
-  absolute + junction, retry, pinning oraz wersjonowany evaluator);
-- `ruff format --check`: 69 plików; `ruff check`: PASS;
-- `mypy --strict`: PASS dla 64 plików źródłowych;
+- backend `pytest`: **111 passed** na izolowanym basetemp (w tym realny
+  FFmpeg/Tesseract, model/language mismatch, geometry-aware alignment i manifest);
+- targeted OCR/evaluator: **24 passed**;
+- `ruff format --check`: 165 plików; `ruff check`: PASS;
+- `mypy --strict`: PASS dla 69 plików źródłowych;
 - `uv lock --check`: PASS; `pip-audit`: brak znanych podatności;
 - frontend bez zmian: Vitest **15 passed**, TypeScript PASS, Vite build PASS,
   `npm audit`: 0 podatności.

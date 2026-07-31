@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,45 @@ from backend.app.engines.definition import (
 
 FIXTURES = Path("backend/tests/fixtures")
 GROUND_TRUTH_PATH = FIXTURES / "expected-ocr/synthetic-hud.json"
-REPORT_PATH = FIXTURES / "expected-ocr/tesseract-5.5.3-evaluation-v1.json"
+REPORT_PATH = FIXTURES / "expected-ocr/tesseract-5.5.3-evaluation-v2.json"
+
+
+def _candidate(char: str, bbox: BBox) -> OcrCandidate:
+    return OcrCandidate(
+        char,
+        bbox,
+        1.0,
+        OcrProvenance(
+            "test",
+            "1",
+            "a" * 64,
+            "b" * 64,
+            "c" * 64,
+            True,
+            "failed",
+            "eng",
+            7,
+        ),
+    )
+
+
+def _fixture_manifest(ground_truth_path: Path, fixtures_root: Path) -> dict[str, Any]:
+    ground_truth = json.loads(ground_truth_path.read_text(encoding="utf-8"))
+    payload = {
+        "ground_truth_sha256": hashlib.sha256(ground_truth_path.read_bytes()).hexdigest(),
+        "crops": [
+            {
+                "path": sample["crop"],
+                "sha256": hashlib.sha256((fixtures_root / sample["crop"]).read_bytes()).hexdigest(),
+            }
+            for sample in ground_truth["samples"]
+        ],
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return {
+        **payload,
+        "manifest_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    }
 
 
 def _load_versioned_evaluation() -> tuple[dict[str, Any], tuple[OcrEvaluationCrop, ...]]:
@@ -70,9 +109,9 @@ def test_versioned_tesseract_observation_recalculates_durable_failed_gate() -> N
 
     result = evaluate_ocr(crops, thresholds)
 
-    assert report["schema_version"] == "tk003-ocr-evaluation-observation-v1"
+    assert report["schema_version"] == "tk003-ocr-evaluation-observation-v2"
     assert report["evaluator_version"] == EVALUATOR_VERSION
-    assert report["fixture_sha256"] == hashlib.sha256(GROUND_TRUTH_PATH.read_bytes()).hexdigest()
+    assert report["fixture_manifest"] == _fixture_manifest(GROUND_TRUTH_PATH, FIXTURES)
     assert report["expected_quality_gate"] == "failed"
     assert result.quality_gate == "failed"
     assert asdict(result.metrics) == report["evaluation"]["metrics"]
@@ -127,3 +166,71 @@ def test_slash_observation_has_native_box_and_failed_provenance() -> None:
     assert report["runtime"]["runtime_sha256"] == (
         "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420"
     )
+
+
+def test_alignment_uses_highest_total_iou_for_equal_cost_repeated_characters() -> None:
+    expected = (
+        ExpectedOcrCharacter("A", BBox(0, 0, 5, 5)),
+        ExpectedOcrCharacter("A", BBox(10, 0, 5, 5)),
+    )
+    observed = (
+        _candidate("A", BBox(0, 0, 5, 5)),
+        _candidate("A", BBox(10, 0, 5, 5)),
+        _candidate("A", BBox(20, 0, 5, 5)),
+    )
+
+    metrics = evaluate_ocr((OcrEvaluationCrop("repeated-a", expected, observed),)).metrics
+
+    assert metrics.edit_count == 1
+    assert metrics.bbox_precision == pytest.approx(2 / 3)
+    assert metrics.bbox_recall == 1.0
+    assert metrics.iou_minimum == 1.0
+
+
+@pytest.mark.parametrize(
+    ("text", "observed_text", "extra_index"),
+    [
+        ("77/100", "777/100", 2),
+        ("100", "1000", 3),
+    ],
+)
+def test_alignment_maximizes_iou_for_repeated_digits(
+    text: str,
+    observed_text: str,
+    extra_index: int,
+) -> None:
+    expected = tuple(
+        ExpectedOcrCharacter(char, BBox(index * 10, 0, 5, 5)) for index, char in enumerate(text)
+    )
+    observed_boxes = [BBox(index * 10, 0, 5, 5) for index in range(len(text))]
+    observed_boxes.insert(extra_index, BBox(1000, 0, 5, 5))
+    observed = tuple(
+        _candidate(char, bbox) for char, bbox in zip(observed_text, observed_boxes, strict=True)
+    )
+
+    metrics = evaluate_ocr((OcrEvaluationCrop("repeated-digits", expected, observed),)).metrics
+
+    assert metrics.edit_count == 1
+    assert metrics.bbox_precision == pytest.approx(len(text) / len(observed_text))
+    assert metrics.bbox_recall == 1.0
+    assert metrics.iou_minimum == 1.0
+
+
+def test_fixture_manifest_pins_ground_truth_and_every_referenced_crop(tmp_path: Path) -> None:
+    report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
+    expected_manifest = _fixture_manifest(GROUND_TRUTH_PATH, FIXTURES)
+
+    assert report["fixture_manifest"] == expected_manifest
+
+    copied_root = tmp_path / "fixtures"
+    (copied_root / "expected-ocr").mkdir(parents=True)
+    shutil.copy2(GROUND_TRUTH_PATH, copied_root / "expected-ocr/synthetic-hud.json")
+    shutil.copytree(FIXTURES / "hud-crops", copied_root / "hud-crops")
+    changed_crop = copied_root / report["fixture_manifest"]["crops"][0]["path"]
+    changed_crop.write_bytes(changed_crop.read_bytes() + b"tampered")
+
+    changed_manifest = _fixture_manifest(
+        copied_root / "expected-ocr/synthetic-hud.json",
+        copied_root,
+    )
+    assert changed_manifest != report["fixture_manifest"]
