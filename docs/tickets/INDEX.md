@@ -7,7 +7,9 @@
 | TK-002 | Profil gry i import lokalnego materiału | wykonany | TK-001 | Gate TK-002 ✓ |
 | TK-003 | Media i eksperymentalny adapter OCR | wykonany | TK-001, TK-002 | Gate 2 techniczny ✓; quality FAIL→TD-014 |
 | TK-004 | Trwały workflow, checkpointy i odzyskiwanie | wykonany | TK-003-F2 | Zintegrowany w `d4069bb`; finalny review `ACCEPT` |
-| TK-005 | Weryfikacja anotacji i eksport COCO | gotowy | TK-004 | Gate 3 |
+| TK-005 | Weryfikacja anotacji i eksport COCO | rozbity na F1/F2 | TK-004 | Gate 3 |
+| TK-005-F1 | Weryfikacja anotacji i licznik rewizji | gotowy | TK-004 | część Gate 3 |
+| TK-005-F2 | Eksport COCO na snapshocie rewizji | gotowy | TK-005-F1 | Gate 3 backend |
 | FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005 | Gate 3 |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
@@ -23,6 +25,12 @@ model/language binding, `ocr-evaluator-v2` i manifest GT+cropów. Quality pozost
 oczekiwanym FAIL, a docelowy engine pozostaje TD-014. TK-004 jest odblokowany,
 ale musi przenosić `experimental=true` i `quality_gate=failed`.
 
+TK-005 został rozbity na dwa sub-tickety. `TK-005-F1` wnosi migrację `0005`
+(`review_revision`, `exports.error_code`, partial unique index eksportu), więc
+`TK-005-F2` bez niego nie startuje. Kontrakt obu jest przypięty w `TECH_PLAN`
+commitem `63fa715`. Rozstrzygnięcie recovery: klatka z decyzją review jest
+nietykalna dla rekoncyliacji, zgodnie z CF-04.
+
 ## Graf zależności
 
 ```mermaid
@@ -30,13 +38,14 @@ graph LR
   A[TK-001] --> C[TK-002]
   C --> D[TK-003]
   D --> E[TK-004]
-  E --> F[TK-005]
+  E --> F1[TK-005-F1]
+  F1 --> F2[TK-005-F2]
   B[FE-SETUP] --> G[FE-001]
   C --> G
   E --> G
-  F --> G
+  F2 --> G
   A --> H[TK-006]
-  F --> H
+  F2 --> H
   G --> H
 ```
 
