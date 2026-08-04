@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import shutil
 import time
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import UUID
 
 from sqlalchemy import select
 
 from backend.app.access.store.database import Database
-from backend.app.access.store.models import ReferenceAsset
+from backend.app.access.store.models import Export, ReferenceAsset
 from backend.app.access.store.workspace import Workspace, WorkspaceError
 
 
@@ -18,6 +20,86 @@ class ReconciliationResult:
     removed_orphaned: int
     marked_missing: int
     marked_ready: int
+
+
+@dataclass(frozen=True)
+class ExportReconciliationResult:
+    removed_temporary: int
+    removed_final: int
+    failed_interrupted: int
+
+
+class ExportReconciler:
+    """Close process-interrupted exports and remove only their private artifacts."""
+
+    ERROR_CODE = "export_process_interrupted"
+
+    def __init__(self, database: Database, workspace: Workspace) -> None:
+        self._database = database
+        self._workspace = workspace
+
+    def reconcile(self) -> ExportReconciliationResult:
+        exports_path = self._workspace.resolve_relpath("exports")
+        with self._database.session() as session:
+            interrupted_ids = tuple(
+                session.scalars(select(Export.id).where(Export.status.in_(("queued", "running"))))
+            )
+
+        removed_temporary = 0
+        removed_final = 0
+        for export_id in interrupted_ids:
+            if not self._is_export_uuid(export_id):
+                continue
+            prefix = f".{export_id}-"
+            for candidate in exports_path.iterdir():
+                if candidate.name.startswith(prefix) and self._remove_artifact(candidate):
+                    removed_temporary += 1
+            final_path = self._workspace.resolve_relpath(Path("exports") / export_id)
+            if self._remove_artifact(final_path):
+                removed_final += 1
+
+        failed_interrupted = 0
+        if interrupted_ids:
+            with self._database.session() as session:
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                records = session.scalars(
+                    select(Export).where(
+                        Export.id.in_(interrupted_ids),
+                        Export.status.in_(("queued", "running")),
+                    )
+                )
+                for export in records:
+                    export.status = "failed"
+                    export.error_code = self.ERROR_CODE
+                    export.output_relpath = None
+                    export.manifest_json = None
+                    failed_interrupted += 1
+
+        return ExportReconciliationResult(
+            removed_temporary=removed_temporary,
+            removed_final=removed_final,
+            failed_interrupted=failed_interrupted,
+        )
+
+    @staticmethod
+    def _is_export_uuid(export_id: str) -> bool:
+        try:
+            return str(UUID(export_id)) == export_id
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _remove_artifact(path: Path) -> bool:
+        try:
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+                return True
+            if path.is_dir():
+                shutil.rmtree(path)
+                return True
+        except OSError:
+            return False
+        return False
 
 
 class ReferenceAssetReconciler:

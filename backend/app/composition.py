@@ -16,7 +16,7 @@ from backend.app.access.ocr import (
 from backend.app.access.status.service import ResourceProbe, SystemResourceProbe, SystemStatusAccess
 from backend.app.access.store.database import Database
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, upgrade_database
-from backend.app.access.store.reconciliation import ReferenceAssetReconciler
+from backend.app.access.store.reconciliation import ExportReconciler, ReferenceAssetReconciler
 from backend.app.access.store.reference_assets import ReferenceAssetStore
 from backend.app.access.store.repositories.annotations import AnnotationRepository
 from backend.app.access.store.repositories.assets import AssetRepository
@@ -104,6 +104,15 @@ def build_composition(
             "removed_orphaned": reconciliation.removed_orphaned,
             "marked_missing": reconciliation.marked_missing,
             "marked_ready": reconciliation.marked_ready,
+        },
+    )
+    export_reconciliation = ExportReconciler(database, workspace).reconcile()
+    logger.info(
+        "export_reconciliation_completed",
+        extra={
+            "removed_temporary": export_reconciliation.removed_temporary,
+            "removed_final": export_reconciliation.removed_final,
+            "failed_interrupted": export_reconciliation.failed_interrupted,
         },
     )
     project_store = ProjectStore(database, workspace)
