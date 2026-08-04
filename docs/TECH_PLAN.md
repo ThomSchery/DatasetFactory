@@ -48,13 +48,25 @@ mają integer `version` do optimistic concurrency.
 | `hud_regions` | `id`, `profile_id`, `name`, `x,y,width,height` integer; bbox dodatni i w granicach source; `UNIQUE(profile_id,name)` |
 | `categories` | `id`, `profile_id`, `name`, `kind=character/game`, `ordinal`; `UNIQUE(profile_id,name)`, `UNIQUE(profile_id,ordinal)` |
 | `video_assets` | `id`, `project_id`, `local_path`, `size_bytes`, `duration_ms`, `width`, `height`, `fingerprint(size+mtime)` |
-| `pipeline_runs` | `id`, `profile_id`, `video_id`, `interval_ms`, `status`, `error_code`, `last_heartbeat_at`, `attempt`, `total_frames`, `version` |
+| `pipeline_runs` | `id`, `profile_id`, `video_id`, `interval_ms`, `status`, `error_code`, `last_heartbeat_at`, `attempt`, `total_frames`, `version`, `review_revision` |
 | `frames` | `id`, `run_id`, `frame_index`, `timestamp_ms`, `image_relpath`, `stage_status`, `review_status`, `width`, `height`, `version`; `UNIQUE(run_id,frame_index)` |
 | `region_samples` | `id`, `frame_id`, `region_id`, `crop_relpath`, `stage_status`; `UNIQUE(frame_id,region_id)` |
 | `ocr_observations` | `id`, `sample_id`, `char`, local `x,y,width,height`, `confidence`, `engine`, `engine_version`, `config_hash`, `valid`, `rejection_code` |
 | `annotations` | `id`, `frame_id`, `category_id`, global `x,y,width,height`, `confidence NULL`, `source=ocr/manual`, `observation_id NULL`, `status=proposed/accepted/deleted`, `version` |
 | `stage_checkpoints` | `run_id`, `frame_index`, `stage`, `attempt`, `status`, `artifact_relpath`, `artifact_hash`, `error_code`; composite unique `(run_id,frame_index,stage)` |
-| `exports` | `id`, `run_id`, `status`, `output_relpath`, `input_revision`, `manifest_json` |
+| `exports` | `id`, `run_id`, `status`, `output_relpath`, `input_revision`, `error_code`, `manifest_json`; partial `UNIQUE(run_id) WHERE status IN ('queued','running')` |
+
+`review_revision` to licznik monotoniczny per run, startujący od `0`. Zwiększa go
+dokładnie jedna transakcja każdej mutacji weryfikacji — korekta klasy anotacji,
+tombstone anotacji oraz accept/reject klatki — obok inkrementu `version` samego
+agregatu. `version` służy optimistic concurrency pojedynczej encji, a
+`review_revision` identyfikuje stan całego zbioru anotacji runu; te dwa liczniki
+nie zastępują się nawzajem. Etapy workera nie ruszają `review_revision`.
+
+Równoległy eksport tego samego runu blokuje partial unique index, nie tylko
+sprawdzenie w kodzie: drugi `POST /exports` przegrywa na `IntegrityError`
+mapowanym na `409 export_running`. Nieudany eksport zapisuje stabilny
+`error_code` jako kolumnę, nie jako pole opisowe manifestu.
 
 SQLite: WAL mode, foreign keys ON, transakcje krótkie. Worker nie trzyma
 transakcji podczas FFmpeg/Tesseract. Najpierw powstaje temp artefakt, następnie
@@ -112,7 +124,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `DELETE /annotations/{id}` | `expected_version` query | `204` | `404`, `409` |
 | `POST /frames/{id}/review` | `{decision:accept|reject,expected_version}` | frame review snapshot | `400 no_annotations`, `404`, `409` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
-| `GET /exports/{id}` | — | status, manifest, relative output | `404` |
+| `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
 
 Endpointy są jawnie `local-public`; FastAPI binduje loopback. Dev CORS dopuszcza
 wyłącznie skonfigurowany origin Vite. Nie ma endpointu przyjmującego upload ani
@@ -138,6 +150,16 @@ dowolną ścieżkę wyjściową.
   klatkę bez propozycji do odrzucenia. Błąd infrastruktury zatrzymuje run.
 - Operacje akceptacji i eksportu są transakcyjne; eksport używa `input_revision`
   i nie miesza wyników ze zmianą review w trakcie generowania.
+- Eksport czyta `pipeline_runs.review_revision` razem ze snapshotem accepted
+  frames w jednej transakcji i zapisuje go jako `input_revision`. Dokument COCO
+  powstaje poza transakcją, na temp katalogu. Przed atomic rename krótka
+  transakcja odczytuje `review_revision` ponownie; różnica kończy eksport jako
+  `failed` z `export_revision_conflict`, kasuje temp i nie publikuje niczego.
+  Użytkownik ponawia eksport świadomie; nie ma cichego retry ani wyniku
+  mieszającego dwie rewizje.
+- Ten sam `input_revision` daje bajtowo identyczny dokument: sortowanie jest
+  deterministyczne, a numeryczne ID `images`/`annotations` nadaje engine po
+  posortowaniu, nigdy z UUID ani kolejności bazy.
 
 ## 7. Filesystem
 
