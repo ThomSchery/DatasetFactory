@@ -18,6 +18,7 @@ from backend.app.access.store.database import Database
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, upgrade_database
 from backend.app.access.store.reconciliation import ReferenceAssetReconciler
 from backend.app.access.store.reference_assets import ReferenceAssetStore
+from backend.app.access.store.repositories.annotations import AnnotationRepository
 from backend.app.access.store.repositories.assets import AssetRepository
 from backend.app.access.store.repositories.checkpoints import CheckpointRepository
 from backend.app.access.store.repositories.frames import FrameRepository
@@ -29,6 +30,7 @@ from backend.app.access.store.repository import ProjectStore
 from backend.app.access.store.workspace import Workspace
 from backend.app.config import Settings
 from backend.app.engines.definition import DatasetDefinitionEngine
+from backend.app.engines.review import AnnotationReviewEngine
 from backend.app.logging import close_json_logging, configure_json_logging
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import (
@@ -39,6 +41,7 @@ from backend.app.managers.workflow.material_use_cases import (
 )
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCases
 from backend.app.managers.workflow.recovery import WorkflowRecovery
+from backend.app.managers.workflow.review_use_cases import ReviewUseCases
 from backend.app.managers.workflow.worker import WorkflowWorker
 
 
@@ -53,6 +56,7 @@ class CompositionRoot:
     ocr_engine: OcrEngine
     profile_use_cases: ProfileUseCases
     material_use_cases: MaterialUseCases
+    review_use_cases: ReviewUseCases
     dataset_workflow: DatasetWorkflow
     logger: logging.Logger
     log_path: Path
@@ -149,6 +153,11 @@ def build_composition(
     runs = RunRepository(database)
     frames = FrameRepository(database)
     checkpoints = CheckpointRepository(database, workspace)
+    review_use_cases = ReviewUseCases(
+        AnnotationReviewEngine(),
+        AnnotationRepository(database),
+        workspace,
+    )
     workflow_recovery = WorkflowRecovery(runs, checkpoints)
     workflow_worker = WorkflowWorker(
         runs,
@@ -173,6 +182,7 @@ def build_composition(
         extra={
             "paused_runs": recovery_result.paused_runs,
             "invalidated_frames": recovery_result.invalidated_frames,
+            "skipped_reviewed_frames": recovery_result.skipped_reviewed_frames,
         },
     )
     return CompositionRoot(
@@ -185,6 +195,7 @@ def build_composition(
         ocr_engine,
         profile_use_cases,
         material_use_cases,
+        review_use_cases,
         dataset_workflow,
         logger,
         log_path,

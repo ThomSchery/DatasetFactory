@@ -11,8 +11,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app import __version__
+from backend.app.api.annotations import create_annotations_router
 from backend.app.api.assets import create_assets_router
 from backend.app.api.errors import error_envelope
+from backend.app.api.frames import create_frames_router
 from backend.app.api.health import SystemStatusReader, create_health_router
 from backend.app.api.materials import create_materials_router
 from backend.app.api.middleware import RequestContextMiddleware
@@ -23,6 +25,7 @@ from backend.app.config import Settings
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import MaterialUseCases
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCases
+from backend.app.managers.workflow.review_use_cases import ReviewUseCases
 
 
 def create_app(
@@ -72,11 +75,17 @@ def create_app(
         active_composition: CompositionRoot = application.state.composition
         return active_composition.dataset_workflow
 
+    def get_review_use_cases() -> ReviewUseCases:
+        active_composition: CompositionRoot = application.state.composition
+        return active_composition.review_use_cases
+
     application.include_router(create_health_router(get_system_status))
     application.include_router(create_profiles_router(get_profile_use_cases))
     application.include_router(create_materials_router(get_material_use_cases))
     application.include_router(create_assets_router(get_profile_use_cases))
     application.include_router(create_runs_router(get_dataset_workflow))
+    application.include_router(create_annotations_router(get_review_use_cases))
+    application.include_router(create_frames_router(get_review_use_cases))
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

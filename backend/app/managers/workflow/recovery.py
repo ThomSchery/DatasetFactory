@@ -21,6 +21,7 @@ from backend.app.access.store.repositories.runs import (
 class RecoveryResult:
     paused_runs: int
     invalidated_frames: int
+    skipped_reviewed_frames: int
 
 
 class WorkflowRecovery:
@@ -44,10 +45,18 @@ class WorkflowRecovery:
         self._runs.clear_stale_resume_reservations()
         running = self._runs.running_ids()
         invalidated = 0
+        skipped = 0
         for run_id in running:
-            invalidated += self.reconcile_run(run_id)
+            plan = self.plan_reconciliation(run_id)
+            self._checkpoints.apply_running_plan(run_id, plan)
+            invalidated += len(plan.invalidations)
+            skipped += len(plan.skipped_reviewed_frames)
             self._runs.pause_orphan(run_id)
-        return RecoveryResult(paused_runs=len(running), invalidated_frames=invalidated)
+        return RecoveryResult(
+            paused_runs=len(running),
+            invalidated_frames=invalidated,
+            skipped_reviewed_frames=skipped,
+        )
 
     def reconcile_run(self, run_id: str) -> int:
         plan = self.plan_reconciliation(run_id)
@@ -74,20 +83,28 @@ class WorkflowRecovery:
             for checkpoint in self._checkpoints.completed_for_run(run_id)
         }
         invalidations: list[FrameInvalidation] = []
-        for frame_index, frame_stage in self._checkpoints.frame_stages(run_id):
+        skipped_reviewed: list[int] = []
+        for frame_index, frame_stage, review_status in self._checkpoints.frame_stages(run_id):
             required = self._REQUIRED_BY_FRAME_STAGE.get(frame_stage, STAGES)
             for stage in required:
                 checkpoint = completed.get((frame_index, stage))
                 if checkpoint is None or not self._checkpoint_is_valid(checkpoint, run):
-                    invalidations.append(
-                        FrameInvalidation(
-                            frame_index=frame_index,
-                            stage=stage,
-                            expected_frame_stage=frame_stage,
+                    if review_status != "pending":
+                        skipped_reviewed.append(frame_index)
+                    else:
+                        invalidations.append(
+                            FrameInvalidation(
+                                frame_index=frame_index,
+                                stage=stage,
+                                expected_frame_stage=frame_stage,
+                            )
                         )
-                    )
                     break
-        return ReconciliationPlan(run_id=run_id, invalidations=tuple(invalidations))
+        return ReconciliationPlan(
+            run_id=run_id,
+            invalidations=tuple(invalidations),
+            skipped_reviewed_frames=tuple(skipped_reviewed),
+        )
 
     def _checkpoint_is_valid(self, checkpoint: CheckpointRecord, run: RunRecord) -> bool:
         return (
@@ -100,6 +117,6 @@ class WorkflowRecovery:
             and checkpoint.ocr_page_segmentation_mode == run.ocr_page_segmentation_mode
             and checkpoint.experimental == run.experimental
             and checkpoint.quality_gate == run.quality_gate
-            and checkpoint.warning == run.warning
+            and checkpoint.warning == run.warning.split("Recovery warning:", 1)[0].rstrip()
             and self._checkpoints.is_valid(checkpoint)
         )

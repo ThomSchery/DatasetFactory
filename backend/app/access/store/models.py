@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -201,6 +202,7 @@ class PipelineRun(TimestampMixin, Base):
     quality_gate: Mapped[str] = mapped_column(String(20), nullable=False)
     warning: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    review_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Frame(TimestampMixin, Base):
@@ -367,6 +369,12 @@ class Export(TimestampMixin, Base):
             "status IN ('queued','running','completed','failed')", name="ck_export_status"
         ),
         CheckConstraint("input_revision >= 0", name="ck_export_revision"),
+        Index(
+            "uq_exports_active_run",
+            "run_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued','running')"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -376,4 +384,5 @@ class Export(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
     output_relpath: Mapped[str | None] = mapped_column(Text)
     input_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(100))
     manifest_json: Mapped[str | None] = mapped_column(Text)

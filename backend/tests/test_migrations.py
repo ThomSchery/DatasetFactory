@@ -35,6 +35,7 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     run_columns = {column["name"] for column in inspector.get_columns("pipeline_runs")}
     checkpoint_columns = {column["name"] for column in inspector.get_columns("stage_checkpoints")}
     observation_columns = {column["name"] for column in inspector.get_columns("ocr_observations")}
+    export_columns = {column["name"] for column in inspector.get_columns("exports")}
     assert {
         "current_stage",
         "current_frame_index",
@@ -47,10 +48,19 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
         "quality_gate",
         "warning",
     } <= run_columns
+    assert "review_revision" in run_columns
+    assert "error_code" in export_columns
     assert {"ocr_engine", "experimental", "quality_gate", "warning"} <= checkpoint_columns
     assert {"runtime_sha256", "experimental", "quality_gate", "warning"} <= (observation_columns)
     run_indexes = {index["name"]: index for index in inspector.get_indexes("pipeline_runs")}
     assert run_indexes["uq_pipeline_runs_global_workflow_slot"]["unique"] == 1
+    export_indexes = {index["name"]: index for index in inspector.get_indexes("exports")}
+    assert export_indexes["uq_exports_active_run"]["unique"] == 1
+    with engine.connect() as connection:
+        export_index_sql = connection.execute(
+            text("SELECT sql FROM sqlite_master WHERE name='uq_exports_active_run'")
+        ).scalar_one()
+    assert "WHERE status IN ('queued','running')" in export_index_sql
     run_checks = {
         constraint["name"] for constraint in inspector.get_check_constraints("pipeline_runs")
     }
@@ -263,7 +273,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0004"
+            "0005"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -374,7 +384,7 @@ def test_documented_cleanup_sql_actually_unblocks_the_migration(settings: Settin
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0004"
+            "0005"
         )
     engine.dispose()
 
@@ -473,6 +483,6 @@ def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Set
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0004"
+            "0005"
         )
     engine.dispose()

@@ -6,7 +6,10 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.parametrize("module_name", ["health", "profiles", "materials", "assets"])
+@pytest.mark.parametrize(
+    "module_name",
+    ["health", "profiles", "materials", "assets", "annotations", "frames"],
+)
 def test_api_router_does_not_import_composition_root(module_name: str) -> None:
     source_path = Path(f"backend/app/api/{module_name}.py")
     tree = ast.parse(source_path.read_text(encoding="utf-8"))
@@ -33,6 +36,8 @@ def test_api_router_does_not_import_composition_root(module_name: str) -> None:
         Path("backend/app/engines/definition/ocr_mapping.py"),
         Path("backend/app/managers/workflow/profile_use_cases.py"),
         Path("backend/app/managers/workflow/material_use_cases.py"),
+        Path("backend/app/engines/review/engine.py"),
+        Path("backend/app/managers/workflow/review_use_cases.py"),
     ],
 )
 def test_engine_and_manager_do_not_import_http_or_sqlalchemy(source_path: Path) -> None:

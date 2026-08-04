@@ -36,6 +36,7 @@ class RunResponse(StrictModel):
     current_stage: str | None
     current_frame_index: int | None
     version: int
+    review_revision: int
     ocr_engine: str
     ocr_engine_version: str
     ocr_runtime_sha256: str

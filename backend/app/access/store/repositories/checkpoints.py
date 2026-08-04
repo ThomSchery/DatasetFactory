@@ -54,6 +54,7 @@ class FrameInvalidation:
 class ReconciliationPlan:
     run_id: str
     invalidations: tuple[FrameInvalidation, ...]
+    skipped_reviewed_frames: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,10 +105,10 @@ class CheckpointRepository:
             )
             return tuple(self._record(checkpoint) for checkpoint in checkpoints)
 
-    def frame_stages(self, run_id: str) -> tuple[tuple[int, str], ...]:
+    def frame_stages(self, run_id: str) -> tuple[tuple[int, str, str], ...]:
         with self._database.session() as session:
             return tuple(
-                (frame.frame_index, frame.stage_status)
+                (frame.frame_index, frame.stage_status, frame.review_status)
                 for frame in session.scalars(
                     select(Frame).where(Frame.run_id == run_id).order_by(Frame.frame_index)
                 )
@@ -258,6 +259,16 @@ class CheckpointRepository:
     def _apply_plan(self, session: Session, plan: ReconciliationPlan) -> None:
         for invalidation in plan.invalidations:
             self._apply_invalidation(session, plan.run_id, invalidation)
+        if plan.skipped_reviewed_frames:
+            run = session.get(PipelineRun, plan.run_id)
+            if run is None:
+                raise CheckpointReservationError
+            base_warning = run.warning.split("Recovery warning:", 1)[0].rstrip()
+            count = len(plan.skipped_reviewed_frames)
+            recovery_warning = (
+                f"Recovery warning: skipped {count} reviewed frame(s) with invalid artifacts."
+            )
+            run.warning = f"{base_warning}\n{recovery_warning}".lstrip()
 
     def _apply_invalidation(
         self,
@@ -279,6 +290,8 @@ class CheckpointRepository:
             )
         ).one()
         if frame.stage_status != invalidation.expected_frame_stage:
+            raise CheckpointReservationError
+        if frame.review_status != "pending":
             raise CheckpointReservationError
         target = target_by_stage[invalidation.stage]
         current = frame.stage_status

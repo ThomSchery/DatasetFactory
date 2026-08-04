@@ -39,3 +39,4 @@ def test_full_composition_root_builds_without_server(composition: CompositionRoo
     assert composition.project_store.resolve_artifact("runs/example/frame.jpg").startswith(
         str(composition.workspace.root)
     )
+    assert composition.review_use_cases is not None

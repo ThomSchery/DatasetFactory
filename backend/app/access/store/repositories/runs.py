@@ -87,6 +87,7 @@ class RunRecord:
     workflow_slot: int | None
     resume_token: str | None
     version: int
+    review_revision: int
     ocr_engine: str
     ocr_engine_version: str
     ocr_runtime_sha256: str
@@ -187,6 +188,7 @@ class RunRepository:
                 quality_gate=provenance.quality_gate,
                 warning=warning,
                 version=1,
+                review_revision=0,
             )
             session.add(run)
             session.flush()
@@ -663,6 +665,7 @@ class RunRepository:
             workflow_slot=run.workflow_slot,
             resume_token=run.resume_token,
             version=run.version,
+            review_revision=run.review_revision,
             ocr_engine=run.ocr_engine,
             ocr_engine_version=run.ocr_engine_version,
             ocr_runtime_sha256=run.ocr_runtime_sha256,

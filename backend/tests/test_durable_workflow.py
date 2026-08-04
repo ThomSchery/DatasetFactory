@@ -36,6 +36,7 @@ from backend.app.access.store.models import (
     VideoAsset,
 )
 from backend.app.access.store.repositories.checkpoints import (
+    CheckpointArtifact,
     CheckpointArtifactError,
     CheckpointRepository,
 )
@@ -51,6 +52,7 @@ from backend.app.engines.definition import (
 from backend.app.main import create_app
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.recovery import WorkflowRecovery
+from backend.app.managers.workflow.state_machine import InvalidTransitionError
 from backend.app.managers.workflow.worker import WorkflowWorker
 
 FIXTURES = Path("backend/tests/fixtures")
@@ -723,3 +725,132 @@ def test_checkpoint_path_escape_is_rejected_before_mkdir(
         )
     assert "artifact_path_invalid" in str(error.value)
     assert not outside.exists()
+
+
+def test_commit_ocr_rejects_review_pending_before_deleting_annotations(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    _install_workflow(composition, StubMediaAccess(composition), StubOcrEngine())
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+
+    frames = FrameRepository(composition.database)
+    with composition.database.session() as session:
+        before = tuple(session.scalars(select(Annotation.id)))
+    with pytest.raises(InvalidTransitionError):
+        frames.commit_ocr(
+            created["id"],
+            0,
+            (),
+            CheckpointArtifact("runs/unused.json", "0" * 64),
+            "",
+        )
+    with composition.database.session() as session:
+        assert tuple(session.scalars(select(Annotation.id))) == before
+
+
+def test_recovery_skips_reviewed_frames_without_changing_review_state_or_revision(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path, duration_ms=2000)
+    _, _, recovery = _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        StubOcrEngine(),
+    )
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        completed = _wait_status(client, created["id"], "review_ready")
+
+    with composition.database.session() as session:
+        frames = tuple(
+            session.scalars(
+                select(Frame).where(Frame.run_id == created["id"]).order_by(Frame.frame_index)
+            )
+        )
+        assert len(frames) == 2
+        frames[0].review_status = "accepted"
+        frames[1].review_status = "rejected"
+        for annotation in session.scalars(
+            select(Annotation).where(Annotation.frame_id == frames[0].id)
+        ):
+            annotation.status = "accepted"
+        for frame_index in (0, 1):
+            checkpoint = session.get(StageCheckpoint, (created["id"], frame_index, "ocr"))
+            assert checkpoint is not None
+            checkpoint.artifact_hash = "0" * 64
+        run = session.get(PipelineRun, created["id"])
+        assert run is not None
+        run.review_revision = 2
+        run.status = "running"
+        run.workflow_slot = 1
+        run.current_stage = "ocr"
+        run.version = completed["version"] + 1
+        frame_ids = tuple(frame.id for frame in frames)
+        annotation_ids = tuple(
+            session.scalars(
+                select(Annotation.id)
+                .where(Annotation.frame_id.in_(frame_ids))
+                .order_by(Annotation.id)
+            )
+        )
+
+    first = recovery.recover_startup()
+    assert first.invalidated_frames == 0
+    assert first.skipped_reviewed_frames == 2
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        assert run is not None
+        assert run.review_revision == 2
+        assert "skipped 2 reviewed frame(s)" in run.warning
+        persisted = tuple(
+            session.scalars(
+                select(Frame).where(Frame.run_id == created["id"]).order_by(Frame.frame_index)
+            )
+        )
+        assert tuple(frame.review_status for frame in persisted) == ("accepted", "rejected")
+        assert (
+            tuple(
+                session.scalars(
+                    select(Annotation.id)
+                    .where(Annotation.frame_id.in_(frame_ids))
+                    .order_by(Annotation.id)
+                )
+            )
+            == annotation_ids
+        )
+        first_warning = run.warning
+        run.status = "running"
+        run.workflow_slot = 1
+        run.current_stage = "ocr"
+
+    second = recovery.recover_startup()
+    assert second.invalidated_frames == 0
+    assert second.skipped_reviewed_frames == 2
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        assert run is not None
+        assert run.review_revision == 2
+        assert run.warning == first_warning
+        persisted = tuple(
+            session.scalars(
+                select(Frame).where(Frame.run_id == created["id"]).order_by(Frame.frame_index)
+            )
+        )
+        assert tuple(frame.review_status for frame in persisted) == ("accepted", "rejected")
