@@ -8,7 +8,7 @@
 | TK-003 | Media i eksperymentalny adapter OCR | wykonany | TK-001, TK-002 | Gate 2 techniczny ✓; quality FAIL→TD-014 |
 | TK-004 | Trwały workflow, checkpointy i odzyskiwanie | wykonany | TK-003-F2 | Zintegrowany w `d4069bb`; finalny review `ACCEPT` |
 | TK-005 | Weryfikacja anotacji i eksport COCO | rozbity na F1/F2 | TK-004 | Gate 3 |
-| TK-005-F1 | Weryfikacja anotacji i licznik rewizji | gotowy | TK-004 | część Gate 3 |
+| TK-005-F1 | Weryfikacja anotacji i licznik rewizji | wykonany | TK-004 | część Gate 3 ✓ |
 | TK-005-F2 | Eksport COCO na snapshocie rewizji | gotowy | TK-005-F1 | Gate 3 backend |
 | FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005 | Gate 3 |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
@@ -24,6 +24,10 @@ Tesseract wyłącznie jako adapter experimental, pinowane provenance, confinemen
 model/language binding, `ocr-evaluator-v2` i manifest GT+cropów. Quality pozostaje
 oczekiwanym FAIL, a docelowy engine pozostaje TD-014. TK-004 jest odblokowany,
 ale musi przenosić `experimental=true` i `quality_gate=failed`.
+
+`TK-005-F1` wykonany (`559acef`) wraz z fixupem `TK-005-F1-FIX1` (`24ee3d2`),
+który rozdzielił ostrzeżenie recovery od provenance OCR po findingu High z cold
+review. Niezależne re-review: `ACCEPT`. Pełny suite 221/221.
 
 TK-005 został rozbity na dwa sub-tickety. `TK-005-F1` wnosi migrację `0005`
 (`review_revision`, `exports.error_code`, partial unique index eksportu), więc

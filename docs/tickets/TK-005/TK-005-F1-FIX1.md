@@ -1,6 +1,6 @@
 # TK-005-F1-FIX1 — rozdzielenie ostrzeżenia recovery od provenance
 
-Status: GOTOWY
+Status: WYKONANY (2026-08-04)
 
 ## Powód
 
@@ -50,3 +50,19 @@ Cokolwiek z TK-005-F2. Zmiana semantyki pominięć uzgodnionej w TK-005-F1.
 - Ostrzeżenie o pominiętych klatkach nadal widoczne w statusie runu.
 - `review_revision` nietknięty przez recovery.
 - Pełne bramki backendu zielone: ruff, mypy strict, cały pytest.
+
+## Wynik wykonania
+
+Commit `24ee3d2`. Stan recovery trzymany jako licznik
+`pipeline_runs.recovery_skipped_frames` (NOT NULL DEFAULT 0) dopisany do
+migracji `0005`; tekst ostrzeżenia wyliczany przy serializacji w `api/runs.py`,
+nie utrwalany. `_checkpoint_is_valid` porównuje `checkpoint.warning ==
+run.warning` wprost; w ścieżce provenance nie został żaden sentinel.
+
+Licznik jest nadpisywany przy każdym zastosowanym planie, także zerem — to
+migawka ostatniej rekoncyliacji, nie historia. Przebieg bez uszkodzonych klatek
+z decyzją review czyści ostrzeżenie.
+
+Weryfikacja: ruff 0, mypy strict 0/83, 3 regresje FIX1, pakiet migracje/
+composition/boundary 22, pełny pytest 221 w 26:41. Niezależne cold re-review:
+`ACCEPT`, brak blokerów.
