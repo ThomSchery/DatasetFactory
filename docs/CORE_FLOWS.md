@@ -62,13 +62,22 @@ błąd config/input jest non-retryable.
 
 1. UI pobiera stronicowaną listę klatek `review_pending` i obraz jednej klatki.
 2. Renderuje bbox, klasę, confidence i region źródłowy.
-3. Użytkownik może zmienić klasę na dozwoloną albo usunąć propozycję.
+3. Użytkownik może zmienić klasę na dozwoloną, usunąć propozycję, poprawić
+   geometrię istniejącego boksu albo narysować nowy w dowolnym miejscu klatki.
 4. Akceptacja klatki zapisuje snapshot aktualnych anotacji jako `accepted`;
    odrzucenie oznacza klatkę `rejected` i wyklucza wszystkie jej anotacje.
 5. Mutacja używa `version` klatki; konflikt równoległej/starej edycji daje `409`
    i wymaga ponownego pobrania (bez optimistic update).
+6. Odrzuconą klatkę można otworzyć ponownie jawną akcją: status wraca do
+   `pending`, anotacje i ich statusy pozostają nietknięte, a licznik
+   `review_revision` rośnie jak przy każdej mutacji weryfikacji. Klatka
+   `accepted` pozostaje zablokowana, żeby snapshot eksportu był trwały.
+7. Lista klatek daje się filtrować po `review_status`, więc odrzucone są
+   osiągalne — bez tego ponowne otwarcie byłoby funkcją bez wejścia.
 
-Brak boksu OCR: v1 nie pozwala go dorysować — użytkownik odrzuca klatkę.
+Brak boksu OCR: użytkownik dorysowuje go ręcznie. Boks ręczny ma `source=manual`
+i nie ma `confidence`; walidacja sprawdza wyłącznie granice klatki, nie regiony
+HUD, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
 
 ## CF-06 — Eksport COCO
 
@@ -77,8 +86,11 @@ Brak boksu OCR: v1 nie pozwala go dorysować — użytkownik odrzuca klatkę.
    generuje stabilne liczbowe ID i waliduje bbox w granicach obrazu.
 3. Uwzględnia wyłącznie klatki/anotacje `accepted`; kopiuje odpowiadające obrazy
    do katalogu eksportu i zapisuje `annotations.json` atomowo.
-4. Manifest zawiera wersję schematu aplikacji, run/profile ID i czas eksportu;
-   pełne lokalne ścieżki źródłowe nie trafiają do COCO.
+4. Manifest zawiera wersję schematu aplikacji, run/profile ID, czas eksportu
+   oraz liczbę anotacji według źródła (`ocr` i `manual`); pełne lokalne ścieżki
+   źródłowe nie trafiają do COCO. Sam dokument COCO pozostaje standardowy —
+   źródło anotacji nie jest w nim polem, bo po weryfikacji każdy boks jest
+   zatwierdzony przez człowieka, a rozróżnienie służy ocenie jakości OCR.
 5. Powtórzenie bez zmian nadpisuje ten sam draft eksportu atomowo; zatwierdzony
    artefakt ma nowy `export_id`.
 

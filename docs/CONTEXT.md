@@ -139,7 +139,7 @@ Pełne uzasadnienia, koszty odkręcenia i ryzyka: artefakt bramki
 | F05 | Wycięcie regionów HUD | Autor datasetu | v1 | pełna | — | — | — |
 | F06 | OCR regionów | Autor datasetu | v1 | uproszczona | Wymienialny moduł `OcrEngine`; Tesseract tylko eksperymentalny adapter, wybór silnika produkcyjnego odroczony | ~3–7 dni na benchmark/adapter | Niska trafność może zwiększyć odrzuty; adapter musi być jawnie oznaczony jako experimental |
 | F07 | Mapowanie znaków na klasy | Autor datasetu | v1 | pełna | Bazowy alfabet obejmuje `-`, `/`, `0–9`, `A–Z` | — | — |
-| F08 | Ekran weryfikacji | Autor datasetu | v1 | uproszczona | Korekta klasy i usunięcie boksu, bez rysowania nowych | ~2 dni, 1–2 pliki | Znak przeoczony przez OCR wymusza odrzucenie klatki |
+| F08 | Ekran weryfikacji | Autor datasetu | v1 | pełna | Korekta klasy, usunięcie boksu, rysowanie nowych i zmiana geometrii istniejących; odrzuconą klatkę można otworzyć ponownie | — | — |
 | F11 | Eksport `COCO JSON` | Autor datasetu | v1 | uproszczona | Jeden plik, bez podziału train/val | ~0.5 dnia, 1 plik | Podział datasetu poza narzędziem |
 | F12 | Dashboard | Autor datasetu | v1 | uproszczona | Stan bieżącej sesji i GPU, bez historii | ~1 dzień, 1–2 pliki | Brak trendu jakości między sesjami |
 | F13 | Materiały | Autor datasetu | v1 | pełna | — | — | — |
@@ -147,7 +147,7 @@ Pełne uzasadnienia, koszty odkręcenia i ryzyka: artefakt bramki
 | F15 | Trwałość projektu | Autor datasetu | v1 | uproszczona | Lokalny `SQLite`, jeden projekt naraz | ~1 dzień, 1–2 pliki | Utrata pliku bazy = utrata sesji |
 | F16 | Powłoka interfejsu | Autor datasetu | v1 | uproszczona | Tokeny i klasy `.df-*` jako zwykły CSS, bez portu na Tailwind | ~1–2 dni, warstwa stylów | Rozjazd z późniejszymi iteracjami designu |
 | F02 | Lista i edycja profili gier | Autor datasetu | później | — | — | — | — |
-| F09 | Ręczne boksy ikon HUD | Autor datasetu | później | — | — | — | — |
+| F09 | Ręczne boksy ikon HUD | Autor datasetu | v1 | uproszczona | Rysowanie i zmiana geometrii boksu w dowolnym miejscu klatki; bez wieloboków i masek | ~2 dni, backend + edytor | Ręczna praca rośnie, gdy OCR jest słaby |
 | F10 | SAM 3 — maski i tracking | Autor datasetu | później | — | — | — | — |
 
 ## Typ Projektu (wyliczony)
@@ -156,7 +156,10 @@ Pełne uzasadnienia, koszty odkręcenia i ryzyka: artefakt bramki
 
 Sygnały, które zdecydowały:
 
-- Istnieje lista „później" (F02, F09, F10) → wstępnie `MVP`.
+- Istnieje lista „później" (F02, F10) → wstępnie `MVP`. F09 został wciągnięty do
+  v1 decyzją z 2026-08-04, gdy okazało się, że przy `quality_gate=failed`
+  Tesseracta brak ręcznego boksu wymusza odrzucanie całych klatek razem z ich
+  poprawnymi odczytami.
 - P9 = `Jednorazowy prototyp` → reguła 1 z PATH-07 wymusza `MVP` bezwarunkowo,
   niezależnie od budżetu liczonego w miesiącach.
 - P4 = 1 osoba → korekta wg `STACK_DEFAULTS.md` i tak kieruje na stack MVP.

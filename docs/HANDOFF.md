@@ -53,7 +53,8 @@ upoważnia do implementowania rozwiązania docelowego w MVP.
 
 - **Contract First:** zmiana endpointu/statusu/modelu najpierw aktualizuje
   `TECH_PLAN` i test kontraktu.
-- **Scope Lock:** ticket nie realizuje F02/F09/F10 ani infrastruktury „na później”.
+- **Scope Lock:** ticket nie realizuje F02/F10 ani infrastruktury „na później”.
+  F09 należy do v1 od 2026-08-04 i jest realizowane przez TK-007 oraz FE-001.
 - **Explicit Over Silent:** stabilne error codes, jawne timeouty/retry/statusy;
   żadnych zachowań zależnych od nieudokumentowanego defaultu frameworka.
 - **Tech Debt Ledger:** każde nowe świadome uproszczenie przed zamknięciem trafia

@@ -120,11 +120,21 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `GET /runs/{id}/frames` | `review_status,page,page_size<=100` | paged summaries | `404/400` |
 | `GET /frames/{id}/image` | — | image stream z kontrolowanego relpath | `404`; nigdy arbitrary path |
 | `GET /frames/{id}` | — | frame + proposed/current annotations + version | `404` |
-| `PATCH /annotations/{id}` | `{category_id,expected_version}` | annotation | `400 category`, `404`, `409 version/review_locked` |
+| `POST /frames/{id}/annotations` | `{category_id,bbox:{x,y,width,height},expected_version}` | `201 Annotation` | `400 category/bbox_invalid`, `404`, `409 version/review_locked` |
+| `PATCH /annotations/{id}` | `{category_id?,bbox?,expected_version}`; co najmniej jedno pole zmiany | annotation | `400 category/bbox_invalid/empty_patch`, `404`, `409 version/review_locked` |
 | `DELETE /annotations/{id}` | `expected_version` query | `204` | `404`, `409` |
-| `POST /frames/{id}/review` | `{decision:accept|reject,expected_version}` | frame review snapshot | `400 no_annotations`, `404`, `409` |
+| `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations`, `404`, `409 version/review_locked/invalid_review_transition` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
 | `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
+
+Anotacja ręczna ma `source='manual'`, `confidence=NULL` i `observation_id=NULL`;
+schemat już to przewiduje, więc F09 nie wymaga migracji. Geometria — nowa i
+poprawiana — przechodzi przez jedną walidację `AnnotationReviewEngine`
+sprawdzającą wyłącznie granice klatki; regiony HUD nie ograniczają boksu
+ręcznego, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
+`reopen` jest dozwolone tylko z `rejected` do `pending` i nie zmienia anotacji
+ani ich statusów; `accepted` pozostaje terminalne, żeby snapshot eksportu był
+trwały. Każda z tych mutacji podbija `version` agregatu oraz `review_revision`.
 
 Endpointy są jawnie `local-public`; FastAPI binduje loopback. Dev CORS dopuszcza
 wyłącznie skonfigurowany origin Vite. Nie ma endpointu przyjmującego upload ani
@@ -157,6 +167,8 @@ dowolną ścieżkę wyjściową.
   `failed` z `export_revision_conflict`, kasuje temp i nie publikuje niczego.
   Użytkownik ponawia eksport świadomie; nie ma cichego retry ani wyniku
   mieszającego dwie rewizje.
+- Manifest raportuje liczbę anotacji według `source` (`ocr` i `manual`). Sam
+  dokument COCO pozostaje standardowy i nie niesie tego pola.
 - Ten sam `input_revision` daje bajtowo identyczny dokument: sortowanie jest
   deterministyczne, a numeryczne ID `images`/`annotations` nadaje engine po
   posortowaniu, nigdy z UUID ani kolejności bazy.
@@ -220,7 +232,7 @@ startup błędem w v1. Brak sekretów.
 ### 3.1 PRD / Flow
 
 - CF-01…07 mają endpointy, statusy, błędy i właścicieli modułowych.
-- F01, F03–08, F11–16 mają pokrycie; F02/F09/F10 pozostają jawnie poza v1.
+- F01, F03–09, F11–16 mają pokrycie; F02/F10 pozostają jawnie poza v1.
 
 ### 3.2 Stress-test
 

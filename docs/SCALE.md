@@ -8,7 +8,7 @@
 | Polling co 2 s | polling obciąża API albo potrzebne logi live | SSE dla statusów; WebSocket tylko przy komunikacji dwukierunkowej |
 | Tesseract experimental za `OcrEngine` | przed packaged v1 lub gdy odrzuty blokują realny dataset | reprezentatywny benchmark i zatwierdzony char-level adapter/model fontu gry |
 | Regiony pikselowe jednej rozdzielczości | pierwszy materiał o innej rozdzielczości/aspect ratio | regiony znormalizowane + reguła dopasowania profilu |
-| Brak ręcznego dodania boksu | odrzucenia z powodu brakującego znaku są istotne | edytor geometrii i F09 |
+| Prostokątne boksy rysowane ręcznie | potrzeba masek, wieloboków lub trackingu między klatkami | F10 i SAM 3 |
 | COCO bez train/val | pierwszy powtarzalny trening z aplikacji | deterministyczny split z seedem i manifestem |
 | API bez auth na loopback | bind sieciowy, użytkownik zewnętrzny lub zdalny worker | auth, role/project ownership, TLS |
 | Brak automatycznego backupu/CI | dataset odtwarzany >1 dzień / pierwszy współpracownik | snapshoty i workflow CI |

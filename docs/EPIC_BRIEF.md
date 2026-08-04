@@ -28,12 +28,12 @@ ground truth i nie usuwa obowiązkowej weryfikacji człowieka.
 
 F01, F03–F08, F11–F16 z wiążącej tabeli w `docs/CONTEXT.md`: tworzenie profilu,
 lokalny materiał, FFmpeg 1 fps, cropy HUD, Tesseract, mapowanie znaków,
-weryfikacja, COCO, dashboard, materiały, polling pipeline'u, SQLite i powłoka UI.
+weryfikacja z ręczną korektą boksów (F09), COCO, dashboard, materiały, polling
+pipeline'u, SQLite i powłoka UI.
 
 ## Poza zakresem
 
 - edycja/lista wielu profili po utworzeniu (F02),
-- ręczne dodawanie i przesuwanie boksów (F09),
 - SAM 3, maski i tracking (F10),
 - chmura, konta, role, współpraca, upload 50 GB przez HTTP,
 - train/val split, YOLO, automatyczny backup, mobile i pełne WCAG AA.

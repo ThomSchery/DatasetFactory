@@ -11,7 +11,8 @@
 | TK-005-F1 | Weryfikacja anotacji i licznik rewizji | wykonany | TK-004 | część Gate 3 ✓ |
 | TK-005-F2 | Eksport COCO na snapshocie rewizji | wykonany | TK-005-F1 | Gate 3 backend ✓ |
 | TK-005-F2-FIX1 | Rekoncyliacja przerwanych eksportów przy starcie | wykonany | TK-005-F2 | cold review High ✓; suite 235/235 |
-| FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005 | Gate 3 |
+| TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | gotowy | TK-005 | część Gate 3 |
+| FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,
@@ -44,6 +45,12 @@ TK-005 został rozbity na dwa sub-tickety. `TK-005-F1` wnosi migrację `0005`
 commitem `63fa715`. Rozstrzygnięcie recovery: klatka z decyzją review jest
 nietykalna dla rekoncyliacji, zgodnie z CF-04.
 
+F09 został wciągnięty do v1 decyzją z 2026-08-04: przy `quality_gate=failed`
+Tesseracta brak ręcznego boksu wymuszał odrzucanie całych klatek razem z ich
+poprawnymi odczytami. Backend realizuje to w `TK-007`, interfejs w `FE-001`.
+Rozstrzygnięcia: `reopen` wyłącznie z `rejected`, boks ręczny w granicach całej
+klatki, źródło anotacji raportowane w manifeście, nie w dokumencie COCO.
+
 ## Graf zależności
 
 ```mermaid
@@ -53,12 +60,13 @@ graph LR
   D --> E[TK-004]
   E --> F1[TK-005-F1]
   F1 --> F2[TK-005-F2]
+  F2 --> I[TK-007 F09]
   B[FE-SETUP] --> G[FE-001]
   C --> G
   E --> G
-  F2 --> G
+  I --> G
   A --> H[TK-006]
-  F2 --> H
+  I --> H
   G --> H
 ```
 
