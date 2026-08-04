@@ -76,7 +76,14 @@ WorkflowProvider = Callable[[], DatasetWorkflow]
 
 def _run_response(record: RunRecord) -> RunResponse:
     # Persistence-only reservation ownership is deliberately not part of the public API.
-    return RunResponse(**{field: getattr(record, field) for field in RunResponse.model_fields})
+    values = {field: getattr(record, field) for field in RunResponse.model_fields}
+    if record.recovery_skipped_frames:
+        recovery_warning = (
+            "Recovery warning: skipped "
+            f"{record.recovery_skipped_frames} reviewed frame(s) with invalid artifacts."
+        )
+        values["warning"] = f"{record.warning}\n{recovery_warning}".lstrip()
+    return RunResponse(**values)
 
 
 def _frame_response(record: FrameSummary) -> FrameSummaryResponse:

@@ -23,6 +23,10 @@ def upgrade() -> None:
         "pipeline_runs",
         sa.Column("review_revision", sa.Integer(), server_default="0", nullable=False),
     )
+    op.add_column(
+        "pipeline_runs",
+        sa.Column("recovery_skipped_frames", sa.Integer(), server_default="0", nullable=False),
+    )
     op.add_column("exports", sa.Column("error_code", sa.String(length=100), nullable=True))
     op.create_index(
         "uq_exports_active_run",
@@ -36,4 +40,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("uq_exports_active_run", table_name="exports")
     op.drop_column("exports", "error_code")
+    op.drop_column("pipeline_runs", "recovery_skipped_frames")
     op.drop_column("pipeline_runs", "review_revision")

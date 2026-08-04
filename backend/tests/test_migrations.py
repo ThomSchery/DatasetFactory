@@ -49,6 +49,7 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
         "warning",
     } <= run_columns
     assert "review_revision" in run_columns
+    assert "recovery_skipped_frames" in run_columns
     assert "error_code" in export_columns
     assert {"ocr_engine", "experimental", "quality_gate", "warning"} <= checkpoint_columns
     assert {"runtime_sha256", "experimental", "quality_gate", "warning"} <= (observation_columns)

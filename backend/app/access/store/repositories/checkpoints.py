@@ -259,16 +259,10 @@ class CheckpointRepository:
     def _apply_plan(self, session: Session, plan: ReconciliationPlan) -> None:
         for invalidation in plan.invalidations:
             self._apply_invalidation(session, plan.run_id, invalidation)
-        if plan.skipped_reviewed_frames:
-            run = session.get(PipelineRun, plan.run_id)
-            if run is None:
-                raise CheckpointReservationError
-            base_warning = run.warning.split("Recovery warning:", 1)[0].rstrip()
-            count = len(plan.skipped_reviewed_frames)
-            recovery_warning = (
-                f"Recovery warning: skipped {count} reviewed frame(s) with invalid artifacts."
-            )
-            run.warning = f"{base_warning}\n{recovery_warning}".lstrip()
+        run = session.get(PipelineRun, plan.run_id)
+        if run is None:
+            raise CheckpointReservationError
+        run.recovery_skipped_frames = len(plan.skipped_reviewed_frames)
 
     def _apply_invalidation(
         self,

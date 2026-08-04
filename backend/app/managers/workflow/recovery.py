@@ -117,6 +117,6 @@ class WorkflowRecovery:
             and checkpoint.ocr_page_segmentation_mode == run.ocr_page_segmentation_mode
             and checkpoint.experimental == run.experimental
             and checkpoint.quality_gate == run.quality_gate
-            and checkpoint.warning == run.warning.split("Recovery warning:", 1)[0].rstrip()
+            and checkpoint.warning == run.warning
             and self._checkpoints.is_valid(checkpoint)
         )

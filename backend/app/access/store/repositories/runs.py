@@ -88,6 +88,7 @@ class RunRecord:
     resume_token: str | None
     version: int
     review_revision: int
+    recovery_skipped_frames: int
     ocr_engine: str
     ocr_engine_version: str
     ocr_runtime_sha256: str
@@ -189,6 +190,7 @@ class RunRepository:
                 warning=warning,
                 version=1,
                 review_revision=0,
+                recovery_skipped_frames=0,
             )
             session.add(run)
             session.flush()
@@ -666,6 +668,7 @@ class RunRepository:
             resume_token=run.resume_token,
             version=run.version,
             review_revision=run.review_revision,
+            recovery_skipped_frames=run.recovery_skipped_frames,
             ocr_engine=run.ocr_engine,
             ocr_engine_version=run.ocr_engine_version,
             ocr_runtime_sha256=run.ocr_runtime_sha256,

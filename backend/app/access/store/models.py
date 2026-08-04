@@ -203,6 +203,7 @@ class PipelineRun(TimestampMixin, Base):
     warning: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     review_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recovery_skipped_frames: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Frame(TimestampMixin, Base):

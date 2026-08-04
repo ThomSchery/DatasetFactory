@@ -818,7 +818,8 @@ def test_recovery_skips_reviewed_frames_without_changing_review_state_or_revisio
         run = session.get(PipelineRun, created["id"])
         assert run is not None
         assert run.review_revision == 2
-        assert "skipped 2 reviewed frame(s)" in run.warning
+        assert "Recovery warning:" not in run.warning
+        assert run.recovery_skipped_frames == 2
         persisted = tuple(
             session.scalars(
                 select(Frame).where(Frame.run_id == created["id"]).order_by(Frame.frame_index)
@@ -840,7 +841,12 @@ def test_recovery_skips_reviewed_frames_without_changing_review_state_or_revisio
         run.workflow_slot = 1
         run.current_stage = "ocr"
 
+    with TestClient(app) as client:
+        public_run = client.get(f"/api/v1/runs/{created['id']}").json()
+        assert "skipped 2 reviewed frame(s)" in public_run["warning"]
+
     second = recovery.recover_startup()
+    assert second == first
     assert second.invalidated_frames == 0
     assert second.skipped_reviewed_frames == 2
     with composition.database.session() as session:
@@ -848,9 +854,161 @@ def test_recovery_skips_reviewed_frames_without_changing_review_state_or_revisio
         assert run is not None
         assert run.review_revision == 2
         assert run.warning == first_warning
+        assert run.recovery_skipped_frames == 2
         persisted = tuple(
             session.scalars(
                 select(Frame).where(Frame.run_id == created["id"]).order_by(Frame.frame_index)
             )
         )
         assert tuple(frame.review_status for frame in persisted) == ("accepted", "rejected")
+
+
+def test_recovery_skip_then_resume_checkpoint_remains_valid_on_second_restart(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path, duration_ms=2000)
+    _, _, recovery = _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        StubOcrEngine(),
+    )
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        completed = _wait_status(client, created["id"], "review_ready")
+
+        with composition.database.session() as session:
+            frames = tuple(
+                session.scalars(
+                    select(Frame)
+                    .where(Frame.run_id == created["id"])
+                    .order_by(Frame.frame_index)
+                )
+            )
+            assert len(frames) == 2
+            frames[0].review_status = "accepted"
+            accepted_checkpoint = session.get(StageCheckpoint, (created["id"], 0, "ocr"))
+            pending_checkpoint = session.get(StageCheckpoint, (created["id"], 1, "sample"))
+            assert accepted_checkpoint is not None
+            assert pending_checkpoint is not None
+            accepted_checkpoint.artifact_hash = "0" * 64
+            pending_checkpoint.artifact_hash = "0" * 64
+            run = session.get(PipelineRun, created["id"])
+            assert run is not None
+            ocr_warning = run.warning
+            review_revision = run.review_revision
+            run.status = "running"
+            run.workflow_slot = 1
+            run.current_stage = "sampling"
+            run.version = completed["version"] + 1
+
+        first = recovery.recover_startup()
+        assert first.invalidated_frames == 1
+        assert first.skipped_reviewed_frames == 1
+        paused = client.get(f"/api/v1/runs/{created['id']}").json()
+        assert "skipped 1 reviewed frame(s)" in paused["warning"]
+        resumed = client.post(
+            f"/api/v1/runs/{created['id']}/resume",
+            json={"expected_version": paused["version"]},
+        )
+        assert resumed.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+
+        with composition.database.session() as session:
+            run = session.get(PipelineRun, created["id"])
+            assert run is not None
+            assert run.warning == ocr_warning
+            assert run.review_revision == review_revision
+            pending_frame = session.scalar(
+                select(Frame).where(Frame.run_id == created["id"], Frame.frame_index == 1)
+            )
+            assert pending_frame is not None
+            assert pending_frame.review_status == "pending"
+            pending_annotation_ids = tuple(
+                session.scalars(
+                    select(Annotation.id)
+                    .where(Annotation.frame_id == pending_frame.id)
+                    .order_by(Annotation.id)
+                )
+            )
+            assert pending_annotation_ids
+            new_checkpoints = tuple(
+                session.scalars(
+                    select(StageCheckpoint).where(
+                        StageCheckpoint.run_id == created["id"],
+                        StageCheckpoint.frame_index == 1,
+                    )
+                )
+            )
+            assert len(new_checkpoints) == 3
+            assert all(checkpoint.warning == ocr_warning for checkpoint in new_checkpoints)
+            run.status = "running"
+            run.workflow_slot = 1
+            run.current_stage = "ocr"
+
+        second = recovery.recover_startup()
+        assert second.invalidated_frames == 0
+        assert second.skipped_reviewed_frames == 1
+        with composition.database.session() as session:
+            run = session.get(PipelineRun, created["id"])
+            assert run is not None
+            assert run.warning == ocr_warning
+            assert run.review_revision == review_revision
+            pending_frame = session.scalar(
+                select(Frame).where(Frame.run_id == created["id"], Frame.frame_index == 1)
+            )
+            assert pending_frame is not None
+            assert pending_frame.review_status == "pending"
+            assert (
+                tuple(
+                    session.scalars(
+                        select(Annotation.id)
+                        .where(Annotation.frame_id == pending_frame.id)
+                        .order_by(Annotation.id)
+                    )
+                )
+                == pending_annotation_ids
+            )
+
+
+def test_ocr_warning_containing_recovery_literal_remains_valid_provenance(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    _, _, recovery = _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        StubOcrEngine(),
+    )
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+
+    literal_warning = "Native OCR warning with Recovery warning: preserved verbatim."
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        assert run is not None
+        run.warning = literal_warning
+        for checkpoint in session.scalars(
+            select(StageCheckpoint).where(StageCheckpoint.run_id == created["id"])
+        ):
+            checkpoint.warning = literal_warning
+
+    first = recovery.plan_reconciliation(created["id"])
+    second = recovery.plan_reconciliation(created["id"])
+    assert first == second
+    assert first.invalidations == ()
+    assert first.skipped_reviewed_frames == ()
