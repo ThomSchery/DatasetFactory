@@ -15,7 +15,7 @@ from backend.app.access.ocr import (
 )
 from backend.app.access.status.service import ResourceProbe, SystemResourceProbe, SystemStatusAccess
 from backend.app.access.store.database import Database
-from backend.app.access.store.migrations import upgrade_database
+from backend.app.access.store.migrations import SchemaUpgradeBlockedError, upgrade_database
 from backend.app.access.store.reconciliation import ReferenceAssetReconciler
 from backend.app.access.store.reference_assets import ReferenceAssetStore
 from backend.app.access.store.repositories.assets import AssetRepository
@@ -75,7 +75,16 @@ def build_composition(
     workspace.prepare()
     log_path = workspace.resolve_relpath("logs/app.jsonl")
     logger = configure_json_logging(log_path, settings.log_level)
-    upgrade_database(settings)
+    try:
+        upgrade_database(settings)
+    except SchemaUpgradeBlockedError as error:
+        # A refused migration is a controlled startup outcome, not a crash: log the
+        # remediation path before the typed error reaches the caller.
+        logger.error(
+            "schema_upgrade_blocked",
+            extra={"error_code": error.code, "remediation": str(error)},
+        )
+        raise
 
     database = Database(settings.database_url)
     reconciliation = ReferenceAssetReconciler(database, workspace).reconcile()

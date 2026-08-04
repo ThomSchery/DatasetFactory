@@ -4,11 +4,13 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from backend.app.access.store.database import Database
 from backend.app.access.store.models import (
@@ -19,8 +21,14 @@ from backend.app.access.store.models import (
     RegionSample,
     StageCheckpoint,
 )
+from backend.app.access.store.repositories.runs import ResumeReservation
 from backend.app.access.store.workspace import Workspace, WorkspaceError
-from backend.app.managers.workflow.state_machine import FrameStage, require_frame_transition
+from backend.app.managers.workflow.state_machine import (
+    FrameStage,
+    RunStatus,
+    require_frame_transition,
+    require_run_transition,
+)
 
 STAGES = ("sample", "crop", "ocr")
 
@@ -29,6 +37,23 @@ class CheckpointArtifactError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+class CheckpointReservationError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class FrameInvalidation:
+    frame_index: int
+    stage: str
+    expected_frame_stage: str
+
+
+@dataclass(frozen=True)
+class ReconciliationPlan:
+    run_id: str
+    invalidations: tuple[FrameInvalidation, ...]
 
 
 @dataclass(frozen=True)
@@ -181,58 +206,138 @@ class CheckpointRepository:
             return False
         return True
 
-    def invalidate_from(self, run_id: str, frame_index: int, stage: str) -> None:
-        if stage not in STAGES:
+    def commit_resume(
+        self,
+        reservation: ResumeReservation,
+        plan: ReconciliationPlan,
+    ) -> None:
+        """Atomically apply every invalidation and consume the global preparation slot."""
+        if plan.run_id != reservation.run_id:
+            raise CheckpointReservationError
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            run = self._require_reservation(session, reservation)
+            self._apply_plan(session, plan)
+            # Re-check the same durable owner immediately before activation. The write
+            # lock makes this stable, but keeping the assertion beside the commit
+            # boundary documents and tests the invariant explicitly.
+            self._require_reservation(session, reservation)
+            current = cast(RunStatus, run.status)
+            require_run_transition(current, "running")
+            run.status = "running"
+            run.error_code = None
+            run.control_requested = None
+            run.resume_token = None
+            run.resume_owner = None
+            run.last_heartbeat_at = datetime.now(UTC)
+            run.current_stage = "sampling"
+            run.current_frame_index = self._first_incomplete_frame(session, run)
+            run.attempt += 1
+            # `workflow_slot=1` is retained: preparation and execution are the same
+            # globally unique durable slot. Reservation already performed the one bump.
+            session.flush()
+
+    def apply_running_plan(self, run_id: str, plan: ReconciliationPlan) -> None:
+        """Apply worker/startup recovery as one short all-or-nothing DB transaction."""
+        if plan.run_id != run_id:
+            raise CheckpointReservationError
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            run = session.get(PipelineRun, run_id)
+            if (
+                run is None
+                or run.status != "running"
+                or run.workflow_slot != 1
+                or run.resume_token is not None
+                or run.resume_owner is not None
+            ):
+                raise CheckpointReservationError
+            self._apply_plan(session, plan)
+            session.flush()
+
+    def _apply_plan(self, session: Session, plan: ReconciliationPlan) -> None:
+        for invalidation in plan.invalidations:
+            self._apply_invalidation(session, plan.run_id, invalidation)
+
+    def _apply_invalidation(
+        self,
+        session: Session,
+        run_id: str,
+        invalidation: FrameInvalidation,
+    ) -> None:
+        if invalidation.stage not in STAGES:
             raise CheckpointArtifactError("checkpoint_stage_invalid")
         target_by_stage: dict[str, FrameStage] = {
             "sample": "pending",
             "crop": "sampled",
             "ocr": "cropped",
         }
-        start = STAGES.index(stage)
-        with self._database.session() as session:
-            frame = session.scalar(
-                select(Frame).where(Frame.run_id == run_id, Frame.frame_index == frame_index)
+        frame = session.scalars(
+            select(Frame).where(
+                Frame.run_id == run_id,
+                Frame.frame_index == invalidation.frame_index,
             )
-            if frame is None:
-                session.execute(
-                    delete(StageCheckpoint).where(
-                        StageCheckpoint.run_id == run_id,
-                        StageCheckpoint.frame_index == frame_index,
-                        StageCheckpoint.stage.in_(STAGES[start:]),
-                    )
-                )
-                return
-            target = target_by_stage[stage]
-            current = frame.stage_status
-            if current != target:
-                require_frame_transition(
-                    current,  # type: ignore[arg-type]
-                    target,
-                    recovery=True,
-                )
-            session.execute(delete(Annotation).where(Annotation.frame_id == frame.id))
-            if stage in {"sample", "crop"}:
-                session.execute(delete(RegionSample).where(RegionSample.frame_id == frame.id))
-            else:
-                sample_ids = select(RegionSample.id).where(RegionSample.frame_id == frame.id)
-                session.execute(
-                    delete(OcrObservation).where(OcrObservation.sample_id.in_(sample_ids))
-                )
-                for sample in session.scalars(
-                    select(RegionSample).where(RegionSample.frame_id == frame.id)
-                ):
-                    sample.stage_status = "cropped"
-            session.execute(
-                delete(StageCheckpoint).where(
-                    StageCheckpoint.run_id == run_id,
-                    StageCheckpoint.frame_index == frame_index,
-                    StageCheckpoint.stage.in_(STAGES[start:]),
+        ).one()
+        if frame.stage_status != invalidation.expected_frame_stage:
+            raise CheckpointReservationError
+        target = target_by_stage[invalidation.stage]
+        current = frame.stage_status
+        if current != target:
+            require_frame_transition(
+                current,  # type: ignore[arg-type]
+                target,
+                recovery=True,
+            )
+        session.execute(delete(Annotation).where(Annotation.frame_id == frame.id))
+        if invalidation.stage in {"sample", "crop"}:
+            session.execute(delete(RegionSample).where(RegionSample.frame_id == frame.id))
+        else:
+            sample_ids = select(RegionSample.id).where(RegionSample.frame_id == frame.id)
+            session.execute(delete(OcrObservation).where(OcrObservation.sample_id.in_(sample_ids)))
+            for sample in session.scalars(
+                select(RegionSample).where(RegionSample.frame_id == frame.id)
+            ):
+                sample.stage_status = "cropped"
+        start = STAGES.index(invalidation.stage)
+        session.execute(
+            delete(StageCheckpoint).where(
+                StageCheckpoint.run_id == run_id,
+                StageCheckpoint.frame_index == invalidation.frame_index,
+                StageCheckpoint.stage.in_(STAGES[start:]),
+            )
+        )
+        frame.stage_status = target
+        frame.review_status = "pending"
+        frame.version += 1
+
+    @staticmethod
+    def _require_reservation(
+        session: Session,
+        reservation: ResumeReservation,
+    ) -> PipelineRun:
+        run = session.get(PipelineRun, reservation.run_id)
+        if (
+            run is None
+            or run.workflow_slot != 1
+            or run.resume_token != reservation.token
+            or run.resume_owner != reservation.owner
+            or run.version != reservation.version
+            or cast(RunStatus, run.status) not in reservation.allowed_from
+        ):
+            raise CheckpointReservationError
+        return run
+
+    @staticmethod
+    def _first_incomplete_frame(session: Session, run: PipelineRun) -> int:
+        completed = set(
+            session.scalars(
+                select(Frame.frame_index).where(
+                    Frame.run_id == run.id,
+                    Frame.stage_status == "review_pending",
                 )
             )
-            frame.stage_status = target
-            frame.review_status = "pending"
-            frame.version += 1
+        )
+        return next((index for index in range(run.total_frames) if index not in completed), 0)
 
     @staticmethod
     def from_run(

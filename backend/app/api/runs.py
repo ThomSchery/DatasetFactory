@@ -54,8 +54,8 @@ class FrameSummaryResponse(StrictModel):
     timestamp_ms: int
     stage_status: str
     review_status: str
-    width: int
-    height: int
+    width: int | None
+    height: int | None
     version: int
     ocr_engine: str
     experimental: bool
@@ -74,7 +74,8 @@ WorkflowProvider = Callable[[], DatasetWorkflow]
 
 
 def _run_response(record: RunRecord) -> RunResponse:
-    return RunResponse(**vars(record))
+    # Persistence-only reservation ownership is deliberately not part of the public API.
+    return RunResponse(**{field: getattr(record, field) for field in RunResponse.model_fields})
 
 
 def _frame_response(record: FrameSummary) -> FrameSummaryResponse:
@@ -93,7 +94,13 @@ def _page_response(page: FramePage) -> FramePageResponse:
 def _workflow_error(request: Request, error: WorkflowError) -> JSONResponse:
     if error.code in {"run_not_found", "profile_not_found", "video_not_found"}:
         status_code = 404
-    elif error.code in {"active_run", "version_conflict", "invalid_transition"}:
+    elif error.code in {
+        "active_run",
+        "version_conflict",
+        "invalid_transition",
+        "source_missing",
+        "source_changed",
+    }:
         status_code = 409
     elif error.code in {"worker_unavailable", "workflow_persistence_failed"}:
         status_code = 500

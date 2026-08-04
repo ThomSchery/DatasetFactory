@@ -78,8 +78,10 @@ class FrameSummary:
     timestamp_ms: int
     stage_status: str
     review_status: str
-    width: int
-    height: int
+    # Unknown until the frame is sampled; the row holds a placeholder because the
+    # column is NOT NULL with a positive CHECK, but no client may read it as a size.
+    width: int | None
+    height: int | None
     version: int
     ocr_engine: str
     experimental: bool
@@ -276,8 +278,8 @@ class FrameRepository:
                 select(RegionSample).where(RegionSample.frame_id == frame.id)
             ):
                 sample.stage_status = "ocr_complete"
-            frame.stage_status = "ocr_complete"
-            require_frame_transition("ocr_complete", "review_pending")
+            # `ocr_complete` and `review_pending` are committed as one atomic step, so
+            # the intermediate stage never reaches the database.
             frame.stage_status = "review_pending"
             frame.review_status = "pending"
             frame.version += 1
@@ -323,8 +325,8 @@ class FrameRepository:
                         timestamp_ms=frame.timestamp_ms,
                         stage_status=frame.stage_status,
                         review_status=frame.review_status,
-                        width=frame.width,
-                        height=frame.height,
+                        width=frame.width if frame.stage_status != "pending" else None,
+                        height=frame.height if frame.stage_status != "pending" else None,
                         version=frame.version,
                         ocr_engine=run.ocr_engine,
                         experimental=run.experimental,

@@ -102,7 +102,6 @@ class WorkflowWorker:
                     frame = self._frames.processing(run_id, frame_index)
                 if frame.stage_status == "cropped":
                     self._ocr_frame(run_id, frame)
-                    self._runs.note_frame_completed(run_id)
                     if self._acknowledge_control_if_requested(run_id):
                         return
             self._runs.finish_review_ready(run_id)
@@ -170,13 +169,13 @@ class WorkflowWorker:
         self._runs.update_progress(run_id, stage="ocr", frame_index=frame.frame_index)
         run = self._runs.get(run_id)
         expected = self._runs.provenance(run_id)
-        described = self._ocr.describe(tuple(frame.category_ids))
-        if described != expected:
-            raise OcrProcessError("ocr_provenance_mismatch")
         regions = {region.id: region for region in frame.regions}
         observations: list[ObservationWrite] = []
         with self._heartbeat(run_id):
             for sample in frame.samples:
+                # Tesseract verifies the pinned runtime/model inside this call,
+                # immediately before launching OCR. Repeating `describe()` here would
+                # hash the same multi-megabyte files once more for every frame.
                 candidates = self._ocr.detect_characters(
                     sample.crop_relpath,
                     tuple(frame.category_ids),

@@ -13,12 +13,29 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.engine import Connection
 
+from backend.app.access.store.migrations import SchemaUpgradeBlockedError
+
 revision: str = "0004"
 down_revision: str | Sequence[str] | None = "0003"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _AFFECTED_TABLES = ("pipeline_runs", "stage_checkpoints", "ocr_observations")
+
+# Backfilling provenance would fabricate the very hashes TK-004 exists to guarantee
+# (CONTEXT NFR-09: a new project has no legacy data), so the migration refuses instead.
+# This is the removal path, ordered so every foreign key is satisfied on the way down:
+# annotations -> observations -> samples -> frames, then checkpoints and exports
+# before the runs they point at.
+_CLEANUP_STATEMENTS = (
+    "DELETE FROM annotations;",
+    "DELETE FROM ocr_observations;",
+    "DELETE FROM region_samples;",
+    "DELETE FROM frames;",
+    "DELETE FROM stage_checkpoints;",
+    "DELETE FROM exports;",
+    "DELETE FROM pipeline_runs;",
+)
 
 
 def _require_migratable_workflow_data(connection: Connection) -> None:
@@ -30,10 +47,13 @@ def _require_migratable_workflow_data(connection: Connection) -> None:
     if not any(counts.values()):
         return
     details = ", ".join(f"{table}={count}" for table, count in counts.items())
-    raise RuntimeError(
+    cleanup = "\n".join(("PRAGMA foreign_keys=ON;", "BEGIN;", *_CLEANUP_STATEMENTS, "COMMIT;"))
+    raise SchemaUpgradeBlockedError(
         "pre-TK-004 workflow rows have no verifiable OCR provenance and must be "
-        "removed or migrated explicitly before migration 0004; no schema changes "
-        f"were made; {details}"
+        "removed before migration 0004; no schema changes were made; "
+        f"{details}\n"
+        "Back the project up, then remove the legacy workflow data in this order "
+        f"(foreign keys require it):\n{cleanup}"
     )
 
 
@@ -45,6 +65,9 @@ def upgrade() -> None:
         sa.Column("current_stage", sa.String(length=40), nullable=True),
         sa.Column("current_frame_index", sa.Integer(), nullable=True),
         sa.Column("control_requested", sa.String(length=20), nullable=True),
+        sa.Column("workflow_slot", sa.Integer(), nullable=True),
+        sa.Column("resume_token", sa.String(length=36), nullable=True),
+        sa.Column("resume_owner", sa.String(length=36), nullable=True),
         sa.Column("ocr_engine", sa.String(length=100), nullable=False),
         sa.Column("ocr_engine_version", sa.String(length=100), nullable=False),
         sa.Column("ocr_runtime_sha256", sa.String(length=64), nullable=False),
@@ -64,15 +87,23 @@ def upgrade() -> None:
             "control_requested IS NULL OR control_requested IN ('pause','cancel')",
         )
         batch_op.create_check_constraint(
+            "ck_pipeline_workflow_slot",
+            "(workflow_slot IS NULL AND status != 'running' AND "
+            "resume_token IS NULL AND resume_owner IS NULL) OR "
+            "(workflow_slot = 1 AND ((status = 'running' AND "
+            "resume_token IS NULL AND resume_owner IS NULL) OR "
+            "(status IN ('paused','failed','cancelled') AND "
+            "resume_token IS NOT NULL AND resume_owner IS NOT NULL)))",
+        )
+        batch_op.create_check_constraint(
             "ck_pipeline_quality_gate",
             "quality_gate IN ('passed','failed','unknown')",
         )
     op.create_index(
-        "uq_pipeline_runs_single_running",
+        "uq_pipeline_runs_global_workflow_slot",
         "pipeline_runs",
-        ["status"],
+        ["workflow_slot"],
         unique=True,
-        sqlite_where=sa.text("status = 'running'"),
     )
 
     checkpoint_columns = (
@@ -143,9 +174,10 @@ def downgrade() -> None:
         ):
             batch_op.drop_column(column)
 
-    op.drop_index("uq_pipeline_runs_single_running", table_name="pipeline_runs")
+    op.drop_index("uq_pipeline_runs_global_workflow_slot", table_name="pipeline_runs")
     with op.batch_alter_table("pipeline_runs") as batch_op:
         batch_op.drop_constraint("ck_pipeline_quality_gate", type_="check")
+        batch_op.drop_constraint("ck_pipeline_workflow_slot", type_="check")
         batch_op.drop_constraint("ck_pipeline_control_requested", type_="check")
         for column in (
             "warning",
@@ -158,6 +190,9 @@ def downgrade() -> None:
             "ocr_runtime_sha256",
             "ocr_engine_version",
             "ocr_engine",
+            "resume_owner",
+            "resume_token",
+            "workflow_slot",
             "control_requested",
             "current_frame_index",
             "current_stage",

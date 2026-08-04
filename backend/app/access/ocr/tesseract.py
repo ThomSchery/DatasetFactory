@@ -352,11 +352,13 @@ class TesseractOcrEngine:
     def describe(self, allowed_chars: Collection[str]) -> OcrProvenance:
         allowed = self._normalize_allowed_chars(allowed_chars)
         whitelist = "".join(allowed)
-        runtime_pin, model_pin = self._runtime.configured_hashes(language=self._language)
+        # Measured, not declared: this provenance is persisted on the run and on the
+        # sample/crop checkpoints long before the first OCR call would verify it.
+        runtime_hash, model_hash = self._runtime.verified_hashes(language=self._language)
         return self._runtime.provenance(
             self._runtime.expected_version,
-            runtime_sha256=runtime_pin,
-            model_sha256=model_pin,
+            runtime_sha256=runtime_hash,
+            model_sha256=model_hash,
             config_hash=self._config_hash(whitelist),
             language=self._language,
             page_segmentation_mode=self._page_segmentation_mode,

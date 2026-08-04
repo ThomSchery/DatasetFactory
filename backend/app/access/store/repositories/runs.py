@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,8 @@ from backend.app.managers.workflow.state_machine import (
     require_run_transition,
 )
 
+PROCESS_INSTANCE_ID = str(uuid4())
+
 
 class RunNotFoundError(LookupError):
     pass
@@ -41,6 +43,10 @@ class RunVideoNotFoundError(LookupError):
 
 
 class RunVersionConflictError(RuntimeError):
+    pass
+
+
+class RunReservationConflictError(RunVersionConflictError):
     pass
 
 
@@ -78,6 +84,8 @@ class RunRecord:
     completed_frames: int
     current_stage: str | None
     current_frame_index: int | None
+    workflow_slot: int | None
+    resume_token: str | None
     version: int
     ocr_engine: str
     ocr_engine_version: str
@@ -98,11 +106,23 @@ class SourceSnapshot:
     fingerprint: str
 
 
+@dataclass(frozen=True)
+class ResumeReservation:
+    run_id: str
+    token: str
+    owner: str
+    version: int
+    allowed_from: frozenset[RunStatus]
+
+
 class RunRepository:
     """Own durable run lifecycle, optimistic versions, and the global active slot."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self, database: Database, *, process_instance_id: str = PROCESS_INSTANCE_ID
+    ) -> None:
         self._database = database
+        self._process_instance_id = process_instance_id
 
     def creation_context(self, profile_id: str, video_id: str) -> RunCreationContext:
         with self._database.session() as session:
@@ -153,6 +173,9 @@ class RunRepository:
                 current_stage=None,
                 current_frame_index=None,
                 control_requested=None,
+                workflow_slot=None,
+                resume_token=None,
+                resume_owner=None,
                 ocr_engine=provenance.engine_id,
                 ocr_engine_version=provenance.engine_version,
                 ocr_runtime_sha256=provenance.runtime_sha256,
@@ -192,6 +215,7 @@ class RunRepository:
                     raise RunNotFoundError
                 if run.version != expected_version:
                     raise RunVersionConflictError
+                self._require_no_reservation(run)
                 current = cast(RunStatus, run.status)
                 if current not in allowed_from:
                     raise InvalidTransitionError(
@@ -199,17 +223,20 @@ class RunRepository:
                         current=current,
                         target="running",
                     )
-                active_id = session.scalar(
+                slot_owner = session.scalar(
                     select(PipelineRun.id)
-                    .where(PipelineRun.status == "running", PipelineRun.id != run_id)
+                    .where(PipelineRun.workflow_slot == 1, PipelineRun.id != run_id)
                     .limit(1)
                 )
-                if active_id is not None:
+                if slot_owner is not None:
                     raise ActiveRunError
                 require_run_transition(current, "running")
                 run.status = "running"
+                run.workflow_slot = 1
                 run.error_code = None
                 run.control_requested = None
+                run.resume_token = None
+                run.resume_owner = None
                 run.last_heartbeat_at = datetime.now(UTC)
                 run.current_stage = "sampling"
                 run.current_frame_index = self._first_incomplete_frame(session, run)
@@ -219,9 +246,145 @@ class RunRepository:
                 session.flush()
                 return self._record(session, run)
         except IntegrityError as exc:
-            if "pipeline_runs.status" in str(exc.orig):
+            if "pipeline_runs.workflow_slot" in str(exc.orig):
                 raise ActiveRunError from exc
             raise
+
+    def reserve_resume(
+        self,
+        run_id: str,
+        *,
+        expected_version: int,
+        allowed_from: frozenset[RunStatus],
+    ) -> ResumeReservation:
+        """Persist the exclusive owner of resume preparation in one short CAS."""
+        try:
+            with self._database.session() as session:
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                run = session.get(PipelineRun, run_id)
+                if run is None:
+                    raise RunNotFoundError
+                if run.version != expected_version:
+                    raise RunVersionConflictError
+                if run.resume_token is not None:
+                    raise RunReservationConflictError
+                current = cast(RunStatus, run.status)
+                if current not in allowed_from:
+                    raise InvalidTransitionError(
+                        aggregate="run",
+                        current=current,
+                        target="running",
+                    )
+                slot_owner = session.scalar(
+                    select(PipelineRun.id)
+                    .where(PipelineRun.workflow_slot == 1, PipelineRun.id != run_id)
+                    .limit(1)
+                )
+                if slot_owner is not None:
+                    raise ActiveRunError
+                require_run_transition(current, "running")
+                token = str(uuid4())
+                run.workflow_slot = 1
+                run.resume_token = token
+                run.resume_owner = self._process_instance_id
+                run.version += 1
+                session.flush()
+                return ResumeReservation(
+                    run.id,
+                    token,
+                    self._process_instance_id,
+                    run.version,
+                    allowed_from,
+                )
+        except IntegrityError as exc:
+            if "pipeline_runs.workflow_slot" in str(exc.orig):
+                raise ActiveRunError from exc
+            raise
+
+    def validate_resume_reservation(self, reservation: ResumeReservation) -> None:
+        """Fail before expensive reconciliation when the request no longer owns the run."""
+        with self._database.session() as session:
+            run = session.get(PipelineRun, reservation.run_id)
+            if run is None:
+                raise RunNotFoundError
+            if (
+                run.resume_token != reservation.token
+                or run.resume_owner != reservation.owner
+                or reservation.owner != self._process_instance_id
+                or run.workflow_slot != 1
+                or run.version != reservation.version
+                or cast(RunStatus, run.status) not in reservation.allowed_from
+            ):
+                raise RunReservationConflictError
+
+    def release_resume(self, reservation: ResumeReservation) -> bool:
+        """Release only the caller's still-current token; never disturb a new owner."""
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            run = session.get(PipelineRun, reservation.run_id)
+            if (
+                run is None
+                or run.resume_token != reservation.token
+                or run.resume_owner != reservation.owner
+                or reservation.owner != self._process_instance_id
+                or run.workflow_slot != 1
+                or run.version != reservation.version
+            ):
+                return False
+            run.resume_token = None
+            run.resume_owner = None
+            run.workflow_slot = None
+            session.flush()
+            return True
+
+    def fail_reserved_resume(
+        self,
+        reservation: ResumeReservation,
+        error_code: str,
+    ) -> bool:
+        """Consume the caller's reservation as a durable failure without another bump."""
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            run = session.get(PipelineRun, reservation.run_id)
+            if (
+                run is None
+                or run.resume_token != reservation.token
+                or run.resume_owner != reservation.owner
+                or reservation.owner != self._process_instance_id
+                or run.workflow_slot != 1
+                or run.version != reservation.version
+                or cast(RunStatus, run.status) not in reservation.allowed_from
+            ):
+                return False
+            run.status = "failed"
+            run.error_code = error_code
+            run.resume_token = None
+            run.resume_owner = None
+            run.workflow_slot = None
+            session.flush()
+            return True
+
+    def clear_stale_resume_reservations(self) -> int:
+        """Recover process-crashed preparation without changing optimistic versions."""
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            reserved = tuple(
+                session.scalars(
+                    select(PipelineRun).where(
+                        PipelineRun.resume_token.is_not(None),
+                        or_(
+                            PipelineRun.resume_owner.is_(None),
+                            PipelineRun.resume_owner != self._process_instance_id,
+                        ),
+                    )
+                )
+            )
+            for run in reserved:
+                run.resume_token = None
+                run.resume_owner = None
+                run.workflow_slot = None
+            session.flush()
+            return len(reserved)
 
     def request_pause(self, run_id: str, *, expected_version: int) -> RunRecord:
         return self._request_control(
@@ -238,6 +401,7 @@ class RunRepository:
                 raise RunNotFoundError
             if run.version != expected_version:
                 raise RunVersionConflictError
+            self._require_no_reservation(run)
             current = cast(RunStatus, run.status)
             if current == "running":
                 require_run_transition(current, "cancelled")
@@ -283,6 +447,7 @@ class RunRepository:
             target: RunStatus = "paused" if run.control_requested == "pause" else "cancelled"
             require_run_transition("running", target)
             run.status = target
+            run.workflow_slot = None
             run.control_requested = None
             run.current_stage = None
             run.current_frame_index = None
@@ -297,6 +462,9 @@ class RunRepository:
                 run.last_heartbeat_at = datetime.now(UTC)
 
     def update_progress(self, run_id: str, *, stage: str, frame_index: int) -> None:
+        # `version` is the optimistic lock protecting client intent (start/pause/resume/
+        # cancel), not a progress counter. Bumping it here would age out the version a
+        # client just polled and reject every control request against a live run.
         with self._database.session() as session:
             run = session.get(PipelineRun, run_id)
             if run is None:
@@ -305,13 +473,6 @@ class RunRepository:
                 return
             run.current_stage = stage
             run.current_frame_index = frame_index
-            run.version += 1
-
-    def note_frame_completed(self, run_id: str) -> None:
-        with self._database.session() as session:
-            run = session.get(PipelineRun, run_id)
-            if run is not None and run.status == "running":
-                run.version += 1
 
     def finish_review_ready(self, run_id: str) -> RunRecord:
         return self._terminal_transition(run_id, "review_ready", None)
@@ -333,6 +494,7 @@ class RunRepository:
                 raise RunNotFoundError
             if run.version != expected_version:
                 raise RunVersionConflictError
+            self._require_no_reservation(run)
             current = cast(RunStatus, run.status)
             if current != "failed":
                 require_run_transition(current, "failed")
@@ -379,6 +541,7 @@ class RunRepository:
                 return
             require_run_transition("running", "paused")
             run.status = "paused"
+            run.workflow_slot = None
             run.control_requested = None
             run.current_stage = None
             run.current_frame_index = None
@@ -405,10 +568,11 @@ class RunRepository:
                 raise RunNotFoundError
             if run.version != expected_version:
                 raise RunVersionConflictError
+            self._require_no_reservation(run)
             current = cast(RunStatus, run.status)
+            # Only `running` may reach `paused`, so this guard already rejects every
+            # other status.
             require_run_transition(current, "paused")
-            if current != "running":
-                raise AssertionError("only a running run can receive a pause request")
             run.control_requested = requested
             run.version += 1
             session.flush()
@@ -425,6 +589,7 @@ class RunRepository:
             run = session.get(PipelineRun, run_id)
             if run is None:
                 raise RunNotFoundError
+            self._require_no_reservation(run)
             if run.status != "running":
                 return self._record(session, run)
             if run.control_requested == "cancel":
@@ -432,6 +597,7 @@ class RunRepository:
                 error_code = None
             require_run_transition("running", target)
             run.status = target
+            run.workflow_slot = None
             run.error_code = error_code
             run.control_requested = None
             run.current_stage = "review" if target == "review_ready" else None
@@ -451,6 +617,11 @@ class RunRepository:
             )
         )
         return next((index for index in range(run.total_frames) if index not in completed), 0)
+
+    @staticmethod
+    def _require_no_reservation(run: PipelineRun) -> None:
+        if run.resume_token is not None:
+            raise RunReservationConflictError
 
     @staticmethod
     def _provenance(run: PipelineRun) -> OcrProvenance:
@@ -489,6 +660,8 @@ class RunRepository:
             completed_frames=completed,
             current_stage=run.current_stage,
             current_frame_index=run.current_frame_index,
+            workflow_slot=run.workflow_slot,
+            resume_token=run.resume_token,
             version=run.version,
             ocr_engine=run.ocr_engine,
             ocr_engine_version=run.ocr_engine_version,

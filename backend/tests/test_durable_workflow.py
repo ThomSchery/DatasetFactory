@@ -64,11 +64,12 @@ class SeededWorkflow:
 
 
 class StubOcrEngine:
-    def __init__(self, *, empty: bool = False) -> None:
+    def __init__(self, *, empty: bool = False, provenance: OcrProvenance | None = None) -> None:
         self.empty = empty
         self.cancelled = threading.Event()
+        self.describe_calls = 0
         self.detect_calls = 0
-        self._provenance = OcrProvenance(
+        self._provenance = provenance or OcrProvenance(
             engine_id="tesseract",
             engine_version="v5.5.3-test",
             runtime_sha256="1" * 64,
@@ -82,6 +83,7 @@ class StubOcrEngine:
 
     def describe(self, allowed_chars: object) -> OcrProvenance:
         del allowed_chars
+        self.describe_calls += 1
         return self._provenance
 
     def detect_characters(
@@ -105,9 +107,11 @@ class StubMediaAccess:
         composition: CompositionRoot,
         *,
         block_sample: bool = False,
+        sample_delay_seconds: float = 0.0,
     ) -> None:
         self._workspace = composition.workspace
         self.block_sample = block_sample
+        self.sample_delay_seconds = sample_delay_seconds
         self.sample_started = threading.Event()
         self.release_sample = threading.Event()
         self.cancelled = threading.Event()
@@ -129,6 +133,8 @@ class StubMediaAccess:
             while not self.release_sample.wait(0.01):
                 if self.cancelled.is_set():
                     raise MediaProcessingError("frame_cancelled")
+        elif self.sample_delay_seconds:
+            time.sleep(self.sample_delay_seconds)
         shutil.copyfile(FIXTURES / "video/synthetic-frame.png", output)
         return SampledFrame(output_relpath, 1280, 852, timestamp_ms)
 
@@ -512,6 +518,7 @@ def test_restart_reconciles_all_crash_windows_without_duplicates(
                 run = session.get(PipelineRun, created["id"])
                 assert run is not None
                 run.status = "running"
+                run.workflow_slot = 1
                 run.current_stage = stage
                 run.version = completed["version"] + 1
 
@@ -629,6 +636,7 @@ def test_recovery_rolls_back_only_the_damaged_frame_and_checkpoint_key_is_unique
             run = session.get(PipelineRun, created["id"])
             assert run is not None
             run.status = "running"
+            run.workflow_slot = 1
             run.current_stage = "ocr"
             run.current_frame_index = 0
             run.version = completed["version"] + 1
@@ -688,9 +696,11 @@ def test_source_drift_sets_controlled_failed_status_without_deleting_data(
             f"/api/v1/runs/{created['id']}/start",
             json={"expected_version": created["version"]},
         )
-        assert started.status_code == 202
-        assert started.json()["status"] == "failed"
-        assert started.json()["error_code"] == f"source_{source_state}"
+        assert started.status_code == 409
+        assert started.json()["error"]["code"] == f"source_{source_state}"
+        current = client.get(f"/api/v1/runs/{created['id']}").json()
+        assert current["status"] == "failed"
+        assert current["error_code"] == f"source_{source_state}"
 
     with composition.database.session() as session:
         assert session.get(PipelineRun, created["id"]) is not None

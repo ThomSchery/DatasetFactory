@@ -8,6 +8,18 @@ from alembic.config import Config
 from backend.app.config import Settings
 
 
+class SchemaUpgradeBlockedError(RuntimeError):
+    """A migration refused to run because the existing data cannot be migrated truthfully.
+
+    Carries the remediation path in its message so the refusal is actionable instead of
+    being an unhandled crash during application startup.
+    """
+
+    def __init__(self, message: str, *, code: str = "schema_upgrade_blocked") -> None:
+        super().__init__(message)
+        self.code = code
+
+
 def alembic_config(settings: Settings) -> Config:
     backend_dir = Path(__file__).resolve().parents[3]
     config = Config(str(backend_dir / "alembic.ini"))

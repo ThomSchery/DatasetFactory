@@ -208,6 +208,63 @@ def test_timeout_and_proven_abnormal_termination_retry_exactly_once(
     assert not tuple(workspace.resolve_relpath("runs/test").glob(".ocr-*"))
 
 
+def test_describe_measures_the_runtime_instead_of_trusting_the_pins(tmp_path: Path) -> None:
+    """F10: provenance stored at run creation must be verified, not merely declared."""
+    workspace = _workspace(tmp_path)
+    runtime = _fake_runtime(tmp_path)
+    engine = TesseractOcrEngine(workspace, runtime, 30, FixtureWritingRunner([]))
+
+    described = engine.describe(["A"])
+    assert described.runtime_sha256 == _sha256(runtime.executable)
+    assert described.model_sha256 == _sha256(runtime.model)
+
+    runtime.executable.write_bytes(b"swapped runtime binary")
+    with pytest.raises(OcrProcessError) as error:
+        engine.describe(["A"])
+    assert error.value.code == "ocr_provenance_mismatch"
+
+    runtime.executable.write_bytes(b"pinned fake runtime")
+    runtime.model.write_bytes(b"swapped model")
+    with pytest.raises(OcrProcessError) as swapped_model:
+        engine.describe(["A"])
+    assert swapped_model.value.code == "ocr_provenance_mismatch"
+
+
+def test_create_measurement_and_pre_ocr_verification_hash_each_file_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Final review 3: retain true hashes without an extra per-frame describe pass."""
+    workspace = _workspace(tmp_path)
+    crop_relpath = _copy_crop(workspace)
+    runtime = _fake_runtime(tmp_path)
+    hashed_paths: list[Path] = []
+
+    def measured_sha256(path: Path) -> str:
+        hashed_paths.append(path)
+        return _sha256(path)
+
+    monkeypatch.setattr(
+        TesseractRuntimeIdentity,
+        "_file_sha256",
+        staticmethod(measured_sha256),
+    )
+    engine = TesseractOcrEngine(workspace, runtime, 30, FixtureWritingRunner([]))
+
+    described = engine.describe(["A"])
+    candidates = engine.detect_characters(crop_relpath, ["A"])
+
+    assert described.runtime_sha256 == _sha256(runtime.executable)
+    assert described.model_sha256 == _sha256(runtime.model)
+    assert candidates and candidates[0].provenance == described
+    assert hashed_paths == [
+        runtime.executable,
+        runtime.model,
+        runtime.executable,
+        runtime.model,
+    ]
+
+
 def test_ordinary_nonzero_exit_is_stable_and_not_retried(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     crop_relpath = _copy_crop(workspace)

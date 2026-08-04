@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -145,6 +146,15 @@ class PipelineRun(TimestampMixin, Base):
             name="ck_pipeline_control_requested",
         ),
         CheckConstraint(
+            "(workflow_slot IS NULL AND status != 'running' AND "
+            "resume_token IS NULL AND resume_owner IS NULL) OR "
+            "(workflow_slot = 1 AND ((status = 'running' AND "
+            "resume_token IS NULL AND resume_owner IS NULL) OR "
+            "(status IN ('paused','failed','cancelled') AND "
+            "resume_token IS NOT NULL AND resume_owner IS NOT NULL)))",
+            name="ck_pipeline_workflow_slot",
+        ),
+        CheckConstraint(
             "quality_gate IN ('passed','failed','unknown')",
             name="ck_pipeline_quality_gate",
         ),
@@ -152,6 +162,12 @@ class PipelineRun(TimestampMixin, Base):
             "status IN ('queued','running','paused','review_ready','completed','failed',"
             "'cancelled')",
             name="ck_pipeline_status",
+        ),
+        # SQLite permits many NULLs, but only one row may own the constant slot value 1.
+        Index(
+            "uq_pipeline_runs_global_workflow_slot",
+            "workflow_slot",
+            unique=True,
         ),
     )
 
@@ -171,6 +187,9 @@ class PipelineRun(TimestampMixin, Base):
     current_stage: Mapped[str | None] = mapped_column(String(40))
     current_frame_index: Mapped[int | None] = mapped_column(Integer)
     control_requested: Mapped[str | None] = mapped_column(String(20))
+    workflow_slot: Mapped[int | None] = mapped_column(Integer)
+    resume_token: Mapped[str | None] = mapped_column(String(36))
+    resume_owner: Mapped[str | None] = mapped_column(String(36))
     ocr_engine: Mapped[str] = mapped_column(String(100), nullable=False)
     ocr_engine_version: Mapped[str] = mapped_column(String(100), nullable=False)
     ocr_runtime_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
