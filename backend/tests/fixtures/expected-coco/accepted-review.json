@@ -1,0 +1,27 @@
+{
+  "annotations": [
+    {
+      "area": 80,
+      "bbox": [10, 4, 10, 8],
+      "category_id": 1,
+      "id": 1,
+      "image_id": 1,
+      "iscrowd": 0
+    },
+    {
+      "area": 12,
+      "bbox": [1, 2, 3, 4],
+      "category_id": 2,
+      "id": 2,
+      "image_id": 1,
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {"id": 1, "name": "zero"},
+    {"id": 2, "name": "one"}
+  ],
+  "images": [
+    {"file_name": "images/00000002.jpg", "height": 50, "id": 1, "width": 100}
+  ]
+}

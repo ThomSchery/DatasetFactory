@@ -9,7 +9,7 @@
 | TK-004 | Trwały workflow, checkpointy i odzyskiwanie | wykonany | TK-003-F2 | Zintegrowany w `d4069bb`; finalny review `ACCEPT` |
 | TK-005 | Weryfikacja anotacji i eksport COCO | rozbity na F1/F2 | TK-004 | Gate 3 |
 | TK-005-F1 | Weryfikacja anotacji i licznik rewizji | wykonany | TK-004 | część Gate 3 ✓ |
-| TK-005-F2 | Eksport COCO na snapshocie rewizji | gotowy | TK-005-F1 | Gate 3 backend |
+| TK-005-F2 | Eksport COCO na snapshocie rewizji | wykonany | TK-005-F1 | Gate 3 backend ✓ |
 | FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005 | Gate 3 |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 

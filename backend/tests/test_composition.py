@@ -40,3 +40,4 @@ def test_full_composition_root_builds_without_server(composition: CompositionRoo
         str(composition.workspace.root)
     )
     assert composition.review_use_cases is not None
+    assert composition.export_use_cases is not None

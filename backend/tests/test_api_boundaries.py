@@ -8,7 +8,7 @@ import pytest
 
 @pytest.mark.parametrize(
     "module_name",
-    ["health", "profiles", "materials", "assets", "annotations", "frames"],
+    ["health", "profiles", "materials", "assets", "annotations", "frames", "exports"],
 )
 def test_api_router_does_not_import_composition_root(module_name: str) -> None:
     source_path = Path(f"backend/app/api/{module_name}.py")
@@ -38,6 +38,8 @@ def test_api_router_does_not_import_composition_root(module_name: str) -> None:
         Path("backend/app/managers/workflow/material_use_cases.py"),
         Path("backend/app/engines/review/engine.py"),
         Path("backend/app/managers/workflow/review_use_cases.py"),
+        Path("backend/app/engines/coco/engine.py"),
+        Path("backend/app/managers/workflow/export_use_cases.py"),
     ],
 )
 def test_engine_and_manager_do_not_import_http_or_sqlalchemy(source_path: Path) -> None:
@@ -61,3 +63,22 @@ def test_definition_engine_does_not_import_ocr_or_image_implementations() -> Non
         assert "opencv" not in source
         assert "cv2" not in source
         assert "tesseract" not in source
+
+
+def test_coco_engine_has_no_framework_or_filesystem_writes() -> None:
+    source_path = Path("backend/app/engines/coco/engine.py")
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    imported_modules = {
+        node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    } | {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+
+    assert not any(
+        module.startswith(("fastapi", "starlette", "sqlalchemy", "pathlib", "tempfile", "shutil"))
+        for module in imported_modules
+    )
+    assert "datetime.now" not in source_path.read_text(encoding="utf-8")

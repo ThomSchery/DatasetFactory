@@ -21,6 +21,7 @@ from backend.app.access.store.reference_assets import ReferenceAssetStore
 from backend.app.access.store.repositories.annotations import AnnotationRepository
 from backend.app.access.store.repositories.assets import AssetRepository
 from backend.app.access.store.repositories.checkpoints import CheckpointRepository
+from backend.app.access.store.repositories.exports import ExportRepository
 from backend.app.access.store.repositories.frames import FrameRepository
 from backend.app.access.store.repositories.materials import MaterialRepository
 from backend.app.access.store.repositories.profiles import ProfileRepository
@@ -29,9 +30,11 @@ from backend.app.access.store.repositories.runs import RunRepository
 from backend.app.access.store.repository import ProjectStore
 from backend.app.access.store.workspace import Workspace
 from backend.app.config import Settings
+from backend.app.engines.coco import CocoExportEngine
 from backend.app.engines.definition import DatasetDefinitionEngine
 from backend.app.engines.review import AnnotationReviewEngine
 from backend.app.logging import close_json_logging, configure_json_logging
+from backend.app.managers.workflow.export_use_cases import ExportUseCases
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import (
     DiskSpaceReader,
@@ -57,11 +60,13 @@ class CompositionRoot:
     profile_use_cases: ProfileUseCases
     material_use_cases: MaterialUseCases
     review_use_cases: ReviewUseCases
+    export_use_cases: ExportUseCases
     dataset_workflow: DatasetWorkflow
     logger: logging.Logger
     log_path: Path
 
     def close(self) -> None:
+        self.export_use_cases.shutdown()
         self.dataset_workflow.shutdown()
         self.database.dispose()
         close_json_logging(self.logger, self.log_path)
@@ -158,6 +163,11 @@ def build_composition(
         AnnotationRepository(database),
         workspace,
     )
+    export_use_cases = ExportUseCases(
+        CocoExportEngine(),
+        ExportRepository(database, workspace),
+        logger,
+    )
     workflow_recovery = WorkflowRecovery(runs, checkpoints)
     workflow_worker = WorkflowWorker(
         runs,
@@ -196,6 +206,7 @@ def build_composition(
         profile_use_cases,
         material_use_cases,
         review_use_cases,
+        export_use_cases,
         dataset_workflow,
         logger,
         log_path,
