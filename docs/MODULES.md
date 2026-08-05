@@ -39,7 +39,7 @@
 | F01, F07 | `DatasetDefinitionEngine`, `DatasetWorkflow`, `ProjectStoreAccess` |
 | F03, F04, F05, F13 | `DatasetWorkflow`, `MediaProcessingAccess`, `ProjectStoreAccess` |
 | F06 | `OcrAccess`, `DatasetDefinitionEngine`, `DatasetWorkflow` |
-| F08 | `AnnotationReviewEngine`, `DatasetWorkflow`, `WebClient` |
+| F08, F09 | `AnnotationReviewEngine`, `DatasetWorkflow`, `WebClient` |
 | F11 | `CocoExportEngine`, `ProjectStoreAccess`, `DatasetWorkflow` |
 | F12, F14 | `SystemStatusAccess`, `DatasetWorkflow`, `WebClient` |
 | F15 | `ProjectStoreAccess` |

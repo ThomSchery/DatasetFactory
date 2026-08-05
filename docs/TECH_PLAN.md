@@ -136,6 +136,17 @@ ręcznego, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
 ani ich statusów; `accepted` pozostaje terminalne, żeby snapshot eksportu był
 trwały. Każda z tych mutacji podbija `version` agregatu oraz `review_revision`.
 
+Klatka z decyzją review jest zamrożona: `accepted` i `rejected` odpowiadają
+`409 review_locked` na `POST /frames/{id}/annotations`, `PATCH` i `DELETE`.
+Edycję odrzuconej klatki odblokowuje dopiero `reopen`. To zaostrza zachowanie
+z TK-005-F1, gdzie blokowane było wyłącznie `accepted`, i jest częścią TK-007.
+
+Rekoncyliacja przy wznowieniu nigdy nie kasuje pracy człowieka. Unieważnienie
+etapu OCR usuwa wyłącznie anotacje `source='ocr'`; `source='manual'` przetrwają
+i współistnieją ze świeżo policzonymi propozycjami. Guard z TK-005-F1 chroni
+klatki z decyzją review, ale `reopen` wraca do `pending`, więc bez tej reguły
+ręczne boksy na klatce ponownie otwartej byłyby kasowalne przez restart.
+
 Endpointy są jawnie `local-public`; FastAPI binduje loopback. Dev CORS dopuszcza
 wyłącznie skonfigurowany origin Vite. Nie ma endpointu przyjmującego upload ani
 dowolną ścieżkę wyjściową.
@@ -167,8 +178,16 @@ dowolną ścieżkę wyjściową.
   `failed` z `export_revision_conflict`, kasuje temp i nie publikuje niczego.
   Użytkownik ponawia eksport świadomie; nie ma cichego retry ani wyniku
   mieszającego dwie rewizje.
-- Manifest raportuje liczbę anotacji według `source` (`ocr` i `manual`). Sam
-  dokument COCO pozostaje standardowy i nie niesie tego pola.
+- Manifest raportuje liczbę anotacji według `source` obiektem
+  `annotation_sources` o dokładnie dwóch kluczach całkowitych, `ocr` i `manual`;
+  oba są zawsze obecne, także gdy wynoszą zero, a ich suma równa się liczbie
+  anotacji w dokumencie. Sam dokument COCO pozostaje standardowy i nie niesie
+  tego pola. Licznik mierzy pochodzenie boksu, nie trafność OCR: anotacja
+  odczytana przez OCR i poprawiona ręcznie zachowuje `source='ocr'`.
+- Ukończony eksport jest niezmienny. Późniejszy `reopen` i ponowna akceptacja
+  zmieniają wyłącznie stan bieżący; dataset leżący na dysku pozostaje wierną
+  migawką swojej `input_revision` i nie jest wstecznie poprawiany. Nowy stan
+  wymaga nowego eksportu z nowym `export_id`.
 - Ten sam `input_revision` daje bajtowo identyczny dokument: sortowanie jest
   deterministyczne, a numeryczne ID `images`/`annotations` nadaje engine po
   posortowaniu, nigdy z UUID ani kolejności bazy.

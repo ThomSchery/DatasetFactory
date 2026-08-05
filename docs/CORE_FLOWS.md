@@ -68,16 +68,24 @@ błąd config/input jest non-retryable.
    odrzucenie oznacza klatkę `rejected` i wyklucza wszystkie jej anotacje.
 5. Mutacja używa `version` klatki; konflikt równoległej/starej edycji daje `409`
    i wymaga ponownego pobrania (bez optimistic update).
-6. Odrzuconą klatkę można otworzyć ponownie jawną akcją: status wraca do
-   `pending`, anotacje i ich statusy pozostają nietknięte, a licznik
-   `review_revision` rośnie jak przy każdej mutacji weryfikacji. Klatka
-   `accepted` pozostaje zablokowana, żeby snapshot eksportu był trwały.
+6. Klatka z decyzją jest zamrożona: `accepted` i `rejected` odrzucają edycję
+   anotacji. Odrzuconą można otworzyć ponownie jawną akcją — status wraca do
+   `pending`, anotacje i ich statusy pozostają nietknięte, a `review_revision`
+   rośnie jak przy każdej mutacji weryfikacji. Dopiero wtedy klatka jest
+   edytowalna. `accepted` pozostaje terminalne, żeby snapshot eksportu był
+   trwały.
 7. Lista klatek daje się filtrować po `review_status`, więc odrzucone są
    osiągalne — bez tego ponowne otwarcie byłoby funkcją bez wejścia.
 
 Brak boksu OCR: użytkownik dorysowuje go ręcznie. Boks ręczny ma `source=manual`
 i nie ma `confidence`; walidacja sprawdza wyłącznie granice klatki, nie regiony
 HUD, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
+
+Odczyty OCR i boksy ręczne wyglądają na klatce tak samo — to prostokąty z klasą.
+Różni je pochodzenie i `confidence`, które ma tylko odczyt; UI musi je odróżniać
+wizualnie. Wznowienie po awarii kasuje wyłącznie boksy pochodzące z OCR, gdy
+przelicza uszkodzony etap; boksy narysowane ręcznie przetrwają i pozostają obok
+świeżych propozycji.
 
 ## CF-06 — Eksport COCO
 
@@ -93,6 +101,9 @@ HUD, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
    zatwierdzony przez człowieka, a rozróżnienie służy ocenie jakości OCR.
 5. Powtórzenie bez zmian nadpisuje ten sam draft eksportu atomowo; zatwierdzony
    artefakt ma nowy `export_id`.
+6. Ukończony eksport jest niezmienny. Ponowne otwarcie i akceptacja klatki, która
+   już w nim jest, nie poprawiają datasetu na dysku — ten pozostaje wierną
+   migawką swojej rewizji. Nowy stan wymaga nowego eksportu.
 
 ## CF-07 — Dashboard i błędy systemowe
 

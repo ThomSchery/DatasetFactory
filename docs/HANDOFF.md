@@ -24,8 +24,8 @@ oddzielnymi klasami/funkcjami wewnątrz modułu z jednym publicznym kontraktem.
 ## Kolejność
 
 1. Równolegle: TK-001 i FE-SETUP.
-2. Sekwencyjnie: TK-002 → TK-003 → TK-004 → TK-005.
-3. FE-001 po stabilizacji wymaganych kontraktów TK-002/004/005.
+2. Sekwencyjnie: TK-002 → TK-003 → TK-004 → TK-005 → TK-007.
+3. FE-001 po stabilizacji wymaganych kontraktów TK-002/004/005/007.
 4. TK-006 zamyka całość.
 
 ## Verification Gates
@@ -34,14 +34,16 @@ oddzielnymi klasami/funkcjami wewnątrz modułu z jednym publicznym kontraktem.
 - Gate 2: TK-003 — techniczny kontrakt/bbox/provenance musi przejść. Negatywny
   wynik jakości Tesseract jest zaakceptowany jako TD-014: adapter działa wyłącznie
   `experimental`, a workflow zapisuje i pokazuje `quality_gate=failed`.
-- Gate 3: TK-005 + FE-001 — pełny workflow API/UI oraz poprawny COCO.
+- Gate 3: TK-005 + TK-007 + FE-001 — pełny workflow API/UI, ręczna korekta
+  boksów oraz poprawny COCO.
 - Gate 4: TK-006 — wszystkie testy, restart/resume, screenshot QA i clean repo.
 
 ## Dług techniczny
 
 Coding agent aktualizuje kolumnę „Gdzie (plik:linia)” w `TECH_DEBT.md` w każdym
-ticketcie. Najwyższy priorytet obserwacji: TD-004 trafność OCR, TD-005 brak
-dodania przeoczonego boksu, TD-001 mismatch rozdzielczości i TD-011 brak backupu.
+ticketcie. Najwyższy priorytet obserwacji: TD-004 trafność OCR, TD-001 mismatch
+rozdzielczości i TD-011 brak backupu. TD-005 został zamknięty 2026-08-04 wraz
+z wciągnięciem F09 do v1.
 
 ## Markery @SCALE
 

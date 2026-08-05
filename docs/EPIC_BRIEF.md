@@ -26,7 +26,7 @@ ground truth i nie usuwa obowiązkowej weryfikacji człowieka.
 
 ## Zakres v1
 
-F01, F03–F08, F11–F16 z wiążącej tabeli w `docs/CONTEXT.md`: tworzenie profilu,
+F01, F03–F09, F11–F16 z wiążącej tabeli w `docs/CONTEXT.md`: tworzenie profilu,
 lokalny materiał, FFmpeg 1 fps, cropy HUD, Tesseract, mapowanie znaków,
 weryfikacja z ręczną korektą boksów (F09), COCO, dashboard, materiały, polling
 pipeline'u, SQLite i powłoka UI.

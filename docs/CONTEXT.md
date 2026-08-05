@@ -118,11 +118,13 @@ Otwiera aplikację → tworzy profil gry (klatka referencyjna → regiony HUD �
 klasy: `-`, `/`, `0–9`, `A–Z`, `health`, `armour`, klasy per gra) → importuje nagranie
 `MP4`/`MKV`/`MOV` i wybiera profil oraz interwał próbkowania → aplikacja próbkuje
 klatki → wycina regiony HUD → uruchamia OCR (znaki, boksy, confidence) → autor
-ogląda podgląd anotacji na klatce → koryguje klasę lub usuwa boks → akceptuje
-albo odrzuca klatkę → eksportuje zaakceptowane klatki jako `COCO JSON`.
+ogląda podgląd anotacji na klatce → koryguje klasę, usuwa boks, poprawia jego
+geometrię albo dorysowuje brakujący → akceptuje albo odrzuca klatkę → w razie
+potrzeby wraca do odrzuconej klatki i otwiera ją ponownie → eksportuje
+zaakceptowane klatki jako `COCO JSON`.
 
-Etapy `SAM 3` oraz ręczne boksy ikon HUD są w tej ścieżce widoczne jako stan
-pipeline'u, ale ich implementacja jest poza v1.
+Etap `SAM 3` jest w tej ścieżce widoczny jako stan pipeline'u, ale jego
+implementacja jest poza v1.
 
 ## Funkcjonalności
 
