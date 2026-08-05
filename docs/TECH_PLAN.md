@@ -123,7 +123,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /frames/{id}/annotations` | `{category_id,bbox:{x,y,width,height},expected_version}` | `201 Annotation` | `400 category/bbox_invalid`, `404`, `409 version/review_locked/frame_not_reviewable` |
 | `PATCH /annotations/{id}` | `{category_id?,bbox?,expected_version}`; co najmniej jedno pole zmiany | annotation | `400 category/bbox_invalid/empty_patch`, `404`, `409 version/review_locked` |
 | `DELETE /annotations/{id}` | `expected_version` query | `204` | `404`, `409` |
-| `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations/bbox_invalid` z `details.annotation_ids`, `404`, `409 version/review_locked/invalid_review_transition` |
+| `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations/bbox_invalid` z `details.annotation_ids`, `404`, `409 version/review_locked/frame_not_reviewable/invalid_review_transition` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
 | `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
 
@@ -145,8 +145,14 @@ Ręczny boks wolno dodać wyłącznie do klatki na etapie `review_pending`, czyl
 zakończonym OCR; wcześniejsza próba dostaje `409 frame_not_reviewable`. Kod jest
 `409`, bo to konflikt ze stanem agregatu, tak samo jak `review_locked`: to samo
 żądanie przechodzi, gdy klatka dojdzie do `review_pending`. Bez tej bramki boks
-narysowany przed pierwszym OCR kasowałby `commit_ocr`, a klatka bez odczytów
-mogłaby zostać zaakceptowana i cicho cofnięta do `pending` przez workera.
+narysowany przed pierwszym OCR kasowałby `commit_ocr`.
+
+Ten sam etap jest wymagany dla decyzji `accept` i `reject`, bo `commit_ocr`
+bezwarunkowo ustawia `review_status='pending'`: decyzja podjęta przed końcem OCR
+zostałaby cicho cofnięta, gdy worker dojdzie do klatki. `reopen` nie podlega tej
+bramce — wychodzi wyłącznie z `rejected`, a taka klatka ma OCR za sobą. Obie
+bramki działają w engine i wewnątrz transakcji zapisu, żeby wyścig z workerem
+nie prześlizgnął się na odczycie etapu z innej sesji.
 
 Rekoncyliacja przy wznowieniu nigdy nie kasuje pracy człowieka. Unieważnienie
 etapu OCR usuwa wyłącznie anotacje `source='ocr'`; `source='manual'` przetrwają

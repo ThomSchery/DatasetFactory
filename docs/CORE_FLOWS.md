@@ -82,7 +82,8 @@ i nie ma `confidence`; walidacja sprawdza wyłącznie granice klatki, nie region
 HUD, bo źle wyznaczony region jest jedną z przyczyn braku odczytu. Rysowanie jest
 możliwe dopiero po zakończeniu OCR klatki — wcześniej przetwarzanie przepisałoby
 propozycje etapu i skasowało świeży boks, więc taka próba dostaje
-`409 frame_not_reviewable`.
+`409 frame_not_reviewable`. Tego samego etapu wymagają `accept` i `reject`:
+decyzja podjęta przed końcem OCR zostałaby cicho cofnięta przez workera.
 
 Odczyty OCR i boksy ręczne wyglądają na klatce tak samo — to prostokąty z klasą.
 Różni je pochodzenie i `confidence`, które ma tylko odczyt; UI musi je odróżniać
