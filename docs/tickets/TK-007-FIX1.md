@@ -63,3 +63,23 @@ i rekoncyliacji startowej. Cokolwiek z FE-001 i F10.
 - Brak martwego kodu; pusty `PATCH` nie podbija żadnego licznika także wtedy,
   gdy ominie się engine.
 - Pełne bramki backendu zielone: ruff, mypy strict, cały pytest.
+
+## Rozszerzenie zakresu zatwierdzone 2026-08-05
+
+Bramka `frame_not_reviewable` obejmuje nie tylko dodanie ręcznego boksu, ale też
+`accept` i `reject`. Powód: `commit_ocr` bezwarunkowo ustawia
+`review_status='pending'`, więc decyzja podjęta przed zakończeniem OCR byłaby
+cicho cofnięta. `reopen` jest zwolniony — wychodzi z `rejected`, a taka klatka
+OCR już przeszła. Kontrakt opisuje `TECH_PLAN §5` i CF-05 (commit `be184ca`).
+
+## Odchylenia techniczne
+
+Identyfikator ręcznej anotacji tworzy manager i przekazuje go zarówno do engine,
+jak i do `create_manual`, zamiast pozwolić repozytorium wywołać `uuid4()`. Dzięki
+temu engine waliduje dokładnie ten identyfikator, który zostanie zapisany, i
+znika placeholder `annotation_id="manual"`. To jedyne miejsce w kodzie, gdzie
+identyfikator powstaje w warstwie manager — świadomy wyjątek, nie wzorzec do
+naśladowania.
+
+Kotwice `plik:linia` w TD-005 zostały przesunięte i obejmują teraz `frames.py:227`.
+Będą dryfować przy każdej zmianie tych plików.
