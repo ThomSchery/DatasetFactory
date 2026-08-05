@@ -74,23 +74,57 @@ class ReviewUseCases:
         self,
         annotation_id: str,
         *,
-        category_id: str,
+        category_id: str | None,
+        bbox: tuple[int, int, int, int] | None = None,
         expected_version: int,
     ) -> StoredAnnotation:
         try:
             current = self._annotations.frame_for_annotation(annotation_id)
-            self._engine.correct_class(
+            review_bbox = ReviewBBox(*bbox) if bbox is not None else None
+            self._engine.edit_annotation(
                 self._snapshot(current),
                 annotation_id=annotation_id,
                 category_id=category_id,
+                bbox=review_bbox,
                 allowed_categories=current.allowed_category_ids,
             )
-            updated = self._annotations.update_category(
+            updated = self._annotations.update(
                 annotation_id,
                 category_id=category_id,
+                bbox=bbox,
                 expected_version=expected_version,
             )
             return self._find_annotation(updated, annotation_id)
+        except Exception as exc:
+            raise self._translate(exc) from exc
+
+    def create_manual_annotation(
+        self,
+        frame_id: str,
+        *,
+        category_id: str,
+        bbox: tuple[int, int, int, int],
+        expected_version: int,
+    ) -> StoredAnnotation:
+        try:
+            current = self._annotations.frame(frame_id)
+            review_bbox = ReviewBBox(*bbox)
+            self._engine.add_annotation(
+                self._snapshot(current),
+                annotation_id="manual",
+                category_id=category_id,
+                bbox=review_bbox,
+                allowed_categories=current.allowed_category_ids,
+            )
+            return self._annotations.create_manual(
+                frame_id,
+                category_id=category_id,
+                x=review_bbox.x,
+                y=review_bbox.y,
+                width=review_bbox.width,
+                height=review_bbox.height,
+                expected_version=expected_version,
+            )
         except Exception as exc:
             raise self._translate(exc) from exc
 
@@ -106,7 +140,7 @@ class ReviewUseCases:
         self,
         frame_id: str,
         *,
-        decision: Literal["accept", "reject"],
+        decision: Literal["accept", "reject", "reopen"],
         expected_version: int,
     ) -> StoredFrameReview:
         try:

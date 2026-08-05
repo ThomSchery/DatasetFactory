@@ -24,9 +24,7 @@ def snapshot(
         version=3,
         annotations=annotations
         if annotations is not None
-        else (
-            AnnotationSnapshot("annotation", "zero", ReviewBBox(1, 2, 3, 4), "proposed", 2),
-        ),
+        else (AnnotationSnapshot("annotation", "zero", ReviewBBox(1, 2, 3, 4), "proposed", 2),),
     )
 
 
@@ -50,6 +48,66 @@ def test_class_correction_and_tombstone_are_immutable_transitions() -> None:
     assert deleted.annotations[0].version == 4
 
 
+def test_manual_annotation_and_overlapping_geometry_are_allowed() -> None:
+    engine = AnnotationReviewEngine()
+    original = snapshot()
+
+    created = engine.add_annotation(
+        original,
+        annotation_id="manual",
+        category_id="one",
+        bbox=ReviewBBox(2, 3, 10, 10),
+        allowed_categories=frozenset({"zero", "one"}),
+    )
+    overlapping = engine.add_annotation(
+        created,
+        annotation_id="manual-overlap",
+        category_id="one",
+        bbox=ReviewBBox(3, 4, 10, 10),
+        allowed_categories=frozenset({"zero", "one"}),
+    )
+
+    assert original.version == 3
+    assert created.version == 4
+    assert overlapping.version == 5
+    assert overlapping.annotations[-2:] == (
+        AnnotationSnapshot("manual", "one", ReviewBBox(2, 3, 10, 10), "proposed", 1),
+        AnnotationSnapshot("manual-overlap", "one", ReviewBBox(3, 4, 10, 10), "proposed", 1),
+    )
+
+
+def test_geometry_edit_and_out_of_bounds_geometry_validation() -> None:
+    engine = AnnotationReviewEngine()
+    changed = engine.edit_annotation(
+        snapshot(),
+        annotation_id="annotation",
+        category_id=None,
+        bbox=ReviewBBox(10, 11, 12, 13),
+        allowed_categories=frozenset({"zero"}),
+    )
+
+    assert changed.annotations[0].bbox == ReviewBBox(10, 11, 12, 13)
+    assert changed.annotations[0].version == 3
+
+    with pytest.raises(ReviewValidationError, match="bbox_invalid"):
+        engine.add_annotation(
+            snapshot(),
+            annotation_id="outside",
+            category_id="zero",
+            bbox=ReviewBBox(99, 49, 2, 2),
+            allowed_categories=frozenset({"zero"}),
+        )
+
+    with pytest.raises(ReviewValidationError, match="empty_patch"):
+        engine.edit_annotation(
+            snapshot(),
+            annotation_id="annotation",
+            category_id=None,
+            bbox=None,
+            allowed_categories=frozenset({"zero"}),
+        )
+
+
 def test_accept_requires_active_annotation_and_marks_snapshot_accepted() -> None:
     engine = AnnotationReviewEngine()
     accepted = engine.review_frame(
@@ -65,9 +123,7 @@ def test_accept_requires_active_annotation_and_marks_snapshot_accepted() -> None
         engine.review_frame(
             snapshot(
                 annotations=(
-                    AnnotationSnapshot(
-                        "annotation", "zero", ReviewBBox(1, 2, 3, 4), "deleted", 2
-                    ),
+                    AnnotationSnapshot("annotation", "zero", ReviewBBox(1, 2, 3, 4), "deleted", 2),
                 )
             ),
             decision="accept",
@@ -75,7 +131,7 @@ def test_accept_requires_active_annotation_and_marks_snapshot_accepted() -> None
         )
 
 
-def test_reject_and_accepted_frame_lock() -> None:
+def test_reopen_only_rejected_and_decided_frames_lock_mutations() -> None:
     engine = AnnotationReviewEngine()
     rejected = engine.review_frame(
         snapshot(),
@@ -85,8 +141,35 @@ def test_reject_and_accepted_frame_lock() -> None:
     assert rejected.review_status == "rejected"
     assert rejected.version == 4
 
+    reopened = engine.review_frame(
+        rejected,
+        decision="reopen",
+        allowed_categories=frozenset({"zero"}),
+    )
+    assert reopened.review_status == "pending"
+    assert reopened.version == 5
+    assert reopened.annotations == rejected.annotations
+
+    with pytest.raises(ReviewValidationError, match="invalid_review_transition"):
+        engine.review_frame(
+            snapshot(),
+            decision="reopen",
+            allowed_categories=frozenset({"zero"}),
+        )
+
+    for locked_status in ("accepted", "rejected"):
+        with pytest.raises(ReviewValidationError, match="review_locked"):
+            engine.tombstone(
+                snapshot(review_status=locked_status),
+                annotation_id="annotation",
+            )
+
     with pytest.raises(ReviewValidationError, match="review_locked"):
-        engine.tombstone(snapshot(review_status="accepted"), annotation_id="annotation")
+        engine.review_frame(
+            snapshot(review_status="accepted"),
+            decision="reopen",
+            allowed_categories=frozenset({"zero"}),
+        )
 
 
 def test_category_outside_profile_is_rejected() -> None:

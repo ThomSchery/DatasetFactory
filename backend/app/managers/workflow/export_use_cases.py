@@ -131,7 +131,11 @@ class ExportUseCases:
                 ),
             )
             exported_at = self._clock().astimezone(UTC).isoformat()
+            annotation_sources = {"ocr": 0, "manual": 0}
+            for annotation in snapshot.annotations:
+                annotation_sources[annotation.source] += 1
             manifest: dict[str, Any] = {
+                "annotation_sources": annotation_sources,
                 "annotations": "annotations.json",
                 "exported_at": exported_at,
                 "images": "images",

@@ -69,6 +69,7 @@ class StoredExportAnnotation:
     y: int
     width: int
     height: int
+    source: str
 
 
 @dataclass(frozen=True)
@@ -180,6 +181,7 @@ class ExportRepository:
                         item.y,
                         item.width,
                         item.height,
+                        item.source,
                     )
                     for item in session.scalars(
                         select(Annotation).where(

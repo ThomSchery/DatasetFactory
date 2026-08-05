@@ -863,6 +863,117 @@ def test_recovery_skips_reviewed_frames_without_changing_review_state_or_revisio
         assert tuple(frame.review_status for frame in persisted) == ("accepted", "rejected")
 
 
+def test_recovery_after_reopen_preserves_manual_annotations_and_review_revision(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    _, _, recovery = _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        StubOcrEngine(),
+    )
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        completed = _wait_status(client, created["id"], "review_ready")
+        with composition.database.session() as session:
+            frame = session.scalar(select(Frame).where(Frame.run_id == created["id"]))
+            category = session.scalar(
+                select(Category).where(Category.profile_id == seeded.profile_id)
+            )
+            assert frame is not None
+            assert category is not None
+            frame_id = frame.id
+            frame_version = frame.version
+            category_id = category.id
+
+        rejected = client.post(
+            f"/api/v1/frames/{frame_id}/review",
+            json={"decision": "reject", "expected_version": frame_version},
+        )
+        assert rejected.status_code == 200, rejected.text
+        reopened = client.post(
+            f"/api/v1/frames/{frame_id}/review",
+            json={"decision": "reopen", "expected_version": rejected.json()["version"]},
+        )
+        assert reopened.status_code == 200, reopened.text
+        manual = client.post(
+            f"/api/v1/frames/{frame_id}/annotations",
+            json={
+                "category_id": category_id,
+                "bbox": {"x": 700, "y": 500, "width": 20, "height": 20},
+                "expected_version": reopened.json()["version"],
+            },
+        )
+        assert manual.status_code == 201, manual.text
+        manual_id = manual.json()["id"]
+
+    with composition.database.session() as session:
+        checkpoint = session.get(StageCheckpoint, (created["id"], 0, "ocr"))
+        run = session.get(PipelineRun, created["id"])
+        assert checkpoint is not None
+        assert run is not None
+        checkpoint.artifact_hash = "0" * 64
+        review_revision = run.review_revision
+        assert review_revision == 3
+        run.status = "running"
+        run.workflow_slot = 1
+        run.current_stage = "ocr"
+        run.version = completed["version"] + 1
+
+    first = recovery.recover_startup()
+    assert first.invalidated_frames == 1
+    assert first.skipped_reviewed_frames == 0
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        frame = session.get(Frame, frame_id)
+        assert run is not None
+        assert frame is not None
+        assert run.review_revision == review_revision
+        assert frame.review_status == "pending"
+        annotations = tuple(
+            session.scalars(
+                select(Annotation).where(Annotation.frame_id == frame_id).order_by(Annotation.id)
+            )
+        )
+        assert [(item.id, item.source) for item in annotations] == [(manual_id, "manual")]
+        stable_frame_state = (frame.stage_status, frame.review_status, frame.version)
+        stable_annotations = tuple(
+            (item.id, item.source, item.status, item.version) for item in annotations
+        )
+        run.status = "running"
+        run.workflow_slot = 1
+        run.current_stage = "ocr"
+
+    second = recovery.recover_startup()
+    assert second.invalidated_frames == 0
+    assert second.skipped_reviewed_frames == 0
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        frame = session.get(Frame, frame_id)
+        assert run is not None
+        assert frame is not None
+        assert run.review_revision == review_revision
+        assert (frame.stage_status, frame.review_status, frame.version) == stable_frame_state
+        assert (
+            tuple(
+                (item.id, item.source, item.status, item.version)
+                for item in session.scalars(
+                    select(Annotation)
+                    .where(Annotation.frame_id == frame_id)
+                    .order_by(Annotation.id)
+                )
+            )
+            == stable_annotations
+        )
+
+
 def test_recovery_skip_then_resume_checkpoint_remains_valid_on_second_restart(
     composition: CompositionRoot,
     tmp_path: Path,
@@ -886,9 +997,7 @@ def test_recovery_skip_then_resume_checkpoint_remains_valid_on_second_restart(
         with composition.database.session() as session:
             frames = tuple(
                 session.scalars(
-                    select(Frame)
-                    .where(Frame.run_id == created["id"])
-                    .order_by(Frame.frame_index)
+                    select(Frame).where(Frame.run_id == created["id"]).order_by(Frame.frame_index)
                 )
             )
             assert len(frames) == 2

@@ -295,7 +295,12 @@ class CheckpointRepository:
                 target,
                 recovery=True,
             )
-        session.execute(delete(Annotation).where(Annotation.frame_id == frame.id))
+        session.execute(
+            delete(Annotation).where(
+                Annotation.frame_id == frame.id,
+                Annotation.source == "ocr",
+            )
+        )
         if invalidation.stage in {"sample", "crop"}:
             session.execute(delete(RegionSample).where(RegionSample.frame_id == frame.id))
         else:

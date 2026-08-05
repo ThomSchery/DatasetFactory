@@ -6,13 +6,24 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import Field
 
 from backend.app.access.store.repositories.annotations import StoredFrameReview
-from backend.app.api.annotations import AnnotationResponse, annotation_response, review_error
+from backend.app.api.annotations import (
+    AnnotationResponse,
+    BBoxRequest,
+    annotation_response,
+    review_error,
+)
 from backend.app.api.errors import ErrorEnvelope, StrictModel
 from backend.app.managers.workflow.review_use_cases import ReviewUseCaseError, ReviewUseCases
 
 
 class FrameReviewRequest(StrictModel):
-    decision: Literal["accept", "reject"]
+    decision: Literal["accept", "reject", "reopen"]
+    expected_version: int = Field(ge=1)
+
+
+class CreateAnnotationRequest(StrictModel):
+    category_id: str = Field(min_length=1)
+    bbox: BBoxRequest
     expected_version: int = Field(ge=1)
 
 
@@ -79,6 +90,33 @@ def create_frames_router(review_provider: ReviewProvider) -> APIRouter:
         except ReviewUseCaseError as error:
             return review_error(request, error)
         return FileResponse(image.path, media_type=image.content_type)
+
+    @router.post(
+        "/{frame_id}/annotations",
+        response_model=AnnotationResponse,
+        status_code=201,
+    )
+    def create_annotation(
+        frame_id: str,
+        payload: CreateAnnotationRequest,
+        request: Request,
+        review: Annotated[ReviewUseCases, Depends(review_provider)],
+    ) -> AnnotationResponse | JSONResponse:
+        try:
+            record = review.create_manual_annotation(
+                frame_id,
+                category_id=payload.category_id,
+                bbox=(
+                    payload.bbox.x,
+                    payload.bbox.y,
+                    payload.bbox.width,
+                    payload.bbox.height,
+                ),
+                expected_version=payload.expected_version,
+            )
+        except ReviewUseCaseError as error:
+            return review_error(request, error)
+        return annotation_response(record)
 
     @router.post("/{frame_id}/review", response_model=FrameDetailResponse)
     def review_frame(

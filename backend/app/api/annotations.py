@@ -10,8 +10,16 @@ from backend.app.api.errors import StrictModel, error_envelope
 from backend.app.managers.workflow.review_use_cases import ReviewUseCaseError, ReviewUseCases
 
 
+class BBoxRequest(StrictModel):
+    x: int
+    y: int
+    width: int
+    height: int
+
+
 class UpdateAnnotationRequest(StrictModel):
-    category_id: str = Field(min_length=1)
+    category_id: str | None = Field(default=None, min_length=1)
+    bbox: BBoxRequest | None = None
     expected_version: int = Field(ge=1)
 
 
@@ -68,6 +76,16 @@ def create_annotations_router(review_provider: ReviewProvider) -> APIRouter:
             record = review.correct_annotation(
                 annotation_id,
                 category_id=payload.category_id,
+                bbox=(
+                    (
+                        payload.bbox.x,
+                        payload.bbox.y,
+                        payload.bbox.width,
+                        payload.bbox.height,
+                    )
+                    if payload.bbox is not None
+                    else None
+                ),
                 expected_version=payload.expected_version,
             )
         except ReviewUseCaseError as error:

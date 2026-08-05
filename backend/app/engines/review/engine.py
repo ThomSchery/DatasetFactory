@@ -43,6 +43,67 @@ class FrameReviewSnapshot:
 class AnnotationReviewEngine:
     """Pure review transitions over immutable snapshots."""
 
+    def add_annotation(
+        self,
+        snapshot: FrameReviewSnapshot,
+        *,
+        annotation_id: str,
+        category_id: str,
+        bbox: ReviewBBox,
+        allowed_categories: frozenset[str],
+    ) -> FrameReviewSnapshot:
+        self._require_mutable(snapshot)
+        if category_id not in allowed_categories:
+            raise ReviewValidationError("category_not_allowed")
+        self.validate_bbox(
+            bbox,
+            frame_width=snapshot.width,
+            frame_height=snapshot.height,
+        )
+        annotation = AnnotationSnapshot(
+            id=annotation_id,
+            category_id=category_id,
+            bbox=bbox,
+            status="proposed",
+            version=1,
+        )
+        return replace(
+            snapshot,
+            version=snapshot.version + 1,
+            annotations=(*snapshot.annotations, annotation),
+        )
+
+    def edit_annotation(
+        self,
+        snapshot: FrameReviewSnapshot,
+        *,
+        annotation_id: str,
+        category_id: str | None,
+        bbox: ReviewBBox | None,
+        allowed_categories: frozenset[str],
+    ) -> FrameReviewSnapshot:
+        self._require_mutable(snapshot)
+        if category_id is None and bbox is None:
+            raise ReviewValidationError("empty_patch")
+        if category_id is not None and category_id not in allowed_categories:
+            raise ReviewValidationError("category_not_allowed")
+        annotation = self._annotation(snapshot, annotation_id)
+        if annotation.status == "deleted":
+            raise ReviewValidationError("annotation_deleted")
+        next_bbox = bbox if bbox is not None else annotation.bbox
+        self.validate_bbox(
+            next_bbox,
+            frame_width=snapshot.width,
+            frame_height=snapshot.height,
+        )
+        changed = replace(
+            annotation,
+            category_id=category_id if category_id is not None else annotation.category_id,
+            bbox=next_bbox,
+            version=annotation.version + 1,
+        )
+        return replace(snapshot, annotations=self._replace_annotation(snapshot, changed))
+
     def correct_class(
         self,
         snapshot: FrameReviewSnapshot,
@@ -51,19 +112,13 @@ class AnnotationReviewEngine:
         category_id: str,
         allowed_categories: frozenset[str],
     ) -> FrameReviewSnapshot:
-        self._require_mutable(snapshot)
-        if category_id not in allowed_categories:
-            raise ReviewValidationError("category_not_allowed")
-        annotation = self._annotation(snapshot, annotation_id)
-        if annotation.status == "deleted":
-            raise ReviewValidationError("annotation_deleted")
-        self.validate_bbox(
-            annotation.bbox,
-            frame_width=snapshot.width,
-            frame_height=snapshot.height,
+        return self.edit_annotation(
+            snapshot,
+            annotation_id=annotation_id,
+            category_id=category_id,
+            bbox=None,
+            allowed_categories=allowed_categories,
         )
-        changed = replace(annotation, category_id=category_id, version=annotation.version + 1)
-        return replace(snapshot, annotations=self._replace_annotation(snapshot, changed))
 
     def tombstone(
         self,
@@ -82,9 +137,19 @@ class AnnotationReviewEngine:
         self,
         snapshot: FrameReviewSnapshot,
         *,
-        decision: Literal["accept", "reject"],
+        decision: Literal["accept", "reject", "reopen"],
         allowed_categories: frozenset[str],
     ) -> FrameReviewSnapshot:
+        if decision == "reopen":
+            if snapshot.review_status == "accepted":
+                raise ReviewValidationError("review_locked")
+            if snapshot.review_status != "rejected":
+                raise ReviewValidationError("invalid_review_transition")
+            return replace(
+                snapshot,
+                review_status="pending",
+                version=snapshot.version + 1,
+            )
         self._require_mutable(snapshot)
         if snapshot.review_status != "pending":
             raise ReviewValidationError("invalid_review_transition")
@@ -128,7 +193,7 @@ class AnnotationReviewEngine:
 
     @staticmethod
     def _require_mutable(snapshot: FrameReviewSnapshot) -> None:
-        if snapshot.review_status == "accepted":
+        if snapshot.review_status in {"accepted", "rejected"}:
             raise ReviewValidationError("review_locked")
 
     @staticmethod

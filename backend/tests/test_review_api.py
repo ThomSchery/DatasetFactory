@@ -23,6 +23,7 @@ from backend.app.access.store.models import (
 )
 from backend.app.composition import CompositionRoot
 from backend.app.main import create_app
+from backend.app.managers.workflow.review_use_cases import ReviewUseCaseError
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class ReviewSeed:
     alternate_category_id: str
     foreign_category_id: str
     observation_id: str
+    run_id: str
 
 
 def _seed_review(composition: CompositionRoot, tmp_path: Path) -> ReviewSeed:
@@ -115,8 +117,8 @@ def _seed_review(composition: CompositionRoot, tmp_path: Path) -> ReviewSeed:
                 name="HUD",
                 x=0,
                 y=0,
-                width=100,
-                height=50,
+                width=10,
+                height=10,
             )
         )
         session.add(
@@ -230,6 +232,7 @@ def _seed_review(composition: CompositionRoot, tmp_path: Path) -> ReviewSeed:
         alternate_category_id,
         foreign_category_id,
         observation_id,
+        run_id,
     )
 
 
@@ -287,9 +290,7 @@ def test_review_api_conflicts_category_scope_lock_and_no_annotations(
         )
         assert accepted.status_code == 200
         assert accepted.json()["review_revision"] == 1
-        locked = client.delete(
-            f"/api/v1/annotations/{seed.annotation_ids[0]}?expected_version=1"
-        )
+        locked = client.delete(f"/api/v1/annotations/{seed.annotation_ids[0]}?expected_version=1")
         assert locked.status_code == 409
         assert locked.json()["error"]["code"] == "review_locked"
 
@@ -315,9 +316,7 @@ def test_tombstone_preserves_ocr_provenance_and_review_revision(
     seed = _seed_review(composition, tmp_path)
     app = create_app(composition.settings, composition=composition)
     with TestClient(app) as client:
-        response = client.delete(
-            f"/api/v1/annotations/{seed.annotation_ids[0]}?expected_version=1"
-        )
+        response = client.delete(f"/api/v1/annotations/{seed.annotation_ids[0]}?expected_version=1")
         assert response.status_code == 204, response.text
         detail = client.get(f"/api/v1/frames/{seed.frame_id}").json()
         deleted = next(
@@ -328,6 +327,202 @@ def test_tombstone_preserves_ocr_provenance_and_review_revision(
         assert detail["review_revision"] == 1
     with composition.database.session() as session:
         assert session.get(OcrObservation, seed.observation_id) is not None
+
+
+def test_manual_annotations_geometry_and_validation_contract(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        first = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.category_id,
+                "bbox": {"x": 80, "y": 30, "width": 10, "height": 10},
+                "expected_version": 1,
+            },
+        )
+        assert first.status_code == 201, first.text
+        assert first.json() | {"id": "ignored"} == {
+            "id": "ignored",
+            "category_id": seed.category_id,
+            "x": 80,
+            "y": 30,
+            "width": 10,
+            "height": 10,
+            "confidence": None,
+            "source": "manual",
+            "observation_id": None,
+            "status": "proposed",
+            "version": 1,
+        }
+
+        overlapping = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.alternate_category_id,
+                "bbox": {"x": 85, "y": 35, "width": 10, "height": 10},
+                "expected_version": 2,
+            },
+        )
+        assert overlapping.status_code == 201, overlapping.text
+
+        foreign = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.foreign_category_id,
+                "bbox": {"x": 20, "y": 20, "width": 2, "height": 2},
+                "expected_version": 3,
+            },
+        )
+        assert foreign.status_code == 400
+        assert foreign.json()["error"]["code"] == "category_not_allowed"
+
+        outside = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.category_id,
+                "bbox": {"x": 99, "y": 49, "width": 2, "height": 2},
+                "expected_version": 3,
+            },
+        )
+        assert outside.status_code == 400
+        assert outside.json()["error"]["code"] == "bbox_invalid"
+
+        stale = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.category_id,
+                "bbox": {"x": 20, "y": 20, "width": 2, "height": 2},
+                "expected_version": 1,
+            },
+        )
+        assert stale.status_code == 409
+        assert stale.json()["error"]["code"] == "version_conflict"
+
+        empty = client.patch(
+            f"/api/v1/annotations/{seed.annotation_ids[0]}",
+            json={"expected_version": 1},
+        )
+        assert empty.status_code == 400, empty.text
+        assert empty.json()["error"]["code"] == "empty_patch"
+
+        edited = client.patch(
+            f"/api/v1/annotations/{seed.annotation_ids[0]}",
+            json={
+                "bbox": {"x": 20, "y": 21, "width": 22, "height": 23},
+                "expected_version": 1,
+            },
+        )
+        assert edited.status_code == 200, edited.text
+        assert edited.json()["observation_id"] == seed.observation_id
+        assert edited.json()["source"] == "ocr"
+        assert [edited.json()[key] for key in ("x", "y", "width", "height")] == [
+            20,
+            21,
+            22,
+            23,
+        ]
+
+        detail = client.get(f"/api/v1/frames/{seed.frame_id}").json()
+        assert detail["version"] == 3
+        assert detail["review_revision"] == 3
+
+    with composition.database.session() as session:
+        assert session.get(OcrObservation, seed.observation_id) is not None
+
+
+def test_rejected_frame_is_frozen_until_reopen(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        rejected = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "reject", "expected_version": 1},
+        )
+        assert rejected.status_code == 200, rejected.text
+        assert rejected.json()["review_status"] == "rejected"
+
+        locked_requests = (
+            client.post(
+                f"/api/v1/frames/{seed.frame_id}/annotations",
+                json={
+                    "category_id": seed.category_id,
+                    "bbox": {"x": 20, "y": 20, "width": 2, "height": 2},
+                    "expected_version": 2,
+                },
+            ),
+            client.patch(
+                f"/api/v1/annotations/{seed.annotation_ids[0]}",
+                json={"category_id": seed.alternate_category_id, "expected_version": 1},
+            ),
+            client.delete(f"/api/v1/annotations/{seed.annotation_ids[1]}?expected_version=1"),
+        )
+        assert [response.status_code for response in locked_requests] == [409, 409, 409]
+        assert {response.json()["error"]["code"] for response in locked_requests} == {
+            "review_locked"
+        }
+
+        reopened = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "reopen", "expected_version": 2},
+        )
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["review_status"] == "pending"
+        assert {item["status"] for item in reopened.json()["annotations"]} == {"proposed"}
+
+        created = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.category_id,
+                "bbox": {"x": 20, "y": 20, "width": 2, "height": 2},
+                "expected_version": 3,
+            },
+        )
+        patched = client.patch(
+            f"/api/v1/annotations/{seed.annotation_ids[0]}",
+            json={"category_id": seed.alternate_category_id, "expected_version": 1},
+        )
+        deleted = client.delete(f"/api/v1/annotations/{seed.annotation_ids[1]}?expected_version=1")
+        assert created.status_code == 201, created.text
+        assert patched.status_code == 200, patched.text
+        assert deleted.status_code == 204, deleted.text
+
+        detail = client.get(f"/api/v1/frames/{seed.frame_id}").json()
+        assert detail["review_revision"] == 5
+        assert len(detail["annotations"]) == 3
+
+
+def test_reopen_invalid_transition_and_accepted_terminal_lock(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        pending = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "reopen", "expected_version": 1},
+        )
+        assert pending.status_code == 409
+        assert pending.json()["error"]["code"] == "invalid_review_transition"
+
+        accepted = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "accept", "expected_version": 1},
+        )
+        assert accepted.status_code == 200
+        terminal = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "reopen", "expected_version": 2},
+        )
+        assert terminal.status_code == 409
+        assert terminal.json()["error"]["code"] == "review_locked"
 
 
 def test_concurrent_annotation_mutations_do_not_lose_review_revision_increment(
@@ -349,3 +544,31 @@ def test_concurrent_annotation_mutations_do_not_lose_review_revision_increment(
     detail = composition.review_use_cases.get_frame(seed.frame_id)
     assert detail.review_revision == 2
     assert {item.version for item in detail.annotations} == {2}
+
+
+def test_concurrent_manual_creation_increments_revision_only_for_committed_mutation(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+
+    def create(x: int) -> str:
+        try:
+            composition.review_use_cases.create_manual_annotation(
+                seed.frame_id,
+                category_id=seed.category_id,
+                bbox=(x, 20, 2, 2),
+                expected_version=1,
+            )
+        except ReviewUseCaseError as error:
+            return error.code
+        return "created"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = tuple(executor.map(create, (20, 30)))
+
+    assert sorted(outcomes) == ["created", "version_conflict"]
+    detail = composition.review_use_cases.get_frame(seed.frame_id)
+    assert detail.version == 2
+    assert detail.review_revision == 1
+    assert sum(item.source == "manual" for item in detail.annotations) == 1

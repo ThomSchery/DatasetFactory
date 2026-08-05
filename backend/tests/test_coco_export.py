@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from backend.app.access.store.models import (
     Annotation,
@@ -44,6 +45,7 @@ class ExportSeed:
     accepted_image: Path
     pending_annotation_id: str
     alternate_category_id: str
+    rejected_frame_id: str
 
 
 class BlockingCocoEngine:
@@ -294,6 +296,7 @@ def _seed_export(composition: CompositionRoot, tmp_path: Path) -> ExportSeed:
         composition.workspace.resolve_relpath(image_relpaths["accepted"]),
         pending_annotation_id,
         category_one,
+        frame_ids["rejected"],
     )
 
 
@@ -391,11 +394,34 @@ def test_export_api_publishes_only_accepted_snapshot(
     assert manifest["schema"] == "datasetfactory-coco-export-v1"
     assert manifest["run_id"] == seed.run_id
     assert manifest["profile_id"] == seed.profile_id
+    assert manifest["annotation_sources"] == {"ocr": 1, "manual": 1}
+    assert sum(manifest["annotation_sources"].values()) == len(document["annotations"])
     assert all(
         str(composition.workspace.root) not in value
         for value in manifest.values()
         if isinstance(value, str)
     )
+
+
+def test_manifest_annotation_sources_always_contains_zero_counts(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    with composition.database.session() as session:
+        for annotation in session.scalars(
+            select(Annotation).where(
+                Annotation.frame_id == seed.accepted_frame_id,
+                Annotation.status == "accepted",
+            )
+        ):
+            annotation.source = "ocr"
+
+    record = composition.export_use_cases.create_export(seed.run_id)
+    completed = _wait_for_export(composition.export_use_cases, record.id, expected="completed")
+    manifest = completed["manifest"]
+    assert isinstance(manifest, dict)
+    assert manifest["annotation_sources"] == {"ocr": 2, "manual": 0}
 
 
 def test_export_api_errors_and_missing_source_publish_nothing(
@@ -456,6 +482,94 @@ def test_review_mutation_during_generation_fails_revision_and_cleans_temp(
     finally:
         engine.release.set()
         use_cases.shutdown()
+
+
+def test_reopen_during_generation_fails_revision_and_cleans_temp(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    engine = BlockingCocoEngine()
+    use_cases = ExportUseCases(
+        engine,
+        ExportRepository(composition.database, composition.workspace),
+        composition.logger,
+        clock=lambda: datetime(2026, 8, 4, 12, 0, tzinfo=UTC),
+    )
+    try:
+        record = use_cases.create_export(seed.run_id)
+        assert engine.entered.wait(timeout=5)
+        reopened = composition.review_use_cases.review_frame(
+            seed.rejected_frame_id,
+            decision="reopen",
+            expected_version=2,
+        )
+        assert reopened.review_status == "pending"
+        engine.release.set()
+        failed = _wait_for_export(use_cases, record.id, expected="failed")
+        assert failed["error_code"] == "export_revision_conflict"
+        assert not composition.workspace.resolve_relpath(f"exports/{record.id}").exists()
+        assert not tuple(composition.workspace.resolve_relpath("exports").glob(f".{record.id}-*"))
+    finally:
+        engine.release.set()
+        use_cases.shutdown()
+
+
+def test_completed_export_stays_immutable_after_reopen_manual_box_and_reaccept(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    first = composition.export_use_cases.create_export(seed.run_id)
+    completed = _wait_for_export(composition.export_use_cases, first.id, expected="completed")
+    first_output = composition.workspace.resolve_relpath(str(completed["output_relpath"]))
+    original_files = {
+        path.relative_to(first_output).as_posix(): path.read_bytes()
+        for path in first_output.rglob("*")
+        if path.is_file()
+    }
+
+    reopened = composition.review_use_cases.review_frame(
+        seed.rejected_frame_id,
+        decision="reopen",
+        expected_version=2,
+    )
+    assert reopened.review_status == "pending"
+    assert len(reopened.annotations) == 1
+    manual = composition.review_use_cases.create_manual_annotation(
+        seed.rejected_frame_id,
+        category_id=seed.alternate_category_id,
+        bbox=(20, 20, 5, 5),
+        expected_version=3,
+    )
+    assert manual.source == "manual"
+    accepted = composition.review_use_cases.review_frame(
+        seed.rejected_frame_id,
+        decision="accept",
+        expected_version=4,
+    )
+    assert accepted.review_status == "accepted"
+    assert len(accepted.annotations) == 2
+
+    assert {
+        path.relative_to(first_output).as_posix(): path.read_bytes()
+        for path in first_output.rglob("*")
+        if path.is_file()
+    } == original_files
+
+    second = composition.export_use_cases.create_export(seed.run_id)
+    refreshed = _wait_for_export(composition.export_use_cases, second.id, expected="completed")
+    refreshed_output = composition.workspace.resolve_relpath(str(refreshed["output_relpath"]))
+    document = json.loads((refreshed_output / "annotations.json").read_bytes())
+    assert len(document["images"]) == 2
+    assert len(document["annotations"]) == 4
+    assert {tuple(item["bbox"]) for item in document["annotations"]} >= {
+        (5, 5, 5, 5),
+        (20, 20, 5, 5),
+    }
+    refreshed_manifest = refreshed["manifest"]
+    assert isinstance(refreshed_manifest, dict)
+    assert refreshed_manifest["annotation_sources"] == {"ocr": 2, "manual": 2}
 
 
 def test_failed_atomic_rename_leaves_no_published_directory(

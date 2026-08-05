@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -99,6 +100,72 @@ class AnnotationRepository:
                 raise AnnotationNotFoundError
             return self._frame_record(session, frame, run)
 
+    def create_manual(
+        self,
+        frame_id: str,
+        *,
+        category_id: str,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        expected_version: int,
+    ) -> StoredAnnotation:
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            frame = session.get(Frame, frame_id)
+            if frame is None:
+                raise ReviewFrameNotFoundError
+            run = session.get(PipelineRun, frame.run_id)
+            if run is None:
+                raise ReviewFrameNotFoundError
+            if frame.version != expected_version:
+                raise ReviewVersionConflictError
+            if frame.review_status != "pending":
+                raise ReviewLockedError
+            self._require_allowed_category(session, category_id, run.profile_id)
+            annotation = Annotation(
+                id=str(uuid4()),
+                frame_id=frame.id,
+                category_id=category_id,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                confidence=None,
+                source="manual",
+                observation_id=None,
+                status="proposed",
+                version=1,
+            )
+            session.add(annotation)
+            frame.version += 1
+            run.review_revision += 1
+            session.flush()
+            return self._stored_annotation(annotation)
+
+    def update(
+        self,
+        annotation_id: str,
+        *,
+        category_id: str | None,
+        bbox: tuple[int, int, int, int] | None,
+        expected_version: int,
+    ) -> StoredFrameReview:
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            annotation, frame, run = self._mutation_rows(session, annotation_id)
+            self._require_annotation_mutation(annotation, frame, expected_version)
+            if category_id is not None:
+                self._require_allowed_category(session, category_id, run.profile_id)
+                annotation.category_id = category_id
+            if bbox is not None:
+                annotation.x, annotation.y, annotation.width, annotation.height = bbox
+            annotation.version += 1
+            run.review_revision += 1
+            session.flush()
+            return self._frame_record(session, frame, run)
+
     def update_category(
         self,
         annotation_id: str,
@@ -106,22 +173,12 @@ class AnnotationRepository:
         category_id: str,
         expected_version: int,
     ) -> StoredFrameReview:
-        with self._database.session() as session:
-            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
-            annotation, frame, run = self._mutation_rows(session, annotation_id)
-            self._require_annotation_mutation(annotation, frame, expected_version)
-            allowed = session.scalar(
-                select(func.count())
-                .select_from(Category)
-                .where(Category.id == category_id, Category.profile_id == run.profile_id)
-            )
-            if not allowed:
-                raise ReviewCategoryError
-            annotation.category_id = category_id
-            annotation.version += 1
-            run.review_revision += 1
-            session.flush()
-            return self._frame_record(session, frame, run)
+        return self.update(
+            annotation_id,
+            category_id=category_id,
+            bbox=None,
+            expected_version=expected_version,
+        )
 
     def tombstone(self, annotation_id: str, *, expected_version: int) -> StoredFrameReview:
         with self._database.session() as session:
@@ -151,10 +208,18 @@ class AnnotationRepository:
                 raise ReviewFrameNotFoundError
             if frame.version != expected_version:
                 raise ReviewVersionConflictError
-            if frame.review_status == "accepted":
-                raise ReviewLockedError
+            if decision == "reopen":
+                if frame.review_status == "accepted":
+                    raise ReviewLockedError
+                if frame.review_status != "rejected":
+                    raise ReviewTransitionError
+                frame.review_status = "pending"
+                frame.version += 1
+                run.review_revision += 1
+                session.flush()
+                return self._frame_record(session, frame, run)
             if frame.review_status != "pending":
-                raise ReviewTransitionError
+                raise ReviewLockedError
             active = tuple(
                 session.scalars(
                     select(Annotation).where(
@@ -202,7 +267,7 @@ class AnnotationRepository:
     ) -> None:
         if annotation.version != expected_version:
             raise ReviewVersionConflictError
-        if frame.review_status == "accepted":
+        if frame.review_status != "pending":
             raise ReviewLockedError
         if annotation.status == "deleted":
             raise ReviewTransitionError
@@ -217,19 +282,7 @@ class AnnotationRepository:
             session.scalars(select(Category.id).where(Category.profile_id == run.profile_id))
         )
         annotations = tuple(
-            StoredAnnotation(
-                id=item.id,
-                category_id=item.category_id,
-                x=item.x,
-                y=item.y,
-                width=item.width,
-                height=item.height,
-                confidence=item.confidence,
-                source=item.source,
-                observation_id=item.observation_id,
-                status=item.status,
-                version=item.version,
-            )
+            AnnotationRepository._stored_annotation(item)
             for item in session.scalars(
                 select(Annotation)
                 .where(Annotation.frame_id == frame.id)
@@ -250,4 +303,34 @@ class AnnotationRepository:
             review_revision=run.review_revision,
             allowed_category_ids=allowed,
             annotations=annotations,
+        )
+
+    @staticmethod
+    def _require_allowed_category(
+        session: Session,
+        category_id: str,
+        profile_id: str,
+    ) -> None:
+        allowed = session.scalar(
+            select(func.count())
+            .select_from(Category)
+            .where(Category.id == category_id, Category.profile_id == profile_id)
+        )
+        if not allowed:
+            raise ReviewCategoryError
+
+    @staticmethod
+    def _stored_annotation(item: Annotation) -> StoredAnnotation:
+        return StoredAnnotation(
+            id=item.id,
+            category_id=item.category_id,
+            x=item.x,
+            y=item.y,
+            width=item.width,
+            height=item.height,
+            confidence=item.confidence,
+            source=item.source,
+            observation_id=item.observation_id,
+            status=item.status,
+            version=item.version,
         )
