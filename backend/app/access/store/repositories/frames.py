@@ -221,7 +221,15 @@ class FrameRepository:
             sample_ids = tuple(
                 session.scalars(select(RegionSample.id).where(RegionSample.frame_id == frame.id))
             )
-            session.execute(delete(Annotation).where(Annotation.frame_id == frame.id))
+            # Only this stage's own proposals are rewritten. A `manual` box drawn
+            # by the user survives the re-run, exactly as it survives the
+            # reconciliation that sends the frame back to `cropped`.
+            session.execute(
+                delete(Annotation).where(
+                    Annotation.frame_id == frame.id,
+                    Annotation.source == "ocr",
+                )
+            )
             if sample_ids:
                 session.execute(
                     delete(OcrObservation).where(OcrObservation.sample_id.in_(sample_ids))

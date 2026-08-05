@@ -14,12 +14,14 @@ from backend.app.engines.review import (
 def snapshot(
     *,
     review_status: str = "pending",
+    stage_status: str = "review_pending",
     annotations: tuple[AnnotationSnapshot, ...] | None = None,
 ) -> FrameReviewSnapshot:
     return FrameReviewSnapshot(
         id="frame",
         width=100,
         height=50,
+        stage_status=stage_status,
         review_status=review_status,  # type: ignore[arg-type]
         version=3,
         annotations=annotations
@@ -129,6 +131,68 @@ def test_accept_requires_active_annotation_and_marks_snapshot_accepted() -> None
             decision="accept",
             allowed_categories=frozenset({"zero"}),
         )
+
+
+def test_manual_annotation_needs_a_frame_that_finished_ocr() -> None:
+    engine = AnnotationReviewEngine()
+    for stage in ("pending", "sampled", "cropped"):
+        with pytest.raises(ReviewValidationError, match="frame_not_reviewable"):
+            engine.add_annotation(
+                snapshot(stage_status=stage),
+                annotation_id="drawn",
+                category_id="zero",
+                bbox=ReviewBBox(2, 3, 10, 10),
+                allowed_categories=frozenset({"zero"}),
+            )
+
+    created = engine.add_annotation(
+        snapshot(stage_status="review_pending"),
+        annotation_id="drawn",
+        category_id="zero",
+        bbox=ReviewBBox(2, 3, 10, 10),
+        allowed_categories=frozenset({"zero"}),
+    )
+    assert created.annotations[-1].id == "drawn"
+
+
+def test_review_decision_needs_a_frame_that_finished_ocr() -> None:
+    engine = AnnotationReviewEngine()
+    for stage in ("pending", "sampled", "cropped"):
+        for decision in ("accept", "reject"):
+            with pytest.raises(ReviewValidationError, match="frame_not_reviewable"):
+                engine.review_frame(
+                    snapshot(stage_status=stage),
+                    decision=decision,
+                    allowed_categories=frozenset({"zero"}),
+                )
+
+    # `reopen` is unaffected: a `rejected` frame has already cleared `review_pending`,
+    # and reconciliation refuses to roll back a frame carrying a review decision.
+    reopened = engine.review_frame(
+        snapshot(review_status="rejected"),
+        decision="reopen",
+        allowed_categories=frozenset({"zero"}),
+    )
+    assert reopened.review_status == "pending"
+
+
+def test_accept_names_every_annotation_outside_the_frame() -> None:
+    engine = AnnotationReviewEngine()
+    with pytest.raises(ReviewValidationError) as raised:
+        engine.review_frame(
+            snapshot(
+                annotations=(
+                    AnnotationSnapshot("inside", "zero", ReviewBBox(1, 2, 3, 4), "proposed", 1),
+                    AnnotationSnapshot("wide", "zero", ReviewBBox(95, 2, 10, 4), "proposed", 1),
+                    AnnotationSnapshot("tall", "zero", ReviewBBox(1, 45, 3, 10), "proposed", 1),
+                    AnnotationSnapshot("gone", "zero", ReviewBBox(99, 49, 9, 9), "deleted", 1),
+                )
+            ),
+            decision="accept",
+            allowed_categories=frozenset({"zero"}),
+        )
+    assert raised.value.code == "bbox_invalid"
+    assert raised.value.details == {"annotation_ids": ["wide", "tall"]}
 
 
 def test_reopen_only_rejected_and_decided_frames_lock_mutations() -> None:

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -20,6 +21,10 @@ from backend.app.access.store.models import (
     ReferenceAsset,
     RegionSample,
     VideoAsset,
+)
+from backend.app.access.store.repositories.annotations import (
+    AnnotationRepository,
+    ReviewEmptyPatchError,
 )
 from backend.app.composition import CompositionRoot
 from backend.app.main import create_app
@@ -523,6 +528,161 @@ def test_reopen_invalid_transition_and_accepted_terminal_lock(
         )
         assert terminal.status_code == 409
         assert terminal.json()["error"]["code"] == "review_locked"
+
+
+def test_manual_annotation_requires_a_frame_that_finished_ocr(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    payload = {
+        "category_id": seed.category_id,
+        "bbox": {"x": 80, "y": 30, "width": 10, "height": 10},
+        "expected_version": 1,
+    }
+    for stage in ("pending", "sampled", "cropped"):
+        with composition.database.session() as session:
+            frame = session.get(Frame, seed.frame_id)
+            assert frame is not None
+            frame.stage_status = stage
+        with TestClient(app) as client:
+            early = client.post(f"/api/v1/frames/{seed.frame_id}/annotations", json=payload)
+            assert early.status_code == 409, early.text
+            assert early.json()["error"]["code"] == "frame_not_reviewable"
+
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, seed.run_id)
+        frame = session.get(Frame, seed.frame_id)
+        assert run is not None
+        assert frame is not None
+        assert run.review_revision == 0
+        assert frame.version == 1
+        frame.stage_status = "review_pending"
+
+    with TestClient(app) as client:
+        allowed = client.post(f"/api/v1/frames/{seed.frame_id}/annotations", json=payload)
+        assert allowed.status_code == 201, allowed.text
+        assert allowed.json()["source"] == "manual"
+
+
+def test_review_decision_requires_a_frame_that_finished_ocr(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    # A frame rolled back by reconciliation sits at `cropped` with `review_status`
+    # still `pending`. Accepting it there would be undone by the worker's next
+    # `commit_ocr`, which resets `review_status` when it rewrites the proposals.
+    for stage in ("pending", "sampled", "cropped"):
+        with composition.database.session() as session:
+            frame = session.get(Frame, seed.frame_id)
+            assert frame is not None
+            frame.stage_status = stage
+        with TestClient(app) as client:
+            for decision in ("accept", "reject"):
+                early = client.post(
+                    f"/api/v1/frames/{seed.frame_id}/review",
+                    json={"decision": decision, "expected_version": 1},
+                )
+                assert early.status_code == 409, early.text
+                assert early.json()["error"]["code"] == "frame_not_reviewable"
+
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, seed.run_id)
+        frame = session.get(Frame, seed.frame_id)
+        assert run is not None
+        assert frame is not None
+        assert run.review_revision == 0
+        assert frame.version == 1
+        assert frame.review_status == "pending"
+        frame.stage_status = "review_pending"
+
+    with TestClient(app) as client:
+        accepted = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "accept", "expected_version": 1},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["review_status"] == "accepted"
+
+
+def test_accept_reports_every_annotation_outside_changed_frame_dimensions(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        manual = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations",
+            json={
+                "category_id": seed.category_id,
+                "bbox": {"x": 80, "y": 30, "width": 10, "height": 10},
+                "expected_version": 1,
+            },
+        )
+        assert manual.status_code == 201, manual.text
+        manual_id = manual.json()["id"]
+
+        # A re-sampled frame can come back smaller; the kept box is not deleted.
+        with composition.database.session() as session:
+            frame = session.get(Frame, seed.frame_id)
+            assert frame is not None
+            frame.width = 50
+            frame.height = 25
+
+        rejected = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "accept", "expected_version": 2},
+        )
+        assert rejected.status_code == 400, rejected.text
+        assert rejected.json()["error"]["code"] == "bbox_invalid"
+        assert rejected.json()["error"]["details"] == {"annotation_ids": [manual_id]}
+
+        detail = client.get(f"/api/v1/frames/{seed.frame_id}").json()
+        assert [item["id"] for item in detail["annotations"] if item["source"] == "manual"] == [
+            manual_id
+        ]
+        assert detail["review_revision"] == 1
+
+        fitted = client.patch(
+            f"/api/v1/annotations/{manual_id}",
+            json={"bbox": {"x": 10, "y": 10, "width": 5, "height": 5}, "expected_version": 1},
+        )
+        assert fitted.status_code == 200, fitted.text
+        accepted = client.post(
+            f"/api/v1/frames/{seed.frame_id}/review",
+            json={"decision": "accept", "expected_version": 2},
+        )
+        assert accepted.status_code == 200, accepted.text
+
+
+def test_repository_rejects_an_empty_patch_without_bumping_any_counter(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    repository = AnnotationRepository(composition.database)
+
+    # Straight at the repository: the engine's `empty_patch` check runs in another
+    # session, so the write transaction has to refuse the no-op on its own.
+    with pytest.raises(ReviewEmptyPatchError):
+        repository.update(
+            seed.annotation_ids[0],
+            category_id=None,
+            bbox=None,
+            expected_version=1,
+        )
+
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, seed.run_id)
+        annotation = session.get(Annotation, seed.annotation_ids[0])
+        assert run is not None
+        assert annotation is not None
+        assert run.review_revision == 0
+        assert annotation.version == 1
 
 
 def test_concurrent_annotation_mutations_do_not_lose_review_revision_increment(

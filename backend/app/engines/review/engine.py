@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Any, Literal
 
 AnnotationStatus = Literal["proposed", "accepted", "deleted"]
 ReviewStatus = Literal["pending", "accepted", "rejected"]
 
+# The only stage at which a frame carries OCR proposals and accepts human work.
+REVIEWABLE_STAGE = "review_pending"
+
 
 class ReviewValidationError(ValueError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, details: dict[str, Any] | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.details = details or {}
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,9 @@ class FrameReviewSnapshot:
     id: str
     width: int
     height: int
+    # Plain `str`: the engine only compares it with `REVIEWABLE_STAGE`, and the
+    # stage vocabulary belongs to the workflow state machine, not here.
+    stage_status: str
     review_status: ReviewStatus
     version: int
     annotations: tuple[AnnotationSnapshot, ...]
@@ -53,6 +60,10 @@ class AnnotationReviewEngine:
         allowed_categories: frozenset[str],
     ) -> FrameReviewSnapshot:
         self._require_mutable(snapshot)
+        # A frame that has not finished OCR would lose the box to `commit_ocr`,
+        # which rewrites the frame's OCR proposals when the worker reaches it.
+        if snapshot.stage_status != REVIEWABLE_STAGE:
+            raise ReviewValidationError("frame_not_reviewable")
         if category_id not in allowed_categories:
             raise ReviewValidationError("category_not_allowed")
         self.validate_bbox(
@@ -150,9 +161,13 @@ class AnnotationReviewEngine:
                 review_status="pending",
                 version=snapshot.version + 1,
             )
+        # `_require_mutable` leaves only `pending`, the third `ReviewStatus` value.
         self._require_mutable(snapshot)
-        if snapshot.review_status != "pending":
-            raise ReviewValidationError("invalid_review_transition")
+        # `commit_ocr` resets `review_status` to `pending` when the worker reaches a
+        # frame, so a decision taken before OCR finished would be silently undone.
+        # `reopen` returns above: a `rejected` frame has always cleared this stage.
+        if snapshot.stage_status != REVIEWABLE_STAGE:
+            raise ReviewValidationError("frame_not_reviewable")
         active = tuple(item for item in snapshot.annotations if item.status != "deleted")
         if decision == "accept":
             if not active:
@@ -160,10 +175,22 @@ class AnnotationReviewEngine:
             for annotation in active:
                 if annotation.category_id not in allowed_categories:
                     raise ReviewValidationError("category_not_allowed")
-                self.validate_bbox(
+            # A recovery that re-samples the frame at smaller dimensions can leave a
+            # kept manual box outside the frame. Name every offending box at once so
+            # the user can fix them instead of hunting one rejection at a time.
+            outside = tuple(
+                annotation.id
+                for annotation in active
+                if not self._bbox_fits(
                     annotation.bbox,
                     frame_width=snapshot.width,
                     frame_height=snapshot.height,
+                )
+            )
+            if outside:
+                raise ReviewValidationError(
+                    "bbox_invalid",
+                    details={"annotation_ids": list(outside)},
                 )
             annotations = tuple(
                 replace(item, status="accepted") if item.status != "deleted" else item
@@ -179,17 +206,21 @@ class AnnotationReviewEngine:
             return replace(snapshot, review_status="rejected", version=snapshot.version + 1)
         raise ReviewValidationError("invalid_decision")
 
+    @classmethod
+    def validate_bbox(cls, bbox: ReviewBBox, *, frame_width: int, frame_height: int) -> None:
+        if not cls._bbox_fits(bbox, frame_width=frame_width, frame_height=frame_height):
+            raise ReviewValidationError("bbox_invalid")
+
     @staticmethod
-    def validate_bbox(bbox: ReviewBBox, *, frame_width: int, frame_height: int) -> None:
-        if (
+    def _bbox_fits(bbox: ReviewBBox, *, frame_width: int, frame_height: int) -> bool:
+        return not (
             bbox.x < 0
             or bbox.y < 0
             or bbox.width <= 0
             or bbox.height <= 0
             or bbox.x + bbox.width > frame_width
             or bbox.y + bbox.height > frame_height
-        ):
-            raise ReviewValidationError("bbox_invalid")
+        )
 
     @staticmethod
     def _require_mutable(snapshot: FrameReviewSnapshot) -> None:

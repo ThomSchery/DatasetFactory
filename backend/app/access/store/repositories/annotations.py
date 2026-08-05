@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -24,6 +23,14 @@ class ReviewVersionConflictError(RuntimeError):
 
 
 class ReviewLockedError(RuntimeError):
+    pass
+
+
+class ReviewStageError(RuntimeError):
+    pass
+
+
+class ReviewEmptyPatchError(ValueError):
     pass
 
 
@@ -104,6 +111,7 @@ class AnnotationRepository:
         self,
         frame_id: str,
         *,
+        annotation_id: str,
         category_id: str,
         x: int,
         y: int,
@@ -123,9 +131,14 @@ class AnnotationRepository:
                 raise ReviewVersionConflictError
             if frame.review_status != "pending":
                 raise ReviewLockedError
+            # Checked inside the write transaction too: a worker reaching the frame
+            # concurrently would rewrite its OCR proposals and drop a box accepted
+            # here on the strength of a stage read taken in another session.
+            if frame.stage_status != "review_pending":
+                raise ReviewStageError
             self._require_allowed_category(session, category_id, run.profile_id)
             annotation = Annotation(
-                id=str(uuid4()),
+                id=annotation_id,
                 frame_id=frame.id,
                 category_id=category_id,
                 x=x,
@@ -153,6 +166,11 @@ class AnnotationRepository:
         expected_version: int,
     ) -> StoredFrameReview:
         with self._database.session() as session:
+            # Own guard rather than trust of the single caller: a no-op patch must
+            # not bump `review_revision`, which would fail a concurrent export draft
+            # with `export_revision_conflict` for a mutation that changed nothing.
+            if category_id is None and bbox is None:
+                raise ReviewEmptyPatchError
             session.connection().exec_driver_sql("BEGIN IMMEDIATE")
             annotation, frame, run = self._mutation_rows(session, annotation_id)
             self._require_annotation_mutation(annotation, frame, expected_version)
@@ -165,20 +183,6 @@ class AnnotationRepository:
             run.review_revision += 1
             session.flush()
             return self._frame_record(session, frame, run)
-
-    def update_category(
-        self,
-        annotation_id: str,
-        *,
-        category_id: str,
-        expected_version: int,
-    ) -> StoredFrameReview:
-        return self.update(
-            annotation_id,
-            category_id=category_id,
-            bbox=None,
-            expected_version=expected_version,
-        )
 
     def tombstone(self, annotation_id: str, *, expected_version: int) -> StoredFrameReview:
         with self._database.session() as session:
@@ -220,6 +224,11 @@ class AnnotationRepository:
                 return self._frame_record(session, frame, run)
             if frame.review_status != "pending":
                 raise ReviewLockedError
+            # Checked inside the write transaction too: a worker committing OCR for
+            # this frame concurrently would reset `review_status` back to `pending`
+            # and undo the decision recorded here on the strength of a stale stage read.
+            if frame.stage_status != "review_pending":
+                raise ReviewStageError
             active = tuple(
                 session.scalars(
                     select(Annotation).where(

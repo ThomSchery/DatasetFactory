@@ -79,13 +79,20 @@ błąd config/input jest non-retryable.
 
 Brak boksu OCR: użytkownik dorysowuje go ręcznie. Boks ręczny ma `source=manual`
 i nie ma `confidence`; walidacja sprawdza wyłącznie granice klatki, nie regiony
-HUD, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
+HUD, bo źle wyznaczony region jest jedną z przyczyn braku odczytu. Rysowanie jest
+możliwe dopiero po zakończeniu OCR klatki — wcześniej przetwarzanie przepisałoby
+propozycje etapu i skasowało świeży boks, więc taka próba dostaje
+`409 frame_not_reviewable`.
 
 Odczyty OCR i boksy ręczne wyglądają na klatce tak samo — to prostokąty z klasą.
 Różni je pochodzenie i `confidence`, które ma tylko odczyt; UI musi je odróżniać
 wizualnie. Wznowienie po awarii kasuje wyłącznie boksy pochodzące z OCR, gdy
 przelicza uszkodzony etap; boksy narysowane ręcznie przetrwają i pozostają obok
-świeżych propozycji.
+świeżych propozycji. Ta sama reguła obowiązuje worker, który po rekoncyliacji
+liczy etap ponownie — inaczej odzyskany boks ginąłby przy zapisie wyników OCR.
+Jeśli przeliczenie zmieni wymiary klatki i zachowany boks przestanie się mieścić,
+`accept` odpowiada `400 bbox_invalid` z listą niemieszczących się anotacji;
+system nie kasuje pracy człowieka za niego.
 
 ## CF-06 — Eksport COCO
 

@@ -4,14 +4,17 @@ import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
+from uuid import uuid4
 
 from backend.app.access.store.repositories.annotations import (
     AnnotationNotFoundError,
     AnnotationRepository,
     ReviewCategoryError,
+    ReviewEmptyPatchError,
     ReviewFrameNotFoundError,
     ReviewLockedError,
     ReviewNoAnnotationsError,
+    ReviewStageError,
     ReviewTransitionError,
     ReviewVersionConflictError,
     StoredAnnotation,
@@ -109,15 +112,18 @@ class ReviewUseCases:
         try:
             current = self._annotations.frame(frame_id)
             review_bbox = ReviewBBox(*bbox)
+            # Minted here so the id the engine validates is the id that is stored.
+            annotation_id = str(uuid4())
             self._engine.add_annotation(
                 self._snapshot(current),
-                annotation_id="manual",
+                annotation_id=annotation_id,
                 category_id=category_id,
                 bbox=review_bbox,
                 allowed_categories=current.allowed_category_ids,
             )
             return self._annotations.create_manual(
                 frame_id,
+                annotation_id=annotation_id,
                 category_id=category_id,
                 x=review_bbox.x,
                 y=review_bbox.y,
@@ -164,6 +170,7 @@ class ReviewUseCases:
             id=record.id,
             width=record.width,
             height=record.height,
+            stage_status=record.stage_status,
             review_status=cast(Literal["pending", "accepted", "rejected"], record.review_status),
             version=record.version,
             annotations=tuple(
@@ -192,6 +199,10 @@ class ReviewUseCases:
             return ReviewUseCaseError("version_conflict")
         if isinstance(error, ReviewLockedError):
             return ReviewUseCaseError("review_locked")
+        if isinstance(error, ReviewStageError):
+            return ReviewUseCaseError("frame_not_reviewable")
+        if isinstance(error, ReviewEmptyPatchError):
+            return ReviewUseCaseError("empty_patch")
         if isinstance(error, ReviewCategoryError):
             return ReviewUseCaseError("category_not_allowed")
         if isinstance(error, ReviewNoAnnotationsError):
@@ -199,7 +210,7 @@ class ReviewUseCases:
         if isinstance(error, ReviewTransitionError):
             return ReviewUseCaseError("invalid_review_transition")
         if isinstance(error, ReviewValidationError):
-            return ReviewUseCaseError(error.code)
+            return ReviewUseCaseError(error.code, details=error.details)
         if isinstance(error, ReviewUseCaseError):
             return error
         return ReviewUseCaseError("review_persistence_failed")

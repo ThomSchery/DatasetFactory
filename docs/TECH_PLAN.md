@@ -120,10 +120,10 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `GET /runs/{id}/frames` | `review_status,page,page_size<=100` | paged summaries | `404/400` |
 | `GET /frames/{id}/image` | — | image stream z kontrolowanego relpath | `404`; nigdy arbitrary path |
 | `GET /frames/{id}` | — | frame + proposed/current annotations + version | `404` |
-| `POST /frames/{id}/annotations` | `{category_id,bbox:{x,y,width,height},expected_version}` | `201 Annotation` | `400 category/bbox_invalid`, `404`, `409 version/review_locked` |
+| `POST /frames/{id}/annotations` | `{category_id,bbox:{x,y,width,height},expected_version}` | `201 Annotation` | `400 category/bbox_invalid`, `404`, `409 version/review_locked/frame_not_reviewable` |
 | `PATCH /annotations/{id}` | `{category_id?,bbox?,expected_version}`; co najmniej jedno pole zmiany | annotation | `400 category/bbox_invalid/empty_patch`, `404`, `409 version/review_locked` |
 | `DELETE /annotations/{id}` | `expected_version` query | `204` | `404`, `409` |
-| `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations`, `404`, `409 version/review_locked/invalid_review_transition` |
+| `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations/bbox_invalid` z `details.annotation_ids`, `404`, `409 version/review_locked/invalid_review_transition` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
 | `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
 
@@ -141,11 +141,26 @@ Klatka z decyzją review jest zamrożona: `accepted` i `rejected` odpowiadają
 Edycję odrzuconej klatki odblokowuje dopiero `reopen`. To zaostrza zachowanie
 z TK-005-F1, gdzie blokowane było wyłącznie `accepted`, i jest częścią TK-007.
 
+Ręczny boks wolno dodać wyłącznie do klatki na etapie `review_pending`, czyli po
+zakończonym OCR; wcześniejsza próba dostaje `409 frame_not_reviewable`. Kod jest
+`409`, bo to konflikt ze stanem agregatu, tak samo jak `review_locked`: to samo
+żądanie przechodzi, gdy klatka dojdzie do `review_pending`. Bez tej bramki boks
+narysowany przed pierwszym OCR kasowałby `commit_ocr`, a klatka bez odczytów
+mogłaby zostać zaakceptowana i cicho cofnięta do `pending` przez workera.
+
 Rekoncyliacja przy wznowieniu nigdy nie kasuje pracy człowieka. Unieważnienie
 etapu OCR usuwa wyłącznie anotacje `source='ocr'`; `source='manual'` przetrwają
-i współistnieją ze świeżo policzonymi propozycjami. Guard z TK-005-F1 chroni
-klatki z decyzją review, ale `reopen` wraca do `pending`, więc bez tej reguły
-ręczne boksy na klatce ponownie otwartej byłyby kasowalne przez restart.
+i współistnieją ze świeżo policzonymi propozycjami. Ta sama reguła obowiązuje
+`commit_ocr`, który przepisuje wyłącznie własne propozycje etapu — inaczej worker
+wznowiony po rekoncyliacji kasowałby boks, który rekoncyliacja właśnie ocaliła.
+Guard z TK-005-F1 chroni klatki z decyzją review, ale `reopen` wraca do
+`pending`, więc bez tej reguły ręczne boksy na klatce ponownie otwartej byłyby
+kasowalne przez restart.
+
+Zachowany ręczny boks może przestać się mieścić, gdy unieważnienie etapu
+`sample` zmieni wymiary klatki. Nie kasujemy go: `accept` zwraca wtedy
+`400 bbox_invalid` z `details.annotation_ids` wskazującymi wszystkie
+niemieszczące się anotacje, żeby użytkownik poprawił je zamiast szukać po jednej.
 
 Endpointy są jawnie `local-public`; FastAPI binduje loopback. Dev CORS dopuszcza
 wyłącznie skonfigurowany origin Vite. Nie ma endpointu przyjmującego upload ani

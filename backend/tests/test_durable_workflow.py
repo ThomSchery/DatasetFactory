@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.app.access.media.processing import (
@@ -972,6 +972,255 @@ def test_recovery_after_reopen_preserves_manual_annotations_and_review_revision(
             )
             == stable_annotations
         )
+
+
+@dataclass(frozen=True)
+class ReopenedFrame:
+    run_id: str
+    frame_id: str
+    category_id: str
+    manual_id: str
+    review_revision: int
+    run_version: int
+
+
+def _reject_reopen_and_draw(
+    composition: CompositionRoot,
+    client: TestClient,
+    seeded: SeededWorkflow,
+) -> ReopenedFrame:
+    """Drive one frame to `review_pending`, reject it, reopen it and draw a box."""
+    created = _create_run(client, seeded)
+    started = client.post(
+        f"/api/v1/runs/{created['id']}/start",
+        json={"expected_version": created["version"]},
+    )
+    assert started.status_code == 202
+    completed = _wait_status(client, created["id"], "review_ready")
+    with composition.database.session() as session:
+        frame = session.scalar(select(Frame).where(Frame.run_id == created["id"]))
+        category = session.scalar(select(Category).where(Category.profile_id == seeded.profile_id))
+        assert frame is not None
+        assert category is not None
+        frame_id = frame.id
+        frame_version = frame.version
+        category_id = category.id
+
+    rejected = client.post(
+        f"/api/v1/frames/{frame_id}/review",
+        json={"decision": "reject", "expected_version": frame_version},
+    )
+    assert rejected.status_code == 200, rejected.text
+    reopened = client.post(
+        f"/api/v1/frames/{frame_id}/review",
+        json={"decision": "reopen", "expected_version": rejected.json()["version"]},
+    )
+    assert reopened.status_code == 200, reopened.text
+    manual = client.post(
+        f"/api/v1/frames/{frame_id}/annotations",
+        json={
+            "category_id": category_id,
+            "bbox": {"x": 700, "y": 500, "width": 20, "height": 20},
+            "expected_version": reopened.json()["version"],
+        },
+    )
+    assert manual.status_code == 201, manual.text
+
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        assert run is not None
+        return ReopenedFrame(
+            run_id=created["id"],
+            frame_id=frame_id,
+            category_id=category_id,
+            manual_id=manual.json()["id"],
+            review_revision=run.review_revision,
+            run_version=completed["version"] + 1,
+        )
+
+
+def _crash_on_the_ocr_checkpoint(composition: CompositionRoot, reopened: ReopenedFrame) -> None:
+    with composition.database.session() as session:
+        checkpoint = session.get(StageCheckpoint, (reopened.run_id, 0, "ocr"))
+        run = session.get(PipelineRun, reopened.run_id)
+        assert checkpoint is not None
+        assert run is not None
+        checkpoint.artifact_hash = "0" * 64
+        run.status = "running"
+        run.workflow_slot = 1
+        run.current_stage = "ocr"
+        run.version = reopened.run_version
+
+
+def _annotation_sources(composition: CompositionRoot, frame_id: str) -> list[tuple[str, str]]:
+    with composition.database.session() as session:
+        return [
+            (item.id, item.source)
+            for item in session.scalars(
+                select(Annotation).where(Annotation.frame_id == frame_id).order_by(Annotation.id)
+            )
+        ]
+
+
+def test_worker_resume_after_reopen_recovery_keeps_the_manual_annotation(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    _, _, recovery = _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        StubOcrEngine(),
+    )
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        reopened = _reject_reopen_and_draw(composition, client, seeded)
+    _crash_on_the_ocr_checkpoint(composition, reopened)
+
+    first = recovery.recover_startup()
+    assert first.invalidated_frames == 1
+    assert first.skipped_reviewed_frames == 0
+    assert _annotation_sources(composition, reopened.frame_id) == [(reopened.manual_id, "manual")]
+
+    with TestClient(app) as client:
+        paused = client.get(f"/api/v1/runs/{reopened.run_id}").json()
+        resumed = client.post(
+            f"/api/v1/runs/{reopened.run_id}/resume",
+            json={"expected_version": paused["version"]},
+        )
+        assert resumed.status_code == 202, resumed.text
+        _wait_status(client, reopened.run_id, "review_ready")
+
+        # The resume is the step the reconciliation exists to enable, and the step
+        # that used to delete the box: `commit_ocr` rewrites the OCR proposals only.
+        detail = client.get(f"/api/v1/frames/{reopened.frame_id}").json()
+        assert detail["stage_status"] == "review_pending"
+        assert detail["review_status"] == "pending"
+        assert [item["id"] for item in detail["annotations"] if item["source"] == "manual"] == [
+            reopened.manual_id
+        ]
+        assert any(item["source"] == "ocr" for item in detail["annotations"])
+        assert detail["review_revision"] == reopened.review_revision
+
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, reopened.run_id)
+        assert run is not None
+        assert run.review_revision == reopened.review_revision
+        run.status = "running"
+        run.workflow_slot = 1
+        run.current_stage = "ocr"
+    after_resume = _annotation_sources(composition, reopened.frame_id)
+
+    second = recovery.recover_startup()
+    assert second.invalidated_frames == 0
+    assert second.skipped_reviewed_frames == 0
+    assert _annotation_sources(composition, reopened.frame_id) == after_resume
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, reopened.run_id)
+        assert run is not None
+        assert run.review_revision == reopened.review_revision
+
+
+def test_accept_succeeds_when_only_manual_annotations_survive_the_resume(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    ocr = StubOcrEngine()
+    _, _, recovery = _install_workflow(composition, StubMediaAccess(composition), ocr)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        reopened = _reject_reopen_and_draw(composition, client, seeded)
+    _crash_on_the_ocr_checkpoint(composition, reopened)
+    assert recovery.recover_startup().invalidated_frames == 1
+
+    # The re-run reads nothing this time, so the manual box is the frame's only
+    # annotation — `accept` still has an active annotation to work with.
+    ocr.empty = True
+    with TestClient(app) as client:
+        paused = client.get(f"/api/v1/runs/{reopened.run_id}").json()
+        resumed = client.post(
+            f"/api/v1/runs/{reopened.run_id}/resume",
+            json={"expected_version": paused["version"]},
+        )
+        assert resumed.status_code == 202, resumed.text
+        _wait_status(client, reopened.run_id, "review_ready")
+        assert _annotation_sources(composition, reopened.frame_id) == [
+            (reopened.manual_id, "manual")
+        ]
+
+        detail = client.get(f"/api/v1/frames/{reopened.frame_id}").json()
+        accepted = client.post(
+            f"/api/v1/frames/{reopened.frame_id}/review",
+            json={"decision": "accept", "expected_version": detail["version"]},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["review_status"] == "accepted"
+        assert [item["status"] for item in accepted.json()["annotations"]] == ["accepted"]
+
+
+def test_first_commit_ocr_deletes_ocr_proposals_but_keeps_manual_annotations(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    _install_workflow(composition, StubMediaAccess(composition), StubOcrEngine())
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+
+    manual_id = str(uuid4())
+    stale_ocr_id = str(uuid4())
+    # Roll the frame back to `cropped` by hand: no recovery machinery involved, so
+    # what follows is an ordinary first-time OCR commit on the frame.
+    with composition.database.session() as session:
+        frame = session.scalar(select(Frame).where(Frame.run_id == created["id"]))
+        category = session.scalar(select(Category).where(Category.profile_id == seeded.profile_id))
+        assert frame is not None
+        assert category is not None
+        frame_id = frame.id
+        image_relpath = frame.image_relpath
+        frame.stage_status = "cropped"
+        session.execute(delete(Annotation).where(Annotation.frame_id == frame_id))
+        session.flush()
+        for annotation_id, source in ((manual_id, "manual"), (stale_ocr_id, "ocr")):
+            session.add(
+                Annotation(
+                    id=annotation_id,
+                    frame_id=frame_id,
+                    category_id=category.id,
+                    x=700,
+                    y=500,
+                    width=20,
+                    height=20,
+                    confidence=None,
+                    source=source,
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                )
+            )
+
+    checkpoints = CheckpointRepository(composition.database, composition.workspace)
+    FrameRepository(composition.database).commit_ocr(
+        created["id"],
+        0,
+        (),
+        checkpoints.hash_artifact(image_relpath),
+        "",
+    )
+
+    assert _annotation_sources(composition, frame_id) == [(manual_id, "manual")]
+    with composition.database.session() as session:
+        frame = session.get(Frame, frame_id)
+        assert frame is not None
+        assert frame.stage_status == "review_pending"
 
 
 def test_recovery_skip_then_resume_checkpoint_remains_valid_on_second_restart(

@@ -47,7 +47,12 @@ def annotation_response(record: StoredAnnotation) -> AnnotationResponse:
 def review_error(request: Request, error: ReviewUseCaseError) -> JSONResponse:
     if error.code in {"annotation_not_found", "frame_not_found", "frame_image_not_found"}:
         status_code = 404
-    elif error.code in {"version_conflict", "review_locked", "invalid_review_transition"}:
+    elif error.code in {
+        "version_conflict",
+        "review_locked",
+        "frame_not_reviewable",
+        "invalid_review_transition",
+    }:
         status_code = 409
     elif error.code == "review_persistence_failed":
         status_code = 500
