@@ -172,3 +172,63 @@ i emituje `resize`, bez mockowania API przeglądarki.
 Ticket wymienia cztery pakiety. Most RHF↔Zod będzie potrzebny dopiero przy
 pierwszym formularzu (F2/F3) i tam należy — instalowanie go w F1 rozszerza
 listę pakietów ponad zakres ticketu.
+
+### `body { min-width }` przeniesione do powłoki
+
+`global.css` wymuszał `min-width: var(--workspace-min-width)` na `body`. Przy
+oknie węższym niż 1280 px komunikat guardu leżałby wtedy w dokumencie o
+szerokości 1280 px i wymagał poziomego przewijania, czyli dokładnie tego, czego
+FE-07 zakazuje. Minimalna szerokość robocza należy do `.df-shell`, nie do
+dokumentu; guard układa się na realnej szerokości viewportu.
+
+### Auto-cleanup Testing Library
+
+Vitest działa bez `globals`, więc Testing Library nie rejestruje własnego
+`cleanup` i DOM jednego testu przeciekał do następnego. `src/test/setup.ts`
+woła `cleanup()` w `afterEach`. Bez tego zapytania zaczynają raportować
+zduplikowane trafienia i testy nawigacji są fałszywie czerwone.
+
+## Wykonanie
+
+Commit: `293acd3`.
+
+### Bramki
+
+| Bramka | Komenda | Wynik |
+|---|---|---|
+| Testy | `npm run test` | 13 plików, 151 testów, 0 nieudanych |
+| Typy | `npm run typecheck` | 0 błędów |
+| Build | `npm run build` | zielony, `tsc --noEmit` + `vite build` |
+| Audit | `npm audit` | 0 podatności (info/low/moderate/high/critical = 0) |
+
+### Pakiety
+
+| Pakiet | Wersja | Licencja | Dlaczego ta |
+|---|---|---|---|
+| `react-router` | 8.3.0 | MIT | Bieżąca stabilna; peer `react >= 19.2.7` pasuje do React 19.2.8. Wymaga Node `>= 22.22.0`, więc `engines` w `package.json` podniesione z `>=22.12.0`. |
+| `@tanstack/react-query` | 5.101.4 | MIT | Bieżąca stabilna linia v5; peer `^18 \|\| ^19`. |
+| `react-hook-form` | 7.84.0 | MIT | Bieżąca stabilna v7; użyta dopiero w F2/F3, instalowana tu zgodnie z zakresem ticketu. |
+| `zod` | 4.4.3 | MIT | Bieżąca stabilna v4; w F1 waliduje kopertę błędu, w F2/F3 formularze. |
+
+Wersje przypięte dokładnie (`--save-exact`), bez zakresów. Jedyna nowa
+zależność przechodnia to `cookie-es@3.1.1` (MIT) z React Routera oraz
+`@tanstack/query-core@5.101.4` (MIT). Zero Zustand, Tailwinda, biblioteki
+komponentów i frameworka canvas.
+
+### Testy pokrywające Done Criteria
+
+| Kryterium | Test |
+|---|---|
+| `details` dociera nienaruszone do UI | `src/api/errorDetails.test.tsx` — `bbox_invalid` z trzema `annotation_ids` przechodzi przez `fetch`, `ApiError`, `describeApiError` i ląduje w DOM; osobny przypadek porównuje cały obiekt `details` z oryginałem |
+| Klient pokrywa `§5` | `src/api/coverage.test.ts` — 21 zaimplementowanych endpointów sprawdzonych wobec tekstu `TECH_PLAN.md`; osobny przypadek pilnuje, że `getDashboard` nie istnieje |
+| Słownik kodów błędów | `src/api/coverage.test.ts` — 10 wymaganych kodów ma komunikat i akcję |
+| Pięć tras z empty state | `src/app/routes.test.tsx` |
+| Nawigacja klawiaturą | `src/app/routes.test.tsx` — Tab do skip linka, dalej po destynacjach, Enter nawiguje |
+| SAM 3 poza v1 | `src/app/routes.test.tsx` — odznaka obecna, SAM 3 nie jest linkiem |
+| Guard szerokości | `src/app/WidthGuard.test.tsx` — 1279 px komunikat, 1280 i 1440 px normalny układ, reakcja na `resize` w obie strony |
+| Żaden komponent nie woła `fetch` | `src/test/architecture.test.ts` — jedyne miejsce wywołania to `src/api/client.ts` |
+| Żaden komponent nie trzyma statusu runu | `src/test/architecture.test.ts` — literały statusów tylko w `src/api/`, `TERMINAL_RUN_STATUSES` zadeklarowane raz |
+| Brak optimistic update | `src/test/architecture.test.ts` — zero `onMutate`, zero `setQueryData` poza warstwą API |
+| Mutacja blokuje przycisk i pokazuje spinner | `src/api/errorDetails.test.tsx` — `disabled` + `aria-busy` w locie |
+| Tokeny zamiast wartości arbitralnych | `src/test/architecture.test.ts` — żaden CSS poza `tokens.css` nie zawiera literału koloru |
+| Kontrast nowych par | `src/styles/contrast.test.ts` — pary tekst/`surface-neutral` i status/`surface-raised` dopisane |
