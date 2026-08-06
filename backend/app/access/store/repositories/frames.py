@@ -97,6 +97,17 @@ class FramePage:
     total: int
 
 
+@dataclass(frozen=True)
+class ReviewStatusCounts:
+    pending: int
+    accepted: int
+    rejected: int
+
+    @property
+    def total(self) -> int:
+        return self.pending + self.accepted + self.rejected
+
+
 class FrameRepository:
     """Persist one frame's stage results atomically after external processing."""
 
@@ -346,6 +357,26 @@ class FrameRepository:
                 page=page,
                 page_size=page_size,
                 total=total,
+            )
+
+    def review_status_counts(self, run_id: str) -> ReviewStatusCounts:
+        """Aggregate the run's frames by `review_status` in a single grouped query.
+
+        A dashboard must not page through frames to count them, so this never
+        materialises a row. An unknown run yields zeros: the caller is a read-only
+        reader that has no run to report on either way.
+        """
+        with self._database.session() as session:
+            rows = session.execute(
+                select(Frame.review_status, func.count())
+                .where(Frame.run_id == run_id)
+                .group_by(Frame.review_status)
+            ).all()
+            counts = {str(status): int(count) for status, count in rows}
+            return ReviewStatusCounts(
+                pending=counts.get("pending", 0),
+                accepted=counts.get("accepted", 0),
+                rejected=counts.get("rejected", 0),
             )
 
     @staticmethod

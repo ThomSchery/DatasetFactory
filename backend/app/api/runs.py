@@ -74,7 +74,8 @@ class FramePageResponse(StrictModel):
 WorkflowProvider = Callable[[], DatasetWorkflow]
 
 
-def _run_response(record: RunRecord) -> RunResponse:
+def run_response(record: RunRecord) -> RunResponse:
+    """Render one run. Public so `/dashboard` shows the same run, warning included."""
     # Persistence-only reservation ownership is deliberately not part of the public API.
     values = {field: getattr(record, field) for field in RunResponse.model_fields}
     if record.recovery_skipped_frames:
@@ -146,7 +147,7 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
             )
         except WorkflowError as error:
             return _workflow_error(request, error)
-        return _run_response(record)
+        return run_response(record)
 
     def mutate(
         action: Literal["start", "pause", "resume", "cancel"],
@@ -160,7 +161,7 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
             record: RunRecord = operation(run_id, expected_version=payload.expected_version)
         except WorkflowError as error:
             return _workflow_error(request, error)
-        return _run_response(record)
+        return run_response(record)
 
     @router.post("/{run_id}/start", response_model=RunResponse, status_code=202)
     def start_run(
@@ -205,7 +206,7 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
         workflow: Annotated[DatasetWorkflow, Depends(workflow_provider)],
     ) -> RunResponse | JSONResponse:
         try:
-            return _run_response(workflow.get_run(run_id))
+            return run_response(workflow.get_run(run_id))
         except WorkflowError as error:
             return _workflow_error(request, error)
 

@@ -22,6 +22,7 @@ from backend.app.access.store.models import (
 )
 from backend.app.engines.definition import OcrProvenance
 from backend.app.managers.workflow.state_machine import (
+    NONTERMINAL_RUN_STATUSES,
     InvalidTransitionError,
     RunStatus,
     require_run_transition,
@@ -201,6 +202,27 @@ class RunRepository:
             run = session.get(PipelineRun, run_id)
             if run is None:
                 raise RunNotFoundError
+            return self._record(session, run)
+
+    def active(self) -> RunRecord | None:
+        """Read the one unfinished run a dashboard should show, or nothing.
+
+        The single `workflow_slot` owner wins, so a run that is `running` or being
+        resumed always beats an older unfinished one; otherwise the newest wins.
+        """
+        with self._database.session() as session:
+            run = session.scalar(
+                select(PipelineRun)
+                .where(PipelineRun.status.in_(NONTERMINAL_RUN_STATUSES))
+                .order_by(
+                    PipelineRun.workflow_slot.desc(),
+                    PipelineRun.created_at.desc(),
+                    PipelineRun.id.desc(),
+                )
+                .limit(1)
+            )
+            if run is None:
+                return None
             return self._record(session, run)
 
     def activate(

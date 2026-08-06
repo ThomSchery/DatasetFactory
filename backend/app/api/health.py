@@ -41,6 +41,19 @@ def _status_response(status: DependencyStatus) -> DependencyStatusResponse:
     )
 
 
+def health_response(snapshot: SystemStatusSnapshot) -> HealthResponse:
+    """Render one system snapshot. Shared so `/dashboard` cannot drift from `/health`."""
+    return HealthResponse(
+        version=__version__,
+        status="ok" if snapshot.operational else "unavailable",
+        database=_status_response(snapshot.database),
+        workspace=_status_response(snapshot.workspace),
+        ffmpeg=_status_response(snapshot.ffmpeg),
+        tesseract=_status_response(snapshot.tesseract),
+        gpu=_status_response(snapshot.gpu),
+    )
+
+
 class SystemStatusReader(Protocol):
     def snapshot(self) -> SystemStatusSnapshot: ...
 
@@ -62,15 +75,7 @@ def create_health_router(status_provider: SystemStatusProvider) -> APIRouter:
     ) -> HealthResponse | JSONResponse:
         # Authorization policy: local-public. Network confinement is enforced by Settings.
         snapshot = system_status.snapshot()
-        response = HealthResponse(
-            version=__version__,
-            status="ok" if snapshot.operational else "unavailable",
-            database=_status_response(snapshot.database),
-            workspace=_status_response(snapshot.workspace),
-            ffmpeg=_status_response(snapshot.ffmpeg),
-            tesseract=_status_response(snapshot.tesseract),
-            gpu=_status_response(snapshot.gpu),
-        )
+        response = health_response(snapshot)
         if snapshot.operational:
             return response
 

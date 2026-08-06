@@ -40,6 +40,17 @@ RUN_TRANSITIONS: Final[dict[RunStatus, frozenset[RunStatus]]] = {
     "cancelled": frozenset({"running", "failed"}),
 }
 
+# Terminal means "no lifecycle move left", derived from the table above rather than
+# restated: `failed` and `cancelled` still reach `running` through resume, so a run in
+# either is unfinished work the dashboard has to keep showing. This is not the
+# frontend's polling-terminal set, which asks the narrower "will it change on its own".
+TERMINAL_RUN_STATUSES: Final[frozenset[RunStatus]] = frozenset(
+    status for status, targets in RUN_TRANSITIONS.items() if not targets
+)
+NONTERMINAL_RUN_STATUSES: Final[frozenset[RunStatus]] = (
+    frozenset(RUN_TRANSITIONS) - TERMINAL_RUN_STATUSES
+)
+
 FRAME_TRANSITIONS: Final[dict[FrameStage, frozenset[FrameStage]]] = {
     "pending": frozenset({"sampled"}),
     "sampled": frozenset({"cropped"}),

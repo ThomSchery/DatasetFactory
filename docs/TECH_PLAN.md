@@ -105,7 +105,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | Metoda i ścieżka | Request | Sukces | Błędy |
 |------------------|---------|--------|-------|
 | `GET /health` | — | wersja, DB, workspace, FFmpeg, Tesseract, GPU | `503 dependency_unavailable` tylko dla krytycznych DB/workspace |
-| `GET /dashboard` | — | aktywny projekt/run, counts per status, system status | `500` — **niezaimplementowany do 2026-08-05, realizuje go TK-008** |
+| `GET /dashboard` | — | `DashboardResponse` — kształt poniżej tabeli | `500` |
 | `GET /assets/references/{asset_id}` | opaque UUID zapisany w profilu | stream obrazu z relpath z bazy | `404`; nigdy arbitrary path |
 | `POST /profiles` | `{name, reference_image_path, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing`, `409 profile_name_exists` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
@@ -126,6 +126,54 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations/bbox_invalid` z `details.annotation_ids`, `404`, `409 version/review_locked/frame_not_reviewable/invalid_review_transition` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
 | `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
+
+`GET /dashboard` (F12, CF-07) jest wyłącznie do odczytu i zwraca `200` także dla
+pustej instalacji — brak projektu, profilu i runu to poprawny stan początkowy,
+nie błąd. Odpowiedź ma postać:
+
+```json
+{
+  "project": {"id": "uuid", "name": "DatasetFactory"},
+  "profile": {
+    "id": "uuid",
+    "name": "Gra",
+    "source_width": 1920,
+    "source_height": 1080,
+    "version": 1,
+    "reference_asset_url": "/api/v1/assets/references/uuid"
+  },
+  "run": "PipelineRun — ten sam obiekt co GET /runs/{id}, albo null",
+  "frame_counts": {"pending": 12, "accepted": 30, "rejected": 3, "total": 45},
+  "system": "HealthResponse — ten sam obiekt co GET /health"
+}
+```
+
+`project`, `profile` i `run` są niezależnie nullowalne; `frame_counts` i `system`
+są zawsze obecne. `project` nie zawiera `workspace_path` — żadna lokalna ścieżka
+nie wychodzi w odpowiedzi. `profile` jest skrótem: regiony i klasy pozostają w
+`GET /profiles/current`, dashboard nazywa profil i linkuje jego obraz
+referencyjny.
+
+`run` to dokładnie to samo DTO co `GET /runs/{id}`, renderowane tą samą funkcją,
+więc `experimental`, `quality_gate` i `warning` docierają na pierwszy ekran w tej
+samej postaci co na ekran runu. `system` to dokładnie `HealthResponse` z tego
+samego `SystemStatusAccess`, którego używa `GET /health`; dashboard nie duplikuje
+sond i nie zwraca `503` — krytyczna niedostępność jest widoczna w polach
+`database`/`workspace` i w `system.status`.
+
+Aktywny run to najnowszy run w statusie nonterminal, przy czym pierwszeństwo ma
+posiadacz `workflow_slot`. Nonterminal wynika z `RUN_TRANSITIONS`: terminalny
+jest ten status, z którego nie ma już przejścia, czyli wyłącznie `completed`.
+`failed` i `cancelled` prowadzą z powrotem do `running` przez wznowienie, więc
+run w tym stanie to niedokończona praca, którą dashboard ma pokazać wraz z
+`error_code` (CF-07). To inna definicja niż frontendowy zbiór „terminalnych”
+statusów pollingu z `FE-03`, który odpowiada na węższe pytanie, czy status
+zmieni się bez akcji użytkownika.
+
+`frame_counts` liczy wiersze `frames` aktywnego runu jednym zapytaniem
+grupującym po `review_status`; `total` to suma trzech pól, czyli liczba
+istniejących klatek, a nie planowane `run.total_frames`. Bez aktywnego runu
+wszystkie cztery pola są zerami.
 
 Geometria jest asymetryczna między żądaniem a odpowiedzią: `POST` i `PATCH`
 przyjmują ją zagnieżdżoną w `bbox`, natomiast `AnnotationResponse` zwraca płaskie

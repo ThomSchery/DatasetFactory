@@ -34,6 +34,7 @@ from backend.app.engines.coco import CocoExportEngine
 from backend.app.engines.definition import DatasetDefinitionEngine
 from backend.app.engines.review import AnnotationReviewEngine
 from backend.app.logging import close_json_logging, configure_json_logging
+from backend.app.managers.workflow.dashboard_use_cases import DashboardUseCases
 from backend.app.managers.workflow.export_use_cases import ExportUseCases
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import (
@@ -61,6 +62,7 @@ class CompositionRoot:
     material_use_cases: MaterialUseCases
     review_use_cases: ReviewUseCases
     export_use_cases: ExportUseCases
+    dashboard_use_cases: DashboardUseCases
     dataset_workflow: DatasetWorkflow
     logger: logging.Logger
     log_path: Path
@@ -177,6 +179,7 @@ def build_composition(
         ExportRepository(database, workspace),
         logger,
     )
+    dashboard_use_cases = DashboardUseCases(projects, profiles, runs, frames, status)
     workflow_recovery = WorkflowRecovery(runs, checkpoints)
     workflow_worker = WorkflowWorker(
         runs,
@@ -216,6 +219,7 @@ def build_composition(
         material_use_cases,
         review_use_cases,
         export_use_cases,
+        dashboard_use_cases,
         dataset_workflow,
         logger,
         log_path,

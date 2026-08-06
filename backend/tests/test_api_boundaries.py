@@ -8,7 +8,16 @@ import pytest
 
 @pytest.mark.parametrize(
     "module_name",
-    ["health", "profiles", "materials", "assets", "annotations", "frames", "exports"],
+    [
+        "health",
+        "profiles",
+        "materials",
+        "assets",
+        "annotations",
+        "frames",
+        "exports",
+        "dashboard",
+    ],
 )
 def test_api_router_does_not_import_composition_root(module_name: str) -> None:
     source_path = Path(f"backend/app/api/{module_name}.py")
@@ -40,6 +49,7 @@ def test_api_router_does_not_import_composition_root(module_name: str) -> None:
         Path("backend/app/managers/workflow/review_use_cases.py"),
         Path("backend/app/engines/coco/engine.py"),
         Path("backend/app/managers/workflow/export_use_cases.py"),
+        Path("backend/app/managers/workflow/dashboard_use_cases.py"),
     ],
 )
 def test_engine_and_manager_do_not_import_http_or_sqlalchemy(source_path: Path) -> None:
