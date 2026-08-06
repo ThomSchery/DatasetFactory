@@ -14,7 +14,7 @@
 | TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | wykonany | TK-005 | część Gate 3 ✓ |
 | FE-001 | Pionowy interfejs Home — Impeccable | rozbity na F1–F5 | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
 | FE-001-F1 | Fundament: klient API, routing i powłoka | gotowy | FE-SETUP, TK-007 | część Gate 3 |
-| TK-008 | Endpoint dashboardu (F12) | gotowy | TK-005, TK-007 | przed FE-001-F2 |
+| TK-008 | Endpoint dashboardu (F12) | wykonany | TK-005, TK-007 | odblokowuje FE-001-F2 |
 | FE-001-F2 | Materiały, uruchomienie runu i dashboard | gotowy | FE-001-F1, TK-008 | część Gate 3 |
 | FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
 | FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
@@ -59,8 +59,11 @@ klatki, źródło anotacji raportowane w manifeście, nie w dokumencie COCO.
 
 `GET /dashboard` figurował w `TECH_PLAN §5` od pierwszej wersji planu, ale nigdy
 nie został zaimplementowany — żaden ticket od TK-001 do TK-007 go nie obejmował.
-Lukę wykrył wykonawca FE-001-F1. Realizuje ją `TK-008`, wymagany przed
-FE-001-F2. Klient API z F1 nie zawiera spekulacyjnego typu dla tego endpointu.
+Lukę wykrył wykonawca FE-001-F1, który świadomie nie dodał spekulacyjnego typu
+dla tego endpointu. Zamknął ją `TK-008` (2026-08-06): kształt odpowiedzi jest
+opisany w `§5`, a `run` i `system` to te same DTO co `GET /runs/{id}` i
+`GET /health`. FE-001-F2 dopisuje `getDashboard` do klienta i aktualizuje
+`src/api/coverage.test.ts`, gdzie endpoint figuruje jeszcze jako niezaimplementowany.
 
 FE-001 został rozbity na pięć sub-ticketów. Kolejność jest sekwencyjna mimo
 częściowej niezależności F2 i F3: katalog komponentów w `new-component.md` oraz
