@@ -72,14 +72,17 @@ Bramka `frame_not_reviewable` obejmuje nie tylko dodanie ręcznego boksu, ale te
 cicho cofnięta. `reopen` jest zwolniony — wychodzi z `rejected`, a taka klatka
 OCR już przeszła. Kontrakt opisuje `TECH_PLAN §5` i CF-05 (commit `be184ca`).
 
-## Odchylenia techniczne
+## Mintowanie identyfikatora
 
 Identyfikator ręcznej anotacji tworzy manager i przekazuje go zarówno do engine,
 jak i do `create_manual`, zamiast pozwolić repozytorium wywołać `uuid4()`. Dzięki
 temu engine waliduje dokładnie ten identyfikator, który zostanie zapisany, i
-znika placeholder `annotation_id="manual"`. To jedyne miejsce w kodzie, gdzie
-identyfikator powstaje w warstwie manager — świadomy wyjątek, nie wzorzec do
-naśladowania.
+znika placeholder `annotation_id="manual"`.
+
+Notatka poprawiona po re-review: to **nie** jest nowy wzorzec ani wyjątek.
+Manager mintuje identyfikatory także w `export_use_cases.py:68`,
+`profile_use_cases.py:79-80,121,132` i `material_use_cases.py:106`. Ta zmiana
+dostosowuje ścieżkę anotacji do sąsiadów, zamiast od nich odstawać.
 
 Kotwice `plik:linia` w TD-005 zostały przesunięte i obejmują teraz `frames.py:227`.
 Będą dryfować przy każdej zmianie tych plików.

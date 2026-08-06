@@ -11,7 +11,7 @@
 | TK-005-F1 | Weryfikacja anotacji i licznik rewizji | wykonany | TK-004 | część Gate 3 ✓ |
 | TK-005-F2 | Eksport COCO na snapshocie rewizji | wykonany | TK-005-F1 | Gate 3 backend ✓ |
 | TK-005-F2-FIX1 | Rekoncyliacja przerwanych eksportów przy starcie | wykonany | TK-005-F2 | cold review High ✓; suite 235/235 |
-| TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | gotowy | TK-005 | część Gate 3 |
+| TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | wykonany | TK-005 | część Gate 3 ✓ |
 | FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
