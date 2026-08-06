@@ -12,7 +12,12 @@
 | TK-005-F2 | Eksport COCO na snapshocie rewizji | wykonany | TK-005-F1 | Gate 3 backend ✓ |
 | TK-005-F2-FIX1 | Rekoncyliacja przerwanych eksportów przy starcie | wykonany | TK-005-F2 | cold review High ✓; suite 235/235 |
 | TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | wykonany | TK-005 | część Gate 3 ✓ |
-| FE-001 | Pionowy interfejs Home — Impeccable | gotowy | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
+| FE-001 | Pionowy interfejs Home — Impeccable | rozbity na F1–F5 | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
+| FE-001-F1 | Fundament: klient API, routing i powłoka | gotowy | FE-SETUP, TK-007 | część Gate 3 |
+| FE-001-F2 | Materiały, uruchomienie runu i dashboard | gotowy | FE-001-F1 | część Gate 3 |
+| FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
+| FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
+| FE-001-F5 | Eksport i bramki Gate 3 UI | gotowy | FE-001-F1…F4 | Gate 3 UI |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,
@@ -51,6 +56,13 @@ poprawnymi odczytami. Backend realizuje to w `TK-007`, interfejs w `FE-001`.
 Rozstrzygnięcia: `reopen` wyłącznie z `rejected`, boks ręczny w granicach całej
 klatki, źródło anotacji raportowane w manifeście, nie w dokumencie COCO.
 
+FE-001 został rozbity na pięć sub-ticketów. Kolejność jest sekwencyjna mimo
+częściowej niezależności F2 i F3: katalog komponentów w `new-component.md` oraz
+`components/common/` są wspólnym, edytowalnym zasobem, więc równoległa praca
+kończy się konfliktem w pliku, który ma gwarantować spójność wizualną. Bboxy
+rysujemy jako overlay SVG nad `<img>` — hit target, focus i klawiatura działają
+natywnie, a skalowanie to jeden `viewBox` liczony z wymiarów naturalnych.
+
 ## Graf zależności
 
 ```mermaid
@@ -61,13 +73,16 @@ graph LR
   E --> F1[TK-005-F1]
   F1 --> F2[TK-005-F2]
   F2 --> I[TK-007 F09]
-  B[FE-SETUP] --> G[FE-001]
-  C --> G
-  E --> G
-  I --> G
+  B[FE-SETUP] --> G1[FE-001-F1]
+  I --> G1
+  G1 --> G2[FE-001-F2]
+  G1 --> G3[FE-001-F3]
+  G3 --> G4[FE-001-F4]
+  G2 --> G5[FE-001-F5]
+  G4 --> G5
   A --> H[TK-006]
   I --> H
-  G --> H
+  G5 --> H
 ```
 
 TK-001 i FE-SETUP mogą powstać równolegle. Dalsza ścieżka backendowa jest
