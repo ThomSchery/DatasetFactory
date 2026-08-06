@@ -1,0 +1,55 @@
+.df-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-md);
+  padding: var(--size-none) var(--size-xs);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  /* CASING-02 / LSPACE-07: all-caps requires widened tracking to stay legible. */
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-tight);
+  text-align: center; /* RADIUS-05: pill content is always centred. */
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.df-status-badge--muted {
+  background: var(--color-surface-transparent);
+  color: var(--color-text-weak-default);
+}
+
+.df-status-badge--brand {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-fill-brand-impeccable);
+}
+
+.df-status-badge--success {
+  border-color: var(--color-status-success-default);
+  color: var(--color-status-success-default);
+}
+
+.df-status-badge--warning {
+  border-color: var(--color-status-warning-default);
+  color: var(--color-status-warning-default);
+}
+
+.df-status-badge--error {
+  border-color: var(--color-status-error-default);
+  background: var(--color-status-error-soft);
+  color: var(--color-status-error-default);
+}
+
+.df-status-badge__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

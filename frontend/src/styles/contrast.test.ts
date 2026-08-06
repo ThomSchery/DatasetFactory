@@ -71,6 +71,13 @@ describe("Impeccable token contrast", () => {
     ["color-text-weak-default", "color-background-primary-default"],
     ["color-text-on-brand", "color-fill-brand-impeccable"],
     ["color-status-error-default", "color-surface-neutral-default"],
+    // Added in FE-001-F1: the navigation rail and the stage list sit on
+    // surface-neutral, and StatusBadge tints text with the status colours.
+    ["color-text-strong-default", "color-surface-neutral-default"],
+    ["color-text-weak-default", "color-surface-neutral-default"],
+    ["color-text-strong-default", "color-surface-neutral-raised"],
+    ["color-status-success-default", "color-surface-neutral-raised"],
+    ["color-status-warning-default", "color-surface-neutral-raised"],
   ])("keeps %s readable on %s", (foreground, background) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5);
   });

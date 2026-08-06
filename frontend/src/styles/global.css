@@ -14,7 +14,10 @@ html {
 }
 
 body {
-  min-width: var(--workspace-min-width);
+  /* FE-07: the minimum working width belongs to the application shell, not to
+     the document. Below it `WidthGuard` replaces the shell with a message, and
+     that message must lay out at the real viewport width instead of forcing a
+     horizontal scroll. */
   min-height: 100vh;
   margin: var(--size-none);
   background: var(--color-background-primary-default);

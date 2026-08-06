@@ -1,0 +1,123 @@
+.df-shell {
+  display: grid;
+  grid-template-columns: var(--nav-rail-width) 1fr;
+  min-width: var(--workspace-min-width);
+  min-height: 100vh;
+  background: var(--color-background-primary-default); /* COLOR-02: the 60%. */
+}
+
+.df-shell__skip {
+  position: absolute;
+  inset-block-start: var(--size-xs);
+  inset-inline-start: var(--size-xs);
+  z-index: 1;
+  padding: var(--size-xs) var(--size-sm);
+  transform: translateY(-200%);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+}
+
+.df-shell__skip:focus-visible {
+  transform: translateY(0);
+}
+
+.df-shell__rail {
+  display: grid;
+  align-content: start;
+  gap: var(--size-xl); /* SPACING-01/06: gap between groups > padding inside. */
+  padding: var(--size-md);
+  /* BORDER-03: a structural divider, so stroke-weak rather than stroke-strong. */
+  border-inline-end: var(--border-width-default) solid var(--color-stroke-weak-default);
+  background: var(--color-surface-neutral-default); /* COLOR-02: the 30%. */
+}
+
+.df-shell__brand {
+  margin: var(--size-none);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-tight);
+  line-height: var(--line-height-tight);
+}
+
+.df-shell__destinations,
+.df-shell__stage-list {
+  display: grid;
+  gap: var(--size-xs);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+.df-shell__destination-disabled {
+  display: grid;
+  gap: var(--size-none);
+  justify-items: start;
+  min-height: var(--control-height-md);
+  padding: var(--size-xs) var(--size-sm);
+  /* Matches NavItem's reserved accent so the rail keeps one vertical rhythm. */
+  border-inline-start: var(--border-width-emphasis) solid var(--color-surface-transparent);
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-shell__destination-description,
+.df-shell__stage-description {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-shell__stages-title {
+  margin: var(--size-none) var(--size-none) var(--size-sm);
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-tight);
+  text-transform: uppercase;
+}
+
+.df-shell__stage {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--size-xs);
+  align-items: center;
+  padding: var(--size-xs) var(--size-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-shell__stage-label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.df-shell__stage-description {
+  grid-column: 1 / -1;
+}
+
+.df-shell__main {
+  padding: var(--size-lg);
+}
+
+.df-shell__heading {
+  margin: var(--size-none) var(--size-none) var(--size-md);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+  line-height: var(--line-height-tight);
+}

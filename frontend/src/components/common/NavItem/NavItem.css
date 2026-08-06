@@ -1,0 +1,48 @@
+.df-nav-item {
+  display: grid;
+  gap: 0;
+  align-content: center;
+  min-height: var(--control-height-md); /* GRID-05: desktop hit area >= 32px. */
+  padding: var(--size-xs) var(--size-sm);
+  /* BWIDTH-13: the inactive item reserves the same 2px accent in a transparent
+     colour, so activation never shifts the 8-point grid. */
+  border-inline-start: var(--border-width-emphasis) solid var(--color-surface-transparent);
+  border-radius: var(--radius-md);
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+  text-decoration: none; /* TYPO-19: structurally interactive, no underline. */
+}
+
+.df-nav-item:hover {
+  /* OPACITY-02 Method B: a 0.06 alpha layer instead of a new absolute colour. */
+  background: var(--color-surface-neutral-hover);
+  color: var(--color-text-strong-default);
+}
+
+.df-nav-item:hover .df-nav-item__label {
+  text-decoration: underline; /* TYPO-20 Logic B. */
+}
+
+.df-nav-item--active {
+  border-inline-start-color: var(--color-fill-brand-impeccable); /* BORDER-08. */
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-text-strong-default);
+}
+
+.df-nav-item__label {
+  font-weight: var(--font-weight-regular);
+}
+
+.df-nav-item--active .df-nav-item__label {
+  /* TYPO-07/11: hierarchy via weight, not size. */
+  font-weight: var(--font-weight-semibold);
+}
+
+.df-nav-item__description {
+  max-width: var(--measure-copy);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}

@@ -71,6 +71,8 @@ frontend/src/components/
 |---|---|---|
 | `Button` | `frontend/src/components/common/Button` | Każda akcja przyciskowa; jedyny dozwolony element `<button>` w aplikacji. |
 | `UiStates` | `frontend/src/components/common/UiStates` | Loading, Empty, InlineError, FatalError i Progress zgodne z FE-06. |
+| `NavItem` | `frontend/src/components/common/NavItem` | Każdy link nawigacyjny; jedyny dozwolony sposób renderowania linku trasy. |
+| `StatusBadge` | `frontend/src/components/common/StatusBadge` | Odznaka stanu lub zakresu przy etykiecie: status runu, klatki, eksportu, znacznik „poza v1”. |
 
 ## 5. DEFINICJE KOMPONENTÓW PROJEKTU
 
@@ -105,4 +107,38 @@ Warianty i stany:
 | `InlineError` | `role=alert` | status-error + status-error-soft |
 | `FatalError` | nazwany `section role=alert`, retry przez `Button` | status-error, surface-raised, stroke-error |
 | `Progress` | etykieta + natywny `<progress>` | surface-raised + brand fill |
+
+### NavItem
+
+Opakowuje `NavLink` z React Routera. Props: `to`, `children` (etykieta),
+`description?`, `end?`.
+
+| Stan | Tło | Tekst | Obramowanie / dekoracja |
+|---|---|---|---|
+| default | `--color-surface-transparent` | `--color-text-weak-default` | akcent `border-inline-start` 2 px w kolorze przezroczystym (rezerwacja miejsca) |
+| hover | `--color-surface-neutral-hover` (alpha 0.06) | `--color-text-strong-default` | `text-decoration: underline` na etykiecie |
+| active (`aria-current="page"`) | `--color-fill-brand-impeccable-soft` | `--color-text-strong-default` | akcent 2 px `--color-fill-brand-impeccable`, etykieta `--font-weight-semibold` |
+| focus-visible | bez zmiany | bez zmiany | globalny `--focus-ring-width` + kolor marki |
+
+Stan aktywny niesie `aria-current="page"` od `NavLink`, więc nie opiera się na
+samym kolorze. Wysokość minimalna `--control-height-md` (hit area desktop).
+
+### StatusBadge
+
+Nieinteraktywna pigułka. Props: `children`, `tone?`, `srLabel?`.
+Typografia: `--font-size-xs`, `--font-weight-semibold`,
+`--letter-spacing-wide`, `text-transform: uppercase`, tekst wyśrodkowany.
+
+| Tone | Tło | Tekst | Obramowanie | Kiedy |
+|---|---|---|---|---|
+| `neutral` (domyślny) | `--color-surface-neutral-raised` | `--color-text-strong-default` | `--color-stroke-weak-default` | zwykła etykieta stanu |
+| `muted` | `--color-surface-transparent` | `--color-text-weak-default` | `--color-stroke-weak-default` | zakres poza v1, destynacja wymagająca danych |
+| `brand` | `--color-fill-brand-impeccable-soft` | `--color-fill-brand-impeccable` | `--color-fill-brand-impeccable` | stan wyróżniony, np. aktywny run |
+| `success` | dziedziczone | `--color-status-success-default` | `--color-status-success-default` | zakończone powodzeniem |
+| `warning` | dziedziczone | `--color-status-warning-default` | `--color-status-warning-default` | ostrzeżenie, np. `experimental` OCR |
+| `error` | `--color-status-error-soft` | `--color-status-error-default` | `--color-status-error-default` | niepowodzenie |
+
+Tonów statusu nie wolno używać do znaczeń niestatusowych — „poza v1” to
+`muted`, nie `warning`. `srLabel` dodaje prefiks czytany przez czytnik ekranu,
+żeby znaczenie nie zależało wyłącznie od koloru.
 

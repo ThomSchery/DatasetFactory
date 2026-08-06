@@ -1,0 +1,39 @@
+.df-width-guard {
+  max-width: var(--measure-copy);
+  margin: var(--size-xxl) auto;
+  padding: var(--size-lg);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-neutral-default);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+}
+
+.df-width-guard__eyebrow,
+.df-width-guard__title,
+.df-width-guard__description {
+  margin: var(--size-none);
+}
+
+.df-width-guard__eyebrow {
+  color: var(--color-fill-brand-impeccable);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-tight);
+  text-transform: uppercase;
+}
+
+.df-width-guard__title {
+  margin-top: var(--size-sm);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+  line-height: var(--line-height-tight);
+}
+
+.df-width-guard__description {
+  margin-top: var(--size-xs);
+  color: var(--color-text-weak-default);
+  line-height: var(--line-height-standard);
+}

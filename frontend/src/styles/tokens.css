@@ -20,6 +20,8 @@
   --measure-copy: 65ch;
   --workspace-min-width: 1280px;
   --workspace-reference-width: 1440px;
+  /* GRID-01 — 280px = 35 x 8, so the shell rail stays on the 8-point grid. */
+  --nav-rail-width: 280px;
 
   /* TYPO-02..11 — baseline families with explicit offline system fallbacks. */
   --font-family-sans: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;

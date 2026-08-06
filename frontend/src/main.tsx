@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Loading } from "./components/common/UiStates";
+import { App } from "./app";
 import { DesignHarness } from "./design-harness";
 import "./styles/global.css";
 
@@ -14,11 +14,5 @@ const showDesignHarness =
   new URLSearchParams(window.location.search).get("view") === "design-harness";
 
 createRoot(rootElement).render(
-  <StrictMode>
-    {showDesignHarness ? (
-      <DesignHarness />
-    ) : (
-      <Loading label="Uruchamianie DatasetFactory…" />
-    )}
-  </StrictMode>,
+  <StrictMode>{showDesignHarness ? <DesignHarness /> : <App />}</StrictMode>,
 );
