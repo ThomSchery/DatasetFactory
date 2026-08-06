@@ -14,7 +14,8 @@
 | TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | wykonany | TK-005 | część Gate 3 ✓ |
 | FE-001 | Pionowy interfejs Home — Impeccable | rozbity na F1–F5 | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
 | FE-001-F1 | Fundament: klient API, routing i powłoka | gotowy | FE-SETUP, TK-007 | część Gate 3 |
-| FE-001-F2 | Materiały, uruchomienie runu i dashboard | gotowy | FE-001-F1 | część Gate 3 |
+| TK-008 | Endpoint dashboardu (F12) | gotowy | TK-005, TK-007 | przed FE-001-F2 |
+| FE-001-F2 | Materiały, uruchomienie runu i dashboard | gotowy | FE-001-F1, TK-008 | część Gate 3 |
 | FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
 | FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
 | FE-001-F5 | Eksport i bramki Gate 3 UI | gotowy | FE-001-F1…F4 | Gate 3 UI |
@@ -56,6 +57,11 @@ poprawnymi odczytami. Backend realizuje to w `TK-007`, interfejs w `FE-001`.
 Rozstrzygnięcia: `reopen` wyłącznie z `rejected`, boks ręczny w granicach całej
 klatki, źródło anotacji raportowane w manifeście, nie w dokumencie COCO.
 
+`GET /dashboard` figurował w `TECH_PLAN §5` od pierwszej wersji planu, ale nigdy
+nie został zaimplementowany — żaden ticket od TK-001 do TK-007 go nie obejmował.
+Lukę wykrył wykonawca FE-001-F1. Realizuje ją `TK-008`, wymagany przed
+FE-001-F2. Klient API z F1 nie zawiera spekulacyjnego typu dla tego endpointu.
+
 FE-001 został rozbity na pięć sub-ticketów. Kolejność jest sekwencyjna mimo
 częściowej niezależności F2 i F3: katalog komponentów w `new-component.md` oraz
 `components/common/` są wspólnym, edytowalnym zasobem, więc równoległa praca
@@ -75,7 +81,9 @@ graph LR
   F2 --> I[TK-007 F09]
   B[FE-SETUP] --> G1[FE-001-F1]
   I --> G1
+  I --> J[TK-008 dashboard]
   G1 --> G2[FE-001-F2]
+  J --> G2
   G1 --> G3[FE-001-F3]
   G3 --> G4[FE-001-F4]
   G2 --> G5[FE-001-F5]

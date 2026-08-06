@@ -105,11 +105,11 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | Metoda i ścieżka | Request | Sukces | Błędy |
 |------------------|---------|--------|-------|
 | `GET /health` | — | wersja, DB, workspace, FFmpeg, Tesseract, GPU | `503 dependency_unavailable` tylko dla krytycznych DB/workspace |
-| `GET /dashboard` | — | aktywny projekt/run, counts per status, system status | `500` |
+| `GET /dashboard` | — | aktywny projekt/run, counts per status, system status | `500` — **niezaimplementowany do 2026-08-05, realizuje go TK-008** |
 | `GET /assets/references/{asset_id}` | opaque UUID zapisany w profilu | stream obrazu z relpath z bazy | `404`; nigdy arbitrary path |
 | `POST /profiles` | `{name, reference_image_path, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing`, `409 profile_name_exists` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
-| `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404` |
+| `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404`, `503 ffprobe_unavailable`, `504 ffprobe_timeout` |
 | `GET /materials` | `page,page_size<=100` | paged list | `400` |
 | `POST /runs` | `{profile_id,video_id,interval_ms=1000}` | `201 PipelineRun(queued)` | `400 resolution/interval`, `404` |
 | `POST /runs/{id}/start` | `{expected_version}` | `202 running` | `409 active_run/version/invalid_transition/source_missing/source_changed` |
@@ -119,13 +119,20 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `GET /runs/{id}` | — | status, progress, error, version | `404` |
 | `GET /runs/{id}/frames` | `review_status,page,page_size<=100` | paged summaries | `404/400` |
 | `GET /frames/{id}/image` | — | image stream z kontrolowanego relpath | `404`; nigdy arbitrary path |
-| `GET /frames/{id}` | — | frame + proposed/current annotations + version | `404` |
+| `GET /frames/{id}` | — | frame + jedna lista `annotations` + version | `404` |
 | `POST /frames/{id}/annotations` | `{category_id,bbox:{x,y,width,height},expected_version}` | `201 Annotation` | `400 category/bbox_invalid`, `404`, `409 version/review_locked/frame_not_reviewable` |
 | `PATCH /annotations/{id}` | `{category_id?,bbox?,expected_version}`; co najmniej jedno pole zmiany | annotation | `400 category/bbox_invalid/empty_patch`, `404`, `409 version/review_locked` |
 | `DELETE /annotations/{id}` | `expected_version` query | `204` | `404`, `409` |
 | `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations/bbox_invalid` z `details.annotation_ids`, `404`, `409 version/review_locked/frame_not_reviewable/invalid_review_transition` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
 | `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
+
+Geometria jest asymetryczna między żądaniem a odpowiedzią: `POST` i `PATCH`
+przyjmują ją zagnieżdżoną w `bbox`, natomiast `AnnotationResponse` zwraca płaskie
+`x`, `y`, `width`, `height`. `GET /frames/{id}` zwraca jedną listę `annotations`,
+nie dwie — pochodzenie niesie `source` (`ocr` albo `manual`), a cykl życia
+`status` (`proposed`, `accepted`, `deleted`). Klient filtruje, nie oczekuje
+osobnych kolekcji.
 
 Anotacja ręczna ma `source='manual'`, `confidence=NULL` i `observation_id=NULL`;
 schemat już to przewiduje, więc F09 nie wymaga migracji. Geometria — nowa i
