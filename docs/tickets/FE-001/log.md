@@ -232,3 +232,163 @@ komponentów i frameworka canvas.
 | Mutacja blokuje przycisk i pokazuje spinner | `src/api/errorDetails.test.tsx` — `disabled` + `aria-busy` w locie |
 | Tokeny zamiast wartości arbitralnych | `src/test/architecture.test.ts` — żaden CSS poza `tokens.css` nie zawiera literału koloru |
 | Kontrast nowych par | `src/styles/contrast.test.ts` — pary tekst/`surface-neutral` i status/`surface-raised` dopisane |
+
+---
+
+# FE-001-F2 — Materiały, uruchomienie runu i dashboard
+
+## Design Plan (przed kodem UI)
+
+Źródła przeczytane przed pisaniem kodu: `frontend/src/styles/tokens.css`
+w całości, `.agent/guidelines/new-component.md` w całości (twarde reguły,
+procedura §2.2, katalog §4 i definicje §5) oraz następujące moduły
+`_agent_oriented_guidelines_final_UI_UX_v3.md` przeczytane od nagłówka modułu
+do jego końca:
+
+| Moduł | Zakres ID | Po co w tym tickecie |
+|---|---|---|
+| Siatka i Odstępy | GRID-00…14, SPACING-01…13 | Siatka paneli, szerokość pól formularza, hit area kontrolek runu, wysokość wierszy list |
+| Kolor | COLOR-01…10 | 60/30/10 na ekranie z panelami; tokeny statusu dla zależności systemu i ostrzeżenia OCR |
+| Obramowanie | BORDER-01…09 | Obrys pól formularza (`stroke-strong`), dzielniki wierszy (`stroke-weak`), akcent ostrzeżenia |
+| Szerokość Obramowania | BWIDTH-01…14 | Wyjątek BWIDTH-03 dla inputów, BWIDTH-11 fokus, BWIDTH-12 stan błędu pola |
+| Promień Obramowania | RADIUS-01…05 | RADIUS-05: pola tekstowe maks. `radius-md`; RADIUS-04 dla zagnieżdżeń w panelu |
+| Nakładki | OVERLAY-01…07 | Brak modali także w F2; obowiązuje reguła alpha warstwy hover |
+| Cienie | SHADOW-01…05 | SHADOW-05: motyw ciemny, wysokość niesie jasność powierzchni, nie cień |
+| Typografia | TYPO-01…21, FONTSIZE-02…11, LHEIGHT-01…14, LSPACE-01…09, PARASPACE-01…06, CASING-01…03 | Skala nagłówków paneli, etykiety pól, mikrokopia pomocnicza, `UPPERCASE` tylko w odznace |
+| Przezroczystość | OPACITY-01…02 | Hover 0.8 / warstwa 0.06, disabled 0.2 dla kontrolek runu w locie |
+
+### Elementy UI powstające w F2
+
+Ekran **Materiały** (`frontend/src/features/materials/**`):
+
+1. `MaterialImportForm` — panel importu: pole „Ścieżka pliku wideo”
+   (`TextField`), przycisk „Zaimportuj materiał” (`Button`), walidacja inline
+   Zod, wynik walidacji backendu przez `describeApiError` w `InlineError`.
+2. `MaterialList` — panel listy materiałów: nazwa pliku, rozdzielczość, czas,
+   rozmiar, odznaka dostępności (`StatusBadge`). Pełny zestaw stanów
+   `Loading` / `Empty` / `FatalError` / sukces.
+3. `RunLaunchForm` — panel uruchomienia: wybór materiału (`SelectField`),
+   wybór profilu (`SelectField`), interwał próbkowania w ms (`TextField`
+   `inputMode="numeric"`), przycisk „Utwórz run” (`Button`).
+
+Ekran **Dashboard** (`frontend/src/features/dashboard/**`):
+
+4. `DashboardScreen` — kompozycja paneli, jedno query `GET /dashboard`
+   z pełnym zestawem stanów.
+5. `ActiveProjectPanel` — projekt i profil jako `DataList`; brak projektu
+   i brak profilu to `Empty`, nie błąd.
+6. `FrameCountsPanel` — liczby klatek per `review_status` jako `DataList`,
+   z jawną adnotacją, że `total` to klatki istniejące, a nie planowane.
+7. `SystemStatusPanel` — FFmpeg, Tesseract, katalog roboczy, GPU i baza jako
+   wiersze z `StatusBadge` i `detail`; wiersz SAM 3 z odznaką „poza v1”.
+8. `RunPanel` — aktywny run: status (`StatusBadge`), bieżący etap, postęp
+   klatek (`Progress`), `error_code` przez `describeErrorCode`, oraz kontrolki
+   Start / Pauza / Wznów / Anuluj (`Button`). Mieszka w `features/dashboard/`,
+   bo dashboard jest właścicielem widoku aktywnego runu (CF-07); ekran
+   materiałów go importuje zamiast duplikować.
+9. `OcrQualityWarning` — stałe ostrzeżenie (`Notice` tone `warning`) widoczne
+   na obu ekranach, gdy aktywny run ma `experimental=true` albo
+   `quality_gate != passed`. Nie da się go zamknąć — nie ma kontrolki
+   zamykania ani stanu lokalnego, który mógłby je ukryć.
+
+Nowe komponenty wspólne (`frontend/src/components/common/`):
+
+10. `Panel` — tytułowana sekcja treści; kontener wszystkich powyższych bloków.
+11. `Notice` — trwały, nieinteraktywny komunikat z tonem (`info`, `warning`,
+    `error`). Nośnik ostrzeżenia OCR i komunikatu `409 active_run`.
+12. `TextField` — etykieta + `<input>` + opis + komunikat błędu, powiązane
+    przez `aria-describedby` / `aria-invalid`.
+13. `SelectField` — etykieta + `<select>` + opis + komunikat błędu; jedyny
+    dozwolony sposób renderowania listy wyboru.
+14. `DataList` — para etykieta/wartość jako `<dl>`; nośnik metadanych projektu,
+    profilu, runu i liczb klatek.
+
+### Checklista wymagana przez `new-component.md` §2.2
+
+- [x] **Layout/Siatka (GRID-01/02/05/09/10/11, SPACING-01/02/03/04/06/08/12)** —
+  ekran to `display: grid` z `gap: var(--size-lg)` między panelami
+  (SPACING-01: odstęp zewnętrzny > paddingu wewnętrznego `--size-md`).
+  Pola powiązane w formularzu dzieli `--size-md` (GRID-02), etykieta przylega
+  do pola odstępem `--size-xs`, a pod polem jest `--size-sm` (SPACING-03:
+  margines nad polem mniejszy niż pod nim). Miejsce na komunikat błędu jest
+  zarezerwowane, więc pojawienie się błędu nie przesuwa kolejnych pól
+  (SPACING-04). Szerokość pola odpowiada oczekiwanej treści (GRID-10):
+  ścieżka pliku `--measure-copy`, interwał `12ch`. Wiersze list zależności
+  i materiałów mają `min-height: var(--control-height-lg)` = 48 px
+  (GRID-11 „standardowe”), a kontrolki runu `--control-height-md` = 40 px
+  > 32 px minimum desktopu (GRID-05). Opisy ograniczone `--measure-copy`
+  (GRID-09). Poziomy padding komórek listy `--size-sm` (SPACING-12).
+- [x] **Typografia (TYPO-07/08/11/19/21, FONTSIZE-02/08/09/10, LHEIGHT-09/10,
+  LSPACE-07, PARASPACE-01/05, CASING-02/03)** — trzy rozmiary na ekran:
+  `--font-size-lg` dla tytułu panelu, `--font-size-md` dla wartości
+  wyróżnionych, `--font-size-sm` dla treści i etykiet pól, a `--font-size-xs`
+  wyłącznie dla odznak i mikrokopii pomocniczej (FONTSIZE-09; nic poniżej
+  12 px — FONTSIZE-08). Dwie wagi: `regular` i `semibold` (TYPO-08).
+  Etykieta pola i tytuł panelu niosą hierarchię wagą i kolorem, nie rozmiarem
+  (TYPO-07, FONTSIZE-10). `--line-height-tight` dla tytułów,
+  `--line-height-standard` dla reszty (LHEIGHT-09/10). `UPPERCASE` wyłącznie
+  w `StatusBadge` i w eyebrow panelu, zawsze z `--letter-spacing-wide`
+  i `semibold` (CASING-02, LSPACE-07). Reszta copy w `Sentence case`,
+  `lowercase` nie występuje (CASING-03). Tekst wyrównany do lewej, bez
+  justowania (PARASPACE-05/06).
+- [x] **Kolory (COLOR-02/07/08/09/10)** — 60 % `--color-background-primary-default`
+  (region główny), 30 % `--color-surface-neutral-default` i
+  `--color-surface-neutral-raised` (panele, wiersze), 10 %
+  `--color-fill-brand-impeccable` (akcje główne, wypełnienie postępu, fokus).
+  Zależność niedostępna: `--color-status-error-default`, dostępna:
+  `--color-status-success-default`, ostrzeżenie OCR:
+  `--color-status-warning-default` — zakresy H zgodne z COLOR-09. „Poza v1”
+  przy SAM 3 to `muted`, nie `warning`, bo to zakres, nie status (COLOR-09).
+  Nowe pary tekst/tło dopisane do `src/styles/contrast.test.ts` (COLOR-08).
+  Wszystkie wartości są tokenami semantycznymi (COLOR-10); żaden literał
+  koloru nie trafia do CSS.
+- [x] **Obramowania (BORDER-02/03/05/06/08, BWIDTH-03/06/10/11/12/13,
+  RADIUS-03/04/05)** — panele oddziela biała przestrzeń, a nie obramowanie
+  (BORDER-02); mają jednak ten sam obrys `--color-stroke-weak-default` 1 px
+  co istniejący `df-ui-state--panel`, żeby nie wprowadzać drugiego stylu
+  panelu. Pola formularza to jedyne elementy z widocznym obramowaniem
+  w stanie domyślnym (BWIDTH-03): `--border-width-default` 1 px
+  w `--color-stroke-strong-default` (BORDER-03: `stroke-strong`
+  ma kontrast ≥ 3:1). Stan błędu pola: `--border-width-emphasis` 2 px
+  w `--color-status-error-default` (BWIDTH-12). Fokus: globalna reguła
+  `:focus-visible` z `global.css` (BORDER-06). Wszystko rysowane do wewnątrz
+  przez globalny `box-sizing: border-box`, a pole rezerwuje 2 px także
+  w stanie domyślnym, więc błąd nie przesuwa układu (BWIDTH-13).
+  `Notice` niesie jednostronny akcent `border-inline-start` 2 px w kolorze
+  tonu (BORDER-08). Promienie: `--radius-md` dla pól (RADIUS-05: pola
+  tekstowe maks. 8 px), `--radius-lg` dla paneli, `--radius-pill` dla odznak.
+  Wiersz listy wewnątrz panelu ma `--radius-md`, bo
+  `promień zewnętrzny (16) − padding (24) ≤ 0` dałoby 0, a wiersz nie dotyka
+  krawędzi panelu — RADIUS-04 dotyczy elementu przylegającego, nie
+  odsuniętego paddingiem.
+- [x] **Cienie (SHADOW-05)** — motyw jest ciemny (`L = 10 %` tła), więc cień
+  jest matematycznie niewidoczny. Wysokość niesie jaśniejsza powierzchnia:
+  wiersz `--color-surface-neutral-raised` (18 %) na panelu
+  `--color-surface-neutral-default` (14 %) na tle (10 %). Żaden element F2
+  nie ustawia `box-shadow`.
+- [x] **Interakcje (COLOR-07, OPACITY-02, BWIDTH-11, GRID-05, FE-06)** —
+  kontrolki runu używają `Button`, który już realizuje wzorzec FE-06:
+  `loading` → natywny `disabled` + spinner + `aria-busy`. W trakcie mutacji
+  wyłączone są wszystkie kontrolki runu, nie tylko kliknięta, bo każda z nich
+  wysyła to samo `expected_version` i druga w locie i tak dostałaby
+  `409 version_conflict`. Hover pola: obramowanie
+  `--color-fill-brand-impeccable` (BWIDTH-11 zmienia kolor semantyczny;
+  szerokość zostaje 1 px, bo fokus już rezerwuje 2 px i podwójne pogrubienie
+  byłoby szumem). Disabled: `--opacity-disabled` na całym komponencie
+  (OPACITY-02). Żadna kontrolka nie jest mniejsza niż 32 × 32 px (GRID-05).
+- [x] **Komponenty (sekcje 4–5 `new-component.md`)** — katalog sprawdzony
+  przed kodowaniem. Istnieją i są użyte bez zmian: `Button` (każda akcja),
+  `UiStates` (`Loading`, `Empty`, `InlineError`, `FatalError`, `Progress`),
+  `StatusBadge` (status runu, dostępność zależności, „poza v1”), `NavItem`
+  (nie dotyczy F2 — nawigacja należy do powłoki). Brakowało kontenera sekcji,
+  trwałego komunikatu z tonem, pola tekstowego, listy wyboru i pary
+  etykieta/wartość — powstają `Panel`, `Notice`, `TextField`, `SelectField`
+  i `DataList` w `components/common/`, a katalog §4 i definicje §5
+  `new-component.md` zostają uzupełnione po ich stworzeniu.
+
+### Copy i terminologia
+
+Teksty po polsku, w `Sentence case`. Terminy dziedzinowe bez tłumaczenia: OCR,
+SAM 3, HUD, GPU, FFmpeg, ffprobe, Tesseract, run. Komunikaty błędów pochodzą
+wyłącznie z `api/messages.ts` — żaden ekran nie pisze własnej wersji tekstu
+dla kodu backendu.
