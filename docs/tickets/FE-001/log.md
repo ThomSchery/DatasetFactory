@@ -392,3 +392,169 @@ Teksty po polsku, w `Sentence case`. Terminy dziedzinowe bez tłumaczenia: OCR,
 SAM 3, HUD, GPU, FFmpeg, ffprobe, Tesseract, run. Komunikaty błędów pochodzą
 wyłącznie z `api/messages.ts` — żaden ekran nie pisze własnej wersji tekstu
 dla kodu backendu.
+
+## Decyzje i interpretacje
+
+### `GET /dashboard` dopisany do klienta — dług F1 spłacony
+
+FE-001-F1 świadomie pominął `getDashboard()`, bo backend nie miał routera.
+TK-008 dodał `backend/app/api/dashboard.py`, więc typ `Dashboard` powstał
+z tego routera, nie z prozy §5. Test `src/api/coverage.test.ts` przestał
+pilnować nieobecności jednej funkcji i zamiast tego wyciąga z §5 wszystkie
+wiersze tabeli i sprawdza, że każdy ma pokrycie — od teraz to nowy endpoint
+w dokumencie zapala czerwone światło, a nie brak aktualizacji listy w teście.
+
+### Dwie różne definicje „aktywnego runu” — polling nie idzie za dashboardem
+
+Backend nazywa run aktywnym, dopóki ma jakiekolwiek przejście w
+`RUN_TRANSITIONS`, czyli terminalny jest wyłącznie `completed`; `failed`
+i `cancelled` to niedokończona praca, którą dashboard pokazuje razem
+z `error_code`. Frontendowy `TERMINAL_RUN_STATUSES` odpowiada na węższe
+pytanie — czy status zmieni się bez akcji użytkownika — i to on rządzi
+pollingiem. `dashboardPollInterval` używa wyłącznie tego drugiego, a test
+`dashboardPolling.test.tsx` przypina obie definicje osobno, żeby nikt ich
+nie „ujednolicił”.
+
+Dodatkowo: bez aktywnego runu polling w ogóle nie startuje. `runPollInterval`
+zwraca 2 s dla `undefined`, bo tam `undefined` znaczy „status jeszcze
+nieznany”; na dashboardzie `run === null` znaczy „nie ma czego obserwować”
+i to inna sytuacja, więc predykat rozróżnia je jawnie zamiast dziedziczyć
+zachowanie.
+
+### `frame_counts.total` i `run.total_frames` nigdy obok siebie jako to samo
+
+Pierwsza liczy wiersze `frames`, które istnieją; druga to liczba klatek
+zaplanowanych dla runu. Panel klatek pokazuje „Razem istniejących” z jawną
+adnotacją, a panel runu „Klatki ukończone wobec zaplanowanych”. Test sprawdza
+też negatywnie: liczba planowanych nie pojawia się w panelu liczb klatek.
+
+### `availableRunActions` w `src/api/runStatus.ts`, nie w komponencie
+
+Gate 3 zabrania komponentom implementowania maszyny stanów, a test
+architektury trzyma literały statusów poza komponentami — tabela sterowana
+statusem musiała więc trafić do warstwy API. Jest to **podpowiedź afordancji**,
+nie maszyna stanów po stronie klienta: backend pozostaje jedynym autorytetem
+i nadal odpowiada `409 invalid_transition`, co UI renderuje ze wspólnego
+słownika. Tabela odwzorowuje `RUN_TRANSITIONS` oraz zbiory `allowed_from`
+z `backend/app/managers/workflow/manager.py`.
+
+### Wybór profilu ograniczony przez kontrakt, nie przez ekran
+
+TECH_PLAN §5 wystawia `GET /profiles/current` i nie ma endpointu listującego
+profile. Ekran materiałów ma więc dokładnie jedną pozycję do zaoferowania.
+Kontrolka pozostaje `SelectField`, żeby F3 mogła ją poszerzyć bez przebudowy
+formularza. To ograniczenie kontraktu, nie decyzja UI — patrz „Obserwacje
+do kontraktu” niżej.
+
+### Tworzenie runu i jego uruchomienie to dwa kroki
+
+`POST /runs` tworzy run w `queued`; dopiero `POST /runs/{id}/start` pobiera
+globalną blokadę i może odpowiedzieć `409 active_run` (CF-02.4,
+`ActiveRunError` w `manager.py`). Sklejenie ich w jeden przycisk ukryłoby ten
+kod za „nie udało się utworzyć runu”. Uruchomienie — nie utworzenie —
+przenosi na `/annotations/:runId`, zgodnie z §Logika.2.
+
+### Wszystkie kontrolki runu wyłączone na czas mutacji
+
+Nie tylko kliknięta. Każda z czterech wysyła to samo `expected_version`
+odczytane z tego samego runu, więc druga w locie i tak dostałaby
+`409 version_conflict`; wyłączenie ich razem jest uczciwsze niż pozwolenie na
+kliknięcie, które nie ma szans przejść.
+
+### Ton `error` nie barwi tekstu na `surface-neutral-raised`
+
+`--color-status-error-default` na `--color-surface-neutral-raised` daje
+4,16:1, poniżej progu AA 4,5:1 dla małego tekstu (COLOR-08). `Notice --error`
+niesie więc ton akcentem 2 px i miękkim tłem, a tytuł zostaje
+w `--color-text-strong-default` — tak samo jak istniejący
+`df-ui-state--inline-error`. `src/styles/contrast.test.ts` przypina samą tę
+nierówność, żeby zabarwienie nie wróciło niezauważone.
+
+### `Field` jako prymityw, a nie dwa komponenty z bliźniaczym CSS
+
+`TextField` i `SelectField` potrzebują identycznego chrome: etykieta, opis,
+komunikat błędu i wiązania `aria-describedby` / `aria-invalid`. Zamiast
+duplikować ~40 linii CSS w dwóch folderach powstał `Field` z render propem,
+a oba pola go komponują. `error` jest jednocześnie flagą niepoprawności, więc
+nie da się pokazać czerwonego obramowania bez komunikatu ani komunikatu,
+którego kontrolka nie opisuje.
+
+### `@hookform/resolvers` instalowany tutaj
+
+F1 świadomie go pominął, zapisując, że most RHF↔Zod należy do pierwszego
+formularza. Wersja `5.7.1` (MIT), przypięta dokładnie, `npm audit` czysty.
+
+### Fake timery w teście pollingu fałszują tylko zegar
+
+`vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval",
+"clearInterval", "Date"] })`. Fałszowanie kolejki mikrozadań zatrzymuje odczyt
+ciała odpowiedzi ze stubowanego `fetch` i test mierzyłby własne zakleszczenie
+zamiast interwału. Dodatkowo TanStack Query powiadamia subskrybentów zegarowym
+zerem, którego sinon nie uruchomi bez ruchu zegara — stąd „szturchnięcie”
+o 1 ms w helperze `tick`. `waitFor` z Testing Library nie nadaje się tutaj, bo
+sam steruje fałszywymi timerami i zakleszcza się z tymi z testu.
+
+## Obserwacje do kontraktu
+
+1. **Brak endpointu listującego profile.** §5 ma `POST /profiles`
+   i `GET /profiles/current`, ale nic w rodzaju `GET /profiles`. Ekran
+   uruchomienia runu może więc zaoferować dokładnie jeden profil, mimo że
+   `POST /runs` przyjmuje dowolne `profile_id`, a schemat trzyma ich wiele.
+   To wygląda na lukę w dokumencie, nie w kodzie — do rozstrzygnięcia przed
+   F3, która tworzy profile.
+2. **`POST /runs` nie zwraca `409 active_run`.** Ticket mówi o „drugim runie”,
+   ale `ActiveRunError` powstaje w `activate`/`reserve_resume`, czyli przy
+   `start` i `resume`. Utworzenie drugiego runu przechodzi i zostaje on
+   w `queued`. Kod jest spójny z §5; warte odnotowania, bo intuicja z ticketu
+   sugeruje inaczej.
+3. **`review_ready` nie ma operacji sterującej w §5.** Jedyne przejście
+   z `review_ready` to `completed`, a żaden endpoint §5 go nie wykonuje. Panel
+   runu pokazuje wtedy jawny komunikat o braku operacji. Domykanie runu należy
+   prawdopodobnie do F4/F5 — do potwierdzenia.
+
+## Wykonanie
+
+Commity: `d2882be` (Design Plan), `3a4d3db` (warstwa API), `60cfc2c`
+(komponenty wspólne), `27cf4bb` (ekrany), `a30596e` (testy).
+
+### Bramki
+
+| Bramka | Komenda | Wynik |
+|---|---|---|
+| Testy | `npm run test` | 22 pliki, 251 testów, 0 nieudanych |
+| Typy | `npm run typecheck` | 0 błędów |
+| Build | `npm run build` | zielony, `tsc --noEmit` + `vite build` |
+| Audit | `npm audit` | info/low/moderate/high/critical = 0 (175 zależności) |
+| Architektura | `src/test/architecture.test.ts` | 66 testów, 0 nieudanych |
+
+Wzrost wobec F1: 13 → 22 plików testowych, 151 → 251 testów.
+
+### Pakiety
+
+| Pakiet | Wersja | Licencja | Dlaczego ta |
+|---|---|---|---|
+| `@hookform/resolvers` | 5.7.1 | MIT | Bieżąca stabilna; most RHF↔Zod dla dwóch formularzy F2. Peer `react-hook-form ^7.55` pasuje do 7.84.0. |
+
+Zero nowych zależności produkcyjnych poza tą jedną.
+
+### Testy pokrywające Done Criteria
+
+| Kryterium | Test |
+|---|---|
+| Design Plan dla każdego elementu UI | sekcja „Design Plan” wyżej; katalog `new-component.md` §4–§5 uzupełniony o `Panel`, `Notice`, `Field`, `TextField`, `SelectField`, `DataList` |
+| Import materiału, utworzenie runu, start | `src/features/materials/materialsFlow.test.tsx` — pełna ścieżka aż do nagłówka „Anotacje”, z asercją ciał żądań |
+| Polling nonterminal → terminalny i zatrzymanie | `src/features/dashboard/dashboardPolling.test.tsx` — 4 odpytania, potem 10 interwałów ciszy |
+| Polling nie startuje bez runu | `dashboardPolling.test.tsx` |
+| `409 active_run` jako komunikat | `src/features/dashboard/runControl.test.tsx` |
+| Konflikt `expected_version` na pause/resume/cancel | `runControl.test.tsx` — osobny przypadek na każdą z trzech operacji plus asercja wysłanej wersji |
+| Ostrzeżenie OCR na obu ekranach | `src/features/dashboard/ocrWarning.test.tsx` — 14 przypadków: `experimental`, `quality_gate != passed`, provenance Tesseractu, brak kontrolki zamykania, copy nie sugeruje poprawności, cisza gdy bramka przeszła |
+| Loading / empty / error / success | `src/features/dashboard/DashboardScreen.test.tsx`, `materialsFlow.test.tsx` |
+| Mutacja blokuje przycisk i pokazuje spinner | `materialsFlow.test.tsx` (import), `runControl.test.tsx` (wszystkie cztery kontrolki runu) |
+| Walidacja inline przed żądaniem | `materialsFlow.test.tsx` — ścieżka względna nie wychodzi z przeglądarki |
+| Kod backendu bez reinterpretacji | `materialsFlow.test.tsx` — `503 ffprobe_unavailable` z copy i widocznym kodem |
+| `frame_counts.total` ≠ `run.total_frames` | `DashboardScreen.test.tsx` |
+| Stan systemu i SAM 3 poza v1 | `DashboardScreen.test.tsx` |
+| Dostępność pól formularza | `src/components/common/Field/Field.test.tsx` |
+| `Notice` nie da się zamknąć | `src/components/common/Notice/Notice.test.tsx` |
+| Predykat ostrzeżenia OCR | `src/api/ocrQuality.test.ts` |
+| Kontrast nowych par | `src/styles/contrast.test.ts` |
