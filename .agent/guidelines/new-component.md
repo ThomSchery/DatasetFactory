@@ -79,6 +79,7 @@ frontend/src/components/
 | `TextField` | `frontend/src/components/common/TextField` | Każde pole tekstowe lub liczbowe; jedyny dozwolony `<input>` w aplikacji. |
 | `SelectField` | `frontend/src/components/common/SelectField` | Każda lista wyboru; jedyny dozwolony `<select>` w aplikacji. |
 | `DataList` | `frontend/src/components/common/DataList` | Pary etykieta/wartość: metadane projektu, profilu, runu, liczby klatek. |
+| `RegionOverlay` | `frontend/src/components/common/RegionOverlay` | Prostokąty nad obrazem: regiony HUD profilu, boksy weryfikacji. Jedyny dozwolony sposób rysowania i wskazywania geometrii nad `<img>`. |
 
 ## 5. DEFINICJE KOMPONENTÓW PROJEKTU
 
@@ -213,3 +214,45 @@ pojawienie się błędu nie przesuwa kolejnych pól (SPACING-04).
 (TYPO-07). `hint` służy do doprecyzowania znaczenia liczby (np. że `total`
 liczy klatki istniejące, a nie planowane).
 
+
+### RegionOverlay
+
+Powierzchnia rysowania prostokątów nad `<img>`. Props: `imageUrl`, `imageAlt`,
+`label`, `source` (`{width, height}` albo `null`), `shapes`, `selectedId`,
+`onSelect?`, `onDraw?`, `onRemove?`, `onSourceResolved?`, `onImageError?`,
+`disabled?`.
+
+Trzy własności są powodem istnienia tego komponentu:
+
+1. **Jeden `viewBox` z wymiarów naturalnych.** `viewBox="0 0 naturalWidth
+   naturalHeight"` plus `preserveAspectRatio="none"` sprawia, że współrzędne
+   źródłowe są jednostką użytkownika SVG. Prostokąty renderują się bez
+   skalowania, a zmiana rozmiaru okna zmienia wyłącznie pudełko CSS. Jedyne
+   przejście między układami współrzędnych to `clientPointToSource`
+   w `geometry.ts` — funkcja czysta, testowana wprost.
+2. **Prostokąty to elementy DOM.** Wzorzec ARIA `listbox`/`option` z roving
+   tabindex: `<svg role="listbox">`, `<g role="option" aria-selected>`.
+   Zaznaczenie niesie `aria-selected`, nie sam kolor.
+3. **Wskazanie i usunięcie nie wymagają precyzji.** Strzałki chodzą po
+   zbiorze, `Home`/`End` skaczą na końce, `Enter`/`Spacja` zaznacza,
+   `Delete`/`Backspace` usuwa. Ekran dokłada do tego listę tekstową
+   z `Button`ami, więc żadna operacja v1 nie wymaga trafienia w prostokąt.
+
+| Element | Wypełnienie | Obrys | Uwagi |
+|---|---|---|---|
+| region domyślny | `--color-surface-transparent` | `--color-fill-brand-impeccable`, `--border-width-emphasis` | `vector-effect: non-scaling-stroke` — 2 px CSS przy każdej skali |
+| region `tone="muted"` | jw. | `--color-stroke-strong-default` | obiekt do obejrzenia, nie do edycji |
+| hover | `--color-surface-neutral-hover` | bez zmiany | OPACITY-02, warstwa 0.06 |
+| zaznaczony | `--color-fill-brand-impeccable-soft` | bez zmiany | dodatkowo `aria-selected="true"` |
+| focus-visible | bez zmiany | `--color-text-strong-default`, `+ --focus-ring-width` | `outline` na `<rect>` nie jest przewidywalny między silnikami |
+| szkic w trakcie rysowania | `--color-fill-brand-impeccable-soft` | `--color-stroke-strong-default`, `stroke-dasharray` | różni się od zapisanego regionu kształtem linii, nie kolorem (COLOR-09) |
+| warstwa hit-targetu | brak | przezroczysta, `stroke-width: --size-xs` | `pointer-events: stroke` — OVERLAY-06 zabrania niewidocznego *blokowania*, nie niewidocznego hit-targetu |
+| `disabled` | — | — | cały komponent `--opacity-disabled`, brak rysowania i zaznaczania |
+
+Prostokąt regionu ma `rx: var(--radius-none)`. Zaokrąglony róg sugerowałby
+crop o zaokrąglonym kształcie, a crop jest dokładnym prostokątem pikseli.
+
+`source` jest `null`, dopóki przeglądarka nie zdekoduje obrazu: obraz się
+renderuje, powierzchnia rysowania nie, bo bez wymiarów naturalnych nie ma
+układu współrzędnych. Konsument, który zna wymiary z API (klatka w F4), podaje
+je od razu.

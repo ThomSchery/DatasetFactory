@@ -1,0 +1,102 @@
+/*
+ * The picture and the drawing surface share one box. The surface is stretched
+ * over the image rather than sized independently, so there is a single place
+ * where the two coordinate systems meet and it is a CSS `inset: 0`.
+ */
+
+.df-region-overlay {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: var(--size-md) auto;
+  border-radius: var(--radius-md);
+  background-color: var(--color-background-primary-default);
+  line-height: var(--line-height-tight);
+}
+
+.df-region-overlay[data-disabled] {
+  opacity: var(--opacity-disabled);
+}
+
+.df-region-overlay__image {
+  display: block;
+  /* GRID-08: never blown up past its own resolution, only shrunk to fit. */
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+
+.df-region-overlay__surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.df-region-overlay__surface--drawable {
+  cursor: crosshair;
+}
+
+.df-region-overlay__shape {
+  cursor: pointer;
+}
+
+.df-region-overlay__shape-fill {
+  fill: var(--color-surface-transparent);
+  stroke: var(--color-fill-brand-impeccable);
+  /* BWIDTH: the outline is 2 CSS px at every window size and every viewBox
+     scale. Without `non-scaling-stroke` a 1920 px source would render it at a
+     fraction of a pixel and the region would read as a hairline. */
+  stroke-width: var(--border-width-emphasis);
+  vector-effect: non-scaling-stroke;
+  /* RADIUS-01: a region is an exact pixel rectangle handed to the cropper.
+     A rounded corner would depict a crop shape that does not exist. */
+  rx: var(--radius-none);
+}
+
+.df-region-overlay__shape--muted .df-region-overlay__shape-fill {
+  stroke: var(--color-stroke-strong-default);
+}
+
+.df-region-overlay__shape:hover .df-region-overlay__shape-fill {
+  fill: var(--color-surface-neutral-hover);
+}
+
+.df-region-overlay__shape[data-selected] .df-region-overlay__shape-fill {
+  fill: var(--color-fill-brand-impeccable-soft);
+}
+
+/* GRID-05: an 8 px band on each side of the edge, in CSS pixels, so a thin
+   region is still grabbable with a mouse. Fill stays clickable too, so the
+   whole rectangle is a target — the band only widens its edge. */
+.df-region-overlay__shape-hit {
+  fill: var(--color-surface-transparent);
+  stroke: var(--color-surface-transparent);
+  stroke-width: var(--size-xs);
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+}
+
+/* `outline` on an SVG shape is not drawn consistently across engines, so focus
+   is expressed in the stroke itself (BORDER-06 intent, SVG mechanism). */
+.df-region-overlay__shape:focus {
+  outline: none;
+}
+
+.df-region-overlay__shape:focus-visible .df-region-overlay__shape-fill {
+  stroke: var(--color-text-strong-default);
+  stroke-width: calc(var(--border-width-emphasis) + var(--focus-ring-width));
+}
+
+/* COLOR-09: the draft differs from a saved region by line *shape*, not only by
+   colour, so the distinction survives a colour-blind reading. */
+.df-region-overlay__draft {
+  fill: var(--color-fill-brand-impeccable-soft);
+  stroke: var(--color-stroke-strong-default);
+  stroke-width: var(--border-width-emphasis);
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
