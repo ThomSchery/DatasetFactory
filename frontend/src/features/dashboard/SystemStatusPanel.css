@@ -1,0 +1,35 @@
+.df-system-status {
+  display: grid;
+  gap: var(--size-xs);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+/* SHADOW-05: the dark theme communicates elevation with a lighter surface, not
+   with a shadow. GRID-11: 48px is the standard data row height. */
+.df-system-status__row {
+  min-height: var(--control-height-lg);
+  padding: var(--size-xs) var(--size-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-system-status__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.df-system-status__label {
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.df-system-status__detail {
+  max-width: var(--measure-copy);
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}

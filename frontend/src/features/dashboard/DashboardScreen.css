@@ -1,0 +1,7 @@
+/* SPACING-01/06: panels are separated by more space than they hold inside
+   (--size-md padding), and the larger step is chosen at the macro level. */
+.df-dashboard {
+  display: grid;
+  gap: var(--size-lg);
+  align-content: start;
+}

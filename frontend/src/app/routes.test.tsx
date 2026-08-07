@@ -1,30 +1,66 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderApp } from "../test/harness";
+import { emptyDashboard } from "../test/fixtures";
+import { renderApp, stubFetch } from "../test/harness";
 import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
 
 /*
- * FE-04 fixes the route set at five. Each one renders an explicit empty state
- * here; the screens arrive in FE-001-F2 … FE-001-F5.
+ * FE-04 fixes the route set at five. Dashboard and Materiały render their real
+ * screens since FE-001-F2; the other three still carry an explicit empty state
+ * naming the ticket that builds them.
  */
 
-const ROUTES: readonly [string, string][] = [
-  ["/", "Dashboard"],
+const UNBUILT_ROUTES: readonly [string, string][] = [
   ["/profiles/new", "Nowy profil gry"],
-  ["/materials", "Materiały"],
   ["/annotations/run-42", "Anotacje"],
   ["/exports", "Eksporty"],
 ];
 
+const BUILT_ROUTES: readonly [string, string][] = [
+  ["/", "Dashboard"],
+  ["/materials", "Materiały"],
+];
+
+beforeEach(() => {
+  // The two built screens query the API on mount; an empty install is the
+  // quietest backdrop for assertions about routing rather than about data.
+  stubFetch((url) => {
+    if (url.includes("/materials")) {
+      return { status: 200, body: { items: [], page: 1, page_size: 100, total: 0 } };
+    }
+    if (url.includes("/profiles/current")) {
+      return { status: 200, body: null };
+    }
+    return { status: 200, body: emptyDashboard() };
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("the five FE-04 routes", () => {
-  it.each(ROUTES)("renders %s with its heading and an explicit empty state", (path, heading) => {
+  it.each(UNBUILT_ROUTES)(
+    "renders %s with its heading and an explicit empty state",
+    (path, heading) => {
+      renderApp([path]);
+
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(heading);
+      const empty = screen.getByRole("region", { name: /nie (jest|są) jeszcze zbudowan/i });
+      expect(within(empty).getByText("Brak danych")).toBeInTheDocument();
+    },
+  );
+
+  it.each(BUILT_ROUTES)("renders the %s screen built in FE-001-F2", async (path, heading) => {
     renderApp([path]);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(heading);
-    const empty = screen.getByRole("region", { name: /nie (jest|są) jeszcze zbudowan/i });
-    expect(within(empty).getByText("Brak danych")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Aktywny run" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
   });
 
   it("keeps runId in the URL rather than in component state", () => {

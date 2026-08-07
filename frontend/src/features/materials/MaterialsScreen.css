@@ -1,0 +1,67 @@
+.df-materials {
+  display: grid;
+  gap: var(--size-lg);
+  align-content: start;
+}
+
+/* GRID-02: --size-md is the step between related form fields. The action group
+   sits further away than the fields sit from each other (SPACING-01). */
+.df-materials form {
+  display: grid;
+  gap: var(--size-md);
+}
+
+.df-materials__actions {
+  display: flex;
+  gap: var(--size-xs);
+  margin-top: var(--size-xs);
+}
+
+.df-materials__feedback {
+  margin-top: var(--size-md);
+}
+
+.df-materials__code {
+  margin: var(--size-xs) var(--size-none) var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}
+
+.df-materials__code code {
+  font-family: var(--font-family-mono);
+}
+
+.df-material-list {
+  display: grid;
+  gap: var(--size-xs);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+/* GRID-11: 48px standard data row; SPACING-12: at least 16px horizontal padding. */
+.df-material-row {
+  min-height: var(--control-height-lg);
+  padding: var(--size-xs) var(--size-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-material-row__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.df-material-row__name {
+  overflow-wrap: anywhere;
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.df-material-row__meta {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}

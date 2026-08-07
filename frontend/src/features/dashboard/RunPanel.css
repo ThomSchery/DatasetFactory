@@ -1,0 +1,31 @@
+.df-run-panel__progress,
+.df-run-panel__failure,
+.df-run-panel__error,
+.df-run-panel__no-actions {
+  margin-top: var(--size-md);
+}
+
+.df-run-panel__code {
+  margin: var(--size-xs) var(--size-none) var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}
+
+.df-run-panel__code code {
+  font-family: var(--font-family-mono);
+}
+
+.df-run-panel__no-actions {
+  margin-bottom: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+}
+
+/* SPACING-01: the control group is separated from the data above it by more
+   space than the controls have between them. */
+.df-run-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+  margin-top: var(--size-lg);
+}

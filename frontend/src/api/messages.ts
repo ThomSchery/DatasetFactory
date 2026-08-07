@@ -1,5 +1,6 @@
 import { annotationIdsFromError, isApiError, isApiTransportError } from "./errors";
 import type { ErrorDetails } from "./errors";
+import type { RunStatus } from "./types";
 
 /*
  * Central translation of backend error codes into Polish copy plus a suggested
@@ -224,6 +225,53 @@ export function describeErrorCode(code: string | null | undefined): ErrorCopy {
 
 export function hasErrorCopy(code: string): boolean {
   return code in ERROR_COPY;
+}
+
+/*
+ * Run status and stage copy lives here rather than in a feature for a
+ * structural reason, not an editorial one: `src/test/architecture.test.ts`
+ * keeps run status literals inside `src/api/`, so any table keyed by them has
+ * to live in this layer. The tones are `StatusBadge` tones.
+ */
+
+export interface RunStatusCopy {
+  label: string;
+  tone: "neutral" | "brand" | "success" | "warning" | "error";
+}
+
+const RUN_STATUS_COPY: Readonly<Record<RunStatus, RunStatusCopy>> = {
+  queued: { label: "W kolejce", tone: "neutral" },
+  running: { label: "W toku", tone: "brand" },
+  paused: { label: "Wstrzymany", tone: "warning" },
+  review_ready: { label: "Gotowy do weryfikacji", tone: "brand" },
+  completed: { label: "Ukończony", tone: "success" },
+  failed: { label: "Nieudany", tone: "error" },
+  cancelled: { label: "Anulowany", tone: "neutral" },
+};
+
+export function describeRunStatus(status: RunStatus): RunStatusCopy {
+  return RUN_STATUS_COPY[status];
+}
+
+/**
+ * `PipelineRun.current_stage` is a free-form string the worker writes
+ * (`backend/app/access/store/repositories/{runs,checkpoints}.py`), not a closed
+ * enum in the contract. Known values get Polish copy; anything else is shown
+ * verbatim rather than hidden, so a new worker stage stays visible.
+ */
+const RUN_STAGE_COPY: Readonly<Record<string, string>> = {
+  sampling: "Próbkowanie",
+  sample: "Próbkowanie",
+  crop: "Regiony HUD",
+  ocr: "OCR",
+  review: "Weryfikacja",
+};
+
+export function describeRunStage(stage: string | null): string | null {
+  if (stage === null || stage === "") {
+    return null;
+  }
+  return RUN_STAGE_COPY[stage] ?? stage;
 }
 
 export interface ErrorPresentation extends ErrorCopy {

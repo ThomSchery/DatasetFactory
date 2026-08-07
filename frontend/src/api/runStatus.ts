@@ -37,6 +37,37 @@ export function runPollInterval(status: RunStatus | undefined): number | false {
   return isTerminalRunStatus(status) ? false : RUN_POLL_INTERVAL_MS;
 }
 
+/** The four run mutations FE-001-F2 exposes, one per TECH_PLAN §5 endpoint. */
+export type RunAction = "start" | "pause" | "resume" | "cancel";
+
+/**
+ * Which controls to offer for a status. This is an affordance hint, not a
+ * client-side state machine: the backend stays the only authority and still
+ * answers `409 invalid_transition` if a request arrives at the wrong moment,
+ * which the UI surfaces through the central dictionary. It lives here because
+ * `src/test/architecture.test.ts` keeps status literals out of components, and
+ * because a screen must not decide for itself what a status permits.
+ *
+ * Mirrors `RUN_TRANSITIONS` and the `allowed_from` sets in
+ * `backend/app/managers/workflow/manager.py`: `start` only from `queued`,
+ * `resume` from `paused`, `failed` and `cancelled`, `pause` from `running`,
+ * and `cancel` from anything that can still reach `cancelled`.
+ */
+const RUN_ACTIONS: Readonly<Record<RunStatus, readonly RunAction[]>> = {
+  queued: ["start", "cancel"],
+  running: ["pause", "cancel"],
+  paused: ["resume", "cancel"],
+  // Only `completed` follows, and no §5 endpoint performs that transition.
+  review_ready: [],
+  completed: [],
+  failed: ["resume", "cancel"],
+  cancelled: ["resume"],
+};
+
+export function availableRunActions(status: RunStatus): readonly RunAction[] {
+  return RUN_ACTIONS[status];
+}
+
 /** Export statuses written by the backend (`repositories/exports.py`). */
 export const TERMINAL_EXPORT_STATUSES = ["completed", "failed"] as const;
 

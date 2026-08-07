@@ -1,40 +1,24 @@
 import { createBrowserRouter, useParams, type RouteObject } from "react-router";
 
 import { Empty } from "../components/common/UiStates";
+import { DashboardScreen } from "../features/dashboard";
+import { MaterialsScreen } from "../features/materials";
 import { AppShell } from "./AppShell";
 
 /*
- * Exactly the five FE-04 routes plus a catch-all for unknown paths. Each one
- * renders an explicit empty state; the screens themselves belong to
- * FE-001-F2 … FE-001-F5 and are deliberately not started here.
+ * Exactly the five FE-04 routes plus a catch-all for unknown paths. The
+ * dashboard and materials screens landed in FE-001-F2; the remaining three
+ * still render an explicit empty state naming the ticket that builds them.
  *
  * `handle.heading` feeds the shell's `<h1>` so the heading and the route stay
  * defined in one place.
  */
-
-function DashboardRoute() {
-  return (
-    <Empty
-      description="Ekran dashboardu powstaje w FE-001-F2. Pokaże aktywny projekt i run, liczby klatek per status oraz stan FFmpeg, Tesseractu, katalogu roboczego i GPU."
-      title="Dashboard nie jest jeszcze zbudowany"
-    />
-  );
-}
 
 function NewProfileRoute() {
   return (
     <Empty
       description="Formularz profilu powstaje w FE-001-F3: obraz referencyjny, rysowanie regionów HUD i klasy bazowe oraz per gra."
       title="Tworzenie profilu nie jest jeszcze zbudowane"
-    />
-  );
-}
-
-function MaterialsRoute() {
-  return (
-    <Empty
-      description="Ekran materiałów powstaje w FE-001-F2: import lokalnego pliku wideo, wybór profilu, interwał próbkowania i uruchomienie runu."
-      title="Materiały nie są jeszcze zbudowane"
     />
   );
 }
@@ -74,13 +58,13 @@ export const appRoutes: RouteObject[] = [
   {
     element: <AppShell />,
     children: [
-      { index: true, element: <DashboardRoute />, handle: { heading: "Dashboard" } },
+      { index: true, element: <DashboardScreen />, handle: { heading: "Dashboard" } },
       {
         path: "profiles/new",
         element: <NewProfileRoute />,
         handle: { heading: "Nowy profil gry" },
       },
-      { path: "materials", element: <MaterialsRoute />, handle: { heading: "Materiały" } },
+      { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },
       {
         path: "annotations/:runId",
         element: <AnnotationsRoute />,

@@ -16,9 +16,11 @@ export * from "./endpoints";
 export {
   describeApiError,
   describeErrorCode,
+  describeRunStage,
+  describeRunStatus,
   hasErrorCopy,
 } from "./messages";
-export type { ErrorCopy, ErrorPresentation } from "./messages";
+export type { ErrorCopy, ErrorPresentation, RunStatusCopy } from "./messages";
 
 export {
   invalidateFor,
@@ -34,11 +36,12 @@ export {
   RUN_POLL_INTERVAL_MS,
   TERMINAL_EXPORT_STATUSES,
   TERMINAL_RUN_STATUSES,
+  availableRunActions,
   exportPollInterval,
   isTerminalExportStatus,
   isTerminalRunStatus,
   runPollInterval,
 } from "./runStatus";
-export type { TerminalRunStatus } from "./runStatus";
+export type { RunAction, TerminalRunStatus } from "./runStatus";
 
 export type * from "./types";
