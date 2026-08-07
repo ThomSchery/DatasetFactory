@@ -558,3 +558,128 @@ Zero nowych zależności produkcyjnych poza tą jedną.
 | `Notice` nie da się zamknąć | `src/components/common/Notice/Notice.test.tsx` |
 | Predykat ostrzeżenia OCR | `src/api/ocrQuality.test.ts` |
 | Kontrast nowych par | `src/styles/contrast.test.ts` |
+
+# FE-001-F3 — Profil gry i rysowanie regionów HUD
+
+## Design Plan (przed kodem UI)
+
+Źródła przeczytane przed pisaniem kodu: `frontend/src/styles/tokens.css`
+w całości, `.agent/guidelines/new-component.md` w całości (twarde reguły,
+procedura §2.2, katalog §4 i definicje §5) oraz następujące moduły
+`_agent_oriented_guidelines_final_UI_UX_v3.md` przeczytane od nagłówka modułu
+do jego końca:
+
+| Moduł | Zakres ID | Po co w tym tickecie |
+|---|---|---|
+| Siatka i Odstępy | GRID-00…14, SPACING-01…13 | Siatka paneli formularza, szerokość pól, hit area regionu na overlayu (GRID-05), wysokość wierszy listy regionów, biała przestrzeń wokół obrazu (SPACING-11) |
+| Kolor | COLOR-01…10 | Obrys i wypełnienie regionu, stan zaznaczenia, odróżnienie regionu zapisanego od rysowanego |
+| Obramowanie | BORDER-01…09 | Obrys regionu jako jedyne obramowanie niosące znaczenie geometryczne; obrys pól formularza |
+| Szerokość Obramowania | BWIDTH-01…14 | BWIDTH-11 fokus regionu, BWIDTH-12 błąd pola, stała grubość obrysu niezależna od skali SVG |
+| Promień Obramowania | RADIUS-01…05 | RADIUS-05 dla pól; jawne `--radius-none` dla prostokąta regionu |
+| Nakładki | OVERLAY-01…07 | OVERLAY-06 (niewidoczny element a `pointer-events`) rządzi warstwą hit-targetu; brak modali także w F3 |
+| Cienie | SHADOW-01…05 | SHADOW-05: motyw ciemny, żaden element F3 nie ustawia `box-shadow` |
+| Typografia | TYPO-01…21, FONTSIZE-02…11, LHEIGHT-01…14, LSPACE-01…09, PARASPACE-01…06, CASING-01…03 | Etykiety pól, nazwy regionów, współrzędne monospace, `UPPERCASE` tylko w odznace i eyebrow |
+| Przezroczystość | OPACITY-01…02 | Wypełnienie regionu jako warstwa alpha, `--opacity-disabled` dla overlaya w trakcie mutacji |
+
+### Elementy UI powstające w F3
+
+Ekran **Nowy profil gry** (`frontend/src/features/profiles/**`):
+
+1. `ProfileCreateScreen` — kompozycja paneli, jedno query `GET /profiles/current`
+   (pełny zestaw `Loading` / `Empty` / `FatalError` / sukces) i jedna mutacja
+   `POST /profiles`. Sukces przekierowuje do importu materiału (CF-01.6).
+2. `ProfileIdentityPanel` — nazwa profilu (`TextField`) i bezwzględna ścieżka
+   obrazu referencyjnego (`TextField`, `--measure-copy`). Nie ma uploadu —
+   backend czyta plik w miejscu i sam kopiuje go do katalogu roboczego.
+3. `ReferencePreview` — `<img>` z `referenceAssetUrl(assetId)`; wymiary
+   naturalne odczytane z `naturalWidth`/`naturalHeight` po `load`. Stan
+   ładowania obrazu, stan błędu (`onError`) i stan „brak obrazu” są rozłączne.
+4. `RegionEditor` — `RegionOverlay` + pole nazwy regionu (`TextField`)
+   + `RegionList`. Rysowanie działa wyłącznie podczas tworzenia profilu.
+5. `RegionList` — wiersz na region: nazwa, współrzędne źródłowe, `Button`
+   „Zaznacz” i `Button` „Usuń”. To jest droga klawiaturowa, która nie wymaga
+   precyzyjnego trafienia w prostokąt (FE-08, Gate 3 UI).
+6. `CategoryEditor` — klasy bazowe jako zamknięty alfabet `-/0-9A-Z`
+   (`kind: "character"`) oraz klasy per gra jako tekst swobodny
+   (`kind: "game"`), obie z listą wybranych i usuwaniem.
+
+Nowy komponent wspólny (`frontend/src/components/common/`):
+
+7. `RegionOverlay` — prymityw overlaya SVG nad `<img>`: jeden `viewBox`
+   wyprowadzony z wymiarów naturalnych, prostokąty jako elementy DOM, wzorzec
+   ARIA `listbox`/`option` z roving tabindex, rysowanie prostokąta wskaźnikiem.
+   Powstaje w `common/`, bo FE-001-F4 buduje na nim overlay weryfikacji.
+
+### Checklista wymagana przez `new-component.md` §2.2
+
+- [x] **Layout/Siatka (GRID-01/02/05/08/09/10/11, SPACING-01/03/04/06/11/12)** —
+  ekran to `display: grid` z `gap: var(--size-lg)` między panelami, `--size-md`
+  między powiązanymi polami (GRID-02). Pole ścieżki ma `--measure-copy`,
+  a pole nazwy regionu `12ch` (GRID-10). Wiersz listy regionów ma
+  `min-height: var(--control-height-lg)` = 48 px (GRID-11 „standardowe”)
+  i `--size-sm` poziomego paddingu (SPACING-12). Obraz referencyjny dostaje
+  `--size-md` białej przestrzeni dookoła (SPACING-11) i nie jest rozciągany
+  ponad swoją szerokość naturalną (GRID-08). Hit target regionu: przezroczysta
+  obwódka o grubości `--region-hit-width`, liczonej tak, żeby pas trafienia
+  miał realną szerokość na ekranie niezależnie od skali `viewBox` — dlatego
+  `vector-effect: non-scaling-stroke`, a nie stała wartość w jednostkach
+  źródłowych, która przy obrazie 1920 px dałaby ułamek piksela CSS. Kontrolki
+  wiersza to `Button` `sm` = `--control-height-sm` = 32 px, czyli minimum
+  desktopu (GRID-05).
+- [x] **Typografia (TYPO-07/08, FONTSIZE-02/08/09/10, LHEIGHT-09/10, LSPACE-07,
+  CASING-02/03)** — trzy rozmiary: `--font-size-lg` tytuł panelu,
+  `--font-size-sm` etykiety, nazwy regionów i treść, `--font-size-xs` wyłącznie
+  odznaki, eyebrow i współrzędne. Współrzędne regionu w `--font-family-mono`,
+  bo to liczby czytane kolumnowo, a nie proza. Hierarchię nazwa/współrzędne
+  niesie waga i kolor, nie rozmiar (TYPO-07). `UPPERCASE` tylko w `StatusBadge`
+  i eyebrow, zawsze z `--letter-spacing-wide` (CASING-02, LSPACE-07).
+- [x] **Kolory (COLOR-02/07/08/09/10)** — obrys regionu
+  `--color-fill-brand-impeccable`; region zaznaczony dostaje wypełnienie
+  `--color-fill-brand-impeccable-soft` (alpha 0.12), niezaznaczony
+  `--color-surface-transparent`. Prostokąt rysowany w locie ma obrys
+  `--color-stroke-strong-default` i kreskowanie, więc „szkic” i „zapisany
+  region” różnią się kształtem linii, nie samym kolorem (COLOR-09: znaczenie
+  nie może zależeć wyłącznie od koloru). Wszystko z tokenów semantycznych
+  (COLOR-10); nowe pary tekst/tło dopisane do `src/styles/contrast.test.ts`
+  (COLOR-08).
+- [x] **Obramowania (BORDER-02/03/06/08, BWIDTH-03/06/11/12/13, RADIUS-01/05)** —
+  obrys regionu to `--border-width-emphasis` 2 px z
+  `vector-effect: non-scaling-stroke`, żeby grubość była 2 px CSS przy każdym
+  rozmiarze okna. Prostokąt regionu ma jawnie `--radius-none`: zaokrąglony róg
+  sugerowałby, że crop jest zaokrąglony, a nie jest — region to dokładny
+  prostokąt pikseli przekazywany do OpenCV. Pola formularza jak w F2:
+  1 px `--color-stroke-strong-default`, błąd 2 px
+  `--color-status-error-default` (BWIDTH-12), fokus przez globalną regułę
+  `:focus-visible` (BORDER-06), a na elemencie SVG dodatkowo własny
+  `stroke-dasharray`, bo `outline` na `<rect>` nie rysuje się przewidywalnie
+  we wszystkich silnikach.
+- [x] **Cienie (SHADOW-05)** — motyw ciemny, cień matematycznie niewidoczny.
+  Wysokość niesie jaśniejsza powierzchnia panelu. Żaden element F3 nie ustawia
+  `box-shadow`.
+- [x] **Interakcje (COLOR-07, OPACITY-02, OVERLAY-06, BWIDTH-11, GRID-05,
+  FE-06)** — region reaguje na hover, zaznaczenie i `:focus-visible`. Warstwa
+  hit-targetu jest niewidoczna, ale celowo interaktywna: OVERLAY-06 zabrania
+  niewidocznego *blokowania* kliknięć, więc ta warstwa ma
+  `pointer-events: stroke` (łapie tylko pas przy krawędzi), a tło SVG zostaje
+  wolne dla rysowania nowego regionu. W trakcie mutacji cały overlay dostaje
+  `--opacity-disabled` i przestaje przyjmować rysowanie, a przycisk zapisu ma
+  `loading` (FE-06: natywny `disabled` + spinner + `aria-busy`). Brak
+  optimistic update — profil pojawia się dopiero po potwierdzeniu przez
+  backend.
+- [x] **Komponenty (sekcje 4–5 `new-component.md`)** — katalog sprawdzony przed
+  kodowaniem. Użyte bez zmian: `Panel` (każdy blok ekranu), `TextField`
+  (nazwa profilu, ścieżka, nazwa regionu, nazwa klasy per gra), `SelectField`
+  (rodzaj klasy per gra), `Button` (każda akcja, w tym „Zaznacz”, „Usuń”,
+  „Dodaj”, „Utwórz profil”), `UiStates` (`Loading`, `Empty`, `InlineError`,
+  `FatalError`), `Notice` (trwałe ostrzeżenie o luce kontraktu), `StatusBadge`
+  (rodzaj klasy), `DataList` (metadane obrazu referencyjnego). Brakowało
+  powierzchni rysowania prostokątów nad obrazem — powstaje `RegionOverlay`
+  w `components/common/`, a katalog §4 i definicje §5 `new-component.md`
+  zostają uzupełnione po jego stworzeniu.
+
+### Copy i terminologia
+
+Teksty po polsku, w `Sentence case`. Terminy dziedzinowe bez tłumaczenia: HUD,
+OCR, region, profil, run. Komunikaty błędów backendu pochodzą wyłącznie
+z `api/messages.ts`; F3 dopisuje do tego słownika kody profilowe, których
+jeszcze nie było, zamiast pisać własne teksty w feature.
