@@ -1,4 +1,4 @@
-import type { Dashboard, Health, Material, PipelineRun } from "../api";
+import type { Dashboard, GameProfile, Health, Material, PipelineRun } from "../api";
 
 /*
  * Wire-shaped fixtures for the FE-001-F2 tests.
@@ -54,6 +54,26 @@ export function runFixture(overrides: Partial<PipelineRun> = {}): PipelineRun {
     experimental: true,
     quality_gate: "failed",
     warning: "Tesseract jest adapterem eksperymentalnym.",
+    ...overrides,
+  };
+}
+
+/**
+ * `GET /profiles/current` as `backend/app/api/profiles.py` renders it. The
+ * asset is an opaque UUID and the URL is built from it by the backend, so a
+ * test never spells a filesystem path.
+ */
+export function profileFixture(overrides: Partial<GameProfile> = {}): GameProfile {
+  return {
+    id: "profile-1",
+    name: "Gra testowa",
+    reference_asset_id: "asset-1",
+    reference_asset_url: "/api/v1/assets/references/asset-1",
+    source_width: 1920,
+    source_height: 1080,
+    version: 1,
+    regions: [{ id: "region-1", name: "Pasek zdrowia", x: 10, y: 20, width: 100, height: 40 }],
+    categories: [{ id: "category-1", name: "7", kind: "character" }],
     ...overrides,
   };
 }
