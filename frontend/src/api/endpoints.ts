@@ -6,6 +6,7 @@ import type {
   CreateMaterialRequest,
   CreateProfileRequest,
   CreateRunRequest,
+  Dashboard,
   Export,
   FrameDetail,
   FrameSummary,
@@ -35,6 +36,15 @@ import type {
 /** `GET /health` */
 export function getHealth(signal?: AbortSignal): Promise<Health> {
   return apiRequest<Health>("/health", { signal });
+}
+
+/**
+ * `GET /dashboard` — read-only; answers `200` with nulls on an empty install
+ * and never `503` (TK-008). Added here in FE-001-F2, after the backend router
+ * landed; FE-001-F1 deliberately shipped without it.
+ */
+export function getDashboard(signal?: AbortSignal): Promise<Dashboard> {
+  return apiRequest<Dashboard>("/dashboard", { signal });
 }
 
 // --- profiles -------------------------------------------------------------

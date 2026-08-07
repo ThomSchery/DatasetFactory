@@ -3,9 +3,9 @@
  * FastAPI response models in `backend/app/api/`. Every DTO on the backend is
  * `extra='forbid'`, so these are exhaustive rather than partial views.
  *
- * `GET /dashboard` is listed in TECH_PLAN §5 but no backend router implements
- * it. It is deliberately absent here instead of typed from prose — see
- * `docs/tickets/FE-001/log.md`.
+ * `GET /dashboard` was absent in FE-001-F1 because no backend router served it.
+ * TK-008 added `backend/app/api/dashboard.py`, so `Dashboard` below is typed
+ * from that router, not from the prose in TECH_PLAN §5.
  */
 
 /** TECH_PLAN §4 `RunStatus`. */
@@ -247,6 +247,61 @@ export type ReviewDecision = "accept" | "reject" | "reopen";
 export interface ReviewFrameRequest {
   decision: ReviewDecision;
   expected_version: number;
+}
+
+// --- dashboard ------------------------------------------------------------
+
+export interface DashboardProject {
+  id: string;
+  name: string;
+}
+
+/**
+ * A summary, not the whole profile: regions and categories stay on
+ * `GET /profiles/current`. `backend/app/api/dashboard.py` builds this shape.
+ */
+export interface DashboardProfile {
+  id: string;
+  name: string;
+  source_width: number;
+  source_height: number;
+  version: number;
+  reference_asset_url: string;
+}
+
+/**
+ * Rows that exist in `frames` for the active run, grouped by `review_status`.
+ * `total` is the sum of the three, so it counts frames the backend has
+ * created — it is *not* `PipelineRun.total_frames`, which is how many frames
+ * the run plans to produce (TECH_PLAN §5, TK-008).
+ */
+export interface FrameCounts {
+  pending: number;
+  accepted: number;
+  rejected: number;
+  total: number;
+}
+
+/**
+ * `GET /dashboard`. `project`, `profile` and `run` are independently nullable:
+ * an empty install answers `200` with three nulls, which is a valid initial
+ * state rather than an error.
+ *
+ * `run` is byte-identical to `GET /runs/{id}` and `system` to `GET /health`,
+ * both rendered by the same backend functions, so the OCR warning reaches this
+ * screen in exactly the form the run screen sees.
+ *
+ * The run carried here is "active" by the backend's state machine, where only
+ * `completed` is terminal — a `failed` or `cancelled` run is unfinished work
+ * and still appears, with its `error_code`. That is a different question from
+ * `TERMINAL_RUN_STATUSES`, which decides when polling stops.
+ */
+export interface Dashboard {
+  project: DashboardProject | null;
+  profile: DashboardProfile | null;
+  run: PipelineRun | null;
+  frame_counts: FrameCounts;
+  system: Health;
 }
 
 // --- exports --------------------------------------------------------------

@@ -15,6 +15,7 @@ import type { ListFramesQuery, ListMaterialsQuery } from "./types";
 
 export const queryKeys = {
   health: () => ["health"] as const,
+  dashboard: () => ["dashboard"] as const,
 
   profiles: () => ["profiles"] as const,
   currentProfile: () => ["profiles", "current"] as const,
@@ -55,10 +56,11 @@ function keysFor(event: MutationEvent): readonly (readonly unknown[])[] {
     case "material-imported":
       return [queryKeys.materials()];
     case "run-created":
-      return [queryKeys.runs()];
+      // The new run becomes the dashboard's active run straight away.
+      return [queryKeys.runs(), queryKeys.dashboard()];
     case "run-transitioned":
       // A transition moves the run's own version and can change its frames.
-      return [queryKeys.run(event.runId)];
+      return [queryKeys.run(event.runId), queryKeys.dashboard()];
     case "annotation-changed":
       // Annotating bumps the frame aggregate and the run's `review_revision`,
       // which the frame list reads back through its summaries.
@@ -66,9 +68,11 @@ function keysFor(event: MutationEvent): readonly (readonly unknown[])[] {
         ? [queryKeys.frame(event.frameId)]
         : [queryKeys.frame(event.frameId), queryKeys.run(event.runId)];
     case "frame-reviewed":
+      // A review decision moves the frame between the three `frame_counts`
+      // buckets the dashboard groups by `review_status`.
       return event.runId === undefined
-        ? [queryKeys.frame(event.frameId)]
-        : [queryKeys.frame(event.frameId), queryKeys.run(event.runId)];
+        ? [queryKeys.frame(event.frameId), queryKeys.dashboard()]
+        : [queryKeys.frame(event.frameId), queryKeys.run(event.runId), queryKeys.dashboard()];
     case "export-started":
       return [queryKeys.exports()];
     case "export-finished":

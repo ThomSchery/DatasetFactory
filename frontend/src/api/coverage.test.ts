@@ -14,11 +14,12 @@ const techPlan = readFileSync("../docs/TECH_PLAN.md", "utf8");
 
 /**
  * Every TECH_PLAN §5 endpoint the backend implements, and the exported function
- * that covers it. `GET /dashboard` is in §5 but no backend router serves it, so
- * it is deliberately absent — see `docs/tickets/FE-001/log.md`.
+ * that covers it. `GET /dashboard` joined the list in FE-001-F2: TK-008 added
+ * `backend/app/api/dashboard.py`, which is what FE-001-F1 was waiting for.
  */
 const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["GET /health", "getHealth"],
+  ["GET /dashboard", "getDashboard"],
   ["GET /assets/references/{asset_id}", "referenceAssetUrl"],
   ["POST /profiles", "createProfile"],
   ["GET /profiles/current", "getCurrentProfile"],
@@ -47,9 +48,12 @@ describe("TECH_PLAN §5 coverage", () => {
     expect(typeof endpoints[exportName]).toBe("function");
   });
 
-  it("exposes no client function for the unimplemented GET /dashboard", () => {
-    expect(techPlan).toContain("`GET /dashboard`");
-    expect(Object.keys(endpoints)).not.toContain("getDashboard");
+  it("leaves no §5 endpoint without a client function", () => {
+    const documented = [...techPlan.matchAll(/^\| `((?:GET|POST|PATCH|DELETE) [^`]+)`/gm)].map(
+      (match) => match[1],
+    );
+    const covered = new Set(IMPLEMENTED_ENDPOINTS.map(([endpoint]) => endpoint));
+    expect(documented.filter((endpoint) => !covered.has(endpoint))).toEqual([]);
   });
 });
 

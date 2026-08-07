@@ -27,11 +27,22 @@ describe("query keys", () => {
 });
 
 describe("invalidation mapping", () => {
-  it("invalidates the frame and its run after a review decision", () => {
+  it("invalidates the frame, its run and the dashboard after a review decision", () => {
+    // The decision moves the frame between the dashboard's `frame_counts`
+    // buckets, which group by `review_status`.
     expect(invalidationKeys({ type: "frame-reviewed", frameId: "f1", runId: "r1" })).toEqual([
       ["frames", "f1"],
       ["runs", "r1"],
+      ["dashboard"],
     ]);
+  });
+
+  it("invalidates the dashboard on every run transition", () => {
+    expect(invalidationKeys({ type: "run-transitioned", runId: "r1" })).toEqual([
+      ["runs", "r1"],
+      ["dashboard"],
+    ]);
+    expect(invalidationKeys({ type: "run-created" })).toEqual([["runs"], ["dashboard"]]);
   });
 
   it("invalidates only the frame when the run is unknown", () => {

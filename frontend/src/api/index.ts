@@ -27,6 +27,9 @@ export {
 } from "./queryKeys";
 export type { MutationEvent } from "./queryKeys";
 
+export { ocrProvenanceOf, requiresOcrWarning } from "./ocrQuality";
+export type { OcrProvenanceView } from "./ocrQuality";
+
 export {
   RUN_POLL_INTERVAL_MS,
   TERMINAL_EXPORT_STATUSES,
