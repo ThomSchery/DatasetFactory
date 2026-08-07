@@ -13,12 +13,13 @@
 | TK-005-F2-FIX1 | Rekoncyliacja przerwanych eksportów przy starcie | wykonany | TK-005-F2 | cold review High ✓; suite 235/235 |
 | TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | wykonany | TK-005 | część Gate 3 ✓ |
 | FE-001 | Pionowy interfejs Home — Impeccable | rozbity na F1–F5 | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
-| FE-001-F1 | Fundament: klient API, routing i powłoka | gotowy | FE-SETUP, TK-007 | część Gate 3 |
+| FE-001-F1 | Fundament: klient API, routing i powłoka | wykonany | FE-SETUP, TK-007 | część Gate 3 ✓ |
 | TK-008 | Endpoint dashboardu (F12) | wykonany | TK-005, TK-007 | odblokowuje FE-001-F2 |
-| FE-001-F2 | Materiały, uruchomienie runu i dashboard | gotowy | FE-001-F1, TK-008 | część Gate 3 |
+| FE-001-F2 | Materiały, uruchomienie runu i dashboard | wykonany | FE-001-F1, TK-008 | część Gate 3 ✓ |
 | FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
 | FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
-| FE-001-F5 | Eksport i bramki Gate 3 UI | gotowy | FE-001-F1…F4 | Gate 3 UI |
+| TK-009 | Zamknięcie runu po eksporcie | gotowy | TK-005, TK-008 | przed FE-001-F5 |
+| FE-001-F5 | Eksport i bramki Gate 3 UI | gotowy | FE-001-F1…F4, TK-009 | Gate 3 UI |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,
@@ -65,6 +66,12 @@ opisany w `§5`, a `run` i `system` to te same DTO co `GET /runs/{id}` i
 `GET /health`. FE-001-F2 dopisuje `getDashboard` do klienta i aktualizuje
 `src/api/coverage.test.ts`, gdzie endpoint figuruje jeszcze jako niezaimplementowany.
 
+`review_ready → completed` istniało w maszynie stanów, ale żaden endpoint tego
+przejścia nie wykonywał — status `completed` był nieosiągalny. Lukę wykrył
+wykonawca FE-001-F2. Realizuje ją `TK-009`: jawne zamknięcie runu po ukończonym
+eksporcie, wymagane przed FE-001-F5. Run w `review_ready` nie blokuje kolejnego,
+bo slot zwalnia się już przy wyjściu z `running`.
+
 FE-001 został rozbity na pięć sub-ticketów. Kolejność jest sekwencyjna mimo
 częściowej niezależności F2 i F3: katalog komponentów w `new-component.md` oraz
 `components/common/` są wspólnym, edytowalnym zasobem, więc równoległa praca
@@ -89,6 +96,8 @@ graph LR
   J --> G2
   G1 --> G3[FE-001-F3]
   G3 --> G4[FE-001-F4]
+  I --> K[TK-009 zamknięcie runu]
+  K --> G5
   G2 --> G5[FE-001-F5]
   G4 --> G5
   A --> H[TK-006]
