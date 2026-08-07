@@ -1,0 +1,65 @@
+.df-panel {
+  padding: var(--size-md);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-neutral-default);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  line-height: var(--line-height-standard);
+}
+
+.df-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--size-sm);
+}
+
+.df-panel__heading {
+  min-width: 0;
+}
+
+.df-panel__eyebrow,
+.df-panel__title,
+.df-panel__description {
+  margin: var(--size-none);
+}
+
+/* CASING-02 + LSPACE-07: the only uppercase text here, so it carries the
+   mandatory tracking, a small size and a strong weight. */
+.df-panel__eyebrow {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-tight);
+  text-transform: uppercase;
+}
+
+.df-panel__eyebrow + .df-panel__title {
+  margin-top: var(--size-xs);
+}
+
+.df-panel__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+  line-height: var(--line-height-tight);
+}
+
+/* PARASPACE-02: less space under the heading than above it, so the description
+   visibly belongs to the title rather than floating between blocks. */
+.df-panel__description {
+  max-width: var(--measure-copy);
+  margin-top: var(--size-xs);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+}
+
+.df-panel__aside {
+  flex: 0 0 auto;
+}
+
+.df-panel__body {
+  margin-top: var(--size-md);
+}

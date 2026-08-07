@@ -78,6 +78,10 @@ describe("Impeccable token contrast", () => {
     ["color-text-strong-default", "color-surface-neutral-raised"],
     ["color-status-success-default", "color-surface-neutral-raised"],
     ["color-status-warning-default", "color-surface-neutral-raised"],
+    // Added in FE-001-F2: `Notice` and the dashboard rows sit on
+    // surface-neutral-raised, and form controls sit on the page background.
+    ["color-text-weak-default", "color-surface-neutral-raised"],
+    ["color-status-error-default", "color-background-primary-default"],
   ])("keeps %s readable on %s", (foreground, background) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5);
   });
@@ -86,5 +90,14 @@ describe("Impeccable token contrast", () => {
     expect(
       contrast("color-stroke-strong-default", "color-background-primary-default"),
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("records why the error tone is not used as text on a raised surface", () => {
+    // FE-001-F2: `Notice --error` carries its tone through the accent border and
+    // the soft background instead of a tinted title, because this pair misses
+    // AA for small text. Pinned so a later refactor cannot quietly re-tint it.
+    expect(
+      contrast("color-status-error-default", "color-surface-neutral-raised"),
+    ).toBeLessThan(4.5);
   });
 });

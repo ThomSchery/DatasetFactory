@@ -1,0 +1,46 @@
+.df-data-list {
+  display: grid;
+  margin: var(--size-none);
+  font-family: var(--font-family-ui);
+  line-height: var(--line-height-standard);
+}
+
+/* SPACING-01: the gap between pairs is larger than the gap inside a pair, so
+   each label reads as belonging to the value under it. */
+.df-data-list--rows {
+  gap: var(--size-sm);
+}
+
+.df-data-list--columns {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--size-md);
+}
+
+.df-data-list__item {
+  display: grid;
+  gap: var(--size-none);
+  min-width: 0;
+}
+
+.df-data-list__label {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}
+
+/* TYPO-07: the value outranks its label by weight, not by a larger size. */
+.df-data-list__value {
+  margin: var(--size-none);
+  overflow-wrap: anywhere;
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.df-data-list__hint {
+  display: block;
+  max-width: var(--measure-copy);
+  margin-top: var(--size-xs);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}

@@ -73,6 +73,12 @@ frontend/src/components/
 | `UiStates` | `frontend/src/components/common/UiStates` | Loading, Empty, InlineError, FatalError i Progress zgodne z FE-06. |
 | `NavItem` | `frontend/src/components/common/NavItem` | Każdy link nawigacyjny; jedyny dozwolony sposób renderowania linku trasy. |
 | `StatusBadge` | `frontend/src/components/common/StatusBadge` | Odznaka stanu lub zakresu przy etykiecie: status runu, klatki, eksportu, znacznik „poza v1”. |
+| `Panel` | `frontend/src/components/common/Panel` | Każda tytułowana sekcja treści na ekranie; jedyny dozwolony kontener sekcji. |
+| `Notice` | `frontend/src/components/common/Notice` | Komunikat trwający tak długo, jak jego warunek — ostrzeżenie OCR, `409 active_run`. Nie dla wyniku pojedynczej akcji (to `InlineError`). |
+| `Field` | `frontend/src/components/common/Field` | Prymityw pod nową kontrolkę formularza: etykieta, opis, komunikat błędu i powiązania ARIA. Nie używać wprost, gdy wystarczy `TextField`/`SelectField`. |
+| `TextField` | `frontend/src/components/common/TextField` | Każde pole tekstowe lub liczbowe; jedyny dozwolony `<input>` w aplikacji. |
+| `SelectField` | `frontend/src/components/common/SelectField` | Każda lista wyboru; jedyny dozwolony `<select>` w aplikacji. |
+| `DataList` | `frontend/src/components/common/DataList` | Pary etykieta/wartość: metadane projektu, profilu, runu, liczby klatek. |
 
 ## 5. DEFINICJE KOMPONENTÓW PROJEKTU
 
@@ -141,4 +147,69 @@ Typografia: `--font-size-xs`, `--font-weight-semibold`,
 Tonów statusu nie wolno używać do znaczeń niestatusowych — „poza v1” to
 `muted`, nie `warning`. `srLabel` dodaje prefiks czytany przez czytnik ekranu,
 żeby znaczenie nie zależało wyłącznie od koloru.
+
+### Panel
+
+Sekcja `<section>` etykietowana własnym nagłówkiem `<h2>`. Props: `title`,
+`children`, `description?`, `eyebrow?`, `aside?` (np. `StatusBadge` przy
+tytule). Panele rozdziela biała przestrzeń (BORDER-02), a nie obramowanie;
+pojedynczy obrys `--color-stroke-weak-default` istnieje tylko po to, żeby panel
+czytał się jako jedna powierzchnia, i jest ten sam co w `df-ui-state--panel`.
+
+| Element | Typografia | Kolor |
+|---|---|---|
+| `eyebrow` | `--font-size-xs`, `semibold`, `--letter-spacing-wide`, `UPPERCASE` | `--color-text-weak-default` |
+| `title` (`h2`) | `--font-size-lg`, `semibold`, `--line-height-tight` | `--color-text-strong-default` |
+| `description` | `--font-size-sm`, `--measure-copy` | `--color-text-weak-default` |
+
+Padding `--size-md`, promień `--radius-lg`, tło
+`--color-surface-neutral-default`. Odstęp pod nagłówkiem `--size-md` jest
+mniejszy niż odstęp między panelami `--size-lg` (SPACING-01).
+
+### Notice
+
+Trwały, nieinteraktywny komunikat. Props: `title`, `children`, `tone?`.
+`role="status"`, etykietowany własnym tytułem. NIE MA kontrolki zamykania ani
+stanu wewnętrznego — komponent, który potrafi się ukryć, uniemożliwiłby
+zagwarantowanie stałego ostrzeżenia o `experimental`/`quality_gate`.
+Do wyniku pojedynczej akcji służy `InlineError` z `UiStates`.
+
+| Tone | Akcent `border-inline-start` 2 px | Tytuł | Tło |
+|---|---|---|---|
+| `info` (domyślny) | `--color-fill-brand-impeccable` | `--color-text-strong-default` | `--color-surface-neutral-raised` |
+| `warning` | `--color-status-warning-default` | `--color-status-warning-default` | `--color-surface-neutral-raised` |
+| `error` | `--color-status-error-default` | `--color-status-error-default` | `--color-status-error-soft` |
+
+### Field, TextField, SelectField
+
+`Field` niesie chrome wspólny dla kontrolek: `label`, `description?`, `error?`,
+`width?` oraz render prop dostający `id`, `className`, `aria-describedby`
+i `aria-invalid`. `TextField` i `SelectField` komponują go i dokładają
+odpowiednio `<input>` i `<select>`; `SelectField` przyjmuje `options`
+i `placeholder?`.
+
+`error` jest jednocześnie flagą niepoprawności — nie ma osobnego `invalid`,
+więc nie da się pokazać czerwonego obramowania bez komunikatu ani komunikatu,
+którego kontrolka nie opisuje przez `aria-describedby`.
+
+| Stan | Obramowanie | Reszta |
+|---|---|---|
+| default | `--border-width-default` `--color-stroke-strong-default` | wysokość `--control-height-md`, promień `--radius-md` (RADIUS-05), tło `--color-background-primary-default` |
+| hover | `--color-fill-brand-impeccable` | bez zmiany szerokości |
+| focus-visible | globalny `--focus-ring-width` w kolorze marki | bez zmiany |
+| error (`aria-invalid`) | `--color-status-error-default` + `outline` 1 px do wewnątrz (BWIDTH-12) | komunikat `role="alert"`, `--color-status-error-default` |
+| disabled | bez zmiany | `--opacity-disabled` |
+
+Szerokości: `full` = `--measure-copy` (ścieżka pliku), `short` = `12ch`
+(interwał w ms) — GRID-10. Slot komunikatu błędu ma stałą wysokość, więc
+pojawienie się błędu nie przesuwa kolejnych pól (SPACING-04).
+
+### DataList
+
+`<dl>` z parami etykieta/wartość. Props: `items` (`label`, `value`, `hint?`),
+`layout?` (`rows` domyślnie, `columns` dla siatki `auto-fit`). Etykieta
+`--font-size-xs` `--color-text-weak-default`, wartość `--font-size-sm`
+`semibold` `--color-text-strong-default` — hierarchię niesie waga, nie rozmiar
+(TYPO-07). `hint` służy do doprecyzowania znaczenia liczby (np. że `total`
+liczy klatki istniejące, a nie planowane).
 

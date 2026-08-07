@@ -1,0 +1,44 @@
+/* BORDER-08: a single-sided 2px accent in the semantic colour carries the tone
+   without boxing the message in on all four edges. */
+.df-notice {
+  padding: var(--size-sm);
+  border-inline-start: var(--border-width-emphasis) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-notice__title {
+  margin: var(--size-none);
+  font-weight: var(--font-weight-semibold);
+}
+
+.df-notice__body {
+  max-width: var(--measure-copy);
+  margin-top: var(--size-xs);
+  color: var(--color-text-weak-default);
+}
+
+.df-notice--info {
+  border-inline-start-color: var(--color-fill-brand-impeccable);
+}
+
+.df-notice--warning {
+  border-inline-start-color: var(--color-status-warning-default);
+}
+
+.df-notice--warning .df-notice__title {
+  color: var(--color-status-warning-default);
+}
+
+/* COLOR-08: `--color-status-error-default` only reaches 4.16:1 on
+   `--color-surface-neutral-raised`, so the error tone is carried by the 2px
+   accent and the soft background, not by tinting the title. This is the same
+   composition `df-ui-state--inline-error` already uses. */
+.df-notice--error {
+  border-inline-start-color: var(--color-status-error-default);
+  background: var(--color-status-error-soft);
+}
