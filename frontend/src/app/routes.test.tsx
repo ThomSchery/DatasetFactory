@@ -8,12 +8,11 @@ import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
 
 /*
  * FE-04 fixes the route set at five. Dashboard and Materiały render their real
- * screens since FE-001-F2; the other three still carry an explicit empty state
- * naming the ticket that builds them.
+ * screens since FE-001-F2 and Nowy profil gry since FE-001-F3; the other two
+ * still carry an explicit empty state naming the ticket that builds them.
  */
 
 const UNBUILT_ROUTES: readonly [string, string][] = [
-  ["/profiles/new", "Nowy profil gry"],
   ["/annotations/run-42", "Anotacje"],
   ["/exports", "Eksporty"],
 ];
@@ -60,6 +59,15 @@ describe("the five FE-04 routes", () => {
     expect(
       await screen.findByRole("region", { name: "Aktywny run" }, { timeout: 3000 }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+  });
+
+  it("renders the profile creation screen built in FE-001-F3", () => {
+    renderApp(["/profiles/new"]);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nowy profil gry");
+    expect(screen.getByRole("region", { name: "Obraz referencyjny" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Regiony HUD" })).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
   });
 

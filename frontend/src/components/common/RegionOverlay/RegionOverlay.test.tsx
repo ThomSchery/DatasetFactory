@@ -101,7 +101,7 @@ function renderOverlay(props: HarnessProps = {}) {
   return result;
 }
 
-function surfaceElement(): Element {
+function surfaceElement(): HTMLElement {
   return screen.getByRole("listbox", { name: "Regiony HUD" });
 }
 

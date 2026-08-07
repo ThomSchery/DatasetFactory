@@ -1,0 +1,137 @@
+/*
+ * SPACING-01: panels are separated by more space than they contain, so the
+ * screen reads as three steps rather than one wall of controls.
+ */
+
+.df-profiles {
+  display: grid;
+  gap: var(--size-lg);
+}
+
+.df-profiles__editor {
+  display: grid;
+  gap: var(--size-md);
+}
+
+.df-profiles__hint {
+  margin: 0;
+  max-width: var(--measure-copy);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-profiles__hint kbd {
+  padding: 0 var(--size-xs);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+.df-profiles__rows {
+  display: grid;
+  gap: var(--size-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* GRID-11 „standardowe” 48 px, SPACING-12 poziomy padding 16 px. */
+.df-profiles__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-sm);
+  min-height: var(--control-height-lg);
+  padding: var(--size-xs) var(--size-sm);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-neutral-raised);
+}
+
+.df-profiles__row[data-selected] {
+  outline: var(--border-width-emphasis) solid var(--color-fill-brand-impeccable);
+  outline-offset: calc(-1 * var(--border-width-emphasis));
+}
+
+.df-profiles__row-text {
+  display: grid;
+  gap: var(--size-none);
+}
+
+/* TYPO-07: name and geometry differ by weight and colour, not by size. */
+.df-profiles__row-name {
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-standard);
+}
+
+.df-profiles__row-meta {
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-profiles__row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.df-profiles__categories {
+  display: grid;
+  gap: var(--size-md);
+}
+
+.df-profiles__fieldset {
+  display: grid;
+  gap: var(--size-xs);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.df-profiles__legend {
+  padding: 0;
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-standard);
+}
+
+.df-profiles__alphabet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+}
+
+.df-profiles__game-classes {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-sm);
+}
+
+.df-profiles__actions {
+  display: flex;
+  gap: var(--size-sm);
+}
+
+.df-profiles__feedback {
+  display: grid;
+  gap: var(--size-xs);
+}
+
+.df-profiles__code {
+  margin: 0;
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-profiles__code code {
+  font-family: var(--font-family-mono);
+}

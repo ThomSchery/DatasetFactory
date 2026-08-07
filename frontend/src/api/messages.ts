@@ -108,6 +108,70 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Format obrazu referencyjnego nie jest wspierany.",
     action: "Wskaż obraz w obsługiwanym formacie.",
   },
+  // Added in FE-001-F3. `POST /profiles` answers with every code
+  // `DatasetDefinitionEngine.validate_profile`, `ReferenceImageProbe` and
+  // `ProfileUseCases.create_profile` can raise, and each one names a different
+  // repair — folding them into the generic fallback would hide which.
+  reference_path_not_absolute: {
+    message: "Ścieżka do obrazu referencyjnego musi być bezwzględna.",
+    action: "Podaj pełną ścieżkę lokalną do pliku obrazu.",
+  },
+  invalid_reference_image: {
+    message: "Wskazany plik nie jest poprawnym obrazem.",
+    action: "Wskaż nieuszkodzony plik obrazu klatki referencyjnej.",
+  },
+  reference_image_unreadable: {
+    message: "Nie udało się odczytać obrazu referencyjnego z dysku.",
+    action: "Sprawdź uprawnienia do pliku i spróbuj ponownie.",
+  },
+  invalid_source_dimensions: {
+    message: "Obraz referencyjny ma niepoprawne wymiary.",
+    action: "Wskaż obraz o dodatniej szerokości i wysokości.",
+  },
+  profile_name_required: {
+    message: "Profil musi mieć nazwę.",
+    action: "Podaj nazwę profilu.",
+  },
+  profile_name_too_long: {
+    message: "Nazwa profilu jest za długa.",
+    action: "Skróć nazwę do 200 znaków.",
+  },
+  invalid_region_name: {
+    message: "Nazwa regionu jest pusta albo za długa.",
+    action: "Nazwij region tekstem o długości od 1 do 200 znaków.",
+  },
+  invalid_region_bbox: {
+    message: "Region ma niepoprawną geometrię.",
+    action: "Region musi mieć dodatnią szerokość i wysokość oraz nieujemny początek.",
+  },
+  duplicate_region_name: {
+    message: "Dwa regiony mają tę samą nazwę.",
+    action: "Nazwy regionów muszą być unikalne w profilu.",
+  },
+  invalid_category_name: {
+    message: "Nazwa klasy jest pusta albo za długa.",
+    action: "Nazwij klasę tekstem o długości od 1 do 200 znaków.",
+  },
+  invalid_category_kind: {
+    message: "Rodzaj klasy nie jest rozpoznawany.",
+    action: "Wybierz klasę bazową albo klasę specyficzną dla gry.",
+  },
+  invalid_character_category: {
+    message: "Klasa bazowa nie należy do alfabetu OCR.",
+    action: "Klasa bazowa to jeden znak ze zbioru A–Z, 0–9, „-” i „/”.",
+  },
+  duplicate_category_name: {
+    message: "Dwie klasy mają tę samą nazwę.",
+    action: "Nazwy klas muszą być unikalne w profilu.",
+  },
+  reference_asset_copy_failed: {
+    message: "Nie udało się skopiować obrazu referencyjnego do katalogu roboczego.",
+    action: "Sprawdź miejsce na dysku i uprawnienia katalogu roboczego, po czym powtórz zapis.",
+  },
+  profile_persistence_failed: {
+    message: "Zapis profilu nie powiódł się i nic nie zostało utrwalone.",
+    action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
+  },
 
   // --- materials ---
   unsupported_media: {

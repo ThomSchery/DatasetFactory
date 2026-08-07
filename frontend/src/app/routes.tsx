@@ -3,25 +3,18 @@ import { createBrowserRouter, useParams, type RouteObject } from "react-router";
 import { Empty } from "../components/common/UiStates";
 import { DashboardScreen } from "../features/dashboard";
 import { MaterialsScreen } from "../features/materials";
+import { ProfileCreateScreen } from "../features/profiles";
 import { AppShell } from "./AppShell";
 
 /*
  * Exactly the five FE-04 routes plus a catch-all for unknown paths. The
- * dashboard and materials screens landed in FE-001-F2; the remaining three
- * still render an explicit empty state naming the ticket that builds them.
+ * dashboard and materials screens landed in FE-001-F2 and profile creation in
+ * FE-001-F3; the remaining two still render an explicit empty state naming the
+ * ticket that builds them.
  *
  * `handle.heading` feeds the shell's `<h1>` so the heading and the route stay
  * defined in one place.
  */
-
-function NewProfileRoute() {
-  return (
-    <Empty
-      description="Formularz profilu powstaje w FE-001-F3: obraz referencyjny, rysowanie regionów HUD i klasy bazowe oraz per gra."
-      title="Tworzenie profilu nie jest jeszcze zbudowane"
-    />
-  );
-}
 
 function AnnotationsRoute() {
   // `runId` comes from the URL and nowhere else — the backend stays the only
@@ -61,7 +54,7 @@ export const appRoutes: RouteObject[] = [
       { index: true, element: <DashboardScreen />, handle: { heading: "Dashboard" } },
       {
         path: "profiles/new",
-        element: <NewProfileRoute />,
+        element: <ProfileCreateScreen />,
         handle: { heading: "Nowy profil gry" },
       },
       { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },

@@ -92,6 +92,18 @@ describe("Impeccable token contrast", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
+  it("keeps the region outline visible as a graphical object", () => {
+    // FE-001-F3: a region outline carries meaning but is not text, so the bar
+    // is 3:1 — against the image backdrop it is drawn over and against the
+    // panel the editor sits on.
+    expect(
+      contrast("color-fill-brand-impeccable", "color-background-primary-default"),
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      contrast("color-fill-brand-impeccable", "color-surface-neutral-default"),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it("records why the error tone is not used as text on a raised surface", () => {
     // FE-001-F2: `Notice --error` carries its tone through the accent border and
     // the soft background instead of a tinted title, because this pair misses
