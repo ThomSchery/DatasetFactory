@@ -683,3 +683,194 @@ Teksty po polsku, w `Sentence case`. Terminy dziedzinowe bez tłumaczenia: HUD,
 OCR, region, profil, run. Komunikaty błędów backendu pochodzą wyłącznie
 z `api/messages.ts`; F3 dopisuje do tego słownika kody profilowe, których
 jeszcze nie było, zamiast pisać własne teksty w feature.
+
+## Decyzje i interpretacje
+
+### Prymityw overlaya: jeden `viewBox`, zero skalowania w JS
+
+`RegionOverlay` renderuje `<svg viewBox="0 0 naturalWidth naturalHeight">`
+i `preserveAspectRatio="none"` nad `<img>` rozciągniętym na to samo pudełko.
+Skutek: prostokąt ma w DOM dokładnie te współrzędne, które pojadą do API —
+`<rect x="480" y="270" width="960" height="270">` — a zmiana rozmiaru okna
+zmienia wyłącznie pudełko CSS. Nie ma drugiej ścieżki skalowania, którą
+trzeba by trzymać w zgodzie z pierwszą.
+
+`preserveAspectRatio="none"` zamiast domyślnego `xMidYMid meet` jest wyborem
+świadomym: przy `meet` przeglądarka może dołożyć letterboxing, którego czysta
+funkcja `clientPointToSource` nie zna, więc render i arytmetyka mogłyby się
+rozjechać o ułamek piksela. Element i tak jest układany w proporcjach obrazu,
+więc `none` niczego nie zniekształca, a czyni odwzorowanie dokładnie liniowym.
+
+Jedyne przejście między układami współrzędnych to `clientPointToSource`
+w `geometry.ts` — moduł bez Reacta i bez DOM, testowany wprost. Done Criterion
+„prostokąt zachowuje współrzędne po zmianie rozmiaru” jest przypięty dwa razy:
+arytmetycznie (`geometry.test.ts` — ten sam punkt przy pięciu szerokościach
+wyświetlania) i na DOM (`RegionOverlay.test.tsx` — atrybuty `<rect>` po
+przełożeniu pudełka z 1440 px na 640 px).
+
+### Wzorzec ARIA `listbox`, nie `<button>` na prostokąt
+
+Prostokąty to `<g role="option">` w `<svg role="listbox">` z roving tabindex:
+zaznaczony element ma `tabIndex=0`, reszta `-1`. Alternatywą było uczynienie
+każdego prostokąta osobnym stopem Tab — odrzucona, bo F4 rysuje boksy per znak
+i kilkadziesiąt stopów Tab na klatkę zamieniłoby overlay w pułapkę
+klawiaturową. `listbox` daje jeden stop wejściowy, strzałki chodzą po zbiorze,
+`Home`/`End` skaczą na końce, `Delete`/`Backspace` usuwa.
+
+### Hit target: pas obrysu plus wypełnienie, a nie samo wypełnienie
+
+Region łapie kliknięcie całą powierzchnią oraz przezroczystym pasem
+`--size-xs` wokół krawędzi, z `vector-effect: non-scaling-stroke`, więc pas ma
+tę samą szerokość w pikselach CSS niezależnie od skali `viewBox`. Bez tego pas
+liczony w jednostkach źródłowych miałby przy obrazie 1920 px ułamek piksela na
+ekranie. Dla boksów F4 (kilkanaście pikseli) sąsiadujące pasy będą się
+nakładać — dlatego droga listy tekstowej z `Button`ami nie jest dodatkiem,
+tylko drugą pełnoprawną ścieżką do każdej operacji.
+
+### Rysowanie zaczyna się wyłącznie na gołym tle SVG
+
+`onPointerDown` sprawdza `event.target !== surface` i wtedy nie zaczyna
+rysowania. Dzięki temu prostokąty pozostają klikalne, a przeciągnięcie zaczęte
+poza istniejącym regionem działa wszędzie. Cena: nowego regionu nie da się
+zacząć rysować od punktu leżącego wewnątrz innego regionu — trzeba zacząć obok.
+Uznane za akceptowalne, bo regiony HUD rzadko się zagnieżdżają, a alternatywa
+(modalne „narzędzie rysowania”) dokłada stan, którego v1 nie potrzebuje.
+
+### Klasy bazowe to zamknięty alfabet, nie pole tekstowe
+
+`DatasetDefinitionEngine._validate_category` odrzuca `kind="character"`
+o nazwie spoza `_CHARACTER_CATEGORIES` (`-`, `/`, `0-9`, `A-Z`) kodem
+`invalid_character_category`. Pole tekstowe pozwoliłoby wpisać nazwę, którą
+backend może wyłącznie odrzucić, więc klasy bazowe są 38 przełącznikami
+`Button` z `aria-pressed`. Klasy per gra zostają tekstem swobodnym, bo backend
+ogranicza je tylko długością i unikalnością.
+
+### Walidacja granic regionu należy do backendu, nie do Zod
+
+Schemat Zod pilnuje nazwy, ścieżki, liczności, unikalności i dodatniej
+geometrii. Nie sprawdza, czy region mieści się w obrazie, bo overlay już
+przycina każdy narysowany prostokąt do wymiarów źródłowych — jedyną drogą do
+regionu poza obrazem jest rozjazd wymiarów obrazu, który wykrywa backend
+i zgłasza jako `region_out_of_bounds`. Funkcja `fitsInSource` istnieje
+w `geometry.ts` i jest przetestowana, ale nie jest wpięta w schemat: to
+odpowiednik reguły backendu dla F4, nie druga, cichsza wersja kontraktu.
+
+### Słownik błędów uzupełniony o kody profilowe
+
+`api/messages.ts` miał `profile_name_exists`, `regions_required`,
+`categories_required`, `region_out_of_bounds` i `unsupported_reference_image`.
+`POST /profiles` potrafi zwrócić jeszcze czternaście innych kodów
+(`reference_path_not_absolute`, `invalid_reference_image`,
+`reference_image_unreadable`, `invalid_source_dimensions`,
+`profile_name_required`, `profile_name_too_long`, `invalid_region_name`,
+`invalid_region_bbox`, `duplicate_region_name`, `invalid_category_name`,
+`invalid_category_kind`, `invalid_character_category`,
+`duplicate_category_name`, `reference_asset_copy_failed`,
+`profile_persistence_failed`). Każdy nazywa inną naprawę, więc wpadanie
+w generyczny fallback ukrywałoby, co użytkownik ma zrobić. Dopisane do
+istniejącego słownika, a nie do feature — zasada „żaden ekran nie pisze
+własnej wersji tekstu dla kodu backendu” zostaje nienaruszona.
+
+### Przechwytywanie wskaźnika jako ulepszenie, nie wymóg
+
+`setPointerCapture` trzyma przeciągnięcie przy życiu poza powierzchnią, ale
+nie każdy silnik i nie każdy wskaźnik je udźwignie (jsdom w testach też nie).
+Wywołanie jest opakowane w `try`/`catch`: odrzucone przechwycenie nie jest
+awarią, bo prostokąt i tak powstaje z tych zdarzeń, które dotarły.
+
+## Obserwacje do kontraktu
+
+1. **CF-01 zakłada etap, którego §5 nie ma — i to blokuje pierwszy profil.**
+   CF-01 sekwencjonuje: krok 2 „API waliduje obraz i kopiuje go do katalogu
+   projektu”, krok 3 „UI pobiera obraz przez opaque asset URL i pozwala
+   narysować regiony”, krok 5 „backend zapisuje profil”. To wymaga endpointu,
+   który zestage'uje obraz i odda `asset_id` **przed** zapisem profilu.
+   TECH_PLAN §5 takiego endpointu nie ma, a implementacja jest z §5 spójna:
+   `POST /profiles` jest atomowy i wymaga `regions` z `min_length=1` już
+   w żądaniu (`CreateProfileRequest`), stage'uje obraz wewnętrznie i wyrzuca go
+   przez `staged_asset.discard()`, jeśli zapis się nie powiedzie.
+
+   Wynika z tego zamknięte koło: żeby narysować regiony, trzeba widzieć obraz;
+   żeby zobaczyć obraz, trzeba mieć `asset_id`; żeby mieć `asset_id`, trzeba
+   zapisać profil; żeby zapisać profil, trzeba mieć regiony. Dla **pierwszego**
+   profilu w instalacji koła nie da się przerwać z poziomu UI.
+
+   To wygląda na lukę w dokumencie, nie w kodzie. Najmniejsza naprawa: endpoint
+   w rodzaju `POST /profiles/reference {reference_image_path}` →
+   `{asset_id, width, height}`, który robi dokładnie to, co dzisiaj robią
+   wewnętrznie `ReferenceAssetStore.stage` i `ReferenceImageProbe.inspect`,
+   a `POST /profiles` przyjmowałby wtedy `asset_id` zamiast ścieżki.
+   Do rozstrzygnięcia przed domknięciem Gate 3 — bez tego CF-01 nie przechodzi
+   end-to-end.
+
+2. **Podgląd w F3 rysuje na obrazie bieżącego profilu i mówi o tym wprost.**
+   Konsekwencja punktu 1. Jedynym źródłem `asset_id` w kontrakcie jest
+   `GET /profiles/current` (wymieniony w sekcji Kontrakt ticketu), więc ekran
+   ładuje ten obraz i pokazuje trwały `Notice`, że podgląd pochodzi z profilu
+   „X” o wymiarach W × H, a nie z pliku wpisanego w polu ścieżki. Gdy
+   `GET /profiles/current` zwraca `null`, panel regionów pokazuje `Empty`
+   nazywający brak, zamiast udawać działające płótno. To działa dla realnego
+   przepływu v1 „popraw profil = utwórz nowy” (edycja profilu to F02, poza v1)
+   i nie działa dla pierwszego profilu — patrz punkt 1.
+
+3. **`region_out_of_bounds` jest jedynym sygnałem rozjazdu rozdzielczości
+   przy tworzeniu profilu.** Jeśli plik z pola ścieżki ma inne wymiary niż
+   obraz, na którym rysowano, backend odrzuci regiony dopiero przy zapisie.
+   Nie ma odpowiednika `profile_resolution_mismatch` (ten dotyczy materiału
+   wobec profilu). Ekran ostrzega o tym w `Notice` z góry, ale werdykt i tak
+   należy do backendu.
+
+4. **`_CHARACTER_CATEGORIES` nie jest udokumentowany w §5 ani w CONTEXT.**
+   Zamknięty alfabet klas bazowych żyje wyłącznie w
+   `backend/app/engines/definition/engine.py`. UI musi go znać, żeby nie
+   oferować wyboru, który backend odrzuci, więc `schemas.ts` trzyma jego kopię
+   z testem przypinającym zawartość. Warto go podnieść do TECH_PLAN §4 obok
+   `CategoryKind`.
+
+## Wykonanie
+
+Commity: `df8831d` (Design Plan), `92f80c1` (`RegionOverlay` + katalog),
+`ca0ed56` (ekran profilu), `0d16fa6` (testy przepływu), `f22bc85` (testy
+schematu) i ten commit (log).
+
+### Bramki
+
+| Bramka | Komenda | Wynik |
+|---|---|---|
+| Testy | `npm run test` | 26 plików, 339 testów, 0 nieudanych |
+| Typy | `npm run typecheck` | 0 błędów |
+| Build | `npm run build` | zielony, `tsc --noEmit` + `vite build` |
+| Audit | `npm audit` | info/low/moderate/high/critical = 0 (175 zależności) |
+| Architektura | `src/test/architecture.test.ts` | 77 testów, 0 nieudanych |
+
+Wzrost wobec F2: 22 → 26 plików testowych, 251 → 339 testów, 66 → 77 testów
+architektury (nowe pliki produkcyjne dochodzą do reguł `it.each`).
+
+### Pakiety
+
+Zero nowych zależności. `RegionOverlay` jest zbudowany na natywnym SVG —
+FE-001 §Pakiety zabrania frameworka canvasowego bez udowodnionej potrzeby,
+a prostokąty w jednym `viewBox` takiej potrzeby nie tworzą.
+
+### Testy pokrywające Done Criteria
+
+| Kryterium | Test |
+|---|---|
+| Design Plan dla każdego elementu UI | sekcja „Design Plan” wyżej; katalog `new-component.md` §4–§5 uzupełniony o `RegionOverlay` |
+| Transformacja współrzędnych przy zmianie rozmiaru | `RegionOverlay/geometry.test.ts` — ten sam punkt przy pięciu szerokościach wyświetlania; `RegionOverlay/RegionOverlay.test.tsx` — atrybuty `<rect>` niezmienione po przełożeniu pudełka 1440 → 640 px oraz identyczny wynik tego samego gestu na dwóch powierzchniach o różnych rozmiarach i różnych offsetach |
+| `viewBox` z wymiarów naturalnych, nie wyświetlanych | `geometry.test.ts`, `RegionOverlay.test.tsx`, `profileFlow.test.tsx` |
+| Hit target: wskazanie i usunięcie klawiaturą | `RegionOverlay.test.tsx` — Tab, strzałki, `Home`/`End`, `Enter`, `Delete`, `Backspace`, jeden stop tabulacji przy wielu prostokątach; `profileFlow.test.tsx` — ta sama operacja przez listę tekstową |
+| Overlay to elementy DOM | wszystkie testy operują na `role="option"`, żaden nie porównuje pikseli |
+| `409 profile_name_exists` jako komunikat | `profileFlow.test.tsx` |
+| `404 source_missing` jako komunikat | `profileFlow.test.tsx` |
+| `400 region_out_of_bounds` bez reinterpretacji | `profileFlow.test.tsx` |
+| Loading / empty / error / success dla query | `profileFlow.test.tsx` — cztery osobne przypadki na `GET /profiles/current` |
+| Mutacja blokuje kontrolkę i pokazuje spinner | `profileFlow.test.tsx` — żądanie trzymane otwarte, `aria-busy` + `disabled`, zwolnienie kontrolki po odpowiedzi |
+| Brak optimistic update | `src/test/architecture.test.ts` (`onMutate`, `setQueryData`) |
+| Walidacja inline przed żądaniem | `profileFlow.test.tsx` — pusty formularz i ścieżka względna nie wychodzą z przeglądarki |
+| Schemat mirroruje regułę backendu | `features/profiles/schemas.test.ts` — nazwa, ścieżka, liczności, unikalność bez względu na wielkość liter, dodatnia geometria, alfabet OCR |
+| Obraz wyłącznie przez opaque asset URL | `profileFlow.test.tsx` — `src` to `/api/v1/assets/references/asset-1`; żaden test nie zna ścieżki pliku |
+| Ciało żądania w pikselach źródłowych | `profileFlow.test.tsx` — pełna asercja `POST /profiles` |
+| Sukces prowadzi do importu materiału (CF-01.6) | `profileFlow.test.tsx` |
+| Trasa `/profiles/new` renderuje ekran | `src/app/routes.test.tsx` |
+| Kontrast obrysu regionu | `src/styles/contrast.test.ts` |
