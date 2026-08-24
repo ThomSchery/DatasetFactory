@@ -80,6 +80,7 @@ def build_composition(
     resource_probe: ResourceProbe | None = None,
     media_probe: MaterialProbe | None = None,
     disk_space: DiskSpaceReader | None = None,
+    ocr_engine: OcrEngine | None = None,
 ) -> CompositionRoot:
     """Build the local application graph after filesystem and schema initialization."""
     workspace = Workspace(settings.workspace_dir, settings.cache_dir)
@@ -154,7 +155,7 @@ def build_composition(
         settings.frame_extraction_timeout_seconds,
         ProcessTreeRunner(),
     )
-    ocr_engine = TesseractOcrEngine(
+    active_ocr_engine = ocr_engine or TesseractOcrEngine(
         workspace,
         TesseractRuntimeIdentity(
             executable=settings.tesseract_path,
@@ -187,7 +188,7 @@ def build_composition(
         checkpoints,
         workflow_recovery,
         media_processing,
-        ocr_engine,
+        active_ocr_engine,
         DatasetDefinitionEngine(),
         logger,
     )
@@ -196,7 +197,7 @@ def build_composition(
         frames,
         workflow_recovery,
         workflow_worker,
-        ocr_engine,
+        active_ocr_engine,
     )
     recovery_result = dataset_workflow.recover_startup()
     logger.info(
@@ -214,7 +215,7 @@ def build_composition(
         project_store,
         status,
         media_processing,
-        ocr_engine,
+        active_ocr_engine,
         profile_use_cases,
         material_use_cases,
         review_use_cases,

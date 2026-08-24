@@ -308,18 +308,32 @@ class ExportRepository:
             export = session.get(Export, export_id)
             if export is None:
                 raise ExportNotFoundError
-            manifest = json.loads(export.manifest_json) if export.manifest_json else None
-            if manifest is not None and not isinstance(manifest, dict):
-                raise ExportPublishError("export_manifest_invalid")
-            return ExportRecord(
-                export.id,
-                export.run_id,
-                export.status,
-                export.input_revision,
-                export.error_code,
-                manifest,
-                export.output_relpath,
+            return self._record(export)
+
+    def latest_for_run(self, run_id: str) -> ExportRecord | None:
+        with self._database.session() as session:
+            export = session.scalar(
+                select(Export)
+                .where(Export.run_id == run_id)
+                .order_by(Export.created_at.desc(), Export.id.desc())
+                .limit(1)
             )
+            return None if export is None else self._record(export)
+
+    @staticmethod
+    def _record(export: Export) -> ExportRecord:
+        manifest = json.loads(export.manifest_json) if export.manifest_json else None
+        if manifest is not None and not isinstance(manifest, dict):
+            raise ExportPublishError("export_manifest_invalid")
+        return ExportRecord(
+            export.id,
+            export.run_id,
+            export.status,
+            export.input_revision,
+            export.error_code,
+            manifest,
+            export.output_relpath,
+        )
 
     def _copy_frame(self, frame: StoredExportFrame, destination: Path) -> None:
         if frame.image_sha256 is None:

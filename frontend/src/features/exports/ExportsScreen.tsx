@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router";
 
 import {
   canCompleteExportedRun,
@@ -20,7 +21,7 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { Empty, FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { useDashboard } from "../dashboard/dashboardQuery";
 import { ExportManifestPanel } from "./ExportManifestPanel";
-import { useTrackedExport, useTrackedRun } from "./exportQueries";
+import { useLatestExport, useTrackedExport, useTrackedRun } from "./exportQueries";
 import { useCompleteRun, useCreateExport } from "./useExportActions";
 import "./ExportsScreen.css";
 
@@ -145,21 +146,70 @@ function ExportStatusPanel({
 }
 
 export function ExportsScreen() {
-  const [exportId, setExportId] = useState<string | null>(null);
-  const [trackedRunId, setTrackedRunId] = useState<string | null>(null);
-  const dashboard = useDashboard();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawExportId = searchParams.get("export_id");
+  const exportId = rawExportId?.trim() || null;
+  const hasExportLocator = rawExportId !== null;
+  const invalidExportLocator = hasExportLocator && exportId === null;
+  const dashboard = useDashboard(!hasExportLocator);
   const exportQuery = useTrackedExport(exportId);
+  const trackedRunId = exportQuery.data?.run_id ?? null;
   const runQuery = useTrackedRun(trackedRunId);
+  const dashboardRunId = dashboard.data?.run?.id ?? null;
+  const latestExportQuery = useLatestExport(hasExportLocator ? null : dashboardRunId);
   const createMutation = useCreateExport((created) => {
-    setTrackedRunId(created.run_id);
-    setExportId(created.id);
+    setSearchParams({ export_id: created.id });
   });
   const completeMutation = useCompleteRun();
 
-  if (dashboard.isPending) {
+  useEffect(() => {
+    if (!hasExportLocator && latestExportQuery.data != null) {
+      setSearchParams({ export_id: latestExportQuery.data.id }, { replace: true });
+    }
+  }, [hasExportLocator, latestExportQuery.data, setSearchParams]);
+
+  if (invalidExportLocator) {
+    return (
+      <FatalError
+        description="Parametr export_id musi zawierać niepusty identyfikator eksportu. Otwórz ekran bez parametru, aby odtworzyć najnowszy eksport aktywnego runu."
+        title="Nieprawidłowy identyfikator eksportu"
+      />
+    );
+  }
+
+  if (hasExportLocator) {
+    if (exportQuery.isError) {
+      const failure = describeApiError(exportQuery.error);
+      return (
+        <FatalError
+          description={`${failure.message} ${failure.action}`}
+          onRetry={() => void exportQuery.refetch()}
+          title="Nie udało się wczytać statusu eksportu"
+        />
+      );
+    }
+    if (exportQuery.isPending || exportQuery.data === undefined) {
+      return <Loading label="Ładowanie statusu eksportu…" />;
+    }
+    if (runQuery.isError) {
+      const failure = describeApiError(runQuery.error);
+      return (
+        <FatalError
+          description={`${failure.message} ${failure.action}`}
+          onRetry={() => void runQuery.refetch()}
+          title="Nie udało się odświeżyć runu"
+        />
+      );
+    }
+    if (runQuery.isPending || runQuery.data === undefined) {
+      return <Loading label="Ładowanie runu eksportu…" />;
+    }
+  }
+
+  if (!hasExportLocator && dashboard.isPending) {
     return <Loading label="Ładowanie runu do eksportu…" />;
   }
-  if (dashboard.isError) {
+  if (!hasExportLocator && dashboard.isError) {
     const failure = describeApiError(dashboard.error);
     return (
       <FatalError
@@ -170,8 +220,8 @@ export function ExportsScreen() {
     );
   }
 
-  const dashboardRun = dashboard.data.run;
-  const run = trackedRunId === null ? dashboardRun : (runQuery.data ?? dashboardRun);
+  const dashboardRun = dashboard.data?.run ?? null;
+  const run = hasExportLocator ? (runQuery.data ?? null) : dashboardRun;
 
   if (run === null) {
     return (
@@ -182,26 +232,34 @@ export function ExportsScreen() {
     );
   }
 
-  if (trackedRunId !== null && runQuery.isError) {
-    const failure = describeApiError(runQuery.error);
+  if (!hasExportLocator && latestExportQuery.isError) {
+    const failure = describeApiError(latestExportQuery.error);
     return (
       <FatalError
         description={`${failure.message} ${failure.action}`}
-        onRetry={() => void runQuery.refetch()}
-        title="Nie udało się odświeżyć runu"
+        onRetry={() => void latestExportQuery.refetch()}
+        title="Nie udało się odtworzyć ostatniego eksportu"
       />
     );
   }
 
+  if (!hasExportLocator && latestExportQuery.isPending) {
+    return <Loading label="Sprawdzanie ostatniego eksportu…" />;
+  }
+
+  if (!hasExportLocator && latestExportQuery.data !== null) {
+    return <Loading label="Przywracanie ostatniego eksportu…" />;
+  }
+
   const startExport = () => createMutation.mutate(run.id);
-  const activeExport = exportQuery.data;
+  const activeExport = hasExportLocator ? exportQuery.data : undefined;
   const busy = createMutation.isPending || completeMutation.isPending;
 
   return (
     <div className="df-exports">
       <RunSummary run={run} />
 
-      {exportId === null ? (
+      {!hasExportLocator ? (
         <Panel
           description="Backend utworzy niezmienną migawkę bieżącej rewizji w formacie COCO."
           eyebrow="Eksport"
@@ -220,17 +278,7 @@ export function ExportsScreen() {
             </Button>
           </div>
         </Panel>
-      ) : exportQuery.isError ? (
-        <FatalError
-          description={`${describeApiError(exportQuery.error).message} ${describeApiError(exportQuery.error).action}`}
-          onRetry={() => void exportQuery.refetch()}
-          title="Nie udało się wczytać statusu eksportu"
-        />
-      ) : exportQuery.isPending || activeExport === undefined ? (
-        <Panel eyebrow="Eksport" title="Bieżący eksport">
-          <Loading label="Ładowanie statusu eksportu…" />
-        </Panel>
-      ) : (
+      ) : activeExport === undefined ? null : (
         <>
           <ExportStatusPanel
             activeExport={activeExport}

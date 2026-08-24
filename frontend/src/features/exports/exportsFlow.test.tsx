@@ -22,12 +22,102 @@ const reviewRun = () =>
     total_frames: 12,
   });
 
+const isLatestLookup = (url: string) => url.includes("/api/v1/exports/latest?");
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe("export query states", () => {
+  it.each(["running", "completed"] as const)(
+    "reloads a %s export from export_id before loading its owning run",
+    async (status) => {
+      const ownedRun = reviewRun();
+      const recovered = exportFixture({
+        id: "foreign-export",
+        run_id: "foreign-run",
+        status,
+        manifest: status === "completed" ? exportFixture().manifest : null,
+        output_relpath: status === "completed" ? "exports/foreign-export" : null,
+      });
+      const spy = stubFetch((url, init) => {
+        if (url.endsWith("/api/v1/exports/foreign-export")) {
+          return { status: 200, body: recovered };
+        }
+        if (url.endsWith("/api/v1/runs/foreign-run")) {
+          return { status: 200, body: { ...ownedRun, id: "foreign-run" } };
+        }
+        return { status: 500, body: errorEnvelope("unexpected_request") };
+      });
+
+      renderApp(["/exports?export_id=foreign-export"]);
+
+      expect(await screen.findByRole("region", { name: "Bieżący eksport" })).toHaveTextContent(
+        "foreign-export",
+      );
+      if (status === "completed") {
+        expect(screen.getByRole("region", { name: "Wynik eksportu COCO" })).toBeInTheDocument();
+      } else {
+        expect(screen.getByText("Eksport COCO jest przygotowywany…")).toBeInTheDocument();
+      }
+      expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/dashboard"))).toBe(false);
+      expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    },
+  );
+
+  it("recovers the latest export for the dashboard run and never starts a replacement", async () => {
+    const recovered = exportFixture();
+    const spy = stubFetch((url, init) => {
+      if (url.endsWith("/api/v1/dashboard")) {
+        return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
+      }
+      if (isLatestLookup(url)) {
+        return { status: 200, body: recovered };
+      }
+      if (url.endsWith("/api/v1/exports/export-1")) {
+        return { status: 200, body: recovered };
+      }
+      if (url.endsWith("/api/v1/runs/run-1")) {
+        return { status: 200, body: reviewRun() };
+      }
+      return { status: 500, body: errorEnvelope("unexpected_request") };
+    });
+
+    renderApp(["/exports"]);
+
+    expect(await screen.findByRole("region", { name: "Wynik eksportu COCO" })).toBeInTheDocument();
+    expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/exports/export-1"))).toBe(
+      true,
+    );
+    expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("shows an invalid locator without falling back to dashboard or POST", async () => {
+    const spy = stubFetch(() => ({ status: 500, body: errorEnvelope("unexpected_request") }));
+    renderApp(["/exports?export_id="]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Nieprawidłowy identyfikator eksportu",
+    );
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unknown export_id as a read error instead of using the dashboard run", async () => {
+    const spy = stubFetch((url) =>
+      url.endsWith("/api/v1/exports/missing")
+        ? { status: 404, body: errorEnvelope("export_not_found") }
+        : { status: 500, body: errorEnvelope("unexpected_request") },
+    );
+    renderApp(["/exports?export_id=missing"]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Nie udało się wczytać statusu eksportu",
+    );
+    expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/dashboard"))).toBe(false);
+    expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
   it("shows loading, empty and HTTP error states separately", async () => {
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
@@ -61,6 +151,9 @@ describe("export query states", () => {
     async (code) => {
       const user = userEvent.setup();
       stubFetch((url, init) => {
+        if (isLatestLookup(url)) {
+          return { status: 200, body: null };
+        }
         if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
           return { status: code === "export_running" ? 409 : 400, body: errorEnvelope(code) };
         }
@@ -86,7 +179,9 @@ describe("export query states", () => {
       const url = String(input);
       let status = 200;
       let body: unknown = dashboardFixture({ run: reviewRun() });
-      if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
+      if (isLatestLookup(url)) {
+        body = null;
+      } else if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         await pending;
         status = 202;
         body = exportFixture();
@@ -115,6 +210,9 @@ describe("export query states", () => {
   it("offers retry when GET export status fails independently from POST", async () => {
     const user = userEvent.setup();
     stubFetch((url, init) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
       if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         return {
           status: 202,
@@ -162,6 +260,9 @@ describe("export lifecycle", () => {
     });
     let exportGets = 0;
     const spy = stubFetch((url, init) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
       if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         return { status: 202, body: current };
       }
@@ -180,6 +281,7 @@ describe("export lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Uruchom eksport COCO" }));
     await tick();
     expect(exportGets).toBe(1);
+    await tick();
     expect(screen.getByText("Eksport COCO jest przygotowywany…")).toBeInTheDocument();
 
     await tick(RUN_POLL_INTERVAL_MS);
@@ -214,6 +316,9 @@ describe("completed and failed exports", () => {
       output_relpath: null,
     });
     stubFetch((url, init) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
       if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         return { status: 202, body: exportFixture({ status: "running", manifest: null, output_relpath: null }) };
       }
@@ -228,15 +333,17 @@ describe("completed and failed exports", () => {
     renderApp(["/exports"]);
     await user.click(await screen.findByRole("button", { name: "Uruchom eksport COCO" }));
 
-    const notice = await screen.findByRole("status");
-    expect(notice).toHaveTextContent(`Kod: ${code}.`);
-    expect(screen.getByRole("button", { name: "Uruchom nowy eksport" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Uruchom nowy eksport" })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent(`Kod: ${code}.`);
   });
 
   it("shows source counts as provenance and never exposes an absolute output path", async () => {
     const user = userEvent.setup();
     const unsafe = exportFixture({ output_relpath: "D:\\secret\\workspace\\export-1" });
     stubFetch((url, init) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
       if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         return { status: 202, body: unsafe };
       }
@@ -273,7 +380,9 @@ describe("explicit run completion", () => {
       const url = String(input);
       let status = 200;
       let body: unknown;
-      if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
+      if (isLatestLookup(url)) {
+        body = null;
+      } else if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         status = 202;
         body = exportFixture();
       } else if (url.endsWith("/api/v1/exports/export-1")) {
@@ -326,6 +435,9 @@ describe("explicit run completion", () => {
   it("keeps completion keyboard reachable and names every landmark", async () => {
     const user = userEvent.setup();
     stubFetch((url, init) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
       if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
         return { status: 202, body: exportFixture() };
       }

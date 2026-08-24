@@ -16,6 +16,7 @@ from sqlalchemy import select
 from backend.app.access.store.models import (
     Annotation,
     Category,
+    Export,
     Frame,
     GameProfile,
     PipelineRun,
@@ -613,3 +614,56 @@ def test_concurrent_post_uses_database_export_running_constraint(
         assert second.json()["error"]["code"] == "export_running"
         engine.release.set()
         _wait_for_export(composition.export_use_cases, first.json()["id"], expected="completed")
+
+
+def test_latest_export_is_nullable_and_breaks_created_at_ties_by_id(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    created_at = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+    with composition.database.session() as session:
+        session.add_all(
+            [
+                Export(
+                    id="00000000-0000-0000-0000-00000000000a",
+                    run_id=seed.run_id,
+                    status="completed",
+                    output_relpath="exports/older",
+                    input_revision=7,
+                    error_code=None,
+                    manifest_json=None,
+                    created_at=created_at,
+                    updated_at=created_at,
+                ),
+                Export(
+                    id="00000000-0000-0000-0000-00000000000b",
+                    run_id=seed.run_id,
+                    status="failed",
+                    output_relpath=None,
+                    input_revision=8,
+                    error_code="export_source_missing",
+                    manifest_json=None,
+                    created_at=created_at,
+                    updated_at=created_at,
+                ),
+            ]
+        )
+
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        latest = client.get("/api/v1/exports/latest", params={"run_id": seed.run_id})
+        assert latest.status_code == 200
+        assert latest.json()["id"] == "00000000-0000-0000-0000-00000000000b"
+        assert latest.json()["error_code"] == "export_source_missing"
+
+        missing = client.get(
+            "/api/v1/exports/latest",
+            params={"run_id": "00000000-0000-0000-0000-000000000099"},
+        )
+        assert missing.status_code == 200
+        assert missing.json() is None
+
+        detail = client.get("/api/v1/exports/00000000-0000-0000-0000-00000000000a")
+        assert detail.status_code == 200
+        assert detail.json()["id"].endswith("a")

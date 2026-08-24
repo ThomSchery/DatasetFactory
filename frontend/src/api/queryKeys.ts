@@ -34,6 +34,7 @@ export const queryKeys = {
 
   exports: () => ["exports"] as const,
   export: (exportId: string) => ["exports", exportId] as const,
+  latestExport: (runId: string) => ["exports", "latest", runId] as const,
 } as const;
 
 /**

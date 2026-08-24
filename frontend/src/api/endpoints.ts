@@ -225,6 +225,14 @@ export function createExport(body: CreateExportRequest): Promise<Export> {
   return apiRequest<Export>("/exports", { method: "POST", body });
 }
 
+/** `GET /exports/latest?run_id=` — newest immutable snapshot for one run or `null`. */
+export function getLatestExport(runId: string, signal?: AbortSignal): Promise<Export | null> {
+  return apiRequest<Export | null>("/exports/latest", {
+    query: { run_id: runId },
+    signal,
+  });
+}
+
 /** `GET /exports/{id}` — status, `input_revision`, `error_code`, manifest, output. */
 export function getExport(exportId: string, signal?: AbortSignal): Promise<Export> {
   return apiRequest<Export>(`/exports/${encodeURIComponent(exportId)}`, { signal });

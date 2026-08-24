@@ -94,6 +94,12 @@ class ExportUseCases:
         except Exception as exc:
             raise self._translate(exc) from exc
 
+    def get_latest_export(self, run_id: str) -> ExportRecord | None:
+        try:
+            return self._exports.latest_for_run(run_id)
+        except Exception as exc:
+            raise self._translate(exc) from exc
+
     def shutdown(self) -> None:
         self._closed = True
         self._executor.shutdown(wait=True, cancel_futures=False)

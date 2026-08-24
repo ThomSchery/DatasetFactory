@@ -42,6 +42,7 @@ const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["DELETE /annotations/{id}", "deleteAnnotation"],
   ["POST /frames/{id}/review", "reviewFrame"],
   ["POST /exports", "createExport"],
+  ["GET /exports/latest", "getLatestExport"],
   ["GET /exports/{id}", "getExport"],
 ];
 

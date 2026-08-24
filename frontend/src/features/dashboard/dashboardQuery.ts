@@ -31,8 +31,9 @@ export function dashboardPollInterval(run: PipelineRun | null | undefined): numb
   return runPollInterval(run.status);
 }
 
-export function useDashboard(): UseQueryResult<Dashboard> {
+export function useDashboard(enabled = true): UseQueryResult<Dashboard> {
   return useQuery({
+    enabled,
     queryKey: queryKeys.dashboard(),
     queryFn: ({ signal }) => getDashboard(signal),
     refetchInterval: (query) => dashboardPollInterval(query.state.data?.run),

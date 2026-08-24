@@ -128,6 +128,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `DELETE /annotations/{id}` | `expected_version` query | `204` | `404`, `409` |
 | `POST /frames/{id}/review` | `{decision:accept|reject|reopen,expected_version}` | frame review snapshot | `400 no_annotations/bbox_invalid` z `details.annotation_ids`, `404`, `409 version/review_locked/frame_not_reviewable/invalid_review_transition` |
 | `POST /exports` | `{run_id}` | `202 Export` | `400 no_accepted_frames`, `404`, `409 export_running` |
+| `GET /exports/latest` | `run_id` query | najnowszy `Export` runu albo `null`; porządek `created_at DESC, id DESC` | `400/500` |
 | `GET /exports/{id}` | — | status, `input_revision`, `error_code`, manifest, relative output | `404` |
 
 `GET /dashboard` (F12, CF-07) jest wyłącznie do odczytu i zwraca `200` także dla
@@ -186,6 +187,15 @@ oraz zapis `completed` odbywają się w jednej transakcji. Operacja zwiększa ty
 `pipeline_runs.version`: nie zmienia klatek, anotacji, eksportów ani
 `review_revision`. Istniejąca definicja `NONTERMINAL_RUN_STATUSES` sprawia, że
 zamknięty run znika z dashboardu bez osobnej ścieżki specjalnej.
+
+`GET /exports/latest?run_id=` jest minimalnym, read-only mechanizmem odzyskania
+stanu ekranu eksportu i nie jest historią eksportów. Statyczna trasa jest
+deklarowana przed `GET /exports/{id}`. Dla runu bez eksportów zwraca `200 null`;
+przy remisie czasu utworzenia nowszy rekord wyznacza malejące `id`. Frontend
+utrwala wybrany eksport jako `export_id` w query URL: z tym parametrem najpierw
+pobiera eksport, a dopiero z jego `run_id` pobiera run; bez parametru korzysta z
+runu dashboardu i pojedynczego lookupu `latest`. Żaden z tych odczytów nie
+uruchamia zastępczego `POST /exports`.
 
 Geometria jest asymetryczna między żądaniem a odpowiedzią: `POST` i `PATCH`
 przyjmują ją zagnieżdżoną w `bbox`, natomiast `AnnotationResponse` zwraca płaskie

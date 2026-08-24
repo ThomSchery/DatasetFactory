@@ -1,6 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { exportPollInterval, getExport, getRun, queryKeys } from "../../api";
+import { exportPollInterval, getExport, getLatestExport, getRun, queryKeys } from "../../api";
+
+export function useLatestExport(runId: string | null) {
+  return useQuery({
+    enabled: runId !== null,
+    queryKey: runId === null ? queryKeys.exports() : queryKeys.latestExport(runId),
+    queryFn: ({ signal }) => {
+      if (runId === null) {
+        throw new Error("run_id is required when the latest export query is enabled");
+      }
+      return getLatestExport(runId, signal);
+    },
+  });
+}
 
 export function useTrackedExport(exportId: string | null) {
   return useQuery({

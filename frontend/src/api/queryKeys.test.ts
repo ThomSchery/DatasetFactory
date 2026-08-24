@@ -92,6 +92,11 @@ describe("run status machine", () => {
     expect(exportPollInterval("failed")).toBe(false);
   });
 
+  it("keeps latest-by-run recovery separate from export detail", () => {
+    expect(queryKeys.latestExport("run-1")).toEqual(["exports", "latest", "run-1"]);
+    expect(queryKeys.latestExport("run-1")).not.toEqual(queryKeys.export("run-1"));
+  });
+
   it("offers explicit completion only for an exported review-ready run", () => {
     expect(canCompleteExportedRun("review_ready", "completed")).toBe(true);
     expect(canCompleteExportedRun("review_ready", "running")).toBe(false);

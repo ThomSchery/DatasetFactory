@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
@@ -70,6 +70,18 @@ def create_exports_router(export_provider: ExportProvider) -> APIRouter:
         # Authorization policy: local-public. Only a controlled run id enters.
         try:
             return _export_response(exports.create_export(payload.run_id))
+        except ExportUseCaseError as error:
+            return _export_error(request, error)
+
+    @router.get("/latest", response_model=ExportResponse | None)
+    def get_latest_export(
+        run_id: Annotated[str, Query(min_length=1)],
+        request: Request,
+        exports: Annotated[ExportUseCases, Depends(export_provider)],
+    ) -> ExportResponse | JSONResponse | None:
+        try:
+            record = exports.get_latest_export(run_id)
+            return None if record is None else _export_response(record)
         except ExportUseCaseError as error:
             return _export_error(request, error)
 

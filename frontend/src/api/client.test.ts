@@ -15,6 +15,7 @@ import {
   getExport,
   getFrame,
   getHealth,
+  getLatestExport,
   listRunFrames,
   reviewFrame,
   updateAnnotation,
@@ -165,6 +166,16 @@ describe("apiRequest", () => {
       error_code: "export_revision_conflict",
       input_revision: 7,
     });
+  });
+
+  it("reads the latest export through a controlled run_id query", async () => {
+    const spy = stubFetch(() => ({ status: 200, body: null }));
+
+    await expect(getLatestExport("run/foreign")).resolves.toBeNull();
+
+    expect(String(spy.mock.calls[0][0])).toBe(
+      `${API_BASE_PATH}/exports/latest?run_id=run%2Fforeign`,
+    );
   });
 });
 
