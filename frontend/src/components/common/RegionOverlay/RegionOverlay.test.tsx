@@ -50,6 +50,7 @@ interface HarnessProps {
   initialShapes?: OverlayShape[];
   interactionMode?: "select" | "draw";
   onDraw?: (rect: SourceRect) => void;
+  onSelect?: (id: string) => void;
   readOnly?: boolean;
 }
 
@@ -58,6 +59,7 @@ function Harness({
   initialShapes = [],
   interactionMode = "select",
   onDraw,
+  onSelect,
   readOnly = false,
 }: HarnessProps) {
   const [shapes, setShapes] = useState<OverlayShape[]>(initialShapes);
@@ -89,7 +91,10 @@ function Harness({
               setSelectedId((current) => (current === id ? null : current));
             }
       }
-      onSelect={setSelectedId}
+      onSelect={(id) => {
+        onSelect?.(id);
+        setSelectedId(id);
+      }}
       onSourceResolved={setSource}
       selectedId={selectedId}
       shapes={shapes}
@@ -238,6 +243,42 @@ describe("the drawing surface", () => {
 
     expect(onDraw).toHaveBeenCalledWith({ x: 480, y: 270, width: 960, height: 270 });
   });
+
+  it.each(["capturing SVG", "origin shape"] as const)(
+    "selects a draw-mode shape exactly once when click reaches the %s",
+    (clickTarget) => {
+      const onDraw = vi.fn();
+      const onSelect = vi.fn();
+      renderOverlay({
+        initialShapes: [
+          { id: "existing", label: "Istniejący", x: 100, y: 100, width: 900, height: 500 },
+        ],
+        interactionMode: "draw",
+        onDraw,
+        onSelect,
+      });
+      const surface = surfaceElement();
+      layOutSurface(surface, 960);
+      const box = surface.getBoundingClientRect();
+      const fill = screen.getByRole("option").querySelector(".df-region-overlay__shape-fill");
+      expect(fill).not.toBeNull();
+      const point = {
+        clientX: box.left + box.width * 0.25,
+        clientY: box.top + box.height * 0.25,
+        pointerId: 1,
+      };
+
+      fireEvent.pointerDown(fill as Element, point);
+      fireEvent.pointerUp(surface, point);
+      fireEvent.click(clickTarget === "capturing SVG" ? surface : (fill as Element), {
+        detail: 1,
+      });
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith("existing");
+      expect(onDraw).not.toHaveBeenCalled();
+    },
+  );
 });
 
 /*

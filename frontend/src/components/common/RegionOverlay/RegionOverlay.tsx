@@ -52,7 +52,15 @@ export interface RegionOverlayProps {
 
 interface Draft {
   origin: SourcePoint;
+  originShapeId: string | null;
   current: SourcePoint;
+}
+
+function shapeIdFromTarget(target: EventTarget | null): string | null {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+  return target.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ?? null;
 }
 
 /**
@@ -111,6 +119,7 @@ export function RegionOverlay({
 }: RegionOverlayProps) {
   const surfaceRef = useRef<SVGSVGElement | null>(null);
   const optionRefs = useRef(new Map<string, SVGGElement>());
+  const suppressCapturedClickRef = useRef(false);
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const canDraw = onDraw !== undefined && !disabled && source !== null;
@@ -130,10 +139,14 @@ export function RegionOverlay({
   }
 
   function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
+    // If a browser omitted the click after the previous captured gesture, the
+    // next physical pointerdown starts a new sequence and must not inherit its
+    // deduplication marker.
+    suppressCapturedClickRef.current = false;
     // Selection mode preserves F3: only the bare surface starts a drawing.
     // Explicit draw mode is for overlapping review boxes, where a drag must be
-    // allowed to begin inside a shape. A click that never moves still reaches
-    // the shape's click handler and selects it.
+    // allowed to begin inside a shape. Pointer capture may retarget the later
+    // click to the SVG, so the gesture remembers its originating shape.
     if (
       !canDraw ||
       (interactionMode === "select" && event.target !== surfaceRef.current)
@@ -144,7 +157,11 @@ export function RegionOverlay({
     if (point === null) {
       return;
     }
-    setDraft({ origin: point, current: point });
+    setDraft({
+      origin: point,
+      originShapeId: interactionMode === "draw" ? shapeIdFromTarget(event.target) : null,
+      current: point,
+    });
     if (surfaceRef.current !== null) {
       capturePointer(surfaceRef.current, event.pointerId, true);
     }
@@ -156,7 +173,7 @@ export function RegionOverlay({
     }
     const point = pointFrom(event);
     if (point !== null) {
-      setDraft({ origin: draft.origin, current: point });
+      setDraft({ ...draft, current: point });
     }
   }
 
@@ -170,9 +187,17 @@ export function RegionOverlay({
     const point = pointFrom(event) ?? draft.current;
     const rect = clampRectToSource(rectFromPoints(draft.origin, point), source);
     setDraft(null);
-    // A click that never moved is not a zero-area region, it is not a region.
+    if (draft.originShapeId !== null) {
+      // The browser click following captured pointerup can target either the
+      // SVG or the original <g>. Suppress that one click in both cases: a
+      // no-drag selection is emitted explicitly below, while a drag is solely
+      // a draw operation.
+      suppressCapturedClickRef.current = true;
+    }
     if (isDrawableRect(rect)) {
       onDraw?.(rect);
+    } else if (draft.originShapeId !== null) {
+      onSelect?.(draft.originShapeId);
     }
   }
 
@@ -256,6 +281,14 @@ export function RegionOverlay({
           className={surfaceClasses}
           onPointerCancel={() => {
             setDraft(null);
+            suppressCapturedClickRef.current = false;
+          }}
+          onClickCapture={(event) => {
+            if (suppressCapturedClickRef.current) {
+              suppressCapturedClickRef.current = false;
+              event.preventDefault();
+              event.stopPropagation();
+            }
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -337,6 +370,7 @@ function ShapeOption({
       aria-label={shapeName(shape)}
       aria-selected={selected}
       className={classes}
+      data-overlay-shape-id={shape.id}
       data-selected={selected || undefined}
       onClick={() => {
         onSelect?.(shape.id);

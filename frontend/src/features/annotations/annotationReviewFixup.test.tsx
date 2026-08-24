@@ -323,6 +323,59 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
 });
 
 describe("success refetches authoritative versions", () => {
+  it("uses the refetched annotation version when retrying after version_conflict", async () => {
+    const user = userEvent.setup();
+    const oldAnnotation = annotationFixture({ category_id: "category-1", version: 3 });
+    const refetchedAnnotation = annotationFixture({ category_id: "category-1", version: 4 });
+    const savedAnnotation = annotationFixture({ category_id: "category-2", version: 5 });
+    const frameDtos = [
+      frameDetailFixture({ annotations: [oldAnnotation] }),
+      frameDetailFixture({ annotations: [refetchedAnnotation] }),
+      frameDetailFixture({ annotations: [savedAnnotation] }),
+    ];
+    let frameRead = 0;
+    let patchCount = 0;
+    const get = reviewGet({
+      frame: () => frameDtos[Math.min(frameRead++, frameDtos.length - 1)]!,
+    });
+    const fetchSpy = stubFetch((url, init) => {
+      if (init?.method === "PATCH") {
+        patchCount += 1;
+        return patchCount === 1
+          ? { body: errorEnvelope("version_conflict"), status: 409 }
+          : { body: savedAnnotation, status: 200 };
+      }
+      return requireResponse(get(url), url);
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByText("Obraz i bbox");
+    await user.selectOptions(screen.getByLabelText("Klasa"), "category-2");
+    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+
+    const conflict = await screen.findByRole("alert");
+    expect(conflict).toHaveTextContent("Kod: version_conflict");
+    await waitFor(() => {
+      expect(frameRead).toBeGreaterThanOrEqual(2);
+      expect(screen.getByLabelText("Klasa")).toBeEnabled();
+    });
+
+    await user.selectOptions(screen.getByLabelText("Klasa"), "category-2");
+    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+
+    await waitFor(() => {
+      const patchBodies = fetchSpy.mock.calls
+        .filter(
+          ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+        )
+        .map(([, init]) => JSON.parse(String(init?.body)) as unknown);
+      expect(patchBodies).toEqual([
+        { category_id: "category-2", expected_version: 3 },
+        { category_id: "category-2", expected_version: 4 },
+      ]);
+    });
+  });
+
   it("uses annotation.version + 1 from refetch in the next delete", async () => {
     const user = userEvent.setup();
     const oldAnnotation = annotationFixture({ version: 3 });
