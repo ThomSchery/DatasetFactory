@@ -1703,3 +1703,86 @@ zachowuje wygląd, copy, immutability i jawny CAS complete zaakceptowane w F5.
   `SelectField` i `RegionOverlay` występują tylko jako istniejące checkpointy
   pozostałych tras. Nie powstaje common component, więc katalog pozostaje
   aktualny.
+
+## FE-001-F5-FIX1 — wynik i Gate 3 (2026-08-24)
+
+Ta sekcja zastępuje opis dowodów z pierwotnego F5 w zakresie trwałego locatora
+i pionowego E2E. Izolowany `ApiHarness` pozostał wyłącznie narzędziem visual QA;
+nie jest dowodem pionowego przepływu.
+
+### Zamknięte findings
+
+- **F1 — durable recovery:** `/exports?export_id=` jest kontrolowanym źródłem
+  identyfikatora. Deep-link najpierw pobiera `GET /exports/{id}`, następnie run
+  z `Export.run_id`; dashboard nie jest wtedy odpytywany. Bez query ekran używa
+  dashboard runu i `GET /exports/latest?run_id=`, gdzie repozytorium wybiera
+  `created_at DESC, id DESC`. Znaleziony rekord utrwala się w URL, `null`
+  pozostawia jawny start state. Recovery nigdy nie wysyła `POST /exports`.
+- **F2 — real vertical E2E:** `backend/tests/e2e_server.py` buduje rzeczywisty
+  composition root, migracje/SQLite i workspace na `D:`, realny ffprobe/FFmpeg
+  znaleziony na `PATH` oraz jedyny backendowy stub na granicy `OcrEngine`.
+  `vertical-flow.spec.ts` nie interceptuje tras. Przechodzi ekranami profil →
+  repo `synthetic-hud.mkv` → create/start → frontendowy polling runu i odświeżenie
+  szczegółu klatki po terminalnym statusie → review → export polling → fizyczny
+  `manifest.json` → jawny CAS complete. Obserwacja request body jest dodatkową
+  asercją, nie źródłem stanu.
+- **F3 — confinement i reprodukowalność:** ścieżki odrzucają każdy URI scheme
+  zgodny z `^[A-Za-z][A-Za-z0-9+.-]*:` przed zamianą separatorów, w tym `http`,
+  `https`, `file` i `data`; osobny segment `..` pozostaje blokowany. Repozytoryjny
+  launcher Node ustawia `PLAYWRIGHT_BROWSERS_PATH`, runtime, raport i traces na
+  `D:\DatasetFactory\cache` (albo kontrolowany `DATASETFACTORY_CACHE_ROOT`) dla
+  zwykłych `npm run e2e` i `npm run e2e:install`, bez nowej zależności.
+
+### Gate 3 UI i screenshot QA
+
+Osiem PNG 1440 zostało zregenerowanych przez finalny plain `npm run e2e` i
+obejrzanych wizualnie. Nie ma ucięć, nakładania, poziomego overflow ani fałszywego
+stanu eksportu. `exports-1440.png` bezpośrednio przed capture potwierdza URL
+`export_id`, completed manifest, `exports/export-1` oraz region provenance.
+
+Route-specific focus checkpointy wykonane przez Tab do konkretnego targetu:
+
+| Trasa | Kontrolka |
+| --- | --- |
+| Dashboard | `Uruchom` w queued run |
+| Profil | `Nazwa profilu` |
+| Materiały | `Ścieżka pliku wideo` |
+| Anotacje | `Status weryfikacji` |
+| Eksporty | `Zamknij run` po completed manifest |
+
+Każdy target jest `document.activeElement` i ma widoczny outline/box-shadow.
+Ten sam test sprawdza 1440 i 1280 px, komplet deklaracji użytych `var(--*)` oraz
+brak zewnętrznych requestów fontów. Loading/empty/error mają osobne capture.
+Common catalog pozostaje aktualny: użyto istniejących komponentów i nie dodano
+nowego common component. `TECH_DEBT.md` ma konkretne `Gdzie` dla TD-007
+(`DashboardScreen.tsx`), TD-010 (`tokens.css`) i TD-013 (common a11y,
+`RegionOverlay`, anotacje oraz `ExportsScreen`).
+
+### Końcowe bramki
+
+| Bramka | Wynik |
+| --- | --- |
+| Backend full pytest | **290/290 passed**, 1825.15 s |
+| Backend Ruff | bez uwag |
+| Backend mypy strict | bez uwag, 95 plików |
+| Frontend full Vitest | **32/32 pliki, 432/432 testy** |
+| Architecture test | **92/92** |
+| TypeScript | `tsc --noEmit`, 0 błędów |
+| Build | 295 modułów; exports JS 8.37 kB / gzip 3.12 kB; main JS 496.48 kB / gzip 152.23 kB |
+| Audit | `npm audit --audit-level=low`: 0 podatności |
+| Plain Playwright | **2/2**: real vertical + visual QA |
+| Screenshot/CSS/font/overflow/focus | **8/8**, 1440/1280, zielone i obejrzane |
+
+Targeted regresje dodatkowo przypinają: route ordering/latest tie-break i `null`,
+reload running/completed, latest/no-latest/invalid/foreign ID, brak recovery POST,
+terminal stop pollingu, HTTP error kontra `Export.error_code`, brak optimistic
+update, URI schemes, CAS complete i dostępność akcji.
+
+### Odchylenia i ryzyka
+
+Brak odchylenia produktowego: nie dodano historii eksportów, train/val, YOLO,
+eksportu przyrostowego ani automatycznego complete. Testowy bootstrap nie trafia
+do runtime aplikacji. Realny E2E wymaga `ffmpeg` i `ffprobe` na `PATH`; launcher
+kończy się jawnym błędem, jeśli narzędzi brakuje. Browser binaria muszą być raz
+zainstalowane przez `npm run e2e:install`, ale cache i wszystkie ciężkie artefakty
+pozostają na `D:`.
