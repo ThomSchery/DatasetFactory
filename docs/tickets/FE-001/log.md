@@ -904,3 +904,46 @@ a prostokąty w jednym `viewBox` takiej potrzeby nie tworzą.
 | Sukces prowadzi do importu materiału (CF-01.6) | `profileFlow.test.tsx` |
 | Trasa `/profiles/new` renderuje ekran | `src/app/routes.test.tsx` |
 | Kontrast obrysu regionu | `src/styles/contrast.test.ts` |
+
+## Domknięcie luki kontraktu `reference-preview`
+
+Po akceptacji obserwacji nr 1 kontrakt został rozszerzony o
+`POST /profiles/reference-preview`. Backend publikuje zweryfikowany obraz bez
+rekordu `reference_assets` i rejestruje `asset_id → {relpath, content_type}`
+wyłącznie w pamięci procesu. `GET /assets/references/{asset_id}` sprawdza DB,
+a po braku rekordu ten rejestr; restart unieważnia podgląd, a istniejący startup
+reconciliation usuwa plik jako orphan. `POST /profiles` celowo stage'uje własny
+asset i zachowuje dotychczasowy payload — podgląd nie jest trwałym składnikiem
+profilu.
+
+Frontend nie czyta już `GET /profiles/current` w ekranie tworzenia. Przepływ
+dla świeżej instalacji to: ścieżka absolutna → podgląd po opaque UUID → obraz
+i `viewBox` z wymiarów naturalnych → regiony → `POST /profiles` z tą samą
+ścieżką i geometrią źródłową. Usunięto obejście z `Notice` o obrazie innego
+profilu. Zmiana ścieżki unieważnia podgląd i regiony, więc geometria nie może
+zostać przypadkiem zapisana względem innego pliku.
+
+Commity domykające: `291ae65` (backend + kontrakt) i `f3e62ed` (frontend,
+testy przepływu i aktualizacja pośredniego `nanoid` 3.3.16 → 3.3.18 w dozwolonym
+zakresie lockfile, po nowym advisory npm).
+
+### Finalne bramki po domknięciu
+
+| Bramka | Komenda | Wynik |
+|---|---|---|
+| Backend testy | `python -m pytest --basetemp .tmp/pytest-fe001-f3-full-20260824 -q` | 273 testy, 0 nieudanych, 27:36 |
+| Backend lint | `python -m ruff check .` | 0 uwag |
+| Backend typy strict | `python -m mypy` | 93 pliki, 0 błędów |
+| Frontend testy | `npm run test` | 26 plików, 340 testów, 0 nieudanych |
+| Frontend typy | `npm run typecheck` | 0 błędów |
+| Frontend build | `npm run build` | zielony, `tsc --noEmit` + `vite build` |
+| Frontend audit | `npm audit` | 0 podatności |
+| Architektura | `src/test/architecture.test.ts` | 77 testów, 0 nieudanych |
+
+Nowe testy backendu pokrywają sukces z realnymi wymiarami, `400
+reference_path_not_absolute`, `404 source_missing`, odczyt zwróconego UUID przez
+endpoint assetu oraz usunięcie porzuconego podglądu po restarcie bez profilu i
+bez trwałego rekordu assetu. Test frontendowy wykonuje realne dwa kroki,
+sprawdza użycie `preview.asset_id` przez `<img>` oraz identyczną ścieżkę i
+geometrię źródłową w późniejszym `POST /profiles`; zgodnie z kontraktem nie
+oczekuje identycznego trwałego `asset_id`.
