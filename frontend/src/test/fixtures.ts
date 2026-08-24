@@ -1,4 +1,14 @@
-import type { Dashboard, GameProfile, Health, Material, PipelineRun } from "../api";
+import type {
+  Annotation,
+  Dashboard,
+  FrameDetail,
+  FrameSummary,
+  GameProfile,
+  Health,
+  Material,
+  Page,
+  PipelineRun,
+} from "../api";
 
 /*
  * Wire-shaped fixtures for the FE-001-F2 tests.
@@ -111,6 +121,70 @@ export function dashboardFixture(overrides: Partial<Dashboard> = {}): Dashboard 
   };
 }
 
+export function annotationFixture(overrides: Partial<Annotation> = {}): Annotation {
+  return {
+    id: "ann-1",
+    category_id: "category-1",
+    x: 100,
+    y: 120,
+    width: 40,
+    height: 32,
+    confidence: 0.91,
+    source: "ocr",
+    observation_id: "observation-1",
+    status: "proposed",
+    version: 3,
+    ...overrides,
+  };
+}
+
+export function frameSummaryFixture(overrides: Partial<FrameSummary> = {}): FrameSummary {
+  return {
+    id: "frame-1",
+    frame_index: 17,
+    timestamp_ms: 16_000,
+    stage_status: "review_pending",
+    review_status: "pending",
+    width: 1920,
+    height: 1080,
+    version: 7,
+    ocr_engine: "tesseract",
+    experimental: true,
+    quality_gate: "failed",
+    warning: "Tesseract jest adapterem eksperymentalnym.",
+    ...overrides,
+  };
+}
+
+export function framePageFixture(
+  overrides: Partial<Page<FrameSummary>> = {},
+): Page<FrameSummary> {
+  return {
+    items: [frameSummaryFixture()],
+    page: 1,
+    page_size: 12,
+    total: 1,
+    ...overrides,
+  };
+}
+
+export function frameDetailFixture(overrides: Partial<FrameDetail> = {}): FrameDetail {
+  return {
+    id: "frame-1",
+    run_id: "run-1",
+    frame_index: 17,
+    timestamp_ms: 16_000,
+    stage_status: "review_pending",
+    review_status: "pending",
+    width: 1920,
+    height: 1080,
+    version: 7,
+    review_revision: 4,
+    annotations: [annotationFixture()],
+    ...overrides,
+  };
+}
+
 /** What a fresh install answers: `200` with three nulls, not an error. */
 export function emptyDashboard(): Dashboard {
   return {
@@ -123,6 +197,10 @@ export function emptyDashboard(): Dashboard {
 }
 
 /** The TECH_PLAN §5 error envelope, for a stubbed non-2xx response. */
-export function errorEnvelope(code: string, message = "Operacja odrzucona."): unknown {
-  return { error: { code, message, details: {}, request_id: "req-1" } };
+export function errorEnvelope(
+  code: string,
+  message = "Operacja odrzucona.",
+  details: Record<string, unknown> = {},
+): unknown {
+  return { error: { code, message, details, request_id: "req-1" } };
 }

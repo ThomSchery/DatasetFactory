@@ -6,7 +6,9 @@ import {
   dashboardFixture,
   emptyDashboard,
   errorEnvelope,
+  framePageFixture,
   materialFixture,
+  profileFixture,
   runFixture,
 } from "../../test/fixtures";
 import { renderApp, stubFetch } from "../../test/harness";
@@ -50,7 +52,7 @@ function stubBackend(state: BackendState) {
       };
     }
     if (url.includes("/api/v1/profiles/current")) {
-      return { status: 200, body: dashboardFixture().profile };
+      return { status: 200, body: profileFixture() };
     }
     if (url.includes("/api/v1/runs") && url.endsWith("/start")) {
       return state.startResponse ?? { status: 202, body: state.run };
@@ -60,6 +62,12 @@ function stubBackend(state: BackendState) {
       state.run = created;
       state.dashboard = dashboardFixture({ run: created });
       return { status: 201, body: created };
+    }
+    if (url.includes("/api/v1/runs/run-1/frames")) {
+      return { status: 200, body: framePageFixture({ items: [], total: 0 }) };
+    }
+    if (url.endsWith("/api/v1/runs/run-1")) {
+      return { status: 200, body: state.run };
     }
     return { status: 200, body: state.dashboard };
   });
@@ -134,7 +142,9 @@ describe("materials: from a file to a started run", () => {
 
     // §Logika.2: starting the run is what puts `runId` in the URL.
     expect(await screen.findByRole("heading", { level: 1, name: "Anotacje" })).toBeInTheDocument();
-    expect(screen.getByText(/run-1/)).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Filtr klatek" })).toHaveTextContent(
+      "run-1",
+    );
 
     const startCall = fetchSpy.mock.calls.find(([url]) => String(url).endsWith("/start"));
     expect(JSON.parse(String(startCall?.[1]?.body))).toEqual({ expected_version: 1 });

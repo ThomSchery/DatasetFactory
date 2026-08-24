@@ -1,0 +1,135 @@
+.df-review-screen {
+  display: grid;
+  gap: var(--size-lg);
+  min-width: 0;
+}
+
+.df-review-workspace {
+  display: grid;
+  grid-template-columns:
+    minmax(calc(var(--size-xxl) * 3), 24%)
+    minmax(0, 1fr)
+    minmax(calc(var(--control-height-md) * 8), 32%);
+  align-items: start;
+  gap: var(--size-md);
+  min-width: 0;
+}
+
+.df-review-workspace > * {
+  min-width: 0;
+}
+
+.df-review-workspace__query-state {
+  grid-column: span 2;
+}
+
+.df-review-workspace__all-state {
+  grid-column: 1 / -1;
+}
+
+.df-review-frames,
+.df-review-annotations {
+  display: grid;
+  gap: var(--size-sm);
+  padding: var(--size-none);
+  margin: var(--size-none);
+  list-style: none;
+}
+
+.df-review-frames__item,
+.df-review-annotations__item {
+  display: grid;
+  gap: var(--size-sm);
+  min-height: var(--control-height-lg);
+  padding: var(--size-sm);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-inline-start: var(--border-width-emphasis) solid var(--color-surface-transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-review-frames__item[data-selected],
+.df-review-annotations__item[data-selected] {
+  border-inline-start-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable-soft);
+}
+
+.df-review-annotations__item[data-invalid] {
+  border-color: var(--color-status-error-default);
+  border-width: var(--border-width-emphasis);
+}
+
+.df-review-frames__summary,
+.df-review-annotations__header,
+.df-review-pagination,
+.df-review-decisions,
+.df-review-annotations__actions,
+.df-review-frames__badges,
+.df-review-annotations__badges {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  flex-wrap: wrap;
+}
+
+.df-review-frames__summary,
+.df-review-annotations__header,
+.df-review-pagination {
+  justify-content: space-between;
+}
+
+.df-review-frames__summary span,
+.df-review-pagination,
+.df-review-annotations__bbox,
+.df-review-create p,
+.df-review-annotations__empty {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}
+
+.df-review-annotations__bbox {
+  margin: var(--size-xs) var(--size-none) var(--size-none);
+  font-family: var(--font-family-mono);
+  line-height: var(--line-height-standard);
+}
+
+.df-review-pagination,
+.df-review-decisions,
+.df-review-create {
+  margin-top: var(--size-md);
+}
+
+.df-review-create {
+  display: grid;
+  gap: var(--size-sm);
+}
+
+.df-review-create p,
+.df-review-annotations__empty {
+  margin: var(--size-none);
+  line-height: var(--line-height-loose);
+}
+
+.df-review-annotations__geometry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--size-xs) var(--size-sm);
+}
+
+.df-review-annotations__invalid {
+  margin: var(--size-none);
+  color: var(--color-status-error-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-loose);
+}
+
+.df-review-decisions,
+.df-review-annotations__actions {
+  justify-content: flex-end;
+}
+
+.df-review-workspace .df-region-overlay {
+  margin-block: var(--size-md);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+}

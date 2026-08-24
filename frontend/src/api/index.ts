@@ -8,6 +8,7 @@ export {
   apiErrorFromBody,
   isApiError,
   isApiTransportError,
+  isVersionConflict,
 } from "./errors";
 export type { ErrorDetails } from "./errors";
 
@@ -28,6 +29,23 @@ export {
   queryKeys,
 } from "./queryKeys";
 export type { MutationEvent } from "./queryKeys";
+
+export {
+  DEFAULT_REVIEW_STATUS_FILTER,
+  REVIEW_STATUS_FILTER_OPTIONS,
+  decisionLabel,
+  describeFrameStage,
+  describeReviewStatus,
+  frameReviewCapabilities,
+  isActiveAnnotation,
+  parseReviewStatusFilter,
+  reviewStatusQuery,
+} from "./frameReview";
+export type {
+  FrameReviewCapabilities,
+  ReviewStatusFilter,
+  StatusPresentation,
+} from "./frameReview";
 
 export { ocrProvenanceOf, requiresOcrWarning } from "./ocrQuality";
 export type { OcrProvenanceView } from "./ocrQuality";

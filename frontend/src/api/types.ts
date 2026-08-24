@@ -202,6 +202,7 @@ export interface ListMaterialsQuery {
 // --- frames and annotations ----------------------------------------------
 
 export type AnnotationSource = "ocr" | "manual";
+export type AnnotationStatus = "proposed" | "accepted" | "deleted";
 
 /**
  * Geometry is flat on the response — `x`/`y`/`width`/`height` — while requests
@@ -218,7 +219,7 @@ export interface Annotation {
   confidence: number | null;
   source: AnnotationSource;
   observation_id: string | null;
-  status: string;
+  status: AnnotationStatus;
   version: number;
 }
 

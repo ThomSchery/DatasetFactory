@@ -69,6 +69,11 @@ export function isApiTransportError(error: unknown): error is ApiTransportError 
   return error instanceof ApiTransportError;
 }
 
+/** A stale expected_version requires an explicit frame reload in review UI. */
+export function isVersionConflict(error: unknown): boolean {
+  return isApiError(error) && error.code === "version_conflict";
+}
+
 /** Builds an `ApiError` from a parsed body, or `null` if it is not an envelope. */
 export function apiErrorFromBody(status: number, body: unknown): ApiError | null {
   const parsed = errorEnvelopeSchema.safeParse(body);

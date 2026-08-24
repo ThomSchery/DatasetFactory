@@ -2,18 +2,22 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { emptyDashboard } from "../test/fixtures";
+import {
+  emptyDashboard,
+  framePageFixture,
+  profileFixture,
+  runFixture,
+} from "../test/fixtures";
 import { renderApp, stubFetch } from "../test/harness";
 import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
 
 /*
  * FE-04 fixes the route set at five. Dashboard and Materiały render their real
- * screens since FE-001-F2 and Nowy profil gry since FE-001-F3; the other two
- * still carry an explicit empty state naming the ticket that builds them.
+ * screens since FE-001-F2, Nowy profil gry since FE-001-F3, and Anotacje since
+ * FE-001-F4. Eksporty still carries an explicit future-feature empty state.
  */
 
 const UNBUILT_ROUTES: readonly [string, string][] = [
-  ["/annotations/run-42", "Anotacje"],
   ["/exports", "Eksporty"],
 ];
 
@@ -23,14 +27,21 @@ const BUILT_ROUTES: readonly [string, string][] = [
 ];
 
 beforeEach(() => {
-  // The two built screens query the API on mount; an empty install is the
+  // The built screens query the API on mount; an empty install is the
   // quietest backdrop for assertions about routing rather than about data.
   stubFetch((url) => {
     if (url.includes("/materials")) {
       return { status: 200, body: { items: [], page: 1, page_size: 100, total: 0 } };
     }
     if (url.includes("/profiles/current")) {
-      return { status: 200, body: null };
+      return { status: 200, body: profileFixture() };
+    }
+    if (url.includes("/frames?")) {
+      return { status: 200, body: framePageFixture({ items: [], total: 0 }) };
+    }
+    const runMatch = url.match(/\/api\/v1\/runs\/([^/?]+)$/);
+    if (runMatch) {
+      return { status: 200, body: runFixture({ id: runMatch[1] }) };
     }
     return { status: 200, body: emptyDashboard() };
   });
@@ -71,9 +82,20 @@ describe("the five FE-04 routes", () => {
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
   });
 
-  it("keeps runId in the URL rather than in component state", () => {
+  it("renders the annotation review screen built in FE-001-F4", async () => {
     renderApp(["/annotations/run-42"]);
-    expect(screen.getByRole("region", { name: /weryfikacja/i })).toHaveTextContent("run-42");
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
+    expect(await screen.findByRole("region", { name: "Filtr klatek" })).toBeInTheDocument();
+    expect(screen.getByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
+    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+  });
+
+  it("keeps runId in the URL rather than in component state", async () => {
+    renderApp(["/annotations/run-42"]);
+    expect(await screen.findByRole("region", { name: "Filtr klatek" })).toHaveTextContent(
+      "run-42",
+    );
   });
 
   it("shows an explicit empty state for an unknown path", () => {

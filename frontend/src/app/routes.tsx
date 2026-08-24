@@ -1,6 +1,7 @@
-import { createBrowserRouter, useParams, type RouteObject } from "react-router";
+import { createBrowserRouter, type RouteObject } from "react-router";
 
 import { Empty } from "../components/common/UiStates";
+import { AnnotationReviewScreen } from "../features/annotations";
 import { DashboardScreen } from "../features/dashboard";
 import { MaterialsScreen } from "../features/materials";
 import { ProfileCreateScreen } from "../features/profiles";
@@ -15,19 +16,6 @@ import { AppShell } from "./AppShell";
  * `handle.heading` feeds the shell's `<h1>` so the heading and the route stay
  * defined in one place.
  */
-
-function AnnotationsRoute() {
-  // `runId` comes from the URL and nowhere else — the backend stays the only
-  // source of durable state (FE-04).
-  const { runId } = useParams<{ runId: string }>();
-
-  return (
-    <Empty
-      description={`Weryfikacja klatek powstaje w FE-001-F4. Run z adresu: ${runId ?? "brak"}.`}
-      title="Weryfikacja nie jest jeszcze zbudowana"
-    />
-  );
-}
 
 function ExportsRoute() {
   return (
@@ -60,7 +48,7 @@ export const appRoutes: RouteObject[] = [
       { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },
       {
         path: "annotations/:runId",
-        element: <AnnotationsRoute />,
+        element: <AnnotationReviewScreen />,
         handle: { heading: "Anotacje" },
       },
       { path: "exports", element: <ExportsRoute />, handle: { heading: "Eksporty" } },

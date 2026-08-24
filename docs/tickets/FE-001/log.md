@@ -993,8 +993,10 @@ Ekran **Anotacje** (`/annotations/:runId`, `runId` wyłącznie z URL):
    `frameImageUrl(frame.id)`, `source={width,height}` z API, aktywne anotacje jako
    jedna kolekcja backendu. `viewBox` pozostaje w naturalnych pikselach klatki.
 7. Tryb dodawania — `SelectField` klasy nowego boksu, instrukcja rysowania oraz
-   gest `RegionOverlay.onDraw`. Powstały bbox jest wysyłany dopiero przez
-   `POST /frames/{id}/annotations`; brak lokalnego optimistic insertu.
+   gest `RegionOverlay.onDraw`. Równoległa droga klawiaturowa ma cztery
+   `TextField` (`x/y/width/height`) i `Button` „Dodaj bbox z pól”. Obie drogi
+   kończą się tym samym `POST /frames/{id}/annotations`; brak lokalnego
+   optimistic insertu i brak drugiego przelicznika współrzędnych.
 8. Tryb zmiany geometrii na obrazie — `Button` „Narysuj nową geometrię” przy
    anotacji przełącza następny gest `onDraw` w `PATCH` wybranej anotacji zamiast
    tworzenia drugiego overlaya albo drugiego przelicznika współrzędnych.
@@ -1002,8 +1004,9 @@ Ekran **Anotacje** (`/annotations/:runId`, `runId` wyłącznie z URL):
    wiersz pokazuje klasę, bbox `x/y/w/h` w monospace, `source=OCR|manual`
    (`StatusBadge`) i confidence tylko dla OCR; zaznaczenie synchronizuje się
    z overlayem.
-10. Operacje wiersza anotacji — `SelectField` zmiany klasy; cztery `TextField`
-    liczby `x`, `y`, `width`, `height` i `Button` „Zapisz geometrię”; `Button`
+10. Operacje wiersza anotacji — `SelectField` zmiany klasy i `Button` „Zapisz
+    klasę” (kontrolka mutacji ze spinnerem); cztery `TextField` liczby `x`, `y`,
+    `width`, `height` i `Button` „Zapisz geometrię”; `Button`
     „Narysuj nową geometrię”; `Button` „Zaznacz”; `Button` „Usuń”. To pełna
     droga klawiaturowa v1 bez trafiania w mały bbox.
 11. Akcje decyzji — dla `pending`: `Button` primary „Zaakceptuj klatkę” oraz
