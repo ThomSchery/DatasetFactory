@@ -242,6 +242,7 @@ Trzy własności są powodem istnienia tego komponentu:
 |---|---|---|---|
 | region domyślny | `--color-surface-transparent` | `--color-fill-brand-impeccable`, `--border-width-emphasis` | `vector-effect: non-scaling-stroke` — 2 px CSS przy każdej skali |
 | region `tone="muted"` | jw. | `--color-stroke-strong-default` | obiekt do obejrzenia, nie do edycji |
+| region `tone="error"` | jw. | `--color-status-error-default`, grubsza kreskowana linia | niepoprawna geometria wskazana przez walidację domenową; znaczenie musi też mieć opis tekstowy |
 | hover | `--color-surface-neutral-hover` | bez zmiany | OPACITY-02, warstwa 0.06 |
 | zaznaczony | `--color-fill-brand-impeccable-soft` | bez zmiany | dodatkowo `aria-selected="true"` |
 | focus-visible | bez zmiany | `--color-text-strong-default`, `+ --focus-ring-width` | `outline` na `<rect>` nie jest przewidywalny między silnikami |

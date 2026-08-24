@@ -222,6 +222,18 @@ describe("keyboard reach", () => {
     { id: "r3", label: "Zegar rundy", x: 800, y: 40, width: 90, height: 30 },
   ];
 
+  it("exposes the general error tone without changing source geometry", () => {
+    renderOverlay({
+      initialShapes: [
+        { ...shapes[0]!, tone: "error" },
+      ],
+    });
+
+    const option = screen.getByRole("option");
+    expect(option).toHaveClass("df-region-overlay__shape--error");
+    expect(shapeGeometry(option)).toEqual({ x: 10, y: 20, width: 100, height: 40 });
+  });
+
   it("exposes every rectangle as an option with its geometry in the name", () => {
     renderOverlay({ initialShapes: shapes });
 

@@ -18,8 +18,8 @@ export interface OverlayShape extends SourceRect {
   id: string;
   /** Human name; the overlay appends the geometry to build the accessible name. */
   label: string;
-  /** `brand` is a shape the user owns, `muted` one they only inspect. */
-  tone?: "brand" | "muted";
+  /** `brand` is editable, `muted` read-only, `error` invalid geometry. */
+  tone?: "brand" | "muted" | "error";
 }
 
 export interface RegionOverlayProps {

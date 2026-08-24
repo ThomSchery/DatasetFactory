@@ -60,6 +60,15 @@
   stroke: var(--color-stroke-strong-default);
 }
 
+/* A domain validation error must survive both resize and colour-blind reading:
+   it uses the status token and a dashed line, while the accessible list names
+   the error in text. */
+.df-region-overlay__shape--error .df-region-overlay__shape-fill {
+  stroke: var(--color-status-error-default);
+  stroke-width: calc(var(--border-width-emphasis) + var(--border-width-default));
+  stroke-dasharray: 6 4;
+}
+
 .df-region-overlay__shape:hover .df-region-overlay__shape-fill {
   fill: var(--color-surface-neutral-hover);
 }
