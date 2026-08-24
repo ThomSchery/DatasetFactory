@@ -150,7 +150,7 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
         return run_response(record)
 
     def mutate(
-        action: Literal["start", "pause", "resume", "cancel"],
+        action: Literal["start", "pause", "resume", "cancel", "complete"],
         run_id: str,
         payload: VersionedMutationRequest,
         request: Request,
@@ -198,6 +198,15 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
         workflow: Annotated[DatasetWorkflow, Depends(workflow_provider)],
     ) -> RunResponse | JSONResponse:
         return mutate("cancel", run_id, payload, request, workflow)
+
+    @router.post("/{run_id}/complete", response_model=RunResponse, status_code=202)
+    def complete_run(
+        run_id: str,
+        payload: VersionedMutationRequest,
+        request: Request,
+        workflow: Annotated[DatasetWorkflow, Depends(workflow_provider)],
+    ) -> RunResponse | JSONResponse:
+        return mutate("complete", run_id, payload, request, workflow)
 
     @router.get("/{run_id}", response_model=RunResponse)
     def get_run(

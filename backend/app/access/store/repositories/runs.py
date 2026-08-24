@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from backend.app.access.store.database import Database
 from backend.app.access.store.models import (
     Category,
+    Export,
     Frame,
     GameProfile,
     PipelineRun,
@@ -52,6 +53,10 @@ class RunReservationConflictError(RunVersionConflictError):
 
 
 class ActiveRunError(RuntimeError):
+    pass
+
+
+class RunCompletionPreconditionError(RuntimeError):
     pass
 
 
@@ -502,6 +507,36 @@ class RunRepository:
 
     def finish_review_ready(self, run_id: str) -> RunRecord:
         return self._terminal_transition(run_id, "review_ready", None)
+
+    def complete(self, run_id: str, *, expected_version: int) -> RunRecord:
+        """Close an exported review with one atomic status/version check.
+
+        The completed export is checked in the same write transaction as the CAS,
+        so a caller cannot close a stale or otherwise ineligible run.
+        """
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            run = session.get(PipelineRun, run_id)
+            if run is None:
+                raise RunNotFoundError
+            current = cast(RunStatus, run.status)
+            require_run_transition(current, "completed")
+            if run.version != expected_version:
+                raise RunVersionConflictError
+            self._require_no_reservation(run)
+            completed_export_id = session.scalar(
+                select(Export.id)
+                .where(Export.run_id == run_id, Export.status == "completed")
+                .limit(1)
+            )
+            if completed_export_id is None:
+                raise RunCompletionPreconditionError
+            run.status = "completed"
+            run.current_stage = None
+            run.current_frame_index = None
+            run.version += 1
+            session.flush()
+            return self._record(session, run)
 
     def fail(self, run_id: str, error_code: str) -> RunRecord:
         return self._terminal_transition(run_id, "failed", error_code)

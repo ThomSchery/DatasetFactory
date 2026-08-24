@@ -16,6 +16,7 @@ from backend.app.access.store.repositories.frames import (
 )
 from backend.app.access.store.repositories.runs import (
     ActiveRunError,
+    RunCompletionPreconditionError,
     RunNotFoundError,
     RunProfileNotFoundError,
     RunRecord,
@@ -184,6 +185,17 @@ class DatasetWorkflow:
             self._worker.cancel_current()
         return record
 
+    def complete(self, run_id: str, *, expected_version: int) -> RunRecord:
+        record = self.get_run(run_id)
+        if record.status != "review_ready":
+            raise WorkflowError("invalid_transition")
+        if record.version != expected_version:
+            raise WorkflowError("version_conflict")
+        try:
+            return self._runs.complete(run_id, expected_version=expected_version)
+        except Exception as exc:
+            raise self._translate(exc) from exc
+
     def get_run(self, run_id: str) -> RunRecord:
         try:
             return self._runs.get(run_id)
@@ -331,6 +343,8 @@ class DatasetWorkflow:
             return WorkflowError("version_conflict")
         if isinstance(error, ActiveRunError):
             return WorkflowError("active_run")
+        if isinstance(error, RunCompletionPreconditionError):
+            return WorkflowError("invalid_transition")
         if isinstance(error, InvalidTransitionError):
             return WorkflowError("invalid_transition")
         return WorkflowError("workflow_persistence_failed")
