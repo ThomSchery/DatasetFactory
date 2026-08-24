@@ -1,6 +1,8 @@
 # FE-001-F4-FIX2 — selekcja pointer capture i retry po 409
 
-Status: GOTOWY
+Status: WYKONANY (2026-08-24)
+
+> Finalny niezależny acceptance review: `ACCEPT`, bez findingów.
 
 ## Powód
 

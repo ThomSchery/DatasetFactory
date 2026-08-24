@@ -1,6 +1,9 @@
 # FE-001-F4-FIX1 — domknięcie workflow weryfikacji
 
-Status: GOTOWY
+Status: WYKONANY (2026-08-24)
+
+> Domknięty implementacją FIX1 oraz uzupełniającym FIX2 po niezależnym
+> re-review. Finalny acceptance review całego otwartego zakresu: `ACCEPT`.
 
 ## Powód
 
