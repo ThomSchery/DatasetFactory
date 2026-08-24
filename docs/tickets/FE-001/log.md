@@ -1392,3 +1392,137 @@ użytkownika. Kod produkcyjny nie wymagał korekty z powodu tej próby.
 Backend, kontrakt API i zależności nie zmieniły się, dlatego zgodnie z FIX2 nie
 powtarzano pełnego backendowego pytest. Nie wykryto nowej luki kontraktu ani
 odchylenia od zamkniętego zakresu.
+
+---
+
+# FE-001-F5 — Eksport COCO i Gate 3 UI
+
+## Design Plan (przed kodem UI)
+
+Źródła przeczytane przed pisaniem kodu: `frontend/src/styles/tokens.css`
+w całości, `.agent/guidelines/new-component.md` w całości (procedura §2.2,
+katalog §4 i definicje §5) oraz następujące pełne moduły
+`_agent_oriented_guidelines_final_UI_UX_v3.md`:
+
+| Moduł | Zakres ID | Po co w tym tickecie |
+|---|---|---|
+| Siatka i Odstępy | GRID-00…14, SPACING-01…13 | Dwukolumnowy układ stanu runu i eksportu, 8-punktowe odstępy paneli, wiersze manifestu, hit area akcji i ograniczenie szerokości copy |
+| Kolor | COLOR-01…10 | Status eksportu, sukces i błąd, 60/30/10, kontrast tekstu oraz rozróżnienie akcji bez opierania znaczenia wyłącznie na kolorze |
+| Obramowanie | BORDER-01…09 | Słabe dzielniki metadanych, mocny fokus, jednostronne akcenty komunikatów i brak dekoracyjnego obramowywania każdej grupy |
+| Szerokość Obramowania | BWIDTH-01…14 | 1 px struktury, 2 px fokusu/akcentu/błędu, bez przesunięcia układu |
+| Promień Obramowania | RADIUS-01…05 | `radius-lg` paneli, `radius-md` grup metadanych i `radius-pill` istniejących odznak |
+| Nakładki | OVERLAY-01…07 | Brak modali i tekstu na obrazie; hover wyłącznie istniejącą warstwą alpha |
+| Cienie | SHADOW-01…05 | Ciemny motyw: hierarchię niosą powierzchnie i spacing, nie `box-shadow` |
+| Typografia | TYPO-01…21, FONTSIZE-01…11, LHEIGHT-01…14, LSPACE-01…09, PARASPACE-01…06, CASING-01…03 | Nagłówki paneli, wartości manifestu, ścieżka monospace, polskie copy w `Sentence case`, mały `UPPERCASE` tylko w gotowych eyebrow/odznakach |
+| Przezroczystość | OPACITY-01…02 | Istniejące hover/pressed `0.8` i disabled `0.2` dla mutacji |
+
+### Wszystkie elementy UI F5
+
+Ekran **Eksporty** (`/exports`, `frontend/src/features/exports/**`):
+
+1. `ExportsScreen` — kompozycja query `GET /dashboard`, opcjonalnego
+   `GET /exports/{id}` i `GET /runs/{id}` po rozpoczęciu pracy. Ekran ma jawne,
+   rozłączne stany `Loading`, `Empty`, `FatalError` i sukces. Aktywny run
+   pochodzi z backendu; nie ma pola do wpisania `run_id`, identyfikatora eksportu
+   ani ścieżki filesystemu.
+2. `ExportRunPanel` — `Panel` z metadanymi runu jako `DataList`: ID, status,
+   wersja CAS, rewizja weryfikacji i liczba ukończonych/zaplanowanych klatek.
+   `StatusBadge` opisuje status, a copy wyjaśnia, że eksport obejmuje wyłącznie
+   zaakceptowane klatki.
+3. Akcja `Button` primary „Uruchom eksport COCO” — wysyła `POST /exports`
+   z `run_id` aktywnego runu. W locie ma `loading`, spinner, `aria-busy` i
+   natywny `disabled`; nie ma optimistic update. `400 no_accepted_frames` i
+   `409 export_running` trafiają do `InlineError` przez centralny słownik.
+4. Stan eksportu w `Panel` — `StatusBadge`, ID eksportu, `input_revision` i
+   komunikat pollingu. `GET /exports/{id}` jest odpytywany co 2 s wyłącznie dla
+   statusu nonterminal; `completed` i `failed` zatrzymują polling.
+5. `ExportManifestPanel` — po `completed` pokazuje `schema`, `run_id`,
+   `profile_id`, `exported_at`, `input_revision`, relatywne położenie
+   `annotations.json` i katalogu obrazów. Dane są semantycznym `DataList`, nie
+   surowym JSON-em.
+6. Sekcja „Pochodzenie anotacji” — dwa liczniki `OCR` i `manual` z
+   `manifest.annotation_sources`. Stałe copy: „To licznik pochodzenia boksów,
+   nie ocena trafności OCR.” Nie powstaje procent jakości ani confidence.
+7. Ścieżka wyniku — wyłącznie `output_relpath` z API, wyrenderowana jako wartość
+   monospace z etykietą „Ścieżka względem workspace”. Nie ma kontrolki edycji,
+   kopiowania ścieżki absolutnej ani pola wejściowego.
+8. `Notice` immutable snapshot — po `completed` mówi, że wynik jest migawką
+   `input_revision`; późniejsze ponowne otwarcie/zmiana klatki nie modyfikuje
+   istniejącego eksportu i wymaga jawnego uruchomienia nowego eksportu.
+9. Błąd terminalny eksportu — `Notice`/`InlineError` pokazuje `error_code`
+   niezależnie od błędu HTTP. Stabilne kody `export_revision_conflict`,
+   `export_source_missing`, `export_process_interrupted` korzystają z tego
+   samego centralnego polskiego copy; ekran nie utożsamia ich z odpowiedzią
+   `POST`.
+10. Akcja `Button` secondary „Uruchom nowy eksport” — dostępna jawnie po
+    `completed` albo `failed`; tworzy nowe `export_id`, nie nadpisuje istniejącej
+    prezentacji ani nie sugeruje eksportu przyrostowego.
+11. Akcja `Button` primary „Zamknij run” — pojawia się dopiero dla ukończonego
+    eksportu i runu, który backend pozwala zamknąć. Wysyła
+    `POST /runs/{id}/complete` z bieżącym `expected_version`; w locie ma własny
+    spinner/disabled. Sukces pochodzi z odpowiedzi backendu, po czym centralna
+    invalidacja/refetch odświeża run i dashboard. To decyzja użytkownika, nigdy
+    automatyczny efekt ukończenia eksportu.
+12. Stan zamknięty — `StatusBadge success` i `Notice` potwierdzają terminalny
+    `completed`; nie ma dalszej akcji mutującej run.
+13. Błędy zamknięcia — `409 version_conflict` i `409 invalid_transition`
+    renderują centralne copy z jawnym kodem; zero lokalnego podstawienia statusu.
+14. QA/test-only harness — nie dodaje produkcyjnego elementu UI. Playwright
+    przechwytuje prawdziwe wywołania jednego typowanego klienta i zwraca jawne,
+    wersjonowane fixture DTO dla profilu → materiału → runu → OCR/review →
+    eksportu → zamknięcia. Fixture nie implementuje walidacji ani maszyny
+    backendu; jest kolejką odpowiedzi i obrazem z repo.
+
+### Checklista wymagana przez `new-component.md` §2.2
+
+- [x] **Layout/Siatka (GRID-01/02/05/08/09/10/11,
+  SPACING-01/02/06/09/10/12/13)** — ekran to `grid` z dwoma kolumnami
+  `minmax(0, 1fr)` i `gap: var(--size-lg)`; przy 1280 px nie ma poziomego
+  overflow. Panele dzieli `--size-lg`, grupy wewnątrz `--size-md`, pary
+  etykieta/wartość `--size-sm`/`--size-xs`. Copy ma `--measure-copy`.
+  Wszystkie akcje używają gotowego `Button md` (40 px, ponad minimum GRID-05),
+  a listy metadanych istniejącego `DataList` z wysokością i paddingiem opartym
+  na tokenach.
+- [x] **Typografia (TYPO-02/07/08/11, FONTSIZE-02/08/09/10,
+  LHEIGHT-09/10/11, LSPACE-02/07/09, PARASPACE-01/02/05/06,
+  CASING-02/03)** — maksymalnie cztery rozmiary: `xl` nagłówka trasy z shell,
+  `lg` tytułów paneli, `sm` treści/akcji, `xs` metadanych/odznak. Dwie wagi:
+  regular/semibold. Relatywna ścieżka i ID używają istniejącego stosu mono,
+  nie mniejszego niż 12 px. Copy jest polskim `Sentence case`; gotowe eyebrow
+  i `StatusBadge` zachowują jedyne krótkie `UPPERCASE` + `letter-spacing-wide`.
+- [x] **Kolory (COLOR-02/07/08/09/10)** — tło/powierzchnie/akcent zachowują
+  60/30/10. Running używa tonu brand, completed success, failed error; znaczenie
+  zawsze niesie też tekst/status i semantyka, nie sama barwa. Brak surowych
+  literałów koloru; nowe pary kontrastu zostaną przypięte testem tylko, jeśli
+  nie pokrywają ich istniejące komponenty.
+- [x] **Obramowania (BORDER-02/03/05/06/08,
+  BWIDTH-02/03/06/10/11/12/13, RADIUS-02/03/05)** — panele i grupy rozdziela
+  przestrzeń; istniejący słaby obrys panelu i dzielniki `DataList` zostają bez
+  nowego stylu. Fokus i błąd pochodzą z gotowych common components, są rysowane
+  do wewnątrz. `radius-lg` panelu, `radius-md` grupy i `radius-pill` odznaki.
+- [x] **Cienie (SHADOW-05)** — brak `box-shadow`; w ciemnym motywie poziomy
+  powierzchni i spacing komunikują hierarchię.
+- [x] **Interakcje (COLOR-07, OPACITY-02, BORDER-06, GRID-05,
+  FE-06/07/08)** — każda mutacja ma własny `Button` ze spinnerem,
+  `aria-busy`, natywnym disabled i widocznym fokusem; eksport i zamknięcie nie
+  mogą wystartować równolegle. Zero optimistic update. Polling kończy się na
+  statusie terminalnym. Błędy są `role=alert`; loading `role=status`; panele są
+  nazwanymi `<section>`. Przy <1280 px istniejący `WidthGuard` zastępuje shell.
+- [x] **Komponenty (katalog §4–§5 `new-component.md`)** — użyte bez zmian:
+  `Button` (wszystkie akcje), `UiStates` (`Loading`, `Empty`, `InlineError`,
+  `FatalError`), `StatusBadge` (run/eksport), `Panel` (każda sekcja), `Notice`
+  (immutable snapshot i pochodzenie), `DataList` (run/manifest/output).
+  `TextField`, `SelectField`, `RegionOverlay` i `NavItem` nie są potrzebne na
+  ekranie eksportu. Nie powstaje nowy common component, więc katalog pozostaje
+  aktualny bez dopisywania definicji.
+
+### Copy, zakres i kontrakt
+
+Teksty są polskie; OCR, COCO, JSON, manifest, manual, run i workspace pozostają
+terminami technicznymi. Ekran nie wspomina train/val, YOLO, eksportu
+przyrostowego ani automatycznej trafności OCR. `annotation_sources` opisuje
+wyłącznie pochodzenie anotacji. Ukończony eksport jest niezmienną migawką;
+każdy późniejszy stan wymaga nowego `POST /exports`. Ścieżka jest prezentowana
+wyłącznie jako wartość relatywna z backendu. Zamknięcie runu jest osobnym,
+jawnym `POST /runs/{id}/complete` z CAS i nigdy nie jest wywoływane przez efekt
+ukończenia eksportu.
