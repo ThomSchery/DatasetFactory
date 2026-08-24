@@ -1306,3 +1306,44 @@ Rozstrzygnięcie produktu o historycznych runach ujawniło rzeczywistą lukę
 kontraktu F4: samo `GET /profiles/current` nie mogło bezpiecznie zweryfikować
 starszego runu. FIX1 zamyka ją read-only `GET /profiles/{profile_id}`. Nie
 wykryto dalszej sprzeczności kontraktu ani potrzeby rozszerzenia zakresu.
+
+## FE-001-F4-FIX2 — Design Plan addendum (2026-08-24)
+
+FIX2 nie dodaje widocznego elementu ani nie zmienia układu. Jedynym elementem
+interfejsu w zakresie jest istniejący `RegionOverlay`: powierzchnia
+`<svg role="listbox">`, bbox `<g role="option">`, jego przezroczysty hit-target
+oraz szkic prostokąta podczas drag. W `interactionMode="draw"` pointerdown na
+shape zapamięta origin shape: niedrawable pointerup wybiera go dokładnie raz,
+a drawable pointerup nadal tworzy nakładający bbox. Domyślny tryb `select`,
+klawiatura, roving tabindex i wizualne stany pozostają bez zmian.
+
+### Checklista UI/UX FIX2
+
+- [x] **Layout/Siatka — moduł Siatka i Odstępy, GRID-01/02/05:** brak zmian
+  wymiarów i CSS. Istniejący hit-target zachowuje minimum desktopowe oraz token
+  `--size-xs`; nie powstaje arbitralna wartość ani nowe pole układu.
+- [x] **Typografia — moduł Typografia:** brak nowego tekstu, copy, rozmiaru,
+  wysokości linii, wagi lub kerningu; istniejące `label` i nazwy shape pozostają
+  bez zmian, więc FIX2 nie wprowadza nowego ID typograficznego.
+- [x] **Kolory — moduł Stylizacja Elementów/UI & Visuals, COLOR-07/09,
+  OPACITY-02:** brak nowych kolorów. Istniejące
+  `--color-fill-brand-impeccable-soft`, `--color-surface-neutral-hover` i
+  `--opacity-disabled` zachowują znaczenie; logika pointer capture nie zmienia
+  stanu wizualnego.
+- [x] **Obramowania — moduł UI & Visuals, BORDER-05/06,
+  BWIDTH-08/10/11/13, RADIUS-02:** istniejący bbox nadal używa
+  `--border-width-emphasis`, `--focus-ring-width`,
+  `--color-stroke-strong-default`, `vector-effect: non-scaling-stroke` i
+  `--radius-none`. Brak zmian obrysu lub geometrii.
+- [x] **Nakładki — moduł UI & Visuals, OVERLAY-06:** niewidoczny hit-target nie
+  blokuje powierzchni w draw mode; origin shape jest ustalany z
+  `event.target.closest`, a pointer capture nie może zgubić znaczenia kliknięcia.
+- [x] **Cienie — moduł UI & Visuals, SHADOW-05:** ciemny overlay nadal nie używa
+  cienia; FIX2 nie dodaje elevation.
+- [x] **Interakcje — GRID-05, BORDER-06, COLOR-07, OPACITY-02, OVERLAY-06:**
+  click bez ruchu na shape wybiera dokładnie ten shape i nie rysuje; drag
+  rozpoczęty na shape rysuje nakładający bbox; select-mode i obsługa klawiatury
+  pozostają zgodne z F3. Deduplikacja click chroni przed podwójnym `onSelect`.
+- [x] **Komponenty — katalog `new-component.md` §4–§5:** użyty wyłącznie
+  istniejący `RegionOverlay`; nie powstaje common component ani nowe API, więc
+  katalog nie wymaga kolejnego rozszerzenia.
