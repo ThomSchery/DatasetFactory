@@ -81,6 +81,16 @@ export interface CreateProfileRequest {
   categories: CategoryInput[];
 }
 
+export interface ReferencePreviewRequest {
+  reference_image_path: string;
+}
+
+export interface ReferencePreview {
+  asset_id: string;
+  width: number;
+  height: number;
+}
+
 export interface Region extends RegionInput {
   id: string;
 }

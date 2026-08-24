@@ -1,24 +1,22 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 
 import {
   createProfile,
+  createReferencePreview,
   describeApiError,
-  getCurrentProfile,
   invalidateFor,
-  queryKeys,
   referenceAssetUrl,
 } from "../../api";
 import { Button } from "../../components/common/Button";
 import { DataList } from "../../components/common/DataList";
-import { Notice } from "../../components/common/Notice";
 import { Panel } from "../../components/common/Panel";
 import type { SourceSize } from "../../components/common/RegionOverlay";
 import { TextField } from "../../components/common/TextField";
-import { Empty, FatalError, InlineError, Loading } from "../../components/common/UiStates";
+import { Empty, InlineError } from "../../components/common/UiStates";
 import { CategoryEditor } from "./CategoryEditor";
 import { RegionEditor } from "./RegionEditor";
 import { profileCreateSchema, type ProfileCreateValues } from "./schemas";
@@ -26,15 +24,9 @@ import "./ProfileCreateScreen.css";
 
 /*
  * CF-01: name and absolute reference path, regions drawn on the reference
- * image, base and per-game classes, one atomic `POST /profiles`, and on
- * success the material import.
- *
- * One thing the contract does not yet allow, recorded in
- * `docs/tickets/FE-001/log.md`: the API serves a reference image only behind
- * the `asset_id` of a *saved* profile, while `POST /profiles` requires the
- * regions in the same request. So the picture drawn on here is the one the
- * current profile already staged, and the screen says so rather than implying
- * it is the file named in the path field.
+ * image, base and per-game classes, then one atomic `POST /profiles`. The
+ * preview is staged first through `POST /profiles/reference-preview`, so a
+ * fresh installation can draw regions before any profile exists.
  */
 
 /** Narrows whatever the resolver put on a field to its message. */
@@ -51,11 +43,6 @@ export function ProfileCreateScreen() {
   const queryClient = useQueryClient();
   const [source, setSource] = useState<SourceSize | null>(null);
 
-  const currentProfile = useQuery({
-    queryFn: ({ signal }) => getCurrentProfile(signal),
-    queryKey: queryKeys.currentProfile(),
-  });
-
   const form = useForm<ProfileCreateValues>({
     defaultValues: { categories: [], name: "", reference_image_path: "", regions: [] },
     resolver: zodResolver(profileCreateSchema),
@@ -63,6 +50,15 @@ export function ProfileCreateScreen() {
 
   const regions = form.watch("regions");
   const categories = form.watch("categories");
+
+  const previewMutation = useMutation({
+    mutationFn: (referenceImagePath: string) =>
+      createReferencePreview({ reference_image_path: referenceImagePath }),
+    onSuccess: () => {
+      setSource(null);
+      form.setValue("regions", [], { shouldValidate: form.formState.isSubmitted });
+    },
+  });
 
   const mutation = useMutation({
     mutationFn: (values: ProfileCreateValues) =>
@@ -91,8 +87,14 @@ export function ProfileCreateScreen() {
   });
 
   const failure = mutation.isError ? describeApiError(mutation.error) : null;
-  const busy = mutation.isPending;
-  const profile = currentProfile.data ?? null;
+  const previewFailure = previewMutation.isError
+    ? describeApiError(previewMutation.error)
+    : null;
+  const busy = mutation.isPending || previewMutation.isPending;
+  const preview = previewMutation.data ?? null;
+  const regionsError = messageOf(form.formState.errors.regions);
+
+  const referencePathField = form.register("reference_image_path");
 
   /** Revalidates only once the user has already seen the form's verdict. */
   const revalidate = { shouldValidate: form.formState.isSubmitted };
@@ -120,14 +122,39 @@ export function ProfileCreateScreen() {
           spellCheck={false}
         />
         <TextField
-          {...form.register("reference_image_path")}
+          {...referencePathField}
           autoComplete="off"
           description="Bezwzględna ścieżka do klatki referencyjnej z HUD."
+          disabled={busy}
           error={form.formState.errors.reference_image_path?.message}
           label="Ścieżka obrazu referencyjnego"
+          onChange={(event) => {
+            void referencePathField.onChange(event);
+            if (preview !== null || previewMutation.isError) {
+              previewMutation.reset();
+              setSource(null);
+              form.setValue("regions", [], revalidate);
+            }
+          }}
           placeholder="D:\gry\hud.png"
           spellCheck={false}
         />
+        <Button
+          disabled={mutation.isPending}
+          loading={previewMutation.isPending}
+          loadingLabel="Wczytywanie podglądu…"
+          onClick={() => {
+            void form.trigger("reference_image_path").then((valid) => {
+              if (valid) {
+                previewMutation.mutate(form.getValues("reference_image_path").trim());
+              }
+            });
+          }}
+          type="button"
+          variant="secondary"
+        >
+          Wczytaj podgląd
+        </Button>
       </Panel>
 
       <Panel
@@ -135,49 +162,37 @@ export function ProfileCreateScreen() {
         eyebrow="Profil gry"
         title="Regiony HUD"
       >
-        {currentProfile.isPending ? <Loading label="Sprawdzanie bieżącego profilu…" /> : null}
-
-        {currentProfile.isError ? (
-          <FatalError
-            description={describeApiError(currentProfile.error).message}
-            onRetry={() => {
-              void currentProfile.refetch();
-            }}
-            title="Nie udało się sprawdzić bieżącego profilu"
-          />
-        ) : null}
-
-        {currentProfile.isSuccess && profile === null ? (
-          <Empty
-            description="API udostępnia obraz referencyjny dopiero po zapisaniu profilu, a zapis wymaga regionów w tym samym żądaniu. Pierwszy profil w instalacji trzeba więc na razie utworzyć poza tym ekranem."
-            title="Nie ma obrazu, na którym można rysować"
-          />
-        ) : null}
-
-        {currentProfile.isSuccess && profile !== null ? (
+        {preview === null ? (
           <>
-            <Notice title="Rysujesz na obrazie bieżącego profilu">
-              Podgląd pochodzi z profilu „{profile.name}” ({profile.source_width} ×{" "}
-              {profile.source_height} px), bo API serwuje obraz wyłącznie po identyfikatorze
-              zapisanego zasobu. Jeśli plik z pola ścieżki ma inne wymiary, backend odrzuci regiony
-              jako wykraczające poza obraz.
-            </Notice>
+            <Empty
+              description="Wpisz bezwzględną ścieżkę powyżej i wczytaj podgląd, żeby zaznaczyć regiony w naturalnych wymiarach obrazu."
+              title="Wczytaj obraz do rysowania"
+            />
+            {regionsError === undefined ? null : <InlineError message={regionsError} />}
+          </>
+        ) : null}
+
+        {previewFailure === null ? null : (
+          <InlineError message={`${previewFailure.message} ${previewFailure.action}`} />
+        )}
+
+        {preview !== null ? (
+          <>
             <DataList
               items={[
-                { label: "Profil źródłowy podglądu", value: profile.name },
                 {
                   hint: "Wymiary naturalne obrazu, w których zapisywane są regiony.",
                   label: "Rozdzielczość",
-                  value: `${String(profile.source_width)} × ${String(profile.source_height)} px`,
+                  value: `${String(preview.width)} × ${String(preview.height)} px`,
                 },
                 { label: "Zaznaczone regiony", value: String(regions.length) },
               ]}
               layout="columns"
             />
             <RegionEditor
-              assetUrl={referenceAssetUrl(profile.reference_asset_id)}
+              assetUrl={referenceAssetUrl(preview.asset_id)}
               disabled={busy}
-              error={messageOf(form.formState.errors.regions)}
+              error={regionsError}
               onChange={(next) => {
                 form.setValue("regions", next, revalidate);
               }}
@@ -205,7 +220,12 @@ export function ProfileCreateScreen() {
       </Panel>
 
       <div className="df-profiles__actions">
-        <Button loading={busy} loadingLabel="Zapisywanie profilu…" type="submit">
+        <Button
+          disabled={previewMutation.isPending}
+          loading={mutation.isPending}
+          loadingLabel="Zapisywanie profilu…"
+          type="submit"
+        >
           Utwórz profil
         </Button>
       </div>

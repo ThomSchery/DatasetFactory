@@ -684,6 +684,36 @@ OCR, region, profil, run. Komunikaty błędów backendu pochodzą wyłącznie
 z `api/messages.ts`; F3 dopisuje do tego słownika kody profilowe, których
 jeszcze nie było, zamiast pisać własne teksty w feature.
 
+### Korekta Design Planu — kontrakt `reference-preview` (przed zmianą UI)
+
+Po zatwierdzonej korekcie `TECH_PLAN §5/§7` ekran nie czyta już obrazu z
+`GET /profiles/current`. Pole ścieżki dostaje sąsiadującą akcję `Button`
+„Wczytaj podgląd”, która uruchamia `POST /profiles/reference-preview`. To jedyny
+nowy element interfejsu; `RegionEditor`, `RegionOverlay`, `DataList`, pola klas
+i końcowy `Button` zapisu pozostają bez zmian.
+
+- [x] **Layout/Siatka (GRID-01/02/05, SPACING-01/03/12)** — akcja podglądu leży
+  po polu ścieżki w istniejącym przepływie panelu, z odstępem `--size-sm`;
+  gotowy `Button md` zachowuje hit area `--control-height-md`.
+- [x] **Typografia (TYPO-07/08, FONTSIZE-09, LHEIGHT-09, CASING-02)** — etykieta
+  akcji używa istniejącej definicji `Button`, sentence case, bez nowej skali.
+- [x] **Kolory, obramowania i cienie (COLOR-07/10, BORDER-06, BWIDTH-11,
+  RADIUS-05, SHADOW-05)** — wszystkie stany pochodzą z wariantu `secondary`
+  `Button`; bez nowych literałów, obramowań, promieni ani cieni.
+- [x] **Interakcje (COLOR-07, OPACITY-01, FE-06)** — mutacja podglądu ustawia
+  `loading`, natywny `disabled`, spinner i `aria-busy`; zmiana ścieżki po
+  wczytaniu unieważnia podgląd i usuwa regiony, żeby nie zapisać geometrii
+  narysowanej na innym obrazie. Brak optimistic update.
+- [x] **Stany UI (FE-06)** — przed pierwszym podglądem istniejący `Empty`
+  instruuje, jak zacząć; błąd endpointu renderuje istniejący `InlineError` ze
+  słownika centralnego; sukces pokazuje istniejące `DataList` i `RegionEditor`.
+  Stan oczekiwania niesie spinner samego przycisku, ponieważ nie ma osobnego
+  query view ani powierzchni danych przed odpowiedzią.
+- [x] **Komponenty (`new-component.md` §4–§5)** — użyte: `TextField`, `Button`,
+  `Empty`, `InlineError`, `DataList`, `RegionOverlay` przez `RegionEditor`.
+  Usunięte: trwały `Notice` o obrazie innego profilu, bo jego warunek już nie
+  istnieje. Nie powstaje nowy komponent wspólny ani wpis w katalogu.
+
 ## Decyzje i interpretacje
 
 ### Prymityw overlaya: jeden `viewBox`, zero skalowania w JS

@@ -17,6 +17,8 @@ import type {
   Material,
   Page,
   PipelineRun,
+  ReferencePreview,
+  ReferencePreviewRequest,
   ReviewFrameRequest,
   UpdateAnnotationRequest,
   VersionedMutationRequest,
@@ -48,6 +50,11 @@ export function getDashboard(signal?: AbortSignal): Promise<Dashboard> {
 }
 
 // --- profiles -------------------------------------------------------------
+
+/** `POST /profiles/reference-preview` → `201` with an ephemeral opaque asset. */
+export function createReferencePreview(body: ReferencePreviewRequest): Promise<ReferencePreview> {
+  return apiRequest<ReferencePreview>("/profiles/reference-preview", { method: "POST", body });
+}
 
 /** `POST /profiles` → `201` */
 export function createProfile(body: CreateProfileRequest): Promise<GameProfile> {

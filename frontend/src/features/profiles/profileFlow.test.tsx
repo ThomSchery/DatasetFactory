@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,18 +14,21 @@ import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 const SOURCE = { width: 1920, height: 1080 };
 
 interface StubOptions {
-  /** What `GET /profiles/current` answers. */
-  current?: StubbedResponse;
+  /** What `POST /profiles/reference-preview` answers. */
+  preview?: StubbedResponse;
   /** What `POST /profiles` answers. */
   create?: StubbedResponse;
 }
 
-function stubProfileApi({ create, current }: StubOptions = {}) {
+function stubProfileApi({ create, preview }: StubOptions = {}) {
   return stubFetch((url, init) => {
-    if (url.includes("/profiles/current")) {
-      return current ?? { status: 200, body: profileFixture() };
+    if (url.includes("/profiles/reference-preview") && init?.method === "POST") {
+      return preview ?? {
+        status: 201,
+        body: { asset_id: "preview-asset-1", width: SOURCE.width, height: SOURCE.height },
+      };
     }
-    if (url.includes("/profiles") && init?.method === "POST") {
+    if (url.endsWith("/profiles") && init?.method === "POST") {
       return create ?? { status: 201, body: profileFixture() };
     }
     if (url.includes("/materials")) {
@@ -42,6 +45,15 @@ async function loadReferenceImage(): Promise<HTMLElement> {
   Object.defineProperty(image, "naturalHeight", { configurable: true, value: SOURCE.height });
   fireEvent.load(image);
   return screen.getByRole("listbox", { name: /Regiony HUD/ });
+}
+
+async function requestPreview(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  const path = screen.getByLabelText("Ścieżka obrazu referencyjnego");
+  if (!String((path as HTMLInputElement).value)) {
+    await user.type(path, "D:\\gry\\hud.png");
+  }
+  await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
+  return loadReferenceImage();
 }
 
 /** Lays the surface out at `width` CSS px and drags a rectangle across it. */
@@ -73,9 +85,16 @@ function drawRegion(
   fireEvent.pointerUp(surface, { ...at(to), pointerId: 1 });
 }
 
-function requestBodies(spy: ReturnType<typeof stubFetch>, method: string): unknown[] {
+function requestBodies(
+  spy: ReturnType<typeof stubFetch>,
+  endpoint: "/profiles" | "/profiles/reference-preview",
+): unknown[] {
   return spy.mock.calls
-    .filter(([, init]) => init?.method === method)
+    .filter(([input, init]) => {
+      const url = String(input);
+      return init?.method === "POST" &&
+        (endpoint === "/profiles" ? url.endsWith(endpoint) : url.includes(endpoint));
+    })
     .map(([, init]) => JSON.parse(String(init?.body)));
 }
 
@@ -85,53 +104,84 @@ afterEach(() => {
 });
 
 describe("the reference image view has every state", () => {
-  it("says it is checking before the answer arrives", () => {
+  it("starts empty with an instruction for staging the image", () => {
     stubProfileApi();
     renderApp(["/profiles/new"]);
 
-    expect(screen.getByText("Sprawdzanie bieżącego profilu…")).toBeInTheDocument();
-  });
-
-  it("explains the empty install rather than showing a broken canvas", async () => {
-    stubProfileApi({ current: { status: 200, body: null } });
-    renderApp(["/profiles/new"]);
-
     expect(
-      await screen.findByRole("region", { name: "Nie ma obrazu, na którym można rysować" }),
+      screen.getByRole("region", { name: "Wczytaj obraz do rysowania" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
-  it("surfaces a failed lookup as an error with a retry", async () => {
+  it("surfaces a failed preview through the central error dictionary", async () => {
+    const user = userEvent.setup();
     stubProfileApi({
-      current: { status: 500, body: errorEnvelope("internal_error") },
+      preview: { status: 404, body: errorEnvelope("source_missing") },
     });
     renderApp(["/profiles/new"]);
 
-    // `FatalError` is a `role="alert"` section, so it announces itself.
-    const error = await screen.findByRole("alert", {
-      name: "Nie udało się sprawdzić bieżącego profilu",
-    });
-    expect(within(error).getByText(/Wystąpił nieoczekiwany błąd aplikacji/)).toBeInTheDocument();
-    expect(within(error).getByRole("button", { name: "Spróbuj ponownie" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\missing.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Plik źródłowy nie istnieje pod zapisaną ścieżką.",
+    );
+  });
+
+  it("disables the preview control and shows its spinner while staging", async () => {
+    const user = userEvent.setup();
+    let answerPreview: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        new Promise<Response>((resolve) => {
+          answerPreview = resolve;
+        }),
+      ),
+    );
+    renderApp(["/profiles/new"]);
+
+    await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
+
+    const pending = await screen.findByRole("button", { name: "Wczytywanie podglądu…" });
+    expect(pending).toBeDisabled();
+    expect(pending).toHaveAttribute("aria-busy", "true");
+
+    answerPreview?.(
+      new Response(
+        JSON.stringify({
+          asset_id: "preview-asset-1",
+          width: SOURCE.width,
+          height: SOURCE.height,
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    expect(await screen.findByAltText(/Obraz referencyjny profilu/)).toBeInTheDocument();
   });
 
   it("draws the surface from the natural dimensions once the image decodes", async () => {
+    const user = userEvent.setup();
     stubProfileApi();
     renderApp(["/profiles/new"]);
 
-    const surface = await loadReferenceImage();
+    const surface = await requestPreview(user);
 
     expect(surface).toHaveAttribute("viewBox", "0 0 1920 1080");
   });
 
   it("loads the picture through the opaque asset endpoint, never a file path", async () => {
+    const user = userEvent.setup();
     stubProfileApi();
     renderApp(["/profiles/new"]);
 
+    await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const image = await screen.findByAltText(/Obraz referencyjny profilu/);
 
-    expect(image).toHaveAttribute("src", "/api/v1/assets/references/asset-1");
+    expect(image).toHaveAttribute("src", "/api/v1/assets/references/preview-asset-1");
   });
 });
 
@@ -147,6 +197,7 @@ describe("creating a profile", () => {
       "D:\\gry\\hud.png",
     );
 
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.25, yRatio: 0.25 }, { xRatio: 0.75, yRatio: 0.5 });
 
@@ -157,9 +208,12 @@ describe("creating a profile", () => {
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
 
     await waitFor(() => {
-      expect(requestBodies(fetchSpy, "POST")).toHaveLength(1);
+      expect(requestBodies(fetchSpy, "/profiles")).toHaveLength(1);
     });
-    expect(requestBodies(fetchSpy, "POST")[0]).toEqual({
+    expect(requestBodies(fetchSpy, "/profiles/reference-preview")).toEqual([
+      { reference_image_path: "D:\\gry\\hud.png" },
+    ]);
+    expect(requestBodies(fetchSpy, "/profiles")[0]).toEqual({
       name: "Gra testowa",
       reference_image_path: "D:\\gry\\hud.png",
       regions: [{ name: "Region 1", x: 480, y: 270, width: 960, height: 270 }],
@@ -181,7 +235,6 @@ describe("creating a profile", () => {
     const user = userEvent.setup();
     const fetchSpy = stubProfileApi();
     renderApp(["/profiles/new"]);
-    await loadReferenceImage();
 
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
 
@@ -191,7 +244,8 @@ describe("creating a profile", () => {
       screen.getByText("Zaznacz przynajmniej jeden region HUD na obrazie."),
     ).toBeInTheDocument();
     expect(screen.getByText("Dodaj przynajmniej jedną klasę.")).toBeInTheDocument();
-    expect(requestBodies(fetchSpy, "POST")).toHaveLength(0);
+    expect(requestBodies(fetchSpy, "/profiles/reference-preview")).toHaveLength(0);
+    expect(requestBodies(fetchSpy, "/profiles")).toHaveLength(0);
   });
 
   it("rejects a relative path before it leaves the browser", async () => {
@@ -201,10 +255,11 @@ describe("creating a profile", () => {
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra");
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "gry\\hud.png");
-    await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
 
     expect(await screen.findByText(/Ścieżka musi być bezwzględna/)).toBeInTheDocument();
-    expect(requestBodies(fetchSpy, "POST")).toHaveLength(0);
+    expect(requestBodies(fetchSpy, "/profiles/reference-preview")).toHaveLength(0);
+    expect(requestBodies(fetchSpy, "/profiles")).toHaveLength(0);
   });
 
   it("disables its control and shows a spinner while the mutation is in flight", async () => {
@@ -220,10 +275,12 @@ describe("creating a profile", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        if (String(input).includes("/profiles/current")) {
-          return Promise.resolve(json(profileFixture(), 200));
+        if (String(input).includes("/profiles/reference-preview")) {
+          return Promise.resolve(
+            json({ asset_id: "preview-asset-1", width: SOURCE.width, height: SOURCE.height }, 201),
+          );
         }
-        if (init?.method === "POST") {
+        if (String(input).endsWith("/profiles") && init?.method === "POST") {
           return new Promise<Response>((resolve) => {
             answerCreate = resolve;
           });
@@ -235,6 +292,7 @@ describe("creating a profile", () => {
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.4, yRatio: 0.4 });
     await user.click(screen.getByRole("button", { name: "7" }));
@@ -274,6 +332,7 @@ describe("backend rejections", () => {
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.4, yRatio: 0.4 });
     await user.click(screen.getByRole("button", { name: "7" }));
@@ -316,7 +375,7 @@ describe("regions are reachable without precise clicking", () => {
     stubProfileApi();
     renderApp(["/profiles/new"]);
 
-    const surface = await loadReferenceImage();
+    const surface = await requestPreview(user);
     drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.4, yRatio: 0.4 });
 
     expect(screen.getByText("x 192, y 108, 576 × 324 px")).toBeInTheDocument();
@@ -342,6 +401,7 @@ describe("regions are reachable without precise clicking", () => {
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.4, yRatio: 0.4 });
 
@@ -353,9 +413,9 @@ describe("regions are reachable without precise clicking", () => {
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
 
     await waitFor(() => {
-      expect(requestBodies(fetchSpy, "POST")).toHaveLength(1);
+      expect(requestBodies(fetchSpy, "/profiles")).toHaveLength(1);
     });
-    expect(requestBodies(fetchSpy, "POST")[0]).toMatchObject({
+    expect(requestBodies(fetchSpy, "/profiles")[0]).toMatchObject({
       regions: [{ name: "Pasek zdrowia", x: 192, y: 108, width: 576, height: 324 }],
     });
   });
