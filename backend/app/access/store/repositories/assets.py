@@ -37,3 +37,16 @@ class AssetRepository:
             if not path.is_file():
                 raise AssetNotFoundError
             return AssetRecord(path=path, content_type=asset.content_type)
+
+    def get_ephemeral_reference(self, *, relpath: str, content_type: str) -> AssetRecord:
+        """Resolve a process-local preview through the same controlled workspace boundary."""
+        try:
+            path = self._workspace.resolve_relpath(relpath)
+        except WorkspaceError as exc:
+            raise AssetNotFoundError from exc
+        references_path = self._workspace.resolve_relpath("assets/references")
+        if path.parent != references_path or path.suffix.casefold() not in {".png", ".jpg"}:
+            raise AssetNotFoundError
+        if not path.is_file():
+            raise AssetNotFoundError
+        return AssetRecord(path=path, content_type=content_type)

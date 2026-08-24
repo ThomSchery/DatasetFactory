@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -42,6 +43,19 @@ class ProfileUseCaseError(RuntimeError):
         self.details = details or {}
 
 
+@dataclass(frozen=True)
+class ReferencePreview:
+    asset_id: str
+    width: int
+    height: int
+
+
+@dataclass(frozen=True)
+class _EphemeralReferenceAsset:
+    relpath: str
+    content_type: str
+
+
 class ProfileUseCases:
     """Coordinate validated profile creation, retrieval, and opaque asset lookup."""
 
@@ -60,6 +74,45 @@ class ProfileUseCases:
         self._profiles = profile_repository
         self._assets = asset_repository
         self._asset_store = reference_asset_store
+        self._reference_previews: dict[str, _EphemeralReferenceAsset] = {}
+
+    def create_reference_preview(self, *, reference_image_path: str) -> ReferencePreview:
+        """Publish a verified preview without creating a durable profile or asset row."""
+        source = Path(reference_image_path)
+        if not source.is_absolute():
+            raise ProfileUseCaseError(
+                "reference_path_not_absolute", details={"field": "reference_image_path"}
+            )
+        if not source.is_file():
+            raise ProfileUseCaseError("source_missing", details={"field": "reference_image_path"})
+
+        asset_id = str(uuid4())
+        try:
+            staged_asset = self._asset_store.stage(source, asset_id=asset_id)
+        except ReferenceAssetWriteError as exc:
+            raise ProfileUseCaseError("reference_asset_copy_failed") from exc
+
+        published = False
+        try:
+            metadata = self._image_probe.inspect(staged_asset.temporary_path)
+            staged_asset.configure(
+                extension=metadata.extension,
+                content_type=metadata.content_type,
+            )
+            staged_asset.publish()
+            published = True
+            self._reference_previews[asset_id] = _EphemeralReferenceAsset(
+                relpath=staged_asset.relpath,
+                content_type=staged_asset.content_type,
+            )
+            return ReferencePreview(asset_id=asset_id, width=metadata.width, height=metadata.height)
+        except ImageProbeError as exc:
+            raise ProfileUseCaseError(str(exc), details={"field": "reference_image_path"}) from exc
+        except ReferenceAssetWriteError as exc:
+            raise ProfileUseCaseError("reference_asset_copy_failed") from exc
+        finally:
+            if not published:
+                staged_asset.discard()
 
     def create_profile(
         self,
@@ -158,7 +211,17 @@ class ProfileUseCases:
         try:
             return self._assets.get_reference(asset_id)
         except AssetNotFoundError as exc:
-            raise ProfileUseCaseError("asset_not_found") from exc
+            preview = self._reference_previews.get(asset_id)
+            if preview is None:
+                raise ProfileUseCaseError("asset_not_found") from exc
+            try:
+                return self._assets.get_ephemeral_reference(
+                    relpath=preview.relpath,
+                    content_type=preview.content_type,
+                )
+            except AssetNotFoundError as preview_error:
+                self._reference_previews.pop(asset_id, None)
+                raise ProfileUseCaseError("asset_not_found") from preview_error
 
 
 def region_definition(*, name: str, x: int, y: int, width: int, height: int) -> RegionDefinition:

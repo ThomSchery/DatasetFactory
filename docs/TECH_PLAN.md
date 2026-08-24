@@ -107,6 +107,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `GET /health` | — | wersja, DB, workspace, FFmpeg, Tesseract, GPU | `503 dependency_unavailable` tylko dla krytycznych DB/workspace |
 | `GET /dashboard` | — | `DashboardResponse` — kształt poniżej tabeli | `500` |
 | `GET /assets/references/{asset_id}` | opaque UUID zapisany w profilu | stream obrazu z relpath z bazy | `404`; nigdy arbitrary path |
+| `POST /profiles/reference-preview` | `{reference_image_path}` | `201 {asset_id, width, height}` | `400 reference_path_not_absolute`, `404 source_missing`, `502 reference_asset_copy_failed` |
 | `POST /profiles` | `{name, reference_image_path, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing`, `409 profile_name_exists` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
 | `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404`, `503 ffprobe_unavailable`, `504 ffprobe_timeout` |
@@ -291,6 +292,24 @@ Obraz referencyjny jest najpierw kopiowany do temp na wolumenie workspace, potem
 w całości dekodowany przez Pillow i dopiero publikowany przez atomic rename.
 Startup usuwa stare temp i finalne orphany, zachowuje committed valid assety oraz
 oznacza rekordy bez pliku jako `missing`; reconciliation jest idempotentne.
+
+`POST /profiles/reference-preview` staguje i publikuje obraz tą samą ścieżką co
+`POST /profiles`, ale nie tworzy profilu — zwraca `asset_id` i wymiary do
+rysowania regionów w UI. To rozwiązuje pierwszy profil w świeżej instalacji:
+bez tego endpointu nie ma jak zobaczyć obrazu przed zapisaniem regionów, a
+regiony są wymagane do zapisania profilu. `POST /profiles` nadal staguje
+niezależnie z własnym `asset_id`; podglądowy asset, jeśli użytkownik porzuci
+formularz, staje się orphanem i ginie przy najbliższym startup reconciliation
+— nie wymaga osobnego mechanizmu czyszczenia.
+
+Podgląd nie tworzy rekordu `reference_assets`: po publikacji trafia do
+procesowego rejestru `asset_id → {relpath, content_type}`. Odczyt
+`GET /assets/references/{asset_id}` sprawdza najpierw trwały rekord w DB, a po
+jego braku rejestr procesowy, nadal rozwiązując wyłącznie kontrolowany relpath
+w workspace. Restart podczas wypełniania formularza unieważnia podgląd; plik
+bez rekordu DB i bez nowego rejestru staje się orphanem usuwanym przez istniejący
+startup reconciliation. To świadomy koszt dla lokalnej, jednoprokcesowej
+aplikacji zamiast migracji schematu i nowego statusu trwałości.
 
 ## 8. Konfiguracja
 

@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
-from backend.app.access.store.models import ReferenceAsset
+from fastapi.testclient import TestClient
+from PIL import Image
+from sqlalchemy import func, select
+
+from backend.app.access.store.models import GameProfile, ReferenceAsset
 from backend.app.access.store.reconciliation import ReferenceAssetReconciler
 from backend.app.composition import CompositionRoot, build_composition
 from backend.app.config import Settings
+from backend.app.main import create_app
 from backend.tests.conftest import AvailableResourceProbe
 
 
@@ -135,5 +141,44 @@ def test_composition_startup_invokes_reconciliation(settings: Settings) -> None:
             asset = session.get(ReferenceAsset, "startup-missing")
             assert asset is not None
             assert asset.status == "missing"
+    finally:
+        restarted.close()
+
+
+def test_startup_sweeps_abandoned_reference_preview_without_creating_profile(
+    settings: Settings,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "preview.png"
+    Image.new("RGB", (41, 23)).save(source, format="PNG")
+    first = build_composition(settings, resource_probe=AvailableResourceProbe())
+    app = create_app(settings, composition=first)
+    try:
+        with TestClient(app) as client:
+            preview = client.post(
+                "/api/v1/profiles/reference-preview",
+                json={"reference_image_path": str(source.resolve())},
+            )
+            assert preview.status_code == 201
+            asset_id = preview.json()["asset_id"]
+            current = client.get("/api/v1/profiles/current")
+            assert current.status_code == 200
+            assert current.json() is None
+
+        references = first.workspace.root / "assets" / "references"
+        published = tuple(references.glob(f"{asset_id}.*"))
+        assert len(published) == 1
+        with first.database.session() as session:
+            assert session.scalar(select(func.count()).select_from(GameProfile)) == 0
+            assert session.scalar(select(func.count()).select_from(ReferenceAsset)) == 0
+    finally:
+        first.close()
+
+    restarted = build_composition(settings, resource_probe=AvailableResourceProbe())
+    try:
+        assert published[0].exists() is False
+        with restarted.database.session() as session:
+            assert session.scalar(select(func.count()).select_from(GameProfile)) == 0
+            assert session.scalar(select(func.count()).select_from(ReferenceAsset)) == 0
     finally:
         restarted.close()

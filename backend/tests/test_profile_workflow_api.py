@@ -83,6 +83,57 @@ def _invalid_png_variants() -> tuple[bytes, ...]:
     return header_only, no_pixels, bytes(corrupted)
 
 
+def test_reference_preview_returns_real_dimensions_and_resolves_opaque_asset(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    expected_content = _write_png(source, width=37, height=19)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/profiles/reference-preview",
+            json={"reference_image_path": str(source.resolve())},
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["width"] == 37
+        assert body["height"] == 19
+        assert set(body) == {"asset_id", "width", "height"}
+
+        asset = client.get(f"/api/v1/assets/references/{body['asset_id']}")
+        assert asset.status_code == 200
+        assert asset.headers["content-type"] == "image/png"
+        assert asset.content == expected_content
+
+    with composition.database.session() as session:
+        assert session.scalar(select(func.count()).select_from(GameProfile)) == 0
+        assert session.scalar(select(func.count()).select_from(ReferenceAsset)) == 0
+
+
+def test_reference_preview_rejects_missing_and_relative_paths(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        relative = client.post(
+            "/api/v1/profiles/reference-preview",
+            json={"reference_image_path": "images/reference.png"},
+        )
+        missing = client.post(
+            "/api/v1/profiles/reference-preview",
+            json={"reference_image_path": str((tmp_path / "missing.png").resolve())},
+        )
+
+    assert relative.status_code == 400
+    assert relative.json()["error"]["code"] == "reference_path_not_absolute"
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "source_missing"
+
+
 def test_profile_aggregate_and_reference_asset_are_created_atomically(
     composition: CompositionRoot,
     tmp_path: Path,

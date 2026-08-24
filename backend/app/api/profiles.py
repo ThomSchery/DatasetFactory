@@ -35,6 +35,16 @@ class CreateProfileRequest(StrictModel):
     categories: tuple[CategoryRequest, ...] = Field(min_length=1)
 
 
+class ReferencePreviewRequest(StrictModel):
+    reference_image_path: str = Field(min_length=1)
+
+
+class ReferencePreviewResponse(StrictModel):
+    asset_id: str
+    width: int
+    height: int
+
+
 class RegionResponse(StrictModel):
     id: str
     name: str
@@ -87,6 +97,8 @@ def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse
         status_code = 404
     elif error.code == "profile_name_exists":
         status_code = 409
+    elif error.code == "reference_asset_copy_failed":
+        status_code = 502
     elif error.code == "profile_persistence_failed":
         status_code = 500
     else:
@@ -102,6 +114,34 @@ def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse
 
 def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRouter:
     router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
+
+    @router.post(
+        "/reference-preview",
+        response_model=ReferencePreviewResponse,
+        status_code=201,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            502: {"model": ErrorEnvelope},
+        },
+    )
+    def create_reference_preview(
+        payload: ReferencePreviewRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> ReferencePreviewResponse | JSONResponse:
+        # Authorization policy: local-public. The path remains server-local and is never returned.
+        try:
+            preview = use_cases.create_reference_preview(
+                reference_image_path=payload.reference_image_path
+            )
+        except ProfileUseCaseError as error:
+            return _profile_error(request, error)
+        return ReferencePreviewResponse(
+            asset_id=preview.asset_id,
+            width=preview.width,
+            height=preview.height,
+        )
 
     @router.post(
         "",
