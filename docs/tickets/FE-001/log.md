@@ -1165,3 +1165,59 @@ uruchamialne dane przeglądarkowe.
   niezgodności ID zatrzymuje edycję z jawnym błędem.
 - Nie wykryto sprzeczności wymagającej zmiany kontraktu ani funkcji oznaczonej
   jako „później”.
+
+## FE-001-F4-FIX1 — Design Plan addendum (2026-08-24)
+
+FIX1 zachowuje układ, paletę, hierarchię i wszystkie elementy bazowego Design
+Planu F4. Zmienia wyłącznie stany i zachowanie poniższych istniejących elementów:
+
+1. `RegionOverlay` otrzymuje jawny `interactionMode="select"|"draw"`. Tryb
+   `select` zachowuje interakcje F3. Tryb `draw` pozwala rozpocząć gest także
+   wewnątrz istniejącego bbox i nadal używa jednego `viewBox`, jednego
+   przelicznika oraz jednej warstwy SVG.
+2. `Notice` trybu redraw nazywa rzeczywisty target klasą i ID anotacji.
+   Zmiana selection anuluje redraw, więc opis i przyszły PATCH pozostają
+   jednoznaczne; UI nie utrzymuje dwóch niezależnych targetów.
+3. `Button` „Spróbuj ponownie załadować obraz” pojawia się obok
+   `InlineError` obrazu. Ma wariant secondary, rozmiar sm, remountuje obraz i
+   znika po `onSourceResolved`; nie zmienia geometrii ani wybranego bbox.
+4. Podczas dowolnej mutacji runu istniejące `SelectField` filtra, `Button`
+   paginacji, wiersze/`Button` wyboru klatki oraz wszystkie kontrolki edytora
+   są disabled. Spinner pozostaje na kontrolce sprawczej, a globalny stan busy
+   przetrwa zmianę selection dzięki mutacji podniesionej do ekranu.
+5. Empty dalszej strony nie zastępuje paginacji bez drogi powrotu: efekt clamp
+   zmienia tylko numer strony, po czym lista renderuje istniejącą stronę.
+6. Profile loading/error/success korzystają z tych samych `Loading`,
+   `FatalError` i paneli co F4, lecz query jest kluczowane po `run.profile_id`.
+   `profile_not_found` zachowuje centralne polskie copy i retry.
+
+### Checklista UI/UX FIX1
+
+- [x] **Layout/Siatka — GRID-01/02/05/08/09/10/11,
+  SPACING-01/02/03/04/06/07/08/10/11/13:** bez nowych wymiarów i bez zmian
+  trzykolumnowego gridu. Retry używa gotowego `Button sm` (minimum 32 px), a
+  komunikat trybu/retry pozostaje w istniejącej grupie z `gap` opartym o
+  `--size-xs`/`--size-sm`. Brak arbitralnych pikseli.
+- [x] **Typografia — TYPO-02/07/08, FONTSIZE-02/08/09/10,
+  LHEIGHT-09/10, LSPACE-02/07/09, CASING-02/03:** nowe copy jest polskim
+  Sentence case; nazwa targetu używa istniejącego body/metadata, bez nowego
+  rozmiaru lub wagi. Eyebrow/odznaki zachowują istniejący uppercase + wide.
+- [x] **Kolory — COLOR-02/07/08/09/10, OPACITY-02:** żadnych nowych kolorów.
+  Busy/disabled używa `--opacity-disabled`; image error istniejących tokenów
+  status error; akcja retry używa neutralnego secondary i nie udaje sukcesu.
+- [x] **Obramowania — BORDER-02/03/05/06/07, BWIDTH-03/06/10/11/12/13,
+  RADIUS-01/02/03/05:** nowe zachowanie nie zmienia chrome. Retry ma gotowy
+  stroke/focus/radius `Button`, overlay nadal ma ostre bbox i non-scaling
+  stroke. Fokus i błędy pozostają rysowane do wewnątrz.
+- [x] **Nakładki — OVERLAY-06:** w trybie draw shape nie staje się niewidzialną
+  przeszkodą; pointerdown deleguje rysowanie jawnie. W select hit-target i
+  roving tabindex działają jak F3.
+- [x] **Cienie — SHADOW-05:** brak cieni i nowych poziomów elevation.
+- [x] **Interakcje — GRID-05, COLOR-07, BORDER-06, OPACITY-02, OVERLAY-06,
+  FE-06/07/08:** globalne disabled blokuje filtr, stronę i selection; aktywna
+  kontrolka zachowuje spinner/`aria-busy`. Retry jest widoczną akcją i faktycznie
+  remountuje image. Draw/redraw dopuszcza start na nakładającym się bbox.
+- [x] **Komponenty — katalog `new-component.md` §4–§5:** użyte istniejące
+  `Button`, `UiStates`, `Notice`, `SelectField`, `Panel` i `RegionOverlay`.
+  Nie powstaje nowy common component. Definicja `RegionOverlay` §5 zostanie
+  rozszerzona wyłącznie o ogólny prop trybu interakcji po implementacji.
