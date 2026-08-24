@@ -1092,3 +1092,76 @@ i manual. Mutacje klatki (`create`, decyzje) wysyłają bieżący `frame.version
 a `PATCH`/`DELETE` bieżący `annotation.version`, zgodnie z rzeczywistymi guardami
 TK-007. Kategorie pochodzą z typowanego `GET /profiles/current`; ekran jawnie
 zatrzymuje edycję, jeśli `run.profile_id` i bieżący profil nie są zgodne.
+
+## FE-001-F4 — wykonanie i weryfikacja (2026-08-24)
+
+### Zrealizowany kształt
+
+- `/annotations/:runId` renderuje `AnnotationReviewScreen`; `runId` pochodzi
+  wyłącznie z `useParams` i pozostaje widoczny w panelu filtra.
+- Lista klatek wysyła jawny parametr `review_status`, ma paginację i wszystkie
+  stany query. Filtr `Odrzucone` jest jedyną drogą do operacji `reopen`.
+- `FrameEditor` pobiera jedną klatkę i jeden opaque URL obrazu. Płaską geometrię
+  odpowiedzi przekazuje do jednego `RegionOverlay`, którego `viewBox` jest
+  naturalnym rozmiarem obrazu. Dodawanie i zmiana geometrii korzystają z tego
+  samego `onDraw`; pola liczbowe zapewniają równoległą drogę klawiaturową.
+- Wszystkie siedem operacji (`create`, `update-class`, `update-geometry`,
+  `delete`, `accept`, `reject`, `reopen`) przechodzi przez typowany klient,
+  wysyła bieżący `expected_version`, nie ma `onMutate`/`setQueryData`, a po
+  sukcesie używa centralnej invalidacji i refetchu.
+- `version_conflict` jawnie przeładowuje klatkę i listę. `bbox_invalid`
+  mapuje `details.annotation_ids` dokładnie na czerwony/dashed bbox oraz
+  `aria-invalid` i tekst w liście. Pozostałe kody domenowe korzystają ze
+  wspólnego polskiego słownika i zachowują jawny kod backendu.
+- `accepted` i `rejected` są zamrożone; `accepted` jest terminalny, a
+  `rejected` udostępnia wyłącznie `reopen`. Akceptacja bez aktywnej anotacji
+  jest zablokowana i ma komunikat `no_annotations`.
+
+### RegionOverlay
+
+Wspólny prymityw dostał wyłącznie ogólne `OverlayShape.tone="error"`.
+Transformacje, hit-target, roving tabindex, gest rysowania i pojedyncza
+warstwa SVG pozostały bez duplikacji. Odcień error ma semantyczny token statusu,
+grubszy dashed stroke i test zachowania geometrii. Do katalogu komponentu
+dopisano tylko dozwolony wiersz odmiany w §5.
+
+### Testy i bramki
+
+| Bramka | Wynik |
+| --- | --- |
+| `npm run test` | 29/29 plików, 372/372 testów |
+| `npm run test -- src/test/architecture.test.ts` | 1/1 plik, 85/85 testów |
+| `npm run typecheck` | 0 błędów |
+| `npm run build` | 288 modułów; JS 492.04 kB (gzip 150.78 kB), CSS 33.95 kB (gzip 4.98 kB) |
+| `npm audit` | 0 podatności |
+
+Pokrycie F4 obejmuje siedem parametryzowanych mutacji z `expected_version` i
+409, filtr/reopen, query loading/empty/error/success, resize/hit-target
+`RegionOverlay`, komplet operacji listy z klawiatury, dokładne wyróżnienia
+`bbox_invalid`, `frame_not_reviewable`, spinnery/disabled oraz brak optimistic
+update. Istniejące testy F3 `RegionOverlay` pozostały zielone.
+
+### QA wizualne i ograniczenia środowiska
+
+Repo zawiera uruchamialny design harness komponentów i fixture Vitest, ale nie
+zawiera runtime fixture/mock servera z runem, obrazem i anotacjami dla ekranu
+F4 ani zależności do browser E2E. Dlatego nie wygenerowano mylącego screenshota
+bez danych produktu. Automatyczne QA potwierdza: 1440 px przepuszcza istniejący
+`WidthGuard`, <1280 px zastępuje cały shell komunikatem o niewspieranej
+szerokości, `RegionOverlay` zachowuje transformację i stały hit-target przy
+resize, a trzy kolumny używają `minmax(0, 1fr)`/`min-width: 0`. Ręczny pomiar
+`scrollWidth` na rzeczywistym fixture pozostaje do wykonania, gdy repo otrzyma
+uruchamialne dane przeglądarkowe.
+
+### Odchylenia i sygnały planu
+
+- Brak zmian backendu, kontraktów dokumentacyjnych i zależności npm.
+- Rzeczywisty guard TK-007 wymaga `frame.version` dla create/decyzji, lecz
+  `annotation.version` dla PATCH/DELETE; implementacja i testy odzwierciedlają
+  ten podział zamiast upraszczać wszystkie operacje do wersji klatki.
+- API v1 nie udostępnia pobrania profilu po `run.profile_id`; dostępne jest
+  tylko `GET /profiles/current`. To ograniczenie planu dla historycznego runu,
+  nie sprzeczność naprawialna w FE-001-F4. Ekran nie zgaduje kategorii: przy
+  niezgodności ID zatrzymuje edycję z jawnym błędem.
+- Nie wykryto sprzeczności wymagającej zmiany kontraktu ani funkcji oznaczonej
+  jako „później”.
