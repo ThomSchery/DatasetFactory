@@ -947,3 +947,145 @@ bez trwałego rekordu assetu. Test frontendowy wykonuje realne dwa kroki,
 sprawdza użycie `preview.asset_id` przez `<img>` oraz identyczną ścieżkę i
 geometrię źródłową w późniejszym `POST /profiles`; zgodnie z kontraktem nie
 oczekuje identycznego trwałego `asset_id`.
+
+---
+
+# FE-001-F4 — Ekran weryfikacji anotacji
+
+## Design Plan (przed kodem UI)
+
+Źródła przeczytane przed pisaniem kodu: `frontend/src/styles/tokens.css`
+w całości, `.agent/guidelines/new-component.md` w całości (procedura §2.2,
+katalog §4 i definicje §5) oraz następujące moduły
+`_agent_oriented_guidelines_final_UI_UX_v3.md` od nagłówka modułu do końca:
+
+| Moduł | Zakres ID | Po co w tym tickecie |
+|---|---|---|
+| Siatka i Odstępy | GRID-00…14, SPACING-01…13 | Trzykolumnowy układ lista klatek → obraz → lista anotacji, 8-punktowe odstępy, wiersze i hit area kontrolek, biała przestrzeń wokół obrazu, minimalna szerokość edytora 1280 px |
+| Kolor | COLOR-01…10 | Stany zaznaczenia, zamrożenia i błędu, semantyczny error dla `bbox_invalid`, odróżnienie interakcji bez polegania wyłącznie na kolorze |
+| Obramowanie | BORDER-01…09 | Obrys obrazu i bbox, fokus klawiatury, jednostronny akcent wybranego wiersza |
+| Szerokość Obramowania | BWIDTH-01…14 | Stały obrys SVG przy resize, 1 px struktury, 2 px zaznaczenia/fokusu/błędu bez przesunięcia układu |
+| Promień Obramowania | RADIUS-01…05 | `--radius-none` dla precyzyjnych bbox, `--radius-md` dla kontrolek i wierszy, `--radius-lg` dla paneli, `--radius-pill` dla odznak |
+| Nakładki | OVERLAY-01…07 | OVERLAY-06 dla przezroczystego hit-targetu bbox; brak modali, tooltipów i tekstu nakładanego na obraz |
+| Cienie | SHADOW-01…05 | SHADOW-05: ciemny motyw, więc hierarchię niosą powierzchnie i spacing, nie `box-shadow` |
+| Typografia | TYPO-01…21, FONTSIZE-01…11, LHEIGHT-01…14, LSPACE-01…09, PARASPACE-01…06, CASING-01…03 | Nagłówki paneli, etykiety/statusy, liczby bbox monospace, polskie copy w `Sentence case`, mały `UPPERCASE` wyłącznie w gotowych eyebrow/odznakach |
+| Przezroczystość | OPACITY-01…02 | Hover jako warstwa alpha i `--opacity-disabled` dla zamrożonego/busy edytora |
+
+### Wszystkie elementy UI powstające w F4
+
+Ekran **Anotacje** (`/annotations/:runId`, `runId` wyłącznie z URL):
+
+1. `AnnotationReviewScreen` (`frontend/src/features/annotations/**`) — kompozycja
+   query listy klatek, wybranej klatki, runu i bieżącego profilu. Każde query ma
+   jawny `Loading`, `Empty`, `FatalError` i sukces; React nie wywołuje `fetch`.
+2. Pasek filtrowania — `SelectField` „Status weryfikacji” z jawnymi opcjami
+   Wszystkie / Oczekujące / Zaakceptowane / Odrzucone. `rejected` jest zawsze
+   widoczny i stanowi wejście do akcji `reopen`.
+3. `FrameList` w `Panel` — stronicowana lista podsumowań klatek. Każdy wiersz
+   pokazuje numer, timestamp, etap (`StatusBadge`), `review_status`
+   (`StatusBadge`) i `Button` „Otwórz”; zaznaczenie nie opiera się na kolorze.
+4. Paginacja — tekst „Strona X z Y” oraz `Button` „Poprzednia” i „Następna”,
+   z natywnym `disabled` na krańcach. Rozmiar strony jest stały i ograniczony
+   przez kontrakt API; ekran nie ładuje obrazów listy.
+5. `FrameEditor` w `Panel` — metadane wybranej klatki przez `DataList` (indeks,
+   czas, wymiary naturalne, etap, wersja) oraz `StatusBadge` decyzji.
+6. `RegionOverlay` — jedyny obraz i jedyny overlay: opaque
+   `frameImageUrl(frame.id)`, `source={width,height}` z API, aktywne anotacje jako
+   jedna kolekcja backendu. `viewBox` pozostaje w naturalnych pikselach klatki.
+7. Tryb dodawania — `SelectField` klasy nowego boksu, instrukcja rysowania oraz
+   gest `RegionOverlay.onDraw`. Powstały bbox jest wysyłany dopiero przez
+   `POST /frames/{id}/annotations`; brak lokalnego optimistic insertu.
+8. Tryb zmiany geometrii na obrazie — `Button` „Narysuj nową geometrię” przy
+   anotacji przełącza następny gest `onDraw` w `PATCH` wybranej anotacji zamiast
+   tworzenia drugiego overlaya albo drugiego przelicznika współrzędnych.
+9. `AnnotationList` obok obrazu — dostępna lista aktywnych anotacji. Każdy
+   wiersz pokazuje klasę, bbox `x/y/w/h` w monospace, `source=OCR|manual`
+   (`StatusBadge`) i confidence tylko dla OCR; zaznaczenie synchronizuje się
+   z overlayem.
+10. Operacje wiersza anotacji — `SelectField` zmiany klasy; cztery `TextField`
+    liczby `x`, `y`, `width`, `height` i `Button` „Zapisz geometrię”; `Button`
+    „Narysuj nową geometrię”; `Button` „Zaznacz”; `Button` „Usuń”. To pełna
+    droga klawiaturowa v1 bez trafiania w mały bbox.
+11. Akcje decyzji — dla `pending`: `Button` primary „Zaakceptuj klatkę” oraz
+    secondary „Odrzuć klatkę”; dla `rejected`: tylko `Button` „Otwórz ponownie”;
+    dla `accepted`: brak mutacji i jawny `Notice` o terminalnym zamrożeniu.
+12. Stany mutacji — kliknięta kontrolka ma `loading` (spinner, `aria-busy`,
+    natywny `disabled`), pozostałe kontrolki edycji są blokowane, aby nie
+    wysłać równoległej mutacji ze starą wersją. Po sukcesie centralna invalidacja
+    i refetch; zero `setQueryData`, `onMutate` i lokalnego podmieniania datasetu.
+13. Błędy mutacji — `InlineError` pokazuje polskie copy i jawny kod ze
+    wspólnego `describeApiError`. `409 version_conflict` dodatkowo invaliduje
+    i przeładowuje klatkę; `frame_not_reviewable`, `review_locked` i
+    `no_annotations` pozostają semantycznymi komunikatami słownika.
+14. `bbox_invalid` — `details.annotation_ids` ustawia zbiór konkretnych ID:
+    tylko te bbox dostają ogólny `tone="error"` w `RegionOverlay` i klasę błędu
+    w liście z tekstem „Boks poza granicami klatki”. Wyróżnienie ma kolor,
+    grubszy obrys, tekst i `aria-invalid`, więc nie zależy od samej czerwieni.
+15. Stan obrazu — błąd opaque image URL jest osobnym `InlineError`; ekran nie
+    próbuje odczytać ani pokazać `image_relpath`.
+16. Guard szerokości — istniejący `WidthGuard` poniżej 1280 px zastępuje cały
+    workspace komunikatem o niewspieranym edytorze. CSS F4 przy szerokości
+    `>=1280px` nie ma poziomego overflow i nie ściska obrazu do wersji mobilnej.
+
+Rozszerzenie komponentu wspólnego:
+
+17. `RegionOverlay.OverlayShape.tone="error"` — ogólna semantyczna odmiana
+    prostokąta niepoprawnego. Nie powstaje drugi overlay ani nowa transformacja;
+    katalog `new-component.md` §5 dostanie wyłącznie nowy wiersz odmiany error.
+
+### Checklista wymagana przez `new-component.md` §2.2
+
+- [x] **Layout/Siatka (GRID-01/02/05/08/09/10/11, SPACING-01/02/06/11/12)** —
+  workspace to grid `minmax(192px, 24%) minmax(0, 1fr) minmax(320px, 32%)`
+  z `gap: var(--size-md)`; liczby te są ograniczeniami proporcji, nie arbitralnym
+  spacingiem. Panele i grupy dzieli `--size-lg`, elementy powiązane `--size-sm`
+  lub `--size-xs`. Obraz ma `max-width: 100%`, nigdy nie jest powiększany ponad
+  naturalny rozmiar (GRID-08), a jego otoczenie ma `--size-md` (SPACING-11).
+  Wiersze list mają minimum `--control-height-lg` i padding `--size-sm`; każdy
+  `Button sm` zachowuje 32 px minimum desktopowego hit area (GRID-05).
+- [x] **Typografia (TYPO-07/08, FONTSIZE-02/08/09/10, LHEIGHT-09/10,
+  LSPACE-02/07, CASING-02/03)** — maksymalnie cztery rozmiary na ekran:
+  `--font-size-xl` nagłówek trasy z powłoki, `--font-size-lg` tytuły paneli,
+  `--font-size-sm` treść i kontrolki, `--font-size-xs` wyłącznie metadane,
+  odznaki i bbox. Dwie wagi: regular/semibold. Bbox używa
+  `--font-family-mono`; copy jest `Sentence case`, a gotowe odznaki/eyebrow
+  zachowują `UPPERCASE` + `--letter-spacing-wide`.
+- [x] **Kolory (COLOR-02/07/08/09/10)** — tło/powierzchnie/akcent zachowują
+  paletę 60/30/10. Wybrane elementy używają brand soft + `aria-selected` albo
+  tekstu „Wybrana”. Zamrożenie jest komunikatem i `disabled`, nie szarym
+  kolorem bez opisu. `bbox_invalid` używa tokenów status error oraz tekstu
+  błędu; nowe pary trafią do `contrast.test.ts` tylko jeśli nie są już
+  pokryte. Brak surowych literałów koloru.
+- [x] **Obramowania (BORDER-02/03/05/06/07/08, BWIDTH-03/06/10/11/12/13,
+  RADIUS-01/02/03/05)** — panele grupuje spacing; `stroke-weak` oddziela
+  wiersze i chroni krawędź obrazu (BORDER-07). Interaktywne kontrolki używają
+  `stroke-strong`; fokus 2 px, błąd 2 px i wszystkie zmiany rysują się do
+  wewnątrz. Bbox ma `--radius-none`; pola/listy `--radius-md`; panel
+  `--radius-lg`; odznaka `--radius-pill`.
+- [x] **Cienie (SHADOW-05)** — brak `box-shadow`; ciemny motyw komunikuje
+  hierarchię jaśniejszą powierzchnią panelu i spacingiem.
+- [x] **Interakcje (COLOR-07, OPACITY-02, OVERLAY-06, BORDER-06, GRID-05,
+  FE-06/07/08)** — hover pochodzi z tokenu alpha, fokus jest widoczny,
+  hit-target overlaya zachowuje 8 px CSS przez `non-scaling-stroke`. Overlay ma
+  roving tabindex, a lista daje każdą operację v1 klawiaturą. Busy blokuje
+  kontrolki i pokazuje spinner na kontrolce sprawczej. Frozen blokuje edycję.
+  Przy <1280 px istniejący guard zastępuje edytor komunikatem.
+- [x] **Komponenty (katalog §4–§5 `new-component.md`)** — użyte bez zmian:
+  `Button` (wszystkie akcje), `UiStates` (Loading/Empty/InlineError/FatalError),
+  `StatusBadge` (status klatki, etap, source), `Panel` (lista, edytor, anotacje),
+  `Notice` (zamrożenie/instrukcja), `TextField` (liczbowa geometria),
+  `SelectField` (filtr i klasy), `DataList` (metadane) oraz `RegionOverlay`
+  (jedyna powierzchnia obrazu/geometrii). Nie powstaje nowy komponent common;
+  `RegionOverlay` dostaje wyłącznie ogólny `error` tone wymagany do wskazania
+  konkretnych ID z kontraktu.
+
+### Copy, dane i kontrakt
+
+Teksty są polskie i w `Sentence case`; OCR, HUD, bbox, manual i run pozostają
+terminami technicznymi. Odpowiedź anotacji ma płaskie `x/y/width/height`,
+natomiast `POST`/`PATCH` wysyłają zagnieżdżone `bbox`. Widok filtruje jedyną
+listę `annotations` do `status !== "deleted"`; nie tworzy osobnych kolekcji OCR
+i manual. Mutacje klatki (`create`, decyzje) wysyłają bieżący `frame.version`,
+a `PATCH`/`DELETE` bieżący `annotation.version`, zgodnie z rzeczywistymi guardami
+TK-007. Kategorie pochodzą z typowanego `GET /profiles/current`; ekran jawnie
+zatrzymuje edycję, jeśli `run.profile_id` i bieżący profil nie są zgodne.
