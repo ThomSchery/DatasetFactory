@@ -13,6 +13,10 @@ from sqlalchemy import func, select
 
 from backend.app.access.media.image import ReferenceImageProbe
 from backend.app.access.store.models import GameProfile, ReferenceAsset
+from backend.app.access.store.repositories.profiles import (
+    ProfileNotFoundError,
+    ProfileRepository,
+)
 from backend.app.access.store.repositories.projects import ProjectRepository
 from backend.app.composition import CompositionRoot
 from backend.app.engines.definition import BBox, CategoryDefinition, RegionDefinition
@@ -162,6 +166,75 @@ def test_profile_aggregate_and_reference_asset_are_created_atomically(
     with composition.database.session() as session:
         assert session.scalar(select(func.count()).select_from(GameProfile)) == 1
         assert session.scalar(select(func.count()).select_from(ReferenceAsset)) == 1
+
+
+def test_profile_repository_gets_historical_profile_by_id(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    first_source = tmp_path / "first.png"
+    second_source = tmp_path / "second.png"
+    _write_png(first_source)
+    _write_png(second_source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        first = client.post("/api/v1/profiles", json=_payload(first_source, name="First"))
+        second = client.post("/api/v1/profiles", json=_payload(second_source, name="Second"))
+
+    repository = ProfileRepository(composition.database)
+    assert repository.get(first.json()["id"]).name == "First"
+    assert repository.get(second.json()["id"]).name == "Second"
+    with pytest.raises(ProfileNotFoundError):
+        repository.get("missing-profile")
+
+
+def test_profile_use_case_translates_missing_profile_and_keeps_historical_record(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "historical.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source, name="Historical"))
+
+    record = composition.profile_use_cases.get_profile(created.json()["id"])
+    assert record.name == "Historical"
+    with pytest.raises(ProfileUseCaseError) as error:
+        composition.profile_use_cases.get_profile("missing-profile")
+    assert error.value.code == "profile_not_found"
+
+
+def test_profile_api_returns_historical_profile_while_current_stays_latest(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    first_source = tmp_path / "old.png"
+    second_source = tmp_path / "current.png"
+    _write_png(first_source)
+    _write_png(second_source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        first = client.post("/api/v1/profiles", json=_payload(first_source, name="Old profile"))
+        second = client.post(
+            "/api/v1/profiles",
+            json=_payload(second_source, name="Current profile"),
+        )
+        historical = client.get(f"/api/v1/profiles/{first.json()['id']}")
+        current = client.get("/api/v1/profiles/current")
+        missing = client.get("/api/v1/profiles/missing-profile")
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert historical.status_code == 200
+    assert historical.json() == first.json()
+    # Defining `/current` before `/{profile_id}` keeps the literal route static.
+    assert current.status_code == 200
+    assert current.json() == second.json()
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "profile_not_found"
 
 
 def test_profile_publish_failure_rolls_back_database_and_removes_temp_asset(

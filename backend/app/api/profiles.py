@@ -93,7 +93,7 @@ def _response(record: ProfileRecord) -> GameProfileResponse:
 
 
 def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
-    if error.code == "source_missing":
+    if error.code in {"profile_not_found", "source_missing"}:
         status_code = 404
     elif error.code == "profile_name_exists":
         status_code = 409
@@ -190,5 +190,21 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
     ) -> GameProfileResponse | None:
         record = use_cases.get_current_profile()
         return _response(record) if record is not None else None
+
+    @router.get(
+        "/{profile_id}",
+        response_model=GameProfileResponse,
+        responses={404: {"model": ErrorEnvelope}},
+    )
+    def profile_by_id(
+        profile_id: str,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> GameProfileResponse | JSONResponse:
+        try:
+            record = use_cases.get_profile(profile_id)
+        except ProfileUseCaseError as error:
+            return _profile_error(request, error)
+        return _response(record)
 
     return router

@@ -19,6 +19,7 @@ from backend.app.access.store.repositories.profiles import (
     CategoryDraft,
     ProfileAggregateDraft,
     ProfileNameExistsError,
+    ProfileNotFoundError,
     ProfilePersistenceError,
     ProfileRecord,
     ProfileRepository,
@@ -206,6 +207,12 @@ class ProfileUseCases:
 
     def get_current_profile(self) -> ProfileRecord | None:
         return self._profiles.current()
+
+    def get_profile(self, profile_id: str) -> ProfileRecord:
+        try:
+            return self._profiles.get(profile_id)
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
 
     def get_reference_asset(self, asset_id: str) -> AssetRecord:
         try:

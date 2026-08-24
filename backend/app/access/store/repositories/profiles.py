@@ -5,6 +5,7 @@ from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from backend.app.access.store.database import Database
 from backend.app.access.store.models import Category, GameProfile, HudRegion, ReferenceAsset
@@ -15,6 +16,10 @@ class ProfileNameExistsError(RuntimeError):
 
 
 class ProfilePersistenceError(RuntimeError):
+    pass
+
+
+class ProfileNotFoundError(LookupError):
     pass
 
 
@@ -165,29 +170,40 @@ class ProfileRepository:
             )
             if profile is None:
                 return None
-            regions = tuple(
-                RegionDraft(item.id, item.name, item.x, item.y, item.width, item.height)
-                for item in session.scalars(
-                    select(HudRegion)
-                    .where(HudRegion.profile_id == profile.id)
-                    .order_by(HudRegion.created_at, HudRegion.id)
-                )
+            return self._record(session, profile)
+
+    def get(self, profile_id: str) -> ProfileRecord:
+        with self._database.session() as session:
+            profile = session.get(GameProfile, profile_id)
+            if profile is None:
+                raise ProfileNotFoundError
+            return self._record(session, profile)
+
+    @staticmethod
+    def _record(session: Session, profile: GameProfile) -> ProfileRecord:
+        regions = tuple(
+            RegionDraft(item.id, item.name, item.x, item.y, item.width, item.height)
+            for item in session.scalars(
+                select(HudRegion)
+                .where(HudRegion.profile_id == profile.id)
+                .order_by(HudRegion.created_at, HudRegion.id)
             )
-            categories = tuple(
-                CategoryDraft(item.id, item.name, item.kind, item.ordinal)
-                for item in session.scalars(
-                    select(Category)
-                    .where(Category.profile_id == profile.id)
-                    .order_by(Category.ordinal)
-                )
+        )
+        categories = tuple(
+            CategoryDraft(item.id, item.name, item.kind, item.ordinal)
+            for item in session.scalars(
+                select(Category)
+                .where(Category.profile_id == profile.id)
+                .order_by(Category.ordinal)
             )
-            return ProfileRecord(
-                id=profile.id,
-                name=profile.name,
-                reference_asset_id=profile.reference_asset_id,
-                source_width=profile.source_width,
-                source_height=profile.source_height,
-                version=profile.version,
-                regions=regions,
-                categories=categories,
-            )
+        )
+        return ProfileRecord(
+            id=profile.id,
+            name=profile.name,
+            reference_asset_id=profile.reference_asset_id,
+            source_width=profile.source_width,
+            source_height=profile.source_height,
+            version=profile.version,
+            regions=regions,
+            categories=categories,
+        )
