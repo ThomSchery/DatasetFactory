@@ -1526,3 +1526,89 @@ każdy późniejszy stan wymaga nowego `POST /exports`. Ścieżka jest prezentow
 wyłącznie jako wartość relatywna z backendu. Zamknięcie runu jest osobnym,
 jawnym `POST /runs/{id}/complete` z CAS i nigdy nie jest wywoływane przez efekt
 ukończenia eksportu.
+
+## FE-001-F5 — wynik i weryfikacja (2026-08-24)
+
+### Dostarczone zachowanie
+
+- `/exports` jest piątą realną trasą produktu. Rozdziela stany dashboardu,
+  odczytu eksportu, terminalnego `export.error_code` i mutacji; eksport polling
+  działa wyłącznie dla `running` i zatrzymuje się na `completed`/`failed`.
+- `POST /exports` i `POST /runs/{id}/complete` przechodzą przez jeden typowany
+  klient API oraz centralne query keys/invalidation. Obie mutacje pozostają
+  disabled ze spinnerem do odpowiedzi backendu i nie zapisują danych
+  optymistycznie. Zamknięcie runu jest wyłącznie jawnym kliknięciem i wysyła
+  bieżący `expected_version`.
+- Manifest pokazuje wyłącznie bezpieczne ścieżki relatywne; guard blokuje
+  ścieżki Windows/UNC/Unix, drive-relative oraz segment `..` także w polach
+  `annotations` i `images`. Nie istnieje pole wejściowe ścieżki eksportu.
+- `annotation_sources` jest opisane jako pochodzenie OCR/manual, nigdy jako
+  trafność. Ukończony wynik ma jawne copy niezmiennego snapshotu i wymaga nowego
+  eksportu po późniejszej zmianie. UI nie obiecuje train/val, YOLO ani eksportu
+  przyrostowego.
+- Stabilne kody `no_accepted_frames`, `export_running`,
+  `export_revision_conflict`, `export_source_missing` i
+  `export_process_interrupted` mają centralne polskie copy i testy rozdzielające
+  błąd koperty HTTP od terminalnego `Export.error_code`.
+
+Commit implementacji: `aa38b04`. Backend i kontrakt TK-009 nie były zmieniane;
+zaakceptowane commity `ddc2565` i `d02d379` pozostały bez modyfikacji.
+
+### Playwright i screenshot QA
+
+Test-only harness przechwytuje prawdziwe żądania `/api/v1`, serwuje jawne DTO i
+repozytoryjny `backend/tests/fixtures/video/synthetic-frame.png`. Nie duplikuje
+walidacji ani implementacji backendu. Pionowy test wykonuje w przeglądarce:
+profil i region HUD → import ścieżki fixture video → create/start run → odczyt
+OCR stub i akceptację klatki → start/poll eksportu → jawny CAS complete. Na końcu
+porównuje request bodies, w tym `expected_version: 1`, review
+`expected_version: 7` i complete `expected_version: 4`.
+
+Zrzuty mają viewport 1440 px i są realnym wynikiem tego samego Vite UI oraz
+interceptowanego kontraktu:
+
+| Trasa/stan | Artefakt |
+| --- | --- |
+| Dashboard | `docs/tickets/FE-001/screenshots/dashboard-1440.png` |
+| Profil gry | `docs/tickets/FE-001/screenshots/profile-1440.png` |
+| Materiały | `docs/tickets/FE-001/screenshots/materials-1440.png` |
+| Anotacje | `docs/tickets/FE-001/screenshots/annotations-1440.png` |
+| Eksporty, ukończony manifest | `docs/tickets/FE-001/screenshots/exports-1440.png` |
+| Loading | `docs/tickets/FE-001/screenshots/loading-1440.png` |
+| Empty | `docs/tickets/FE-001/screenshots/empty-1440.png` |
+| Error | `docs/tickets/FE-001/screenshots/error-1440.png` |
+
+Wszystkie osiem zrzutów przejrzano wizualnie: nie ma uciętego copy, nakładania,
+fałszywych danych ani poziomego overflow. Test przeglądarkowy dodatkowo sprawdza
+każdy widok przy 1440 i 1280 px, komplet deklaracji dla użytych `var(--*)`, brak
+zewnętrznych requestów fontów oraz widoczny focus po wejściu klawiaturą.
+Semantyczne landmarki i akcje klawiaturowe mają osobne asercje Vitest; kontrast
+korzysta wyłącznie z istniejących, przypiętych tokenów/common components.
+
+### Done Criteria — Gate 3
+
+| Bramka | Wynik |
+| --- | --- |
+| Targeted `src/features/exports` | 2/2 pliki, 20/20 testów |
+| Pełny `npm test` | 32/32 pliki, 420/420 testów |
+| `src/test/architecture.test.ts` | 1/1 plik, 92/92 testy |
+| `npm run typecheck` | 0 błędów (wykonane samodzielnie i ponownie w buildzie) |
+| `npm run build` | 295 modułów; main JS 495.32 kB gzip 151.82 kB; osobny chunk exports 7.28 kB gzip 2.82 kB; bez warningu rozmiaru |
+| `npm audit --audit-level=low` | 0 podatności |
+| Playwright `npm run e2e` | 2/2 testy; pionowy flow + 5 tras i loading/empty/error |
+| Screenshot/overflow/CSS/font/focus QA | 8/8 widoków, 1440/1280 px, zielone |
+| `git diff --check` | bez błędów |
+
+Nowa zależność `@playwright/test@1.62.1` pochodzi z oficjalnego npm, ma licencję
+Apache-2.0 i jest przypięta dokładnie w lockfile. Cache npm oraz binarki Chromium,
+FFmpeg i Winldd są na `D:\DatasetFactory\cache`; raporty/traces Playwright także
+trafiają na `D:` i nie zanieczyszczają repo. Katalog common components nie
+wymagał zmiany, bo ekran składa się wyłącznie z istniejących elementów.
+
+### Odchylenia i ryzyka
+
+Nie ma odchylenia produktowego ani rozszerzenia backendu. Pełnego pytest backendu
+nie powtarzano zgodnie z zakresem: produkcyjny backend nie został dotknięty, a
+TK-009 miał już 289/289 na bazowym HEAD. Jedynym pozostającym ryzykiem środowiska
+jest pierwsze pobranie binariów Playwright; przypięta wersja i ścieżka cache na
+`D:` ograniczają jego wpływ do stanowiska developerskiego.
