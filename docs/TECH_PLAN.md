@@ -110,6 +110,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /profiles/reference-preview` | `{reference_image_path}` | `201 {asset_id, width, height}` | `400 reference_path_not_absolute`, `404 source_missing`, `502 reference_asset_copy_failed` |
 | `POST /profiles` | `{name, reference_image_path, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing`, `409 profile_name_exists` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
+| `GET /profiles/{profile_id}` | — | dokładny `GameProfile` przypisany do runu | `404 profile_not_found` |
 | `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404`, `503 ffprobe_unavailable`, `504 ffprobe_timeout` |
 | `GET /materials` | `page,page_size<=100` | paged list | `400` |
 | `POST /runs` | `{profile_id,video_id,interval_ms=1000}` | `201 PipelineRun(queued)` | `400 resolution/interval`, `404` |
@@ -191,6 +192,14 @@ ręcznego, bo źle wyznaczony region jest jedną z przyczyn braku odczytu.
 `reopen` jest dozwolone tylko z `rejected` do `pending` i nie zmienia anotacji
 ani ich statusów; `accepted` pozostaje terminalne, żeby snapshot eksportu był
 trwały. Każda z tych mutacji podbija `version` agregatu oraz `review_revision`.
+
+`GET /profiles/{profile_id}` jest read-only i zwraca ten sam pełny kontrakt
+`GameProfile` co niepuste `GET /profiles/current`, łącznie z kategoriami i
+regionami. Ekran weryfikacji najpierw pobiera run, a następnie profil dokładnie
+po `run.profile_id`; `/profiles/current` pozostaje skrótem dla bieżącego profilu
+używanym przez pozostałe przepływy. Statyczna trasa `/profiles/current` musi być
+rozwiązywana przed dynamiczną `/{profile_id}`. Brak rekordu zwraca stabilne
+`404 profile_not_found` i nigdy nie powoduje podstawienia bieżącego profilu.
 
 Klatka z decyzją review jest zamrożona: `accepted` i `rejected` odpowiadają
 `409 review_locked` na `POST /frames/{id}/annotations`, `PATCH` i `DELETE`.

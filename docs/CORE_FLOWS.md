@@ -60,7 +60,10 @@ błąd config/input jest non-retryable.
 
 ## CF-05 — Weryfikacja anotacji
 
-1. UI pobiera stronicowaną listę klatek `review_pending` i obraz jednej klatki.
+1. UI pobiera run, jego profil po `run.profile_id`, stronicowaną listę klatek
+   `review_pending` i obraz jednej klatki. Profil nie jest rozwiązywany przez
+   globalne `/profiles/current`, dzięki czemu deep-link do historycznego runu
+   pozostaje weryfikowalny po utworzeniu kolejnego profilu.
 2. Renderuje bbox, klasę, confidence i region źródłowy.
 3. Użytkownik może zmienić klasę na dozwoloną, usunąć propozycję, poprawić
    geometrię istniejącego boksu albo narysować nowy w dowolnym miejscu klatki.
