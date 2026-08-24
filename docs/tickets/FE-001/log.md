@@ -1612,3 +1612,94 @@ nie powtarzano zgodnie z zakresem: produkcyjny backend nie został dotknięty, a
 TK-009 miał już 289/289 na bazowym HEAD. Jedynym pozostającym ryzykiem środowiska
 jest pierwsze pobranie binariów Playwright; przypięta wersja i ścieżka cache na
 `D:` ograniczają jego wpływ do stanowiska developerskiego.
+
+---
+
+# FE-001-F5-FIX1 — Design Plan addendum (przed kodem UI)
+
+Cold review: `artifacts/fe-001-f5-tk-009-cold-review/index.md`, verdict
+`REVISE`. FIX1 nie tworzy historii eksportów ani nowego wspólnego komponentu.
+Zmienia mechanizm trwałego wskazania istniejącego eksportu i dowody browser QA;
+zachowuje wygląd, copy, immutability i jawny CAS complete zaakceptowane w F5.
+
+## Elementy UI i zachowanie
+
+1. **Kontrolowany locator w URL:** `/exports?export_id=<id>` jest źródłem
+   identyfikatora śledzonego eksportu. Nie powstaje widoczne pole, lista historii
+   ani dodatkowa nawigacja. Po `POST /exports` URL zmienia się dopiero po
+   odpowiedzi backendu; usunięcie/zmiana query uruchamia nową hydratację.
+2. **Hydratacja deep-link/reload:** przy query ekran najpierw pokazuje istniejący
+   `Loading`, następnie pobiera `GET /exports/{id}` i dopiero z jego `run_id`
+   autorytatywny `GET /runs/{id}`. Running wraca do pollingu; completed/failed
+   pozostają terminalne. Obcy/niepoprawny ID daje istniejący named
+   `FatalError` z retry, bez fallbacku do dashboard runu i bez POST.
+3. **Recovery bez query:** ekran pobiera dashboard run, a potem read-only
+   `GET /exports/latest?run_id=…`. `null` prowadzi do istniejącego panelu „Nowy
+   eksport COCO”; znaleziony running/completed/failed ustawia kontrolowany query
+   i renderuje ten sam status/manifest. Lookup nigdy nie tworzy eksportu.
+4. **Istniejące stany i sekcje:** `Loading`, `Empty`, `FatalError`, `RunSummary`,
+   panel startu, `ExportStatusPanel`, terminalny `Notice`,
+   `ExportManifestPanel`, provenance OCR/manual i immutable snapshot pozostają
+   jedynymi elementami ekranu. Query recovery nie dodaje równoległego wariantu
+   UI ani lokalnej kopii DTO.
+5. **Istniejące akcje:** `Button` „Uruchom eksport COCO”/„Uruchom nowy eksport”
+   nadal wykonuje jawny POST bez optimistic update; „Zamknij run” nadal pojawia
+   się wyłącznie po completed export i wysyła bieżący CAS. Mutacje zachowują
+   spinner, `aria-busy`, natywny disabled i centralne invalidacje.
+6. **Ścieżki manifestu:** `safeWorkspaceRelativePath` odrzuci URI schemes
+   `http:`, `https:`, `file:`, `data:` i każdy ciąg zgodny z
+   `^[A-Za-z][A-Za-z0-9+.-]*:` przed normalizacją. Poprawne relatywne nazwy z
+   `..` wewnątrz segmentu (np. `frame..backup`) pozostają dozwolone; osobny
+   segment `..` pozostaje blokowany.
+7. **Browser focus QA — konkretne checkpointy tras:** Dashboard — przycisk
+   „Uruchom” w queued run; Profil — pole „Nazwa profilu”; Materiały — pole
+   „Ścieżka pliku wideo”; Anotacje — select „Status weryfikacji”; Eksporty —
+   przycisk „Zamknij run” w completed manifest. Każdy target dostaje focus,
+   jest `document.activeElement` i ma widoczny focus ring; wspólny skip-link nie
+   jest dowodem trasowym.
+8. **Screenshot QA:** pięć tras oraz loading/empty/error pozostaje przy 1440 px.
+   Eksportowy capture bezpośrednio przed `page.screenshot` ponownie asercyjnie
+   sprawdza heading „Wynik eksportu COCO”, status „Ukończony”, relatywną ścieżkę,
+   provenance i immutable snapshot. Resize/focus nie może przeładować ani
+   zgubić `export_id`.
+9. **Test-only runtime:** pionowy Playwright używa produkcyjnych ekranów i HTTP,
+   prawdziwego FastAPI/composition root, SQLite/workspace i fixture
+   `synthetic-hud.mkv`; jedyny stub to backendowy deterministic `OcrEngine`.
+   Lekki route harness pozostaje wyłącznie dla visual/query-state QA i nie jest
+   nazywany pionowym E2E.
+
+## Moduły UI/UX, tokeny i ID
+
+| Moduł | ID i zastosowanie FIX1 |
+| --- | --- |
+| Siatka i odstępy | GRID-00–14, SPACING-01–13: istniejący desktop canvas 1280/1440, `minmax(0,1fr)`, tokenowe gap/padding, brak overflow i stabilny layout przy hydratacji/resize |
+| Kolor | COLOR-01–10: istniejące semantic status tones, 60/30/10, kontrast i brak nowej pary kolorów |
+| Obramowanie / szerokość | BORDER-01–09, BWIDTH-01–14: istniejące weak structure i strong route-specific focus ring bez layout shift |
+| Promień | RADIUS-01–05: bez zmian — istniejące `radius-lg/md/pill`, żadnej arbitralnej geometrii |
+| Nakładki | OVERLAY-01–07: brak modala/overlay; fixture obrazów nadal używa istniejącego `RegionOverlay` bez niewidzialnej blokady |
+| Cienie | SHADOW-01–05: brak nowego elevation w ciemnym shellu |
+| Typografia | TYPO-01–21, FONTSIZE-01–11, LHEIGHT-01–14, LSPACE-01–09, PARASPACE-01–06, CASING-01–03: istniejące polskie Sentence case, mono tylko dla ID/relpath, UPPERCASE tylko gotowych eyebrow/badge |
+| Przezroczystość | OPACITY-01–02: istniejące hover/pressed 0.8 i disabled 0.2; żadnej nowej wartości |
+| Architektura frontend | FE-02/03/04/06/07/08/10: stan serwera nie jest kopiowany lokalnie; deep-link żyje w URL; jawne query states; desktop ≥1280; semantyka/klawiatura/focus; krytyczny real-backend E2E |
+| NFR | NFR-08/10: testowy bootstrap tylko przez konfigurację; jedna plain komenda E2E; browser/report/cache automatycznie na `D:` lub `DATASETFACTORY_CACHE_ROOT` |
+
+## Checklista `new-component.md` §2.2
+
+- [x] **Layout/Siatka:** bez nowych wartości CSS. URL hydration używa tych
+  samych `Panel` i `DataList`, więc zachowuje GRID-01/02/08/09/10/11 oraz
+  SPACING-01/02/06/09/10/12/13.
+- [x] **Typografia:** brak nowego widocznego copy poza istniejącymi stanami;
+  pozostają tokeny sans/ui/mono, `xs/sm/lg/xl`, tight/standard i Sentence case.
+- [x] **Kolory:** brak nowego koloru; running/completed/failed nadal brand /
+  success / error z tekstem i semantyką, nie tylko barwą.
+- [x] **Obramowania:** route-specific QA przypina istniejący strong 2 px
+  `focus-visible`; panele/dzielniki zachowują weak 1 px i border-box.
+- [x] **Cienie:** brak zmian i brak nowego cienia.
+- [x] **Interakcje:** URL zmienia się dopiero po backend success; recovery nie
+  wysyła POST; retry/refetch, polling terminal stop, disabled+spinner i brak
+  optimistic update pozostają jawne.
+- [x] **Komponenty/common catalog:** użyte bez zmian `Button`, `UiStates`,
+  `NavItem`, `StatusBadge`, `Panel`, `Notice`, `DataList`; `TextField`,
+  `SelectField` i `RegionOverlay` występują tylko jako istniejące checkpointy
+  pozostałych tras. Nie powstaje common component, więc katalog pozostaje
+  aktualny.
