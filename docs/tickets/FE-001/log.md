@@ -1347,3 +1347,48 @@ klawiatura, roving tabindex i wizualne stany pozostają bez zmian.
 - [x] **Komponenty — katalog `new-component.md` §4–§5:** użyty wyłącznie
   istniejący `RegionOverlay`; nie powstaje common component ani nowe API, więc
   katalog nie wymaga kolejnego rozszerzenia.
+
+## FE-001-F4-FIX2 — wynik i weryfikacja (2026-08-24)
+
+### Pointer capture i deduplikacja selection
+
+`RegionOverlay` zapisuje w stanie gestu `originShapeId`, odczytane z rzeczywistego
+targetu pointerdown. Przy pointerup drawable rect nadal wywołuje wyłącznie
+`onDraw`; niedrawable rect rozpoczęty na shape jawnie wywołuje dokładnie jedno
+`onSelect(originShapeId)` i zero `onDraw`. Ponieważ następujący click może po
+pointer capture trafić do SVG albo mimo wszystko do `<g>`, jednorazowy marker w
+refie jest konsumowany przez `onClickCapture` powierzchni. Kolejny fizyczny
+pointerdown resetuje ewentualny marker, jeżeli browser pominął click. Testy obu
+targetów click wymagają dokładnie jednego wyboru; overlapping draw i domyślny
+select-mode F3 pozostają zielone. Commit implementacji: `ec1eab6`.
+
+### Retry po `409 version_conflict`
+
+Nowy test ekranu podaje jawne DTO anotacji v3, pierwszy PATCH z
+`expected_version: 3`, odpowiedź `409 version_conflict`, a następnie DTO v4 z
+centralnego refetchu. Kod 409 pozostaje widoczny. Użytkownik ponownie wybiera
+klasę i wysyła drugi realny PATCH z `expected_version: 4`; kolejna odpowiedź v5
+kończy mutację. Fixture jest wyłącznie kolejką odpowiedzi/DTO i nie implementuje
+reguł backendu. Dotychczasowe success sequences i osobne przypadki 409 pozostały.
+
+### Próby i bramki
+
+Pierwszy targeted run miał 45/46 testów: nowy test błędnie oczekiwał aktywnego
+przycisku zapisu natychmiast po refetchu, choć remount wiersza poprawnie resetuje
+draft do DTO v4 i wyłącza przycisk do czasu ponownej zmiany. Oczekiwanie zmieniono
+na odblokowane pole klasy, po czym test wykonuje rzeczywistą ponowną akcję
+użytkownika. Kod produkcyjny nie wymagał korekty z powodu tej próby.
+
+| Bramka | Wynik |
+| --- | --- |
+| Targeted `RegionOverlay.test.tsx` + oba review suites | 3/3 plików, 46/46 testów |
+| `npm run test` | 30/30 plików, 390/390 testów |
+| `npm run test -- src/test/architecture.test.ts` | 1/1 plik, 85/85 testów |
+| `npm run typecheck` | 0 błędów |
+| `npm run build` | 288 modułów; JS 494.17 kB (gzip 151.42 kB), CSS 34.02 kB (gzip 4.99 kB) |
+| `npm audit` | 0 podatności |
+| `git diff --check` | bez błędów |
+
+Backend, kontrakt API i zależności nie zmieniły się, dlatego zgodnie z FIX2 nie
+powtarzano pełnego backendowego pytest. Nie wykryto nowej luki kontraktu ani
+odchylenia od zamkniętego zakresu.
