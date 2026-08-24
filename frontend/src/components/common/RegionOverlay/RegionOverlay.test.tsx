@@ -48,12 +48,18 @@ function dragAcross(
 
 interface HarnessProps {
   initialShapes?: OverlayShape[];
+  interactionMode?: "select" | "draw";
   onDraw?: (rect: SourceRect) => void;
   readOnly?: boolean;
 }
 
 /** The overlay driven the way a feature drives it: it owns the shape list. */
-function Harness({ initialShapes = [], onDraw, readOnly = false }: HarnessProps) {
+function Harness({
+  initialShapes = [],
+  interactionMode = "select",
+  onDraw,
+  readOnly = false,
+}: HarnessProps) {
   const [shapes, setShapes] = useState<OverlayShape[]>(initialShapes);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [source, setSource] = useState<SourceSize | null>(null);
@@ -62,6 +68,7 @@ function Harness({ initialShapes = [], onDraw, readOnly = false }: HarnessProps)
     <RegionOverlay
       imageAlt="Obraz referencyjny"
       imageUrl="/api/v1/assets/references/asset-1"
+      interactionMode={interactionMode}
       label="Regiony HUD"
       onDraw={
         readOnly
@@ -163,6 +170,73 @@ describe("the drawing surface", () => {
     dragAcross(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.6, yRatio: 0.6 });
 
     expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it("preserves F3 selection mode by ignoring a drag that starts on a shape", () => {
+    const onDraw = vi.fn();
+    renderOverlay({
+      initialShapes: [
+        { id: "existing", label: "Istniejący", x: 100, y: 100, width: 900, height: 500 },
+      ],
+      onDraw,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const box = surface.getBoundingClientRect();
+    const fill = screen.getByRole("option").querySelector(".df-region-overlay__shape-fill");
+    expect(fill).not.toBeNull();
+
+    fireEvent.pointerDown(fill as Element, {
+      clientX: box.left + box.width * 0.25,
+      clientY: box.top + box.height * 0.25,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(surface, {
+      clientX: box.left + box.width * 0.75,
+      clientY: box.top + box.height * 0.75,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: box.left + box.width * 0.75,
+      clientY: box.top + box.height * 0.75,
+      pointerId: 1,
+    });
+
+    expect(onDraw).not.toHaveBeenCalled();
+  });
+
+  it("lets explicit draw mode start an overlapping gesture inside a shape", () => {
+    const onDraw = vi.fn();
+    renderOverlay({
+      initialShapes: [
+        { id: "existing", label: "Istniejący", x: 100, y: 100, width: 900, height: 500 },
+      ],
+      interactionMode: "draw",
+      onDraw,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const box = surface.getBoundingClientRect();
+    const fill = screen.getByRole("option").querySelector(".df-region-overlay__shape-fill");
+    expect(fill).not.toBeNull();
+
+    fireEvent.pointerDown(fill as Element, {
+      clientX: box.left + box.width * 0.25,
+      clientY: box.top + box.height * 0.25,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(surface, {
+      clientX: box.left + box.width * 0.75,
+      clientY: box.top + box.height * 0.5,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: box.left + box.width * 0.75,
+      clientY: box.top + box.height * 0.5,
+      pointerId: 1,
+    });
+
+    expect(onDraw).toHaveBeenCalledWith({ x: 480, y: 270, width: 960, height: 270 });
   });
 });
 

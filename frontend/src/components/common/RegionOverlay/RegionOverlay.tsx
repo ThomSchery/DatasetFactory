@@ -28,6 +28,8 @@ export interface RegionOverlayProps {
   imageAlt: string;
   /** Opaque asset URL from the API layer. Never a filesystem path. */
   imageUrl: string;
+  /** `draw` lets a drag start over an existing shape; `select` preserves F3 selection. */
+  interactionMode?: "select" | "draw";
   /** Accessible name of the set of rectangles. */
   label: string;
   onImageError?: () => void;
@@ -96,6 +98,7 @@ export function RegionOverlay({
   disabled = false,
   imageAlt,
   imageUrl,
+  interactionMode = "select",
   label,
   onDraw,
   onImageError,
@@ -127,9 +130,14 @@ export function RegionOverlay({
   }
 
   function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
-    // Only the bare surface starts a drawing. A press that lands on an existing
-    // shape is a selection, so shapes stay clickable without swallowing drags.
-    if (!canDraw || event.target !== surfaceRef.current) {
+    // Selection mode preserves F3: only the bare surface starts a drawing.
+    // Explicit draw mode is for overlapping review boxes, where a drag must be
+    // allowed to begin inside a shape. A click that never moves still reaches
+    // the shape's click handler and selects it.
+    if (
+      !canDraw ||
+      (interactionMode === "select" && event.target !== surfaceRef.current)
+    ) {
       return;
     }
     const point = pointFrom(event);
@@ -227,7 +235,11 @@ export function RegionOverlay({
     .join(" ");
 
   return (
-    <div className="df-region-overlay" data-disabled={disabled || undefined}>
+    <div
+      className="df-region-overlay"
+      data-disabled={disabled || undefined}
+      data-interaction-mode={interactionMode}
+    >
       <img
         alt={imageAlt}
         className="df-region-overlay__image"

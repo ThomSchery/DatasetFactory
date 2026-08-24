@@ -219,6 +219,7 @@ liczy klatki istniejące, a nie planowane).
 
 Powierzchnia rysowania prostokątów nad `<img>`. Props: `imageUrl`, `imageAlt`,
 `label`, `source` (`{width, height}` albo `null`), `shapes`, `selectedId`,
+`interactionMode` (`select` domyślnie albo jawny `draw`),
 `onSelect?`, `onDraw?`, `onRemove?`, `onSourceResolved?`, `onImageError?`,
 `disabled?`.
 
@@ -257,3 +258,8 @@ crop o zaokrąglonym kształcie, a crop jest dokładnym prostokątem pikseli.
 renderuje, powierzchnia rysowania nie, bo bez wymiarów naturalnych nie ma
 układu współrzędnych. Konsument, który zna wymiary z API (klatka w F4), podaje
 je od razu.
+
+`interactionMode="select"` zachowuje selekcję F3: gest rysowania zaczyna się
+tylko na wolnej powierzchni. `interactionMode="draw"` jest jawnym trybem dla
+nakładających się bbox i pozwala rozpocząć drag wewnątrz istniejącego kształtu;
+klik bez ruchu nadal może zaznaczyć kształt.
