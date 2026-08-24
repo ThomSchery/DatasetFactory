@@ -5,6 +5,7 @@ import { Panel } from "../../components/common/Panel";
 import { StatusBadge } from "../../components/common/StatusBadge";
 
 interface FrameListProps {
+  disabled: boolean;
   frames: Page<FrameSummary>;
   onPageChange: (page: number) => void;
   onSelect: (frameId: string) => void;
@@ -15,7 +16,7 @@ function timestampLabel(timestampMs: number): string {
   return `${(timestampMs / 1000).toFixed(3)} s`;
 }
 
-export function FrameList({ frames, onPageChange, onSelect, selectedId }: FrameListProps) {
+export function FrameList({ disabled, frames, onPageChange, onSelect, selectedId }: FrameListProps) {
   const pageCount = Math.max(1, Math.ceil(frames.total / frames.page_size));
 
   return (
@@ -55,6 +56,7 @@ export function FrameList({ frames, onPageChange, onSelect, selectedId }: FrameL
               </div>
               <Button
                 aria-pressed={selected}
+                disabled={disabled}
                 onClick={() => {
                   onSelect(frame.id);
                 }}
@@ -70,7 +72,7 @@ export function FrameList({ frames, onPageChange, onSelect, selectedId }: FrameL
 
       <nav aria-label="Stronicowanie klatek" className="df-review-pagination">
         <Button
-          disabled={frames.page <= 1}
+          disabled={disabled || frames.page <= 1}
           onClick={() => {
             onPageChange(frames.page - 1);
           }}
@@ -83,7 +85,7 @@ export function FrameList({ frames, onPageChange, onSelect, selectedId }: FrameL
           Strona {frames.page} z {pageCount}
         </span>
         <Button
-          disabled={frames.page >= pageCount}
+          disabled={disabled || frames.page >= pageCount}
           onClick={() => {
             onPageChange(frames.page + 1);
           }}

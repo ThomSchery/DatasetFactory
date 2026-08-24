@@ -36,6 +36,9 @@ beforeEach(() => {
     if (url.includes("/profiles/current")) {
       return { status: 200, body: profileFixture() };
     }
+    if (url.includes("/profiles/profile-1")) {
+      return { status: 200, body: profileFixture() };
+    }
     if (url.includes("/frames?")) {
       return { status: 200, body: framePageFixture({ items: [], total: 0 }) };
     }

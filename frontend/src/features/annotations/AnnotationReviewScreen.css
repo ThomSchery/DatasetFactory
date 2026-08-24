@@ -19,6 +19,12 @@
   min-width: 0;
 }
 
+.df-review-image-error {
+  display: grid;
+  gap: var(--size-xs);
+  justify-items: start;
+}
+
 .df-review-workspace__query-state {
   grid-column: span 2;
 }

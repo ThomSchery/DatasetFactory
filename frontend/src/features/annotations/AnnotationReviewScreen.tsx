@@ -1,12 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useIsMutating, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 
 import {
   DEFAULT_REVIEW_STATUS_FILTER,
   REVIEW_STATUS_FILTER_OPTIONS,
   describeApiError,
-  getCurrentProfile,
+  getProfile,
   getRun,
   listRunFrames,
   parseReviewStatusFilter,
@@ -19,6 +19,7 @@ import { SelectField } from "../../components/common/SelectField";
 import { Empty, FatalError, Loading } from "../../components/common/UiStates";
 import { FrameEditor } from "./FrameEditor";
 import { FrameList } from "./FrameList";
+import { reviewMutationKey } from "./reviewMutations";
 import "./AnnotationReviewScreen.css";
 
 const PAGE_SIZE = 12;
@@ -46,21 +47,40 @@ function ReviewForRun({ runId }: { runId: string }) {
   const [filter, setFilter] = useState<ReviewStatusFilter>(DEFAULT_REVIEW_STATUS_FILTER);
   const [page, setPage] = useState(1);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const isWriting = useIsMutating({ mutationKey: reviewMutationKey(runId) }) > 0;
   const frameQuery = { review_status: reviewStatusQuery(filter), page, page_size: PAGE_SIZE };
   const runQuery = useQuery({
     queryKey: queryKeys.run(runId),
     queryFn: ({ signal }) => getRun(runId, signal),
   });
+  const profileId = runQuery.data?.profile_id;
   const profileQuery = useQuery({
-    queryKey: queryKeys.currentProfile(),
-    queryFn: ({ signal }) => getCurrentProfile(signal),
+    enabled: profileId !== undefined,
+    queryKey: queryKeys.profile(profileId ?? "pending-run-profile"),
+    queryFn: ({ signal }) => {
+      if (profileId === undefined) {
+        throw new Error("Profile query enabled before the run resolved");
+      }
+      return getProfile(profileId, signal);
+    },
   });
   const framesQuery = useQuery({
     queryKey: queryKeys.runFrames(runId, frameQuery),
     queryFn: ({ signal }) => listRunFrames(runId, frameQuery, signal),
   });
 
-  if (runQuery.isPending || profileQuery.isPending) {
+  useEffect(() => {
+    if (framesQuery.data === undefined) {
+      return;
+    }
+    const lastPage = Math.max(1, Math.ceil(framesQuery.data.total / framesQuery.data.page_size));
+    if (page > lastPage) {
+      setPage(lastPage);
+      setSelectedFrameId(null);
+    }
+  }, [framesQuery.data, page]);
+
+  if (runQuery.isPending) {
     return <Loading label="Ładowanie runu i profilu anotacji…" />;
   }
   if (runQuery.isError) {
@@ -74,6 +94,9 @@ function ReviewForRun({ runId }: { runId: string }) {
       />
     );
   }
+  if (profileQuery.isPending) {
+    return <Loading label="Ładowanie profilu przypisanego do runu…" />;
+  }
   if (profileQuery.isError) {
     return (
       <FatalError
@@ -85,23 +108,6 @@ function ReviewForRun({ runId }: { runId: string }) {
       />
     );
   }
-  if (profileQuery.data === null) {
-    return (
-      <Empty
-        description="Weryfikacja wymaga profilu gry z klasami anotacji. Utwórz profil i uruchom pipeline."
-        title="Brak profilu gry"
-      />
-    );
-  }
-  if (profileQuery.data.id !== runQuery.data.profile_id) {
-    return (
-      <FatalError
-        description="Bieżący profil nie jest profilem tego runu, a API v1 nie udostępnia klas historycznego profilu. Edycja została zatrzymana, aby nie wysłać niedozwolonej klasy."
-        title="Profil runu nie jest bieżący"
-      />
-    );
-  }
-
   let framesContent;
   if (framesQuery.isPending) {
     framesContent = (
@@ -121,6 +127,16 @@ function ReviewForRun({ runId }: { runId: string }) {
         />
       </div>
     );
+  } else if (
+    framesQuery.data.items.length === 0 &&
+    framesQuery.data.total > 0 &&
+    page > Math.max(1, Math.ceil(framesQuery.data.total / framesQuery.data.page_size))
+  ) {
+    framesContent = (
+      <div className="df-review-workspace__all-state">
+        <Loading label="Powrót do ostatniej istniejącej strony…" />
+      </div>
+    );
   } else if (framesQuery.data.items.length === 0) {
     framesContent = (
       <div className="df-review-workspace__all-state">
@@ -137,6 +153,7 @@ function ReviewForRun({ runId }: { runId: string }) {
     framesContent = (
       <>
         <FrameList
+          disabled={isWriting}
           frames={framesQuery.data}
           onPageChange={(nextPage) => {
             setPage(nextPage);
@@ -163,6 +180,7 @@ function ReviewForRun({ runId }: { runId: string }) {
         title="Filtr klatek"
       >
         <SelectField
+          disabled={isWriting}
           label="Status weryfikacji"
           onChange={(event) => {
             setFilter(parseReviewStatusFilter(event.target.value));

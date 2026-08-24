@@ -66,6 +66,11 @@ export function getCurrentProfile(signal?: AbortSignal): Promise<GameProfile | n
   return apiRequest<GameProfile | null>("/profiles/current", { signal });
 }
 
+/** `GET /profiles/{profile_id}` → the exact full profile assigned to a run. */
+export function getProfile(profileId: string, signal?: AbortSignal): Promise<GameProfile> {
+  return apiRequest<GameProfile>(`/profiles/${encodeURIComponent(profileId)}`, { signal });
+}
+
 /** `GET /assets/references/{asset_id}` — opaque UUID resolved through the DB. */
 export function referenceAssetUrl(assetId: string): string {
   return buildUrl(`/assets/references/${encodeURIComponent(assetId)}`);
@@ -150,8 +155,11 @@ export function getFrame(frameId: string, signal?: AbortSignal): Promise<FrameDe
 }
 
 /** `GET /frames/{id}/image` — stream from a controlled relpath. */
-export function frameImageUrl(frameId: string): string {
-  return buildUrl(`/frames/${encodeURIComponent(frameId)}/image`);
+export function frameImageUrl(frameId: string, attempt?: number): string {
+  return buildUrl(
+    `/frames/${encodeURIComponent(frameId)}/image`,
+    attempt === undefined ? undefined : { attempt },
+  );
 }
 
 /** `POST /frames/{id}/annotations` → `201` (TK-007). */

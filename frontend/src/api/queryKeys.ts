@@ -19,6 +19,7 @@ export const queryKeys = {
 
   profiles: () => ["profiles"] as const,
   currentProfile: () => ["profiles", "current"] as const,
+  profile: (profileId: string) => ["profiles", "detail", profileId] as const,
 
   materials: () => ["materials"] as const,
   materialList: (query: ListMaterialsQuery = {}) => ["materials", "list", query] as const,

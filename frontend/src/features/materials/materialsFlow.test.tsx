@@ -54,6 +54,9 @@ function stubBackend(state: BackendState) {
     if (url.includes("/api/v1/profiles/current")) {
       return { status: 200, body: profileFixture() };
     }
+    if (url.includes("/api/v1/profiles/profile-1")) {
+      return { status: 200, body: profileFixture() };
+    }
     if (url.includes("/api/v1/runs") && url.endsWith("/start")) {
       return state.startResponse ?? { status: 202, body: state.run };
     }

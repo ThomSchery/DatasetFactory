@@ -33,7 +33,11 @@ import {
   parseGeometryDraft,
   type GeometryDraft,
 } from "./geometryForm";
-import { executeReviewMutation, type ReviewMutationIntent } from "./reviewMutations";
+import {
+  executeReviewMutation,
+  reviewMutationKey,
+  type ReviewMutationIntent,
+} from "./reviewMutations";
 
 interface FrameEditorProps {
   frameId: string;
@@ -100,17 +104,23 @@ interface LoadedFrameEditorProps {
   runId: string;
 }
 
+interface RedrawMode {
+  annotationId: string;
+  kind: "redraw";
+}
+
 function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   const queryClient = useQueryClient();
   const imageErrorCopy = describeErrorCode("frame_image_not_found");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drawTargetId, setDrawTargetId] = useState<string | null>(null);
+  const [redrawMode, setRedrawMode] = useState<RedrawMode | null>(null);
   const [newCategoryId, setNewCategoryId] = useState(profile.categories[0]?.id ?? "");
   const [newGeometry, setNewGeometry] = useState<GeometryDraft>(() => ({
     ...EMPTY_GEOMETRY_DRAFT,
   }));
   const [newGeometryError, setNewGeometryError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
   const capabilities = frameReviewCapabilities(frame.stage_status, frame.review_status);
@@ -124,11 +134,15 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   );
 
   const mutation = useMutation<void, unknown, ReviewMutationIntent>({
+    mutationKey: reviewMutationKey(runId),
     mutationFn: (intent) => executeReviewMutation(frame.id, intent),
     onError: async (error, intent) => {
       const presentation = describeApiError(error);
       setActionError(presentation);
-      setInvalidIds(presentation.annotationIds);
+      if (presentation.code === "bbox_invalid") {
+        // A newer bbox verdict replaces the whole previous verdict atomically.
+        setInvalidIds(presentation.annotationIds);
+      }
       if (isVersionConflict(error)) {
         // Explicit stale-frame reload. `invalidateFor` owns the central key map
         // and waits for the active frame/list refetch; no cache value is patched.
@@ -141,8 +155,12 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
     },
     onSuccess: async (_data, intent) => {
       setActionError(null);
-      setInvalidIds([]);
-      setDrawTargetId(null);
+      if (intent.kind === "review") {
+        setInvalidIds([]);
+      } else if (intent.kind === "geometry" || intent.kind === "delete") {
+        setInvalidIds((current) => current.filter((id) => id !== intent.annotationId));
+      }
+      setRedrawMode(null);
       if (intent.kind === "delete") {
         setSelectedId((current) => (current === intent.annotationId ? null : current));
       }
@@ -176,10 +194,15 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   const stage = describeFrameStage(frame.stage_status);
   const review = describeReviewStatus(frame.review_status);
   const editorDisabled = !capabilities.canEdit || mutation.isPending;
+  const redrawTarget =
+    redrawMode === null ? undefined : activeAnnotations.find((item) => item.id === redrawMode.annotationId);
+  const redrawTargetLabel =
+    redrawTarget === undefined
+      ? null
+      : `${categoryById.get(redrawTarget.category_id) ?? redrawTarget.category_id} (${redrawTarget.id})`;
 
   function submit(intent: ReviewMutationIntent): void {
     setActionError(null);
-    setInvalidIds([]);
     mutation.mutate(intent);
   }
 
@@ -188,8 +211,8 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   }
 
   function handleDraw(bbox: BBox): void {
-    if (drawTargetId !== null) {
-      const annotation = annotationById(drawTargetId);
+    if (redrawMode !== null) {
+      const annotation = annotationById(redrawMode.annotationId);
       if (annotation !== undefined) {
         submit({
           annotationId: annotation.id,
@@ -208,6 +231,13 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
         kind: "create",
       });
     }
+  }
+
+  function selectAnnotation(annotationId: string): void {
+    setSelectedId(annotationId);
+    // Selection means inspection. It cancels redraw so a later gesture cannot
+    // silently PATCH the previously armed annotation.
+    setRedrawMode(null);
   }
 
   return (
@@ -270,9 +300,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
               value={newCategoryId}
             />
             <p>
-              {drawTargetId === null
+              {redrawTargetLabel === null
                 ? "Przeciągnij na obrazie, aby dodać ręczny bbox."
-                : "Przeciągnij na obrazie, aby zastąpić geometrię zaznaczonej anotacji."}
+                : `Tryb zmiany geometrii: ${redrawTargetLabel}. Przeciągnij na obrazie, aby zastąpić bbox tej anotacji.`}
             </p>
             <div className="df-review-annotations__geometry">
               {(["x", "y", "width", "height"] as const).map((field) => (
@@ -326,19 +356,36 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
 
         {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
         {imageError ? (
-          <InlineError
-            message={`${imageErrorCopy.message} ${imageErrorCopy.action} Kod: frame_image_not_found.`}
-          />
+          <div className="df-review-image-error">
+            <InlineError
+              message={`${imageErrorCopy.message} ${imageErrorCopy.action} Kod: frame_image_not_found.`}
+            />
+            <Button
+              disabled={mutation.isPending}
+              onClick={() => {
+                setImageAttempt((current) => current + 1);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Spróbuj ponownie załadować obraz
+            </Button>
+          </div>
         ) : null}
 
         <RegionOverlay
           disabled={editorDisabled}
           imageAlt={`Klatka ${frame.frame_index} runu ${runId}`}
-          imageUrl={frameImageUrl(frame.id)}
+          imageUrl={frameImageUrl(frame.id, imageAttempt === 0 ? undefined : imageAttempt)}
+          interactionMode="draw"
+          key={`frame-image-${String(imageAttempt)}`}
           label="Bbox anotacji na klatce"
           onDraw={capabilities.canEdit ? handleDraw : undefined}
           onImageError={() => {
             setImageError(true);
+          }}
+          onSourceResolved={() => {
+            setImageError(false);
           }}
           onRemove={
             capabilities.canEdit
@@ -354,7 +401,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
                 }
               : undefined
           }
-          onSelect={setSelectedId}
+          onSelect={selectAnnotation}
           selectedId={selectedId}
           shapes={shapes}
           source={{ width: frame.width, height: frame.height }}
@@ -414,7 +461,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           busyKey={currentBusyKey}
           categories={profile.categories}
           disabled={editorDisabled}
-          drawTargetId={drawTargetId}
+          drawTargetId={redrawMode?.annotationId ?? null}
           frameSize={{ width: frame.width, height: frame.height }}
           invalidIds={invalidSet}
           onCategoryChange={(annotation, categoryId) => {
@@ -440,10 +487,14 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
               kind: "geometry",
             });
           }}
-          onSelect={setSelectedId}
+          onSelect={selectAnnotation}
           onToggleDrawTarget={(annotationId) => {
-            setDrawTargetId((current) => (current === annotationId ? null : annotationId));
             setSelectedId(annotationId);
+            setRedrawMode((current) =>
+              current?.annotationId === annotationId
+                ? null
+                : { annotationId, kind: "redraw" },
+            );
           }}
           selectedId={selectedId}
         />

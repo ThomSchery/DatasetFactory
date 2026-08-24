@@ -38,7 +38,7 @@ function reviewApi(options: ReviewApiOptions = {}) {
     if (url === "/api/v1/runs/run-1") {
       return { status: 200, body: runFixture({ id: "run-1", profile_id: PROFILE.id }) };
     }
-    if (url === "/api/v1/profiles/current") {
+    if (url === `/api/v1/profiles/${PROFILE.id}`) {
       return { status: 200, body: PROFILE };
     }
     if (url.startsWith("/api/v1/runs/run-1/frames?")) {
@@ -78,7 +78,7 @@ describe("annotation review query states", () => {
       if (url === "/api/v1/runs/run-1") {
         return { status: 200, body: runFixture({ profile_id: PROFILE.id }) };
       }
-      if (url === "/api/v1/profiles/current") {
+      if (url === `/api/v1/profiles/${PROFILE.id}`) {
         return { status: 200, body: PROFILE };
       }
       return { status: 404, body: errorEnvelope("run_not_found") };
@@ -117,7 +117,7 @@ describe("annotation review query states", () => {
       if (url === "/api/v1/runs/run-1") {
         return { status: 200, body: runFixture({ profile_id: PROFILE.id }) };
       }
-      if (url === "/api/v1/profiles/current") {
+      if (url === `/api/v1/profiles/${PROFILE.id}`) {
         return { status: 200, body: PROFILE };
       }
       if (url.startsWith("/api/v1/runs/run-1/frames?")) {
@@ -154,7 +154,7 @@ describe("review filters and mutations", () => {
       if (url === "/api/v1/runs/run-1") {
         return { status: 200, body: runFixture({ profile_id: PROFILE.id }) };
       }
-      if (url === "/api/v1/profiles/current") {
+      if (url === `/api/v1/profiles/${PROFILE.id}`) {
         return { status: 200, body: PROFILE };
       }
       if (url.includes("review_status=rejected")) {
@@ -216,7 +216,7 @@ describe("review filters and mutations", () => {
       const response =
         url === "/api/v1/runs/run-1"
           ? runFixture({ profile_id: PROFILE.id })
-          : url === "/api/v1/profiles/current"
+          : url === `/api/v1/profiles/${PROFILE.id}`
             ? PROFILE
             : url.startsWith("/api/v1/runs/run-1/frames?")
               ? framePageFixture()

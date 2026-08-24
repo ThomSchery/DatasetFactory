@@ -11,6 +11,11 @@ import {
 import type { RunStatus } from "./types";
 
 describe("query keys", () => {
+  it("keeps an exact historical profile separate from the current shortcut", () => {
+    expect(queryKeys.profile("profile-old")).toEqual(["profiles", "detail", "profile-old"]);
+    expect(queryKeys.profile("profile-old")).not.toEqual(queryKeys.currentProfile());
+  });
+
   it("nests a run's frames under the run so one call invalidates both", () => {
     expect(queryKeys.runFrames("run-1", { page: 2 })).toEqual([
       "runs",

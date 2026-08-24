@@ -14,6 +14,11 @@ export type ReviewMutationIntent =
   | { bbox: BBox; categoryId: string; expectedVersion: number; kind: "create" }
   | { decision: ReviewDecision; expectedVersion: number; kind: "review" };
 
+/** Shared mutation scope used to serialize every write on one review screen. */
+export function reviewMutationKey(runId: string): readonly ["annotation-review", string, "write"] {
+  return ["annotation-review", runId, "write"];
+}
+
 /** One transport path for all seven FE-001-F4 writes. */
 export async function executeReviewMutation(
   frameId: string,
