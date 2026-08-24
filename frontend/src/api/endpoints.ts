@@ -130,6 +130,14 @@ export function cancelRun(runId: string, body: VersionedMutationRequest): Promis
   });
 }
 
+/** `POST /runs/{id}/complete` → `202 completed` (TK-009). */
+export function completeRun(runId: string, body: VersionedMutationRequest): Promise<PipelineRun> {
+  return apiRequest<PipelineRun>(`/runs/${encodeURIComponent(runId)}/complete`, {
+    method: "POST",
+    body,
+  });
+}
+
 /** `GET /runs/{id}` */
 export function getRun(runId: string, signal?: AbortSignal): Promise<PipelineRun> {
   return apiRequest<PipelineRun>(`/runs/${encodeURIComponent(runId)}`, { signal });

@@ -1,0 +1,61 @@
+.df-exports {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--size-lg);
+  min-width: 0;
+}
+
+.df-exports > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.df-exports__start,
+.df-exports__status,
+.df-exports__manifest {
+  display: grid;
+  gap: var(--size-md);
+  min-width: 0;
+}
+
+.df-exports__start > p,
+.df-exports__sources > p,
+.df-exports__sources > h3 {
+  max-width: var(--measure-copy);
+  margin: var(--size-none);
+}
+
+.df-exports__start > p,
+.df-exports__sources > p {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-exports__sources {
+  display: grid;
+  gap: var(--size-sm);
+  padding: var(--size-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-exports__sources > h3 {
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.df-exports__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-sm);
+}
+
+.df-exports__path {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-loose);
+  overflow-wrap: anywhere;
+}

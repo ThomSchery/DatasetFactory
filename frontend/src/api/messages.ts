@@ -1,6 +1,6 @@
 import { annotationIdsFromError, isApiError, isApiTransportError } from "./errors";
 import type { ErrorDetails } from "./errors";
-import type { RunStatus } from "./types";
+import type { ExportStatus, RunStatus } from "./types";
 
 /*
  * Central translation of backend error codes into Polish copy plus a suggested
@@ -315,6 +315,16 @@ const RUN_STATUS_COPY: Readonly<Record<RunStatus, RunStatusCopy>> = {
 
 export function describeRunStatus(status: RunStatus): RunStatusCopy {
   return RUN_STATUS_COPY[status];
+}
+
+const EXPORT_STATUS_COPY: Readonly<Record<ExportStatus, RunStatusCopy>> = {
+  running: { label: "W toku", tone: "brand" },
+  completed: { label: "Ukończony", tone: "success" },
+  failed: { label: "Nieudany", tone: "error" },
+};
+
+export function describeExportStatus(status: ExportStatus): RunStatusCopy {
+  return EXPORT_STATUS_COPY[status];
 }
 
 /**

@@ -317,6 +317,22 @@ export interface Dashboard {
 
 // --- exports --------------------------------------------------------------
 
+export type ExportStatus = "running" | "completed" | "failed";
+
+export interface ExportManifest {
+  annotation_sources: {
+    manual: number;
+    ocr: number;
+  };
+  annotations: string;
+  exported_at: string;
+  images: string;
+  input_revision: number;
+  profile_id: string;
+  run_id: string;
+  schema: string;
+}
+
 export interface CreateExportRequest {
   run_id: string;
 }
@@ -324,7 +340,7 @@ export interface CreateExportRequest {
 export interface Export {
   id: string;
   run_id: string;
-  status: string;
+  status: ExportStatus;
   input_revision: number;
   /**
    * Failure reason of a finished export, not an HTTP envelope code. Carries
@@ -332,7 +348,7 @@ export interface Export {
    * `export_process_interrupted`.
    */
   error_code: string | null;
-  manifest: Record<string, unknown> | null;
+  manifest: ExportManifest | null;
   /** Relative to the workspace; the backend never returns an absolute path. */
   output_relpath: string | null;
 }

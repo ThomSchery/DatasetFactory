@@ -1,6 +1,7 @@
 import type {
   Annotation,
   Dashboard,
+  Export,
   FrameDetail,
   FrameSummary,
   GameProfile,
@@ -117,6 +118,28 @@ export function dashboardFixture(overrides: Partial<Dashboard> = {}): Dashboard 
     run: runFixture(),
     frame_counts: { pending: 12, accepted: 30, rejected: 3, total: 45 },
     system: healthFixture(),
+    ...overrides,
+  };
+}
+
+export function exportFixture(overrides: Partial<Export> = {}): Export {
+  return {
+    id: "export-1",
+    run_id: "run-1",
+    status: "completed",
+    input_revision: 7,
+    error_code: null,
+    manifest: {
+      annotation_sources: { ocr: 12, manual: 3 },
+      annotations: "annotations.json",
+      exported_at: "2026-08-24T12:00:00+00:00",
+      images: "images",
+      input_revision: 7,
+      profile_id: "profile-1",
+      run_id: "run-1",
+      schema: "datasetfactory-coco-export-v1",
+    },
+    output_relpath: "exports/export-1",
     ...overrides,
   };
 }

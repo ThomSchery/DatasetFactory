@@ -1,30 +1,25 @@
 import { createBrowserRouter, type RouteObject } from "react-router";
+import { lazy, Suspense } from "react";
 
-import { Empty } from "../components/common/UiStates";
+import { Empty, Loading } from "../components/common/UiStates";
 import { AnnotationReviewScreen } from "../features/annotations";
 import { DashboardScreen } from "../features/dashboard";
 import { MaterialsScreen } from "../features/materials";
 import { ProfileCreateScreen } from "../features/profiles";
 import { AppShell } from "./AppShell";
 
+const ExportsScreen = lazy(() =>
+  import("../features/exports").then((module) => ({ default: module.ExportsScreen })),
+);
+
 /*
  * Exactly the five FE-04 routes plus a catch-all for unknown paths. The
- * dashboard and materials screens landed in FE-001-F2 and profile creation in
- * FE-001-F3; the remaining two still render an explicit empty state naming the
- * ticket that builds them.
+ * All five product routes now render their real screens. The catch-all keeps a
+ * named empty state for addresses outside the product map.
  *
  * `handle.heading` feeds the shell's `<h1>` so the heading and the route stay
  * defined in one place.
  */
-
-function ExportsRoute() {
-  return (
-    <Empty
-      description="Ekran eksportów powstaje w FE-001-F5: uruchomienie eksportu COCO, status, manifest i ścieżka wyniku."
-      title="Eksporty nie są jeszcze zbudowane"
-    />
-  );
-}
 
 function NotFoundRoute() {
   return (
@@ -32,6 +27,14 @@ function NotFoundRoute() {
       description="Ten adres nie należy do żadnej z pięciu tras aplikacji. Wybierz destynację z nawigacji."
       title="Nie ma takiej trasy"
     />
+  );
+}
+
+function ExportsRoute() {
+  return (
+    <Suspense fallback={<Loading label="Ładowanie ekranu eksportów…" />}>
+      <ExportsScreen />
+    </Suspense>
   );
 }
 

@@ -14,12 +14,8 @@ import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
 /*
  * FE-04 fixes the route set at five. Dashboard and Materiały render their real
  * screens since FE-001-F2, Nowy profil gry since FE-001-F3, and Anotacje since
- * FE-001-F4. Eksporty still carries an explicit future-feature empty state.
+ * FE-001-F4 and Eksporty in FE-001-F5.
  */
-
-const UNBUILT_ROUTES: readonly [string, string][] = [
-  ["/exports", "Eksporty"],
-];
 
 const BUILT_ROUTES: readonly [string, string][] = [
   ["/", "Dashboard"],
@@ -55,17 +51,6 @@ afterEach(() => {
 });
 
 describe("the five FE-04 routes", () => {
-  it.each(UNBUILT_ROUTES)(
-    "renders %s with its heading and an explicit empty state",
-    (path, heading) => {
-      renderApp([path]);
-
-      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(heading);
-      const empty = screen.getByRole("region", { name: /nie (jest|są) jeszcze zbudowan/i });
-      expect(within(empty).getByText("Brak danych")).toBeInTheDocument();
-    },
-  );
-
   it.each(BUILT_ROUTES)("renders the %s screen built in FE-001-F2", async (path, heading) => {
     renderApp([path]);
 
@@ -91,6 +76,14 @@ describe("the five FE-04 routes", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
     expect(await screen.findByRole("region", { name: "Filtr klatek" })).toBeInTheDocument();
     expect(screen.getByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
+    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+  });
+
+  it("renders the export screen built in FE-001-F5", async () => {
+    renderApp(["/exports"]);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Eksporty");
+    expect(await screen.findByText("Brak runu do eksportu")).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
   });
 

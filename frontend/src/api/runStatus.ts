@@ -1,4 +1,4 @@
-import type { RunStatus } from "./types";
+import type { ExportStatus, RunStatus } from "./types";
 
 /*
  * The pipeline status machine lives here, once. No React component may hold a
@@ -69,16 +69,37 @@ export function availableRunActions(status: RunStatus): readonly RunAction[] {
 }
 
 /** Export statuses written by the backend (`repositories/exports.py`). */
-export const TERMINAL_EXPORT_STATUSES = ["completed", "failed"] as const;
+export const TERMINAL_EXPORT_STATUSES = ["completed", "failed"] as const satisfies readonly ExportStatus[];
 
-export function isTerminalExportStatus(status: string): boolean {
-  return (TERMINAL_EXPORT_STATUSES as readonly string[]).includes(status);
+export function isTerminalExportStatus(status: ExportStatus): boolean {
+  return (TERMINAL_EXPORT_STATUSES as readonly ExportStatus[]).includes(status);
 }
 
 /** Same contract as `runPollInterval`, for the export status query. */
-export function exportPollInterval(status: string | undefined): number | false {
+export function exportPollInterval(status: ExportStatus | undefined): number | false {
   if (status === undefined) {
     return RUN_POLL_INTERVAL_MS;
   }
   return isTerminalExportStatus(status) ? false : RUN_POLL_INTERVAL_MS;
+}
+
+export function isCompletedExportStatus(status: ExportStatus): boolean {
+  return status === "completed";
+}
+
+export function isFailedExportStatus(status: ExportStatus): boolean {
+  return status === "failed";
+}
+
+export function isRunningExportStatus(status: ExportStatus): boolean {
+  return status === "running";
+}
+
+export function isCompletedRunStatus(status: RunStatus): boolean {
+  return status === "completed";
+}
+
+/** UI affordance only; the backend still owns and atomically validates the transition. */
+export function canCompleteExportedRun(runStatus: RunStatus, exportStatus: ExportStatus): boolean {
+  return runStatus === "review_ready" && isCompletedExportStatus(exportStatus);
 }

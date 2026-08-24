@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { invalidateFor, invalidationKeys, queryKeys } from "./queryKeys";
 import {
   RUN_POLL_INTERVAL_MS,
+  canCompleteExportedRun,
   exportPollInterval,
   isTerminalRunStatus,
   runPollInterval,
@@ -89,5 +90,11 @@ describe("run status machine", () => {
     expect(exportPollInterval("running")).toBe(RUN_POLL_INTERVAL_MS);
     expect(exportPollInterval("completed")).toBe(false);
     expect(exportPollInterval("failed")).toBe(false);
+  });
+
+  it("offers explicit completion only for an exported review-ready run", () => {
+    expect(canCompleteExportedRun("review_ready", "completed")).toBe(true);
+    expect(canCompleteExportedRun("review_ready", "running")).toBe(false);
+    expect(canCompleteExportedRun("completed", "completed")).toBe(false);
   });
 });
