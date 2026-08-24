@@ -118,6 +118,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /runs/{id}/pause` | `{expected_version}` | `202` | `409 invalid_transition` |
 | `POST /runs/{id}/resume` | `{expected_version}` | `202` | `409 active_run/invalid_transition/version/source_missing/source_changed` |
 | `POST /runs/{id}/cancel` | `{expected_version}` | `202` | `409 invalid_transition` |
+| `POST /runs/{id}/complete` | `{expected_version}` | `202 completed` | `404`; `409 invalid_transition/version` |
 | `GET /runs/{id}` | — | status, progress, error, version | `404` |
 | `GET /runs/{id}/frames` | `review_status,page,page_size<=100` | paged summaries | `404/400` |
 | `GET /frames/{id}/image` | — | image stream z kontrolowanego relpath | `404`; nigdy arbitrary path |
@@ -176,6 +177,15 @@ zmieni się bez akcji użytkownika.
 grupującym po `review_status`; `total` to suma trzech pól, czyli liczba
 istniejących klatek, a nie planowane `run.total_frames`. Bez aktywnego runu
 wszystkie cztery pola są zerami.
+
+`POST /runs/{id}/complete` jest jawną, wersjonowaną granicą końca pracy nad
+runem. Przejście jest dozwolone wyłącznie z `review_ready` i wymaga co najmniej
+jednego rekordu eksportu tego runu w statusie `completed`; brak takiego eksportu
+jest `409 invalid_transition`. Sprawdzenie statusu, `expected_version` i eksportu
+oraz zapis `completed` odbywają się w jednej transakcji. Operacja zwiększa tylko
+`pipeline_runs.version`: nie zmienia klatek, anotacji, eksportów ani
+`review_revision`. Istniejąca definicja `NONTERMINAL_RUN_STATUSES` sprawia, że
+zamknięty run znika z dashboardu bez osobnej ścieżki specjalnej.
 
 Geometria jest asymetryczna między żądaniem a odpowiedzią: `POST` i `PATCH`
 przyjmują ją zagnieżdżoną w `bbox`, natomiast `AnnotationResponse` zwraca płaskie

@@ -18,7 +18,7 @@
 | FE-001-F2 | Materiały, uruchomienie runu i dashboard | wykonany | FE-001-F1, TK-008 | część Gate 3 ✓ |
 | FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
 | FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
-| TK-009 | Zamknięcie runu po eksporcie | gotowy | TK-005, TK-008 | przed FE-001-F5 |
+| TK-009 | Zamknięcie runu po eksporcie | wykonany | TK-005, TK-008 | odblokowuje FE-001-F5 |
 | FE-001-F5 | Eksport i bramki Gate 3 UI | gotowy | FE-001-F1…F4, TK-009 | Gate 3 UI |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
@@ -71,6 +71,13 @@ przejścia nie wykonywał — status `completed` był nieosiągalny. Lukę wykry
 wykonawca FE-001-F2. Realizuje ją `TK-009`: jawne zamknięcie runu po ukończonym
 eksporcie, wymagane przed FE-001-F5. Run w `review_ready` nie blokuje kolejnego,
 bo slot zwalnia się już przy wyjściu z `running`.
+
+`TK-009` wykonany commitem `ddc2565` (2026-08-24). Zamknięcie jest dozwolone
+wyłącznie z `review_ready`, wymaga co najmniej jednego eksportu `completed` i
+wykonuje sprawdzenie `expected_version` oraz zapis w jednej transakcji. Nie rusza
+klatek, anotacji, eksportów ani `review_revision`; istniejący dashboard przestaje
+pokazywać run po zmianie na terminalne `completed`. Pełna bramka: 289/289 testów
+w 28 min 19 s; ruff i mypy strict czyste.
 
 FE-001 został rozbity na pięć sub-ticketów. Kolejność jest sekwencyjna mimo
 częściowej niezależności F2 i F3: katalog komponentów w `new-component.md` oraz

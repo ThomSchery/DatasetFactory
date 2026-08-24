@@ -115,6 +115,11 @@ system nie kasuje pracy człowieka za niego.
 6. Ukończony eksport jest niezmienny. Ponowne otwarcie i akceptacja klatki, która
    już w nim jest, nie poprawiają datasetu na dysku — ten pozostaje wierną
    migawką swojej rewizji. Nowy stan wymaga nowego eksportu.
+7. Po co najmniej jednym ukończonym eksporcie autor jawnie zamyka run operacją
+   `POST /runs/{id}/complete` z `expected_version`. Dozwolone jest wyłącznie
+   przejście `review_ready → completed`; sprawdzenie eksportu i CAS są atomowe.
+8. Zamknięcie nie zmienia klatek, anotacji, eksportów ani `review_revision`.
+   `completed` jest terminalne, a dashboard przestaje traktować run jako aktywny.
 
 ## CF-07 — Dashboard i błędy systemowe
 
