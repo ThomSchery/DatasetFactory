@@ -17,10 +17,18 @@ export default defineConfig({
     trace: "retain-on-failure",
     viewport: { width: 1440, height: 1000 },
   },
-  webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:5173",
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: "node scripts/e2e-backend.mjs",
+      url: "http://127.0.0.1:8000/api/v1/health",
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: "npm run dev",
+      url: "http://127.0.0.1:5173",
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  ],
 });

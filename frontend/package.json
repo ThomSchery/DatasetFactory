@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "e2e": "playwright test",
+    "e2e": "node scripts/playwright.mjs test",
+    "e2e:install": "node scripts/playwright.mjs install chromium",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

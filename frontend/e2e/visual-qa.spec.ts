@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -36,9 +36,17 @@ async function assertResolvedCssVariables(page: Page): Promise<void> {
   expect(unresolved).toEqual([]);
 }
 
-async function assertKeyboardFocus(page: Page): Promise<void> {
+async function assertKeyboardFocus(page: Page, expected: Locator): Promise<void> {
   await page.locator("body").click({ position: { x: 2, y: 2 } });
-  await page.keyboard.press("Tab");
+  let reached = false;
+  for (let index = 0; index < 40; index += 1) {
+    await page.keyboard.press("Tab");
+    if (await expected.evaluate((element) => element === document.activeElement)) {
+      reached = true;
+      break;
+    }
+  }
+  expect(reached, "route-specific focus checkpoint was not keyboard reachable").toBe(true);
   const focus = await page.evaluate(() => {
     const element = document.activeElement;
     if (!(element instanceof HTMLElement)) {
@@ -59,7 +67,9 @@ async function capture(
   name: string,
   route: string,
   options: { dashboardMode?: DashboardMode; phase?: HarnessPhase } = {},
+  focusTarget: (page: Page) => Locator,
   prepare?: (page: Page) => Promise<void>,
+  beforeScreenshot?: (page: Page) => Promise<void>,
 ): Promise<void> {
   const api = new ApiHarness(options);
   await api.install(page);
@@ -75,8 +85,9 @@ async function capture(
   await prepare?.(page);
   await assertNoOverflow(page);
   await assertResolvedCssVariables(page);
-  await assertKeyboardFocus(page);
+  await assertKeyboardFocus(page, focusTarget(page));
   expect(externalFonts).toEqual([]);
+  await beforeScreenshot?.(page);
   await page.screenshot({ fullPage: true, path: path.join(screenshotDirectory, `${name}-1440.png`) });
   await page.goto("about:blank");
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -85,23 +96,53 @@ async function capture(
 test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA layoutu", async ({
   page,
 }) => {
-  await capture(page, "dashboard", "/", { dashboardMode: "populated" });
-  await capture(page, "profile", "/profiles/new");
-  await capture(page, "materials", "/materials", { phase: "review" });
-  await capture(page, "annotations", "/annotations/run-1", { phase: "review" }, async (current) => {
-    await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
-  });
-  await capture(page, "exports", "/exports", { phase: "accepted" }, async (current) => {
-    await current.getByRole("button", { name: "Uruchom eksport COCO" }).click();
-    await expect(current.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible({ timeout: 8_000 });
-  });
-  await capture(page, "loading", "/", { dashboardMode: "loading" }, async (current) => {
-    await expect(current.getByText("Ładowanie stanu systemu…")).toBeVisible();
-  });
-  await capture(page, "empty", "/", { dashboardMode: "empty" }, async (current) => {
-    await expect(current.getByText("Brak aktywnego projektu")).toBeVisible();
-  });
-  await capture(page, "error", "/", { dashboardMode: "error" }, async (current) => {
-    await expect(current.getByText("Nie udało się wczytać dashboardu")).toBeVisible();
-  });
+  await capture(page, "dashboard", "/", { phase: "queued" }, (current) =>
+    current.getByRole("button", { name: "Uruchom" }));
+  await capture(page, "profile", "/profiles/new", {}, (current) =>
+    current.getByLabel("Nazwa profilu"));
+  await capture(page, "materials", "/materials", { phase: "review" }, (current) =>
+    current.getByLabel("Ścieżka pliku wideo"));
+  await capture(
+    page,
+    "annotations",
+    "/annotations/run-1",
+    { phase: "review" },
+    (current) => current.getByRole("combobox", { name: "Status weryfikacji" }),
+    async (current) => {
+      await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
+    },
+  );
+  await capture(
+    page,
+    "exports",
+    "/exports",
+    { phase: "accepted" },
+    (current) => current.getByRole("button", { name: "Zamknij run" }),
+    async (current) => {
+      await current.getByRole("button", { name: "Uruchom eksport COCO" }).click();
+      await expect(current.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible({
+        timeout: 8_000,
+      });
+    },
+    async (current) => {
+      await expect(current).toHaveURL(/\/exports\?export_id=export-1$/);
+      await expect(current.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible();
+      await expect(current.getByRole("region", { name: "Pochodzenie anotacji" })).toContainText(
+        "OCR",
+      );
+      await expect(current.getByText("exports/export-1", { exact: true })).toBeVisible();
+    },
+  );
+  await capture(page, "loading", "/", { dashboardMode: "loading" }, (current) =>
+    current.getByRole("link", { name: /Dashboard/ }), async (current) => {
+      await expect(current.getByText("Ładowanie stanu systemu…")).toBeVisible();
+    });
+  await capture(page, "empty", "/", { dashboardMode: "empty" }, (current) =>
+    current.getByRole("link", { name: /Dashboard/ }), async (current) => {
+      await expect(current.getByText("Brak aktywnego projektu")).toBeVisible();
+    });
+  await capture(page, "error", "/", { dashboardMode: "error" }, (current) =>
+    current.getByRole("button", { name: "Spróbuj ponownie" }), async (current) => {
+      await expect(current.getByText("Nie udało się wczytać dashboardu")).toBeVisible();
+    });
 });

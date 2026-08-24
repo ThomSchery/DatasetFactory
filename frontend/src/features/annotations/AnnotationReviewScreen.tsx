@@ -8,10 +8,12 @@ import {
   describeApiError,
   getProfile,
   getRun,
+  isTerminalRunStatus,
   listRunFrames,
   parseReviewStatusFilter,
   queryKeys,
   reviewStatusQuery,
+  runPollInterval,
   type ReviewStatusFilter,
 } from "../../api";
 import { Panel } from "../../components/common/Panel";
@@ -52,6 +54,7 @@ function ReviewForRun({ runId }: { runId: string }) {
   const runQuery = useQuery({
     queryKey: queryKeys.run(runId),
     queryFn: ({ signal }) => getRun(runId, signal),
+    refetchInterval: (query) => runPollInterval(query.state.data?.status),
   });
   const profileId = runQuery.data?.profile_id;
   const profileQuery = useQuery({
@@ -68,6 +71,12 @@ function ReviewForRun({ runId }: { runId: string }) {
     queryKey: queryKeys.runFrames(runId, frameQuery),
     queryFn: ({ signal }) => listRunFrames(runId, frameQuery, signal),
   });
+
+  useEffect(() => {
+    if (runQuery.data !== undefined && isTerminalRunStatus(runQuery.data.status)) {
+      void framesQuery.refetch();
+    }
+  }, [framesQuery.refetch, runQuery.data?.status]);
 
   useEffect(() => {
     if (framesQuery.data === undefined) {
@@ -164,7 +173,7 @@ function ReviewForRun({ runId }: { runId: string }) {
         />
         <FrameEditor
           frameId={selectedId}
-          key={selectedId}
+          key={`${selectedId}:${runQuery.data.status}`}
           profile={profileQuery.data}
           runId={runId}
         />

@@ -17,6 +17,10 @@ describe("workspace-relative export paths", () => {
     "/srv/datasetfactory/exports/export-1",
     "\\\\server\\share\\export-1",
     "exports/../secrets",
+    "http://example.test/export-1",
+    "https://example.test/export-1",
+    "file:///D:/DatasetFactory/export-1",
+    "data:text/plain,export-1",
   ])("never exposes the absolute or escaping path %s", (value) => {
     expect(safeWorkspaceRelativePath(value)).toBeNull();
   });

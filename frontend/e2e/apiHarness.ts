@@ -262,6 +262,13 @@ export class ApiHarness {
       }), 202);
       return;
     }
+    if (pathname === "/exports/latest" && method === "GET") {
+      await json(
+        route,
+        ["exported", "completed"].includes(this.phase) ? completedExport : null,
+      );
+      return;
+    }
     if (pathname === "/exports/export-1" && method === "GET") {
       this.exportReads += 1;
       if (this.exportReads === 1) {

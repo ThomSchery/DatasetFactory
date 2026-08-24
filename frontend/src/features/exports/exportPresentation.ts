@@ -1,4 +1,5 @@
 const WINDOWS_DRIVE_PATH = /^[a-zA-Z]:/;
+const URI_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 
 /**
  * The API contract returns a workspace-relative path. Refuse to display a
@@ -6,6 +7,9 @@ const WINDOWS_DRIVE_PATH = /^[a-zA-Z]:/;
  */
 export function safeWorkspaceRelativePath(value: string | null): string | null {
   if (value === null || value.trim() === "") {
+    return null;
+  }
+  if (URI_SCHEME.test(value)) {
     return null;
   }
   const normalized = value.replaceAll("\\", "/");
