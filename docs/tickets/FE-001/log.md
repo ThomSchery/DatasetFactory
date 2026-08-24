@@ -1221,3 +1221,88 @@ Planu F4. Zmienia wyłącznie stany i zachowanie poniższych istniejących eleme
   `Button`, `UiStates`, `Notice`, `SelectField`, `Panel` i `RegionOverlay`.
   Nie powstaje nowy common component. Definicja `RegionOverlay` §5 zostanie
   rozszerzona wyłącznie o ogólny prop trybu interakcji po implementacji.
+
+## FE-001-F4-FIX1 — wykonanie i weryfikacja (2026-08-24)
+
+### Rozwiązania findings F1–F8
+
+1. **F1 — jednoznaczny redraw:** stan redraw zawiera wyłącznie docelowe
+   `annotationId`, a komunikat podaje klasę i ID targetu. Zmiana zaznaczenia
+   jawnie anuluje redraw. Test A → zaznaczenie B → gest potwierdza, że A nie
+   dostaje PATCH, a gest tworzy nową anotację manual.
+2. **F2 — trwałe `bbox_invalid`:** submit nie czyści zbioru. Kolejne
+   `bbox_invalid` atomowo zastępuje ID; geometry/delete success usuwa tylko ID
+   zmienionej anotacji; unrelated success i 409 zachowują pozostałe; review
+   success albo zmiana klatki czyści całość. Test z dwoma ID obejmuje success
+   jednego targetu i późniejszy 409.
+3. **F3 — profil historyczny:** backend udostępnia
+   `GET /profiles/{profile_id}` po statycznym `GET /profiles/current`, zwraca ten
+   sam pełny `GameProfile` i stabilne `404 profile_not_found`, bez migracji.
+   Repozytorium i use case pobierają dokładne ID. Frontend ma typowane
+   `getProfile(id)`, `queryKeys.profile(id)` i uruchamia query dopiero po
+   rozwiązaniu `run.profile_id`; usunięto normalną ścieżkę current/mismatch.
+   Testy dwóch profili potwierdzają starszy profil po ID, nadal poprawny current
+   oraz missing 404.
+4. **F4 — clamp paginacji:** gdy dalsza strona staje się pusta przy `total > 0`,
+   numer strony jest cofany do ostatniej istniejącej strony i lista jest
+   pobierana ponownie. Test wykonuje rzeczywisty review ostatniej pozycji strony
+   2 i potwierdza powrót do działającej strony.
+5. **F5 — serializacja write:** wszystkie mutacje runu dzielą centralny
+   `mutationKey`; `useIsMutating` blokuje filtr, paginację, wybór klatki i
+   kontrolki edytora, a lokalna kontrolka zachowuje spinner. Test A → B → A
+   potwierdza brak drugiej mutacji i zachowanie wyniku pierwszej. Cache nie jest
+   aktualizowany optymistycznie.
+6. **F6 — jawny tryb overlaya:** `RegionOverlay` otrzymał ogólny
+   `interactionMode="select"|"draw"`. Domyślne `select` zachowuje F3, natomiast
+   `draw` pozwala rozpocząć drag wewnątrz istniejącego bbox. Testy obejmują oba
+   tryby i nakładający się gest; nie powstał drugi overlay ani przelicznik.
+7. **F7 — retry obrazu:** widoczny przycisk zwiększa próbę w opaque URL i przez
+   `key` faktycznie remountuje/re-requestuje obraz. `onSourceResolved` usuwa błąd
+   po udanym load; naturalny `viewBox` i geometria pozostają bez zmian.
+8. **F8 — kolejne DTO po refetchu:** testy success → refetch potwierdzają użycie
+   `annotation.version + 1` w następnym PATCH/DELETE, `frame.version + 1` w
+   create → accept/reject oraz reject → filtr rejected → reopen. Fixture tylko
+   zwraca jawnie kolejne DTO; osobne testy prawdziwego 409 pozostały.
+
+### Kontrakty i rozszerzenie wspólnego prymitywu
+
+- Nowy endpoint profilu historycznego nie zmienia schematu bazy ani kształtu
+  `GameProfile`. Literalne `/profiles/current` pozostaje rozwiązywane przez
+  statyczny handler przed trasą dynamiczną.
+- Jedynym rozszerzeniem `RegionOverlay` w FIX1 jest ogólny tryb interakcji.
+  Wspólny `viewBox`, resize transform, hit-target, roving tabindex i warstwa SVG
+  pozostały bez zmian; katalog §5 zawiera wyłącznie dozwolone dopisanie wariantu.
+- Brak nowych zależności, optimistic update, migracji i backendowej logiki w
+  fixture frontendowym.
+
+### Pełne bramki końcowe
+
+| Bramka | Wynik |
+| --- | --- |
+| `uv run ruff check .` | bez błędów |
+| `uv run mypy` | 93 pliki źródłowe, bez błędów |
+| `uv run pytest --basetemp D:\\my\\Projects\\DatasetFactory\\tmp\\pytest-fe001-f4-fix1-full-final` | 276/276 testów; 1608.07 s (26:48) |
+| `npm run test` | 30/30 plików, 387/387 testów |
+| `npm run test -- src/test/architecture.test.ts` | 1/1 plik, 85/85 testów |
+| `npm run typecheck` | 0 błędów |
+| `npm run build` | 288 modułów; JS 493.77 kB (gzip 151.27 kB), CSS 34.02 kB (gzip 4.99 kB) |
+| `npm audit` | 0 podatności |
+| `git diff --check` | bez błędów |
+
+Pierwsza próba izolowanego pytest użyła niewłaściwego basetemp na dysku `C:`;
+po przeniesieniu katalogu na `D:` dwie zbyt krótkie limity procesu (10 i 15
+minut) przerwały bramkę bez błędu testu. Końcowy pojedynczy proces z realistycznym
+limitem zakończył wszystkie 276 testów zielono w 26:48.
+
+### QA, odchylenia i sygnały planu
+
+Repo nadal nie ma uczciwego runtime browser fixture/mock servera z runem,
+opaque obrazem i anotacjami. Nie wykonano więc pozornego success screenshotu;
+runtime screenshot oraz ręczny pomiar overflow przy 1440 px pozostają jawną
+niewykonaną częścią parent Gate 3. Automatyczne testy potwierdzają resize,
+hit-target, retry/remount oraz guard <1280 px.
+
+Rozstrzygnięcie produktu o historycznych runach ujawniło rzeczywistą lukę
+kontraktu F4: samo `GET /profiles/current` nie mogło bezpiecznie zweryfikować
+starszego runu. FIX1 zamyka ją read-only `GET /profiles/{profile_id}`. Nie
+wykryto dalszej sprzeczności kontraktu ani potrzeby rozszerzenia zakresu.
