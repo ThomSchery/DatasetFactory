@@ -53,6 +53,13 @@ describe("export query states", () => {
 
       renderApp(["/exports?export_id=foreign-export"]);
 
+      // The first iteration also crosses the lazy route boundary. Give only the
+      // transition to the first screen-owned state a local budget, then verify
+      // the dependent export -> run loading sequence with the normal timeout.
+      expect(
+        await screen.findByText("Ładowanie statusu eksportu…", {}, { timeout: 2_000 }),
+      ).toBeInTheDocument();
+      expect(await screen.findByText("Ładowanie runu eksportu…")).toBeInTheDocument();
       expect(await screen.findByRole("region", { name: "Bieżący eksport" })).toHaveTextContent(
         "foreign-export",
       );
