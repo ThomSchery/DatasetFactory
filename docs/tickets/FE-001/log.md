@@ -2069,3 +2069,85 @@ oraz wiąże detekcję terminalnego przejścia z tożsamością runu.
 - [x] **Komponenty/common catalog:** wyłącznie istniejące `Panel`, `SelectField`,
   `TextField`, `Button`, `StatusBadge`, `UiStates`, `RegionOverlay`; brak nowego
   common component.
+
+## FE-001-F5-FIX3 — wynik i Gate 3 (2026-08-25)
+
+FIX3 zamyka dwa findings acceptance review bez zmian eksportu, backendu,
+runtime E2E, normalizera PNG, copy i CSS.
+
+### Zamknięte findings
+
+- **F1 — per-field baseline:** `AnnotationRow` przechowuje jeden atomowy stan
+  formularza z baseline i widocznym draftem dla `x`, `y`, `width`, `height` oraz
+  klasy. Każde pole jest dirty wyłącznie, gdy jego kontrolka różni się od
+  aktualnego baseline. Refetch przesuwa baseline do nowego DTO, synchronizuje
+  każde czyste pole osobno i zachowuje każde dirty pole. Ręczne przywrócenie
+  wartości baseline powoduje, że następna zmiana serwera znów pojawia się w
+  kontrolce.
+- **F1 — payload i błąd:** geometria i klasa są zapisywane dokładnie z wartości
+  widocznych w kontrolkach, z `expected_version` najnowszej anotacji. Gdy
+  synchronizacja baseline zmienia widoczną geometrię, stary `geometryError` jest
+  czyszczony. Klucz wiersza nadal jest wyłącznie `annotation.id`; nie wrócił
+  remount przez `version`.
+- **F2 — status związany z runem:** ref przechowuje `{runId, status}`. Terminalny
+  refetch uruchamia się tylko dla non-terminal → terminal tego samego runu.
+  Nawigacja z running A do zcache'owanego terminalnego B i pierwszy terminalny
+  render nie wykonują dodatkowej pary requestów.
+
+### Cztery nowe regresje
+
+1. Dirty `x=1910` przetrwał refetch, a czyste `y=222`, `width=10` i klasa
+   `category-2` przyjęły wartości serwera. Stary błąd granic zniknął, a PATCH
+   wysłał dokładnie widoczny bbox `{x:1910,y:222,width:10,height:32}` oraz
+   `expected_version:4`.
+2. Bez dirty wszystkie cztery pola geometrii oraz klasa zsynchronizowały się z
+   nowym DTO.
+3. Dirty `x=321` zachował się przy baseline `100→144`; po ręcznym cofnięciu do
+   `144` kolejny baseline `188` pojawił się w kontrolce.
+4. Po napełnieniu cache terminalnego runu B, przejściu do running A i powrocie
+   do B liczniki run/list/detail B pozostały `1/1/1` — bez dodatkowego terminal
+   refetchu. Istniejąca regresja tego samego runu nadal potwierdza dokładnie
+   jeden refetch list/detail i brak stormu.
+
+### Bramki
+
+| Bramka | Wynik |
+| --- | --- |
+| Targeted annotations | **4/4 pliki, 37/37 testów**; `annotationTerminalRefresh` **5/5** (istniejąca + 4 nowe) |
+| Frontend full Vitest | **33/33 pliki, 437/437 testów** |
+| Architecture | **92/92** |
+| TypeScript | `tsc --noEmit`, 0 błędów |
+| Build | **295 modułów**; exports 8.37 kB / gzip 3.12 kB; main 497.52 kB / gzip 152.57 kB |
+| Audit | `npm audit --audit-level=low`: **0 vulnerabilities** |
+| Plain Playwright | dwa pełne przebiegi po **2/2**; finalny 33.3 s, real vertical + visual, migracje 0001→0005 |
+| Dodatkowy visual | trzy przebiegi po **1/1**; finalne osiem SHA-256 równe HEAD FIX2 |
+| Backend full pytest | odziedziczone **290/290** z FIX1; `git diff --stat 9362869..HEAD -- backend/app` jest pusty |
+
+Końcowe hashe screenshotów są dokładnie niezmienione względem FIX2:
+
+| PNG | SHA-256 |
+| --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+### Odchylenia i ryzyka
+
+Nie ma odchylenia produktowego, nowych zależności ani zmian screenshotów.
+Podczas pierwszego pełnego `npm run e2e` po poprawce `empty` i `materials`, a
+podczas drugiego pełnego przebiegu samo `empty`, zostały zapisane z alternatywnym
+rastrem mimo zielonych asercji. Nie commitowano tych plików i nie zmieniano
+zamkniętego w FIX2 harnessa. Każdy następujący izolowany visual capture odtworzył
+dokładne hashe FIX2; dwa pierwsze izolowane przebiegi były identyczne, trzeci
+ponownie pozostawił baseline i czysty status. To jest jawny drift rasteryzacji
+zależny od sekwencji testów, nie zmiana UI FIX3; pozostaje ryzykiem środowiskowym
+do obserwacji poza zamkniętym zakresem tego ticketu.
+
+Commity FIX3 przed raportem: `48b5b20` (ticket/status), `e2967e0` (Design Plan)
+i `99c3b51` (implementacja + regresje). TK-009, historia FIX1/FIX2, durable
+locator, COCO i runtime E2E nie zostały przepisane ani zmienione.
