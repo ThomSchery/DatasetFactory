@@ -11,7 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "e2e": "node scripts/playwright.mjs test",
     "e2e:install": "node scripts/playwright.mjs install chromium",
-    "test:e2e-root": "node --test scripts/e2e-runtime-root.test.mjs",
+    "test:e2e-root": "node --test scripts/e2e-runtime-root.node.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
