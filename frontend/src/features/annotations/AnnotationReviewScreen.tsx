@@ -1,5 +1,5 @@
-import { useIsMutating, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import {
@@ -15,6 +15,7 @@ import {
   reviewStatusQuery,
   runPollInterval,
   type ReviewStatusFilter,
+  type RunStatus,
 } from "../../api";
 import { Panel } from "../../components/common/Panel";
 import { SelectField } from "../../components/common/SelectField";
@@ -46,9 +47,11 @@ export function AnnotationReviewScreen() {
 }
 
 function ReviewForRun({ runId }: { runId: string }) {
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<ReviewStatusFilter>(DEFAULT_REVIEW_STATUS_FILTER);
   const [page, setPage] = useState(1);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const previousRunStatus = useRef<RunStatus | undefined>(undefined);
   const isWriting = useIsMutating({ mutationKey: reviewMutationKey(runId) }) > 0;
   const frameQuery = { review_status: reviewStatusQuery(filter), page, page_size: PAGE_SIZE };
   const runQuery = useQuery({
@@ -72,11 +75,39 @@ function ReviewForRun({ runId }: { runId: string }) {
     queryFn: ({ signal }) => listRunFrames(runId, frameQuery, signal),
   });
 
+  const activeFrameId =
+    framesQuery.data === undefined
+      ? null
+      : framesQuery.data.items.some((frame) => frame.id === selectedFrameId)
+        ? selectedFrameId
+        : (framesQuery.data.items[0]?.id ?? null);
+
   useEffect(() => {
-    if (runQuery.data !== undefined && isTerminalRunStatus(runQuery.data.status)) {
-      void framesQuery.refetch();
+    const status = runQuery.data?.status;
+    const previousStatus = previousRunStatus.current;
+    previousRunStatus.current = status;
+    if (
+      status === undefined ||
+      previousStatus === undefined ||
+      isTerminalRunStatus(previousStatus) ||
+      !isTerminalRunStatus(status)
+    ) {
+      return;
     }
-  }, [framesQuery.refetch, runQuery.data?.status]);
+
+    async function refetchTerminalFrameState(): Promise<void> {
+      await framesQuery.refetch();
+      if (activeFrameId !== null) {
+        await queryClient.refetchQueries({
+          exact: true,
+          queryKey: queryKeys.frame(activeFrameId),
+          type: "active",
+        });
+      }
+    }
+
+    void refetchTerminalFrameState();
+  }, [activeFrameId, framesQuery.refetch, queryClient, runQuery.data?.status]);
 
   useEffect(() => {
     if (framesQuery.data === undefined) {
@@ -156,9 +187,7 @@ function ReviewForRun({ runId }: { runId: string }) {
       </div>
     );
   } else {
-    const selectedId = framesQuery.data.items.some((frame) => frame.id === selectedFrameId)
-      ? (selectedFrameId as string)
-      : framesQuery.data.items[0]!.id;
+    const selectedId = activeFrameId as string;
     framesContent = (
       <>
         <FrameList
@@ -173,7 +202,7 @@ function ReviewForRun({ runId }: { runId: string }) {
         />
         <FrameEditor
           frameId={selectedId}
-          key={`${selectedId}:${runQuery.data.status}`}
+          key={selectedId}
           profile={profileQuery.data}
           runId={runId}
         />

@@ -35,11 +35,7 @@ export function AnnotationList(props: AnnotationListProps) {
   return (
     <ol aria-label="Aktywne anotacje" className="df-review-annotations">
       {props.annotations.map((annotation) => (
-        <AnnotationRow
-          {...props}
-          annotation={annotation}
-          key={`${annotation.id}:${annotation.version}`}
-        />
+        <AnnotationRow {...props} annotation={annotation} key={annotation.id} />
       ))}
     </ol>
   );
