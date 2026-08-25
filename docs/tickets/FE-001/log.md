@@ -1925,6 +1925,93 @@ w obu przebiegach:
 | `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
 | `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
 
+---
+
+# FE-001-F5-FIX4 — Design Plan addendum (przed kodem UI)
+
+Źródła: `docs/tickets/FE-001/FE-001-F5-FIX4.md` oraz
+`artifacts/fe-001-f5-fix3-independent-rereview/index.md` (`REVISE`). FIX4 nie
+zmienia produktu, copy ani produkcyjnych stylów. Domyka wyłącznie wiarygodność
+dowodu focus-visible w harnessie screenshotowym oraz prawdziwość istniejącego
+alarmu geometrii po synchronizacji formularza z serwerem.
+
+## Elementy UI, layout i polskie copy
+
+1. **Osiem checkpointów screenshot QA:** dashboard (`Button` „Uruchom”), profil
+   (`TextField` „Nazwa profilu”), materiały (`TextField` „Ścieżka pliku wideo”),
+   anotacje (`SelectField` „Status weryfikacji”), eksport (`Button` „Zamknij
+   run”), loading/empty (aktywny `NavItem` „Dashboard”) oraz error (`Button`
+   „Spróbuj ponownie”). Trasy, ich layout 1440 px, query states i zawartość PNG
+   pozostają bez zmian.
+2. **Focus evidence:** testowy arkusz motion-free przypina tokenowy ring regułą
+   CSS opartą na stabilnym stanie `:focus`, a nie atrybutem dopisywanym do węzła
+   React. Bezpośrednio po route-specific `beforeScreenshot` i przed zapisem PNG
+   harness sprawdza, że dokładnie wskazany checkpoint jest `activeElement` oraz
+   ma widoczny, nieprzezroczysty outline. Utrata focusu albo ringu kończy test
+   czytelnym błędem; nie powstaje fałszywie zielony screenshot.
+3. **Wiersz anotacji:** istniejące cztery `TextField` `x`/`y`/`width`/`height`,
+   komunikat `geometryError`, `Button` „Zapisz geometrię”, badge źródła/statusu
+   i `RegionOverlay` pozostają w tym samym układzie. Dirty `width=""` zachowuje
+   widoczną wartość przy refetchu, czyste `y` przyjmuje baseline serwera, a alarm
+   pozostaje, dopóki cały widoczny draft nie przejdzie walidacji względem klatki.
+4. **Copy:** brak nowego tekstu produktowego. Istniejące polskie Sentence case i
+   komunikaty walidacji pozostają bez zmian; nowe komunikaty są wyłącznie
+   diagnostyką testu i nazywają utracony focus lub niewidoczny ring.
+
+## Interakcje i model stanu
+
+1. Klawiatura nadal dociera do każdego route-specific checkpointu przez `Tab`.
+   Harness nie przejmuje focusu, nie dodaje atrybutu do kontrolki i nie zmienia
+   produkcyjnego `:focus-visible`; jedynie stabilizuje dowód w testowym arkuszu.
+2. Re-render pomiędzy pierwszą asercją a screenshotem może odświeżyć kontrolkę,
+   ale nie usuwa reguły `:focus`. Końcowy guard wykonuje się po
+   `beforeScreenshot`; dopiero jego sukces zezwala na `page.screenshot`.
+3. `syncAnnotationFormState` nadal synchronizuje baseline per pole. Gdy istnieje
+   `geometryError`, wynikowy `nextDraft` jest ponownie parsowany względem
+   `frameSize`: poprawny draft czyści alarm, a pusty, nieparsowalny, niedodatni
+   lub wychodzący poza klatkę draft zachowuje aktualny alarm walidacji.
+4. Zapis geometrii nadal wysyła dokładnie wartości widoczne w kontrolkach i
+   najnowszy CAS; brak optimistic update, remountu przez `version` i nowych
+   requestów.
+
+## Moduły UI/UX, tokeny i ID
+
+| Moduł | ID i zastosowanie FIX4 |
+| --- | --- |
+| Siatka i odstępy | GRID-00–14, SPACING-01–13: brak zmian CSS/layoutu; desktop ≥1280, istniejące wysokości kontrolek, short fields, gap i brak overflow pozostają bez zmian |
+| Kolor i kontrast | COLOR-01–10, OPACITY-01/02: testowy ring korzysta z istniejącego `--color-fill-brand-impeccable`; guard odrzuca brak widocznego/nieprzezroczystego obrysu, bez nowych kolorów i zmian kontrastu produktu |
+| Obramowanie i focus | BORDER-01–03/05–09, BWIDTH-01–14: Stroke-Strong, `--focus-ring-width` i `--focus-ring-offset`; stabilna reguła `:focus` przeżywa re-render, a stan błędu pozostaje semantyczny i widoczny |
+| Promień, overlay, cienie | RADIUS-01–05, OVERLAY-01–07, SHADOW-01–05: brak zmian produkcyjnych; istniejące `radius-md`, `RegionOverlay` i elevation pozostają bez zmian |
+| Typografia | TYPO-01–21, FONTSIZE-01–11, LHEIGHT-01–14, LSPACE-01–09, PARASPACE-01–06, CASING-01–03: brak nowego copy/skali; istniejące etykiety i alert zachowują czytelność oraz Sentence case |
+| Architektura frontend | FE-02/03/05/06/08/10: lokalny per-field draft, TanStack Query jako server state, walidacja całej geometrii, semantyczny `role="alert"`, klawiatura i regresje Testing Library/Playwright |
+
+## Komponenty i common catalog IDs
+
+- `Button`, `TextField`, `SelectField`, `StatusBadge`, `UiStates`, `Panel`,
+  `NavItem` i `RegionOverlay` pozostają jedynymi wspólnymi prymitywami używanymi
+  przez opisane ekrany, zgodnie z `new-component.md` §4–5.
+- Feature components pozostają `AnnotationReviewScreen`, `FrameEditor`,
+  `AnnotationList`/`AnnotationRow` i pięć istniejących ekranów tras.
+- Nie powstaje nowy common component, token ani produkcyjny styl; katalog common
+  pozostaje aktualny.
+
+## Checklista `new-component.md` §2.2
+
+- [x] **Layout/Siatka:** zero zmian układu i arbitralnych wartości; zachowane
+  GRID-01/02/05/08/10/12 oraz SPACING-01/03/04/08/13.
+- [x] **Typografia:** zero nowego copy produktu; zachowane istniejące tokeny
+  rozmiaru, wagi, wysokości linii i Sentence case.
+- [x] **Kolory:** wyłącznie istniejący token marki dla testowego ring evidence;
+  produkcyjne pary kolorów i status error bez zmian.
+- [x] **Obramowania:** testowy outline korzysta z istniejącej szerokości, offsetu
+  i koloru; nie zmienia box modelu ani produkcyjnego focus-visible.
+- [x] **Cienie:** brak zmian i brak nowego elevation.
+- [x] **Interakcje:** route-specific focus po klawiaturze, końcowa asercja focusu
+  i ringu, negatywny test utraty focusu; alarm geometrii znika tylko po realnej
+  walidacji całego widocznego draftu.
+- [x] **Komponenty/common catalog:** wyłącznie istniejący katalog; brak nowego
+  elementu interaktywnego i brak aktualizacji §4–5.
+
 Wszystkie osiem obejrzano po finalnej rasteryzacji. Nie ma ucięć, nakładania,
 artefaktów kodowania ani fałszywych stanów. Focus jest widoczny na dokładnych
 checkpointach pięciu tras. `exports-1440.png` nadal pokazuje ukończony manifest,
