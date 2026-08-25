@@ -1,6 +1,6 @@
 # FE-001-F5-FIX1 — trwały eksport i rzeczywisty Gate 3 E2E
 
-Status: WYMAGA FIX2
+Status: GOTOWY — DOMKNIĘTY PRZEZ FIX2
 
 ## Powód
 

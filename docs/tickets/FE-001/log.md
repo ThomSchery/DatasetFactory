@@ -1870,3 +1870,103 @@ bezpieczeństwo testowego Gate 3.
   `UiStates`; feature components to `FrameList`, `FrameEditor` i
   `AnnotationList`. Nie powstaje common component, więc katalog pozostaje
   aktualny.
+
+## FE-001-F5-FIX2 — wynik i Gate 3 (2026-08-25)
+
+Ta sekcja zastępuje dowody FIX1 wyłącznie w zakresie terminalnego odświeżenia
+anotacji, confinement runtime E2E i deterministyczności PNG. Durable locator,
+COCO, TK-009 oraz product copy nie zostały zmienione.
+
+### Zamknięte findings
+
+- **F1 — dirty state bez remountu:** `FrameEditor` jest kluczowany wyłącznie ID
+  aktywnej klatki, a `AnnotationRow` wyłącznie ID anotacji. Przejście
+  non-terminal → terminal wykonuje jeden autorytatywny refetch listy oraz jeden
+  refetch aktywnego query klatki przez TanStack Query. Wejście od razu na status
+  terminalny i kolejny refetch tego samego statusu nie uruchamiają dodatkowej
+  pary requestów. Regresja `running → review_ready` potwierdza jednocześnie nowe
+  dane/nową anotację z serwera i zachowanie dirty `x`, szkicu `Nowy x`, selection
+  oraz redraw mode; nie ma optimistic update ani refetch storm.
+- **F2 — markerowany runtime leaf:** `playwright.mjs` zawsze tworzy przez
+  `mkdtemp` unikalny `runtime-*` bezpośrednio pod
+  `<DATASETFACTORY_CACHE_ROOT>/playwright`, zapisuje nieprzewidywalny marker i
+  przekazuje token backendowi. Bootstrap akceptuje tylko istniejący, niesymlinkowy
+  leaf z pasującym markerem i nie wykonuje `rmtree`. `finally` launchera usuwa
+  wyłącznie leaf, którego marker nadal dowodzi jego własności; obcy katalog bez
+  markera pozostaje nietknięty. `D:\playwright` jest odrzucany, a custom cache na
+  innym wolumenie jest akceptowany. Domyślna ścieżka nadal jest na D:.
+- **F2 — jedna granica testowa:** usunięto `AvailableE2eResourceProbe`.
+  Composition root używa prawdziwego `SystemResourceProbe`; FastAPI, health,
+  migracje, SQLite/workspace, FFmpeg/ffprobe, worker, repozytoria, COCO i CAS są
+  realne. Jedynym stubem backendowym pozostaje `DeterministicE2eOcrEngine`.
+- **F3 — deterministyczny capture:** test ustawia reduced motion, wyłącza CSS
+  animation/transition/caret/smooth scroll, a po prawdziwej asercji
+  `activeElement` i focus-visible przypina do targetu te same tokeny focus ring.
+  Chromium działa z wyłączonym GPU/LCD text/hinting. Minimalny normalizer PNG
+  dekoduje piksele Chromium, zapisuje stały filtr scanline i stałe parametry zlib;
+  nie zmienia pikseli i nie wymaga nowej zależności.
+- **F3 — EOF/diff:** blank EOF FIX1 został usunięty w pierwszym commicie FIX2;
+  `git diff --check 178bd68..HEAD` jest zielony.
+
+### Deterministyczne screenshoty
+
+Dwa kolejne plain `npm run e2e -- visual-qa.spec.ts`, bez zmiany kodu pomiędzy
+nimi, przeszły 1/1 i pozostawiły pusty `git status`. Osiem SHA-256 było identyczne
+w obu przebiegach:
+
+| PNG | SHA-256 |
+| --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+Wszystkie osiem obejrzano po finalnej rasteryzacji. Nie ma ucięć, nakładania,
+artefaktów kodowania ani fałszywych stanów. Focus jest widoczny na dokładnych
+checkpointach pięciu tras. `exports-1440.png` nadal pokazuje ukończony manifest,
+`exports/export-1`, provenance OCR/manual i komunikat niezmiennego snapshotu.
+Test nadal sprawdza overflow 1440/1280, unresolved CSS variables i zewnętrzne
+font fetches.
+
+### Końcowe bramki
+
+| Bramka | Wynik |
+| --- | --- |
+| Targeted annotations | **4/4 pliki, 33/33 testy**; nowa regresja terminal refresh **1/1** |
+| Node runtime ownership | **2/2** |
+| Backend runtime-root safety | **3/3**, 0.51 s |
+| Frontend full Vitest | **33/33 pliki, 433/433 testy** |
+| Architecture | **92/92** |
+| TypeScript | `tsc --noEmit`, 0 błędów |
+| Build | 295 modułów; exports JS 8.37 kB / gzip 3.12 kB; main JS 496.67 kB / gzip 152.29 kB |
+| Audit | `npm audit --audit-level=low`: 0 podatności |
+| Backend Ruff | cały `backend`, bez uwag |
+| Backend mypy strict | skonfigurowane `backend/app` + `backend/tests`: **96 plików**, bez uwag |
+| Plain vertical Playwright | **1/1**, 22.9 s; real FastAPI/SQLite/FFmpeg/COCO/CAS, migracje 0001→0005 |
+| Plain visual Playwright ×2 | **1/1 + 1/1**, identyczne 8/8 SHA-256, pusty status po obu |
+| Backend full pytest | odziedziczone **290/290** z FIX1; produkcyjny backend nie został zmieniony |
+
+Pierwsza próba pełnego Vitest wykryła, że Node `*.test.mjs` był zbierany także
+przez Vitest mimo poprawnego wykonania przez `node:test`; plik przemianowano na
+`*.node.mjs`, po czym pełna bramka przeszła 433/433. Ręczne
+`mypy --strict backend` objęło trzy migracje Alembic poza zakresem `files` z
+`pyproject.toml` i pokazało ich istniejące braki adnotacji. Właściwa repozytoryjna
+bramka `python -m mypy` przeszła 96 plików. Migracji nie zmieniano w ramach FIX2.
+
+### Commity, odchylenia i ryzyka
+
+Commity FIX2: `e2c1cf5` (ticket/status), `fcba45f` (Design Plan), `e90bf88`
+(dirty-safe refresh), `18b5e46` (runtime confinement), `7d9f879`, `bc06d4b`,
+`4a4dcd0`, `063b160` (deterministyczny visual proof) oraz `83d41f0` (izolacja
+Node suite). TK-009 `ddc2565`/`d02d379` i cała historia FIX1 pozostały bez zmian.
+
+Brak odchylenia produktowego i brak nowych zależności. Test-only
+`Settings.model_copy` pozwala umieścić markerowany runtime pod jawnym custom
+cache na innym wolumenie bez osłabiania produkcyjnego walidatora D:. Ryzyka
+środowiskowe pozostają jawne: `ffmpeg` i `ffprobe` muszą być na `PATH`, browser
+musi być raz zainstalowany w cache, a realny resource probe może uczciwie
+raportować brak opcjonalnego Tesseract/GPU bez blokowania operacyjnego health.
