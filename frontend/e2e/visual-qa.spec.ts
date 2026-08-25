@@ -1,8 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { ApiHarness, type DashboardMode, type HarnessPhase } from "./apiHarness";
+import { deterministicPng } from "./deterministicPng";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -103,12 +105,15 @@ async function capture(
   await assertKeyboardFocus(page, focusTarget(page));
   expect(externalFonts).toEqual([]);
   await beforeScreenshot?.(page);
-  await page.screenshot({
+  const screenshot = await page.screenshot({
     animations: "disabled",
     caret: "hide",
     fullPage: true,
-    path: path.join(screenshotDirectory, `${name}-1440.png`),
   });
+  await writeFile(
+    path.join(screenshotDirectory, `${name}-1440.png`),
+    deterministicPng(screenshot),
+  );
   await page.goto("about:blank");
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
