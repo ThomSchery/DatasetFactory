@@ -14,6 +14,9 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
     baseURL: "http://127.0.0.1:5173",
     browserName: "chromium",
+    launchOptions: {
+      args: ["--disable-gpu", "--disable-lcd-text", "--font-render-hinting=none"],
+    },
     trace: "retain-on-failure",
     viewport: { width: 1440, height: 1000 },
   },
