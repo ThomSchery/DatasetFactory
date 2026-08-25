@@ -62,6 +62,9 @@ async function assertKeyboardFocus(page: Page, expected: Locator): Promise<void>
   });
   expect(focus.tag).not.toBe("BODY");
   expect(focus.visible).toBe(true);
+  await expected.evaluate((element) => {
+    element.setAttribute("data-visual-qa-focus", "true");
+  });
 }
 
 async function freezeMotion(page: Page): Promise<void> {
@@ -73,6 +76,10 @@ async function freezeMotion(page: Page): Promise<void> {
         caret-color: transparent !important;
         scroll-behavior: auto !important;
         transition: none !important;
+      }
+      [data-visual-qa-focus="true"] {
+        outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable) !important;
+        outline-offset: var(--focus-ring-offset) !important;
       }
     `,
   });
