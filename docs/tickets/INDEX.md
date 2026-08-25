@@ -19,7 +19,7 @@
 | FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
 | FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
 | TK-009 | Zamknięcie runu po eksporcie | wykonany | TK-005, TK-008 | odblokowuje FE-001-F5 |
-| FE-001-F5 | Eksport i bramki Gate 3 UI | gotowy | FE-001-F1…F4, TK-009 | Gate 3 UI |
+| FE-001-F5 | Eksport i bramki Gate 3 UI | wykonany | FE-001-F1…F4, TK-009 | Gate 3 UI |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,

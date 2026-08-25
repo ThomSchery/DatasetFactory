@@ -1,6 +1,6 @@
 # FE-001-F5-FIX3 — świeże dane serwera w nietkniętych polach anotacji
 
-Status: GOTOWY — DOMKNIĘTY PRZEZ FIX4
+Status: WYKONANY (2026-08-25) — DOMKNIĘTY PRZEZ FIX4
 
 ## Powód
 
