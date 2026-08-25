@@ -1,6 +1,6 @@
 # TK-006-T1-FIX1 — uczciwe czytanie `.env` i wykrywanie zależności
 
-Status: GOTOWY
+Status: W TOKU
 
 ## Powód
 

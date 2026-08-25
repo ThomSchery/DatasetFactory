@@ -150,10 +150,13 @@ z odpowiedzi eksportu. Pelny output awarii z `check.ps1` pokazywal nadal
 route-level fallback; druga awaria miala identyczny test i czas 1170 ms, ale jej
 pelnego DOM nie zachowano. Dowod nie wskazuje na wolne zapytania produktu.
 
-Pelny `npm test` pre-fix: 1/5 czerwonych (pozostale 4 x 439/439); razem z
-pierwszym `check.ps1`: 2/6 czerwonych. Obie awarie dotyczyly wariantu `running`
-i konczyly sie po 1170-1179 ms. Trzy dodatkowe targetowane przebiegi byly po
-17/17 zielone.
+Flake zaobserwowano w pierwszym pelnym `check.ps1` oraz w jednym z pieciu
+pelnych `npm test` wykonawcy (pozostale 4 x 439/439). Obie awarie dotyczyly
+wariantu `running` i konczyly sie po 1170-1179 ms. Recenzent nie odtworzyl tej
+czestosci: piec pelnych `npm test` na dokladnym commicie `4d60305`, sprzed
+poprawki, bylo zielone 5/5. Jest to zatem jednorazowy pomiar wykonawcy, a nie
+niezaleznie potwierdzona czestosc. Trzy dodatkowe targetowane przebiegi
+wykonawcy byly po 17/17 zielone.
 
 ### Poprawka i dowod post-fix
 
@@ -169,3 +172,34 @@ Dowody po zmianie:
 - pelny `npm test`: 5/5 przebiegow po 33/33 pliki i 439/439 testow;
 - czasy pieciu pelnych suite: 34.39 s, 28.69 s, 30.53 s, 33.79 s, 30.99 s;
 - czestosc czerwonych: 0/5 post-fix wobec 1/5 w bezposredniej probce pre-fix.
+
+## TK-006-T1-FIX1 - plan i audyt przed zmiana
+
+### Plan
+
+1. `Import-DotEnv` zwroci mape kluczy faktycznie odczytanych z `.env`, nadal
+   eksportujac je do srodowiska procesu dla polecen potomnych.
+2. `Get-RequiredEnvironmentValue` bedzie czytal wymagane wartosci tylko z tej
+   mapy i w bledzie nazwie zarowno klucz, jak i plik `.env`.
+3. `Assert-Executable` lokalnie ustawi `$ErrorActionPreference = "Continue"`
+   tylko na czas wywolania natywnego procesu, stlumi jego strumienie i zapisze
+   `$LASTEXITCODE` przed przywroceniem ustawienia. O wyniku zdecyduje wylacznie
+   kod wyjscia; stderr procesu z kodem zero nie stanie sie konczacym
+   `RemoteException` w Windows PowerShell 5.1.
+4. Regresje obejma brak klucza mimo wartosci odziedziczonej po rodzicu, proces
+   stderr/exit 0 i proces z kodem niezerowym, a potem pozytywny bootstrap oraz
+   jeden pelny `check.ps1`.
+
+### Audyt pozostalych wywolan natywnych exe
+
+- `bootstrap.ps1`: `uv sync`, `npm ci` i `npm run e2e:install` nie przekierowuja
+  stderr i sprawdzaja `$LASTEXITCODE`, wiec nie maja pulapki z F2.
+- `dev.ps1`: `taskkill.exe` tlumi stderr, ale juz przed wywolaniem lokalnie
+  ustawia `$ErrorActionPreference = "Continue"` i przywraca poprzednia wartosc
+  w `finally`; uruchomienia aplikacji korzystaja z `Start-Process`.
+- `check.ps1`: `Invoke-Gate` nie tlumi stderr, zapisuje `$LASTEXITCODE`, a
+  wyjatek i kod niezerowy prowadza do czerwonej bramki. Zimny review potwierdzil
+  ten mechanizm negatywnym przebiegiem end-to-end.
+
+Nie znaleziono drugiego miejsca z kombinacja natywnego exe, stlumionego stderr
+i globalnego `$ErrorActionPreference = "Stop"`.
