@@ -1786,3 +1786,87 @@ do runtime aplikacji. Realny E2E wymaga `ffmpeg` i `ffprobe` na `PATH`; launcher
 kończy się jawnym błędem, jeśli narzędzi brakuje. Browser binaria muszą być raz
 zainstalowane przez `npm run e2e:install`, ale cache i wszystkie ciężkie artefakty
 pozostają na `D:`.
+
+---
+
+# FE-001-F5-FIX2 — Design Plan addendum (przed kodem UI)
+
+Źródła: `docs/tickets/FE-001/FE-001-F5-FIX2.md` oraz
+`artifacts/fe-001-f5-fix1-independent-rereview/index.md` (`REVISE`). FIX2 nie
+zmienia durable locatora, COCO, product copy ani wyglądu ekranu. Naprawia
+zachowanie istniejącego edytora przy zmianie statusu runu oraz wiarygodność i
+bezpieczeństwo testowego Gate 3.
+
+## Elementy UI, stan i interakcje
+
+1. **Ekran weryfikacji:** istniejące `SelectField` filtra, `FrameList` oraz
+   `FrameEditor` zachowują obecny layout. Polling query runu nadal działa co 2 s
+   wyłącznie dla statusów aktywnych i zatrzymuje się terminalnie.
+2. **Autorytatywne odświeżenie:** tylko faktyczne przejście z non-terminalnego
+   statusu (`running`) do terminalnego (`review_ready`/`completed`/`failed`/
+   `cancelled`) wywołuje po jednym refetchu listy klatek i aktywnego query
+   szczegółu zaznaczonej klatki. Wejście od razu na status terminalny oraz kolejne
+   rendery tego samego statusu nie wywołują dodatkowego refetchu ani pętli.
+3. **Stan lokalny `FrameEditor`:** identyfikator wybranej anotacji, tryb redraw,
+   szkic nowego bbox (`Nowy x/y/width/height`), wybrana klasa, błędy formularza i
+   stan obrazu pozostają zamontowane przy zmianie statusu runu. `FrameEditor` jest
+   kluczowany wyłącznie tożsamością aktywnej klatki.
+4. **Dirty draft istniejącej anotacji:** `AnnotationList` i pola `Klasa`, `x`,
+   `y`, `width`, `height` zachowują niezapisane wartości przy autorytatywnym
+   refetchu. Stabilna tożsamość wiersza opiera się na `annotation.id`, nie wersji;
+   dane serwera (nagłówek geometrii, wersje CAS, nowe anotacje i status klatki)
+   nadal pochodzą z aktualnego DTO. FIX2 nie wprowadza optimistic update.
+5. **Selection i redraw:** `RegionOverlay` nadal niesie `aria-selected`, a tekstowa
+   lista nadal daje pełną obsługę klawiatury. Wybrany bbox i jawny tryb
+   „Narysuj nową geometrię” nie są resetowane przez polling/refetch; zmienia je
+   dopiero akcja użytkownika albo istniejący sukces mutacji.
+6. **Query states i mutacje:** istniejące `Loading`, `Empty`, `FatalError`,
+   `InlineError`, `Notice`, disabled+spinner oraz centralne invalidacje pozostają
+   bez zmian. Refetch terminalny jest read-only i nie wykonuje POST/PATCH.
+7. **Screenshot QA:** osiem istniejących widoków (pięć tras oraz
+   loading/empty/error) pozostaje w 1440 px. Przed każdym capture Playwright
+   wyłącza animacje CSS, transition i caret, więc faza spinnera nie wpływa na PNG;
+   dwa kolejne przebiegi muszą mieć identyczne SHA-256 wszystkich ośmiu plików.
+8. **Test-only runtime:** launcher tworzy unikalny leaf pod zweryfikowanym
+   `<DATASETFACTORY_CACHE_ROOT>/playwright/`, zapisuje marker własności i dopiero
+   ten leaf przekazuje backendowi. Bootstrap akceptuje wyłącznie istniejący,
+   bezpośredni, markerowany leaf i sam niczego rekurencyjnie nie usuwa. Cleanup
+   launchera dotyka wyłącznie utworzonego przez niego leaf. Jawny custom cache
+   może leżeć na innym wolumenie; domyślna ścieżka pozostaje na `D:`.
+9. **Granica backendu E2E:** realne pozostają composition root, health/resource
+   probe, FastAPI, migracje, SQLite/workspace, FFmpeg/ffprobe i COCO. Jedynym
+   stubem jest deterministyczny backendowy `OcrEngine`.
+
+## Moduły UI/UX, tokeny i ID
+
+| Moduł | ID i zastosowanie FIX2 |
+| --- | --- |
+| Siatka i odstępy | GRID-00–14, SPACING-01–13: brak zmian layoutu; istniejący desktop 1280/1440, tokenowe gap/padding, hit areas i brak overflow pozostają wymaganiem screenshot QA |
+| Kolor i interakcje | COLOR-01–10, OPACITY-01/02: brak nowej pary kolorów; istniejące semantyczne statusy, disabled i focus zachowują kontrast; zamrożenie animacji jest wyłącznie testowe |
+| Obramowania i focus | BORDER-01–09, BWIDTH-01–14: istniejące strong focus ring i weak structure bez layout shift; refetch nie zmienia fokusu ani struktury DOM aktywnej klatki |
+| Promień i warstwy | RADIUS-01–05, OVERLAY-01–07: bez zmian geometrii; istniejący `RegionOverlay` zachowuje stabilny DOM, selection i redraw, bez niewidzialnej blokady |
+| Cienie | SHADOW-01–05: brak nowego elevation; screenshoty zamrażają ruch, nie zmieniają runtime tokenów |
+| Typografia | TYPO-01–21, FONTSIZE-01–11, LHEIGHT-01–14, LSPACE-01–09, PARASPACE-01–06, CASING-01–03: brak nowego copy i typografii; zachowany polski Sentence case oraz aktualna hierarchia pól/statusów |
+| Architektura frontend | FE-02/03/06/08/10: dirty draft pozostaje lokalny, DTO pozostaje server state w TanStack Query, jawne stany UI, klawiatura/focus i regresja krytycznego polling flow |
+| NFR i E2E | NFR-08/10, FE-10: testowy bootstrap konfigurowalny i ograniczony markerem; zwykłe `npm run e2e` uruchamia realny vertical flow oraz deterministyczny visual QA |
+
+## Checklista `new-component.md` §2.2
+
+- [x] **Layout/Siatka:** bez zmian CSS i arbitralnych wartości; istniejący
+  workspace `Panel` + lista + edytor zachowuje GRID-01/02/08/12 oraz
+  SPACING-01/02/06/11.
+- [x] **Typografia:** brak nowego tekstu użytkowego; pozostają tokeny
+  `xs/sm/md/lg`, regular/semibold oraz tight/standard.
+- [x] **Kolory:** brak nowego koloru; statusy i błędy nadal mają semantyczne
+  tokeny oraz opis tekstowy, nie tylko barwę.
+- [x] **Obramowania:** brak zmian; focus-visible i zaznaczenie pozostają widoczne
+  po refetchu bez remountu.
+- [x] **Cienie:** brak zmian runtime i brak nowego cienia.
+- [x] **Interakcje:** jednorazowy terminalny refetch listy + aktywnej klatki;
+  dirty draft, selection i redraw pozostają; brak optimistic update i refetch
+  storm.
+- [x] **Komponenty/common catalog:** bez zmian użyte są `Panel`, `SelectField`,
+  `RegionOverlay`, `TextField`, `Button`, `StatusBadge`, `Notice`, `DataList` i
+  `UiStates`; feature components to `FrameList`, `FrameEditor` i
+  `AnnotationList`. Nie powstaje common component, więc katalog pozostaje
+  aktualny.
