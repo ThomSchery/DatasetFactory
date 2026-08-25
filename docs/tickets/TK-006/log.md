@@ -60,7 +60,48 @@ PowerShell zostanie przerwany zanim wykona `finally`.
 
 ### Pelne bramki i determinizm
 
-Do uzupelnienia po dwoch pelnych przebiegach.
+Dwa kolejne `scripts/check.ps1` po stabilizacji byly zielone bez resetu ani
+recznej korekty plikow pomiedzy nimi:
+
+| Bramka | Run 1 | Run 2 |
+| --- | --- | --- |
+| Ruff format | 226 plikow sformatowanych | 226 plikow sformatowanych |
+| Ruff lint | 0 bledow | 0 bledow |
+| mypy | 96 plikow, 0 problemow | 96 plikow, 0 problemow |
+| pytest | 293/293, 29:45 | 293/293, 29:35 |
+| frontend typecheck | 0 bledow | 0 bledow |
+| Vitest | 33/33 pliki, 439/439 | 33/33 pliki, 439/439 |
+| build | 295 modulow; main 497.65 kB/gzip 152.63; exports 8.37 kB/gzip 3.12 | identyczne |
+| Playwright | 3/3, 52.9 s | 3/3, 39.1 s |
+| E2E root safety | 2/2 | 2/2 |
+| Podsumowanie skryptu | PASS 9/9 | PASS 9/9 |
+| `git status --porcelain` | `<clean>` | `<clean>` |
+
+Osiem PNG po kazdym przebiegu mialo identyczne SHA-256:
+
+| PNG | Run 1 | Run 2 |
+| --- | --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+### Commity, odchylenia i ryzyka
+
+- `d9bd69b` - izolowane, semantycznie neutralne formatowanie znalezione przez nowa bramke;
+- `48b891f` - trzy skrypty PowerShell;
+- `4d60305` - README, RUNBOOK i poczatkowy log;
+- `9d34ba0` - test-only stabilizacja lazy route wraz z diagnoza i Design Planem.
+
+Brak odchylenia produktowego, nowych zaleznosci i zmian screenshotow. Jedyna
+dodatkowa zmiana poza pierwotna lista plikow T1 to autoryzowane formatowanie
+jednego pliku Python oraz autoryzowana test-only stabilizacja. Obie powstaly
+dlatego, ze pierwsze realne uruchomienie nowej bramki ujawnilo istniejace
+problemy na `main`; zadnego nie obchodzono przez ponawianie do zielonego.
 
 ## TK-006-T1 - Design Plan stabilizacji testu eksportu (test-only)
 
