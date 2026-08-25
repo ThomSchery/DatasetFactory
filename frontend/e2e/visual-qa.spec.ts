@@ -62,6 +62,20 @@ async function assertKeyboardFocus(page: Page, expected: Locator): Promise<void>
   expect(focus.visible).toBe(true);
 }
 
+async function freezeMotion(page: Page): Promise<void> {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addStyleTag({
+    content: `
+      *, *::before, *::after {
+        animation: none !important;
+        caret-color: transparent !important;
+        scroll-behavior: auto !important;
+        transition: none !important;
+      }
+    `,
+  });
+}
+
 async function capture(
   page: Page,
   name: string,
@@ -81,6 +95,7 @@ async function capture(
     }
   });
   await page.goto(route);
+  await freezeMotion(page);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await prepare?.(page);
   await assertNoOverflow(page);
