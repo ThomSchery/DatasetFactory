@@ -77,15 +77,22 @@ function Assert-Executable {
         throw "Brak $Name pod sciezka '$Path'. $InstallHint"
     }
 
-    $exitCode = 1
+    $exitCode = $null
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
+        $global:LASTEXITCODE = $null
         & $Path @Arguments 1> $null 2> $null
-        $exitCode = $LASTEXITCODE
+        $exitCode = $global:LASTEXITCODE
+    }
+    catch {
+        $exitCode = $null
     }
     finally {
         $ErrorActionPreference = $previousErrorAction
+    }
+    if ($null -eq $exitCode) {
+        throw "$Name istnieje pod '$Path', ale nie mozna go uruchomic jako procesu natywnego. $InstallHint"
     }
     if ($exitCode -ne 0) {
         throw "$Name istnieje pod '$Path', ale nie uruchamia sie poprawnie (exit $exitCode). $InstallHint"
