@@ -247,3 +247,32 @@ Po przebiegu `git status --short` byl pusty, a `git diff --check
 62fd954..HEAD` nie zglosil bledow. Poprawka kodu jest w commicie `350cdf6`;
 nie zmieniono zachowania `check.ps1`, `dev.ps1`, kodu produkcyjnego ani
 konfiguracji bramek.
+
+## TK-006-T1-FIX2 - plan i audyt przed zmiana
+
+### Plan
+
+`Assert-Executable` ustawi `$LASTEXITCODE = $null` bezposrednio przed
+wywolaniem. Uruchomiony proces natywny nadpisuje sentinel liczbowym kodem
+wyjscia. Jezeli operator `&` nie uruchomi procesu natywnego, sentinel pozostaje
+`$null` i walidator zwraca osobny blad z instrukcja instalacji. Dopiero liczbowy
+kod jest rozpatrywany jako zero albo kod niezerowy.
+
+Mechanizm zachowuje lokalne `$ErrorActionPreference = "Continue"` i tlumienie
+obu strumieni, wiec stderr procesu z exit 0 nie staje sie konczacym
+`RemoteException` w Windows PowerShell 5.1. Sentinel nie zalezy od `$?`, ktore
+stderr moze ustawic na falsz mimo poprawnego kodu natywnego procesu.
+
+### Audyt zalozen o `$LASTEXITCODE`
+
+- `check.ps1`: `Invoke-Gate` inicjalizuje kod na 1, ale pracuje z globalnym
+  `$ErrorActionPreference = "Stop"` i nie tlumi stderr. Brak startu polecenia
+  przechodzi do `catch` przed przypisaniem `$LASTEXITCODE`, zachowuje kod 1 i
+  zapisuje szczegol wyjatku; nie ma sciezki do falszywego PASS.
+- `dev.ps1`: jedyne bezposrednie wywolanie natywne to best-effort
+  `taskkill.exe` w cleanupie. Skrypt nie interpretuje `$LASTEXITCODE` ani nie
+  oglasza na jego podstawie sukcesu; ostateczna gwarancja sprzatania pochodzi z
+  Windows Job Object `KILL_ON_JOB_CLOSE`. Nie ma zalozenia, ze stary kod
+  pochodzi z biezacego wywolania.
+
+Zmiana zachowania `check.ps1` i `dev.ps1` nie jest potrzebna.
