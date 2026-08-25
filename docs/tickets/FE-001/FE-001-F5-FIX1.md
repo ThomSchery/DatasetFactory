@@ -1,6 +1,6 @@
 # FE-001-F5-FIX1 — trwały eksport i rzeczywisty Gate 3 E2E
 
-Status: GOTOWY
+Status: WYMAGA FIX2
 
 ## Powód
 
@@ -88,4 +88,3 @@ Review: `artifacts/fe-001-f5-tk-009-cold-review/index.md`.
 - Backend: ruff, mypy strict oraz pełny pytest są zielone, ponieważ FIX1 dodaje
   nowy endpoint i testowy composition bootstrap.
 - `git diff --check` czysty, worktree czysty; bez push/merge.
-
