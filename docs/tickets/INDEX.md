@@ -20,7 +20,11 @@
 | FE-001-F4 | Ekran weryfikacji anotacji | wykonany | FE-001-F1, FE-001-F3 | część Gate 3 ✓ |
 | TK-009 | Zamknięcie runu po eksporcie | wykonany | TK-005, TK-008 | odblokowuje FE-001-F5 |
 | FE-001-F5 | Eksport i bramki Gate 3 UI | wykonany | FE-001-F1…F4, TK-009 | Gate 3 UI ✓ |
-| TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
+| TK-006 | E2E, hardening i uruchomienie jedną komendą | rozbity na T1–T4 | wszystkie powyższe | Gate 4 |
+| TK-006-T1 | Skrypty uruchomieniowe, jedna bramka i dokumentacja | do zrobienia | FE-001 | część Gate 4 |
+| TK-006-T2 | Restart, resume i pełna ścieżka review w E2E | do zrobienia | TK-006-T1 | część Gate 4 |
+| TK-006-T3 | Validator COCO, realny Tesseract i zapis zależności | do zrobienia | TK-006-T2 | część Gate 4 |
+| TK-006-T4 | Packaged-local bez binarki OCR i audyty domykające | do zrobienia | TK-006-T3 | Gate 4 |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,
 15/15 frontendu, pełny lint/typecheck/build/audit bez ostrzeżeń.
@@ -110,6 +114,10 @@ graph LR
   A --> H[TK-006]
   I --> H
   G5 --> H
+  H --> H1[TK-006-T1 skrypty]
+  H1 --> H2[TK-006-T2 restart/resume E2E]
+  H2 --> H3[TK-006-T3 validator COCO]
+  H3 --> H4[TK-006-T4 packaged-local i audyty]
 ```
 
 TK-001 i FE-SETUP mogą powstać równolegle. Dalsza ścieżka backendowa jest
