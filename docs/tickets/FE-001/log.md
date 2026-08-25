@@ -1970,3 +1970,102 @@ cache na innym wolumenie bez osłabiania produkcyjnego walidatora D:. Ryzyka
 środowiskowe pozostają jawne: `ffmpeg` i `ffprobe` muszą być na `PATH`, browser
 musi być raz zainstalowany w cache, a realny resource probe może uczciwie
 raportować brak opcjonalnego Tesseract/GPU bez blokowania operacyjnego health.
+
+---
+
+# FE-001-F5-FIX3 — Design Plan addendum (przed kodem UI)
+
+Źródła: `docs/tickets/FE-001/FE-001-F5-FIX3.md` oraz
+`artifacts/fe-001-f5-fix2-independent-acceptance-review/index.md` (`REVISE`).
+FIX3 nie zmienia wyglądu, copy, kontraktu API ani przepływu eksportu. Naprawia
+wyłącznie relację między aktualnym server state a lokalnym formularzem anotacji
+oraz wiąże detekcję terminalnego przejścia z tożsamością runu.
+
+## Elementy UI, layout i polskie copy
+
+1. **Trasa weryfikacji `/annotations/:runId`:** istniejące `Panel`, filtr
+   `SelectField` „Status weryfikacji”, `FrameList`, `FrameEditor`, query states
+   `Loading`/`Empty`/`FatalError` i desktopowy układ lista + edytor pozostają bez
+   zmian. Zmiana `runId` nie zmienia struktury ekranu ani nie tworzy dodatkowego
+   komunikatu.
+2. **Wiersz anotacji:** zachowane są nagłówek klasy i geometrii, badge źródła
+   OCR/manual, confidence i „Niepoprawny bbox”, `SelectField` „Klasa”, przycisk
+   „Zapisz klasę”, cztery `TextField` `x`/`y`/`width`/`height`, komunikat
+   `geometryError` oraz akcje „Zaznacz”, „Zapisz geometrię”, „Narysuj nową
+   geometrię” i „Usuń”. Klucz React pozostaje `annotation.id`; żadna kontrolka
+   ani aktywny fokus nie jest resetowany przez remount zależny od `version`.
+3. **Overlay i stan edytora:** `RegionOverlay`, selection, redraw oraz pola
+   szkicu nowego bboxa (`Nowy x/y/width/height`) pozostają zamontowane przy
+   autorytatywnym refetchu. FIX3 nie zmienia współrzędnych overlay, klawiatury,
+   roving tabindex ani hit-targetów.
+4. **Copy:** nie powstaje nowy tekst użytkowy. Obowiązuje dotychczasowe polskie
+   Sentence case, w tym istniejące komunikaty walidacji i przyciski zapisu.
+
+## Model stanu i interakcje
+
+1. **Baseline per pole:** `x`, `y`, `width`, `height` oraz `categoryId` mają
+   niezależny aktualny baseline z DTO serwera. Dirty jest właściwością pola:
+   widoczny draft różny od baseline jest dirty; równy baseline jest czysty.
+2. **Synchronizacja refetchu:** po nowym DTO każde czyste pole przejmuje nową
+   wartość serwera, a każde dirty zachowuje wartość widoczną użytkownikowi.
+   Baseline zawsze przesuwa się do najnowszego DTO, dzięki czemu ręczne cofnięcie
+   kontrolki do aktualnego baseline natychmiast przywraca jej podążanie za
+   kolejnymi refetchami. Dirty `x` nie zamraża `y`, rozmiarów ani klasy.
+3. **Payload i CAS:** „Zapisz geometrię” parsuje dokładnie cztery wartości
+   widoczne w kontrolkach i przekazuje najnowszy obiekt anotacji jako źródło
+   `expected_version`; „Zapisz klasę” wysyła dokładnie widoczny `categoryId`.
+   Brak optimistic update i brak ukrytej starej wartości.
+4. **Błąd geometrii:** zwykła edycja pola nadal czyści `geometryError`. Gdy
+   synchronizacja baseline zmienia przynajmniej jedną widoczną kontrolkę
+   geometrii, stary alarm jest czyszczony, aby nie opisywał wartości, której
+   użytkownik już nie widzi. Dirty geometria zachowana bez zmiany widoku nie
+   traci własnego aktualnego alarmu.
+5. **Terminalny refetch per run:** ref poprzedniego statusu przechowuje parę
+   `{runId, status}`. Tylko non-terminal → terminal dla tego samego `runId`
+   wykonuje po jednym refetchu listy i aktywnej klatki. Pierwszy render
+   terminalnego runu oraz przejście z running runu A do zcache'owanego
+   terminalnego runu B nie wywołują dodatkowej pary requestów.
+6. **Mutacje i dostępność:** istniejące `Button`, `TextField` i `SelectField`
+   zachowują natywne disabled, spinner/`aria-busy`, etykiety, komunikaty błędów,
+   focus-visible i pełną obsługę klawiatury. Nie powstaje nowa akcja ani stan
+   pośredni.
+
+## Moduły UI/UX, tokeny i ID
+
+| Moduł | ID i zastosowanie FIX3 |
+| --- | --- |
+| Siatka i odstępy | GRID-00–14, SPACING-01–13: brak zmian CSS/layoutu; istniejące tokenowe gap/padding, krótkie pola geometrii, desktop ≥1280 i brak overflow pozostają bez zmian |
+| Kolor i interakcje | COLOR-01–10, OPACITY-01/02: brak nowych kolorów; semantyczny error, disabled 0.2, hover/pressed 0.8 i kontrast istniejących kontrolek pozostają bez zmian |
+| Obramowania i focus | BORDER-01–09, BWIDTH-01–14: istniejące strong border/focus dla pól i przycisków oraz weak structure; synchronizacja stanu nie może zgubić fokusu ani powodować layout shift |
+| Promień i overlay | RADIUS-01–05, OVERLAY-01–07: istniejące `radius-md` pól i `RegionOverlay`; bez remountu, nowych warstw i niewidzialnych blokad |
+| Cienie | SHADOW-01–05: brak zmian i brak nowego elevation w ciemnym motywie |
+| Typografia | TYPO-01–21, FONTSIZE-01–11, LHEIGHT-01–14, LSPACE-01–09, PARASPACE-01–06, CASING-01–03: brak nowego copy/skali; polski Sentence case, czytelne etykiety i tekst błędu pozostają istniejące |
+| Architektura frontend | FE-02/03/05/06/08/10: lokalne drafty wyłącznie dla edycji, TanStack Query jako server state, per-field walidacja i jawne stany, semantyka/klawiatura oraz cztery regresje krytycznej synchronizacji |
+
+## Komponenty i common catalog IDs
+
+- `Panel`, `SelectField`, `TextField`, `Button`, `StatusBadge`, `UiStates` oraz
+  `RegionOverlay` są używane bez zmian zgodnie z katalogiem `new-component.md`
+  §4–5.
+- Feature components pozostają `AnnotationReviewScreen`, `FrameList`,
+  `FrameEditor` i `AnnotationList`/`AnnotationRow`.
+- Nie powstaje nowy common component ani nowy token; katalog pozostaje aktualny.
+
+## Checklista `new-component.md` §2.2
+
+- [x] **Layout/Siatka:** bez zmian CSS i arbitralnych wartości; obecny workspace,
+  pola short oraz grupowanie zachowują GRID-01/02/05/08/10/12 i
+  SPACING-01/03/04/08/13.
+- [x] **Typografia:** brak nowego copy; zachowane `xs/sm/md`, regular/semibold,
+  `line-height-standard` i polski Sentence case.
+- [x] **Kolory:** brak nowych par; widoczny błąd używa status-error i treści,
+  a dirty/clean nie jest komunikowane samym kolorem.
+- [x] **Obramowania:** bez zmian; focus-visible i error border pozostają
+  widoczne, a synchronizacja nie remountuje aktywnej kontrolki.
+- [x] **Cienie:** brak zmian i brak nowego cienia.
+- [x] **Interakcje:** per-field dirty/baseline, dokładny widoczny payload, czyszczenie
+  stale `geometryError`, terminalny refetch tylko w obrębie tego samego runu;
+  zero optimistic update i zero dodatkowych requestów przy zmianie runu.
+- [x] **Komponenty/common catalog:** wyłącznie istniejące `Panel`, `SelectField`,
+  `TextField`, `Button`, `StatusBadge`, `UiStates`, `RegionOverlay`; brak nowego
+  common component.
