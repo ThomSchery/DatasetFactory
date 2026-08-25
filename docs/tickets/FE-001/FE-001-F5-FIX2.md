@@ -1,6 +1,6 @@
 # FE-001-F5-FIX2 — bezpieczne odświeżanie edytora i deterministyczny E2E
 
-Status: GOTOWY
+Status: GOTOWY — DOMKNIĘTY PRZEZ FIX3
 
 ## Powód
 
