@@ -82,6 +82,18 @@ describe("the profile a user can submit", () => {
     );
   });
 
+  it("folds names the way `casefold` does, not the way `toLowerCase` does", () => {
+    const regions = [
+      { id: "r1", name: "Straße", x: 0, y: 0, width: 10, height: 10 },
+      // `casefold` maps `ß` onto `ss`, so the backend reads one name here.
+      { id: "r2", name: "STRASSE", x: 20, y: 20, width: 10, height: 10 },
+    ];
+
+    expect(messagesFor({ ...VALID, regions })).toContain(
+      "Nazwy regionów muszą być unikalne w profilu.",
+    );
+  });
+
   it("rejects two classes with the same name — `duplicate_category_name`", () => {
     const categories = [
       { kind: "game" as const, name: "Nazwa mapy" },

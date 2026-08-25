@@ -31,11 +31,24 @@ export const CHARACTER_CLASS_ALPHABET: readonly string[] = [
 
 const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 
+/**
+ * Mirrors Python `str.casefold()`, which `_require_unique` uses server side.
+ * `toLowerCase` is not the same mapping: it leaves `ß` and final `ς` alone,
+ * where casefold folds them onto `ss` and `σ`. Without the extra folds the
+ * inline check would call `Straße`/`STRASSE` distinct and let the form pass,
+ * only for the backend to reject the profile as a duplicate. JavaScript has no
+ * full case-folding primitive, so exotic scripts can still differ — the
+ * backend stays the authority and its error is surfaced as-is.
+ */
+function caseFold(value: string): string {
+  return value.normalize("NFKC").toLowerCase().replaceAll("ß", "ss").replaceAll("ς", "σ");
+}
+
 /** `_require_unique` compares case-folded names. */
 function hasDuplicateNames(names: readonly string[]): number | null {
   const seen = new Set<string>();
   for (const [index, name] of names.entries()) {
-    const normalized = name.trim().toLowerCase();
+    const normalized = caseFold(name.trim());
     if (seen.has(normalized)) {
       return index;
     }

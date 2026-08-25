@@ -12,14 +12,14 @@
 | TK-005-F2 | Eksport COCO na snapshocie rewizji | wykonany | TK-005-F1 | Gate 3 backend ✓ |
 | TK-005-F2-FIX1 | Rekoncyliacja przerwanych eksportów przy starcie | wykonany | TK-005-F2 | cold review High ✓; suite 235/235 |
 | TK-007 | Ręczne boksy i ponowne otwarcie klatki (F09) | wykonany | TK-005 | część Gate 3 ✓ |
-| FE-001 | Pionowy interfejs Home — Impeccable | rozbity na F1–F5 | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 |
+| FE-001 | Pionowy interfejs Home — Impeccable | wykonany | FE-SETUP, TK-002, TK-004, TK-005, TK-007 | Gate 3 ✓ |
 | FE-001-F1 | Fundament: klient API, routing i powłoka | wykonany | FE-SETUP, TK-007 | część Gate 3 ✓ |
 | TK-008 | Endpoint dashboardu (F12) | wykonany | TK-005, TK-007 | odblokowuje FE-001-F2 |
 | FE-001-F2 | Materiały, uruchomienie runu i dashboard | wykonany | FE-001-F1, TK-008 | część Gate 3 ✓ |
-| FE-001-F3 | Profil gry i rysowanie regionów HUD | gotowy | FE-001-F1 | część Gate 3 |
-| FE-001-F4 | Ekran weryfikacji anotacji | gotowy | FE-001-F1, FE-001-F3 | część Gate 3 |
+| FE-001-F3 | Profil gry i rysowanie regionów HUD | wykonany | FE-001-F1 | część Gate 3 ✓ |
+| FE-001-F4 | Ekran weryfikacji anotacji | wykonany | FE-001-F1, FE-001-F3 | część Gate 3 ✓ |
 | TK-009 | Zamknięcie runu po eksporcie | wykonany | TK-005, TK-008 | odblokowuje FE-001-F5 |
-| FE-001-F5 | Eksport i bramki Gate 3 UI | wykonany | FE-001-F1…F4, TK-009 | Gate 3 UI |
+| FE-001-F5 | Eksport i bramki Gate 3 UI | wykonany | FE-001-F1…F4, TK-009 | Gate 3 UI ✓ |
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | gotowy | wszystkie powyższe | Gate 4 |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,

@@ -35,7 +35,8 @@ oddzielnymi klasami/funkcjami wewnątrz modułu z jednym publicznym kontraktem.
   wynik jakości Tesseract jest zaakceptowany jako TD-014: adapter działa wyłącznie
   `experimental`, a workflow zapisuje i pokazuje `quality_gate=failed`.
 - Gate 3: TK-005 + TK-007 + FE-001 — pełny workflow API/UI, ręczna korekta
-  boksów oraz poprawny COCO.
+  boksów oraz poprawny COCO. Domknięty 2026-08-25; dowody i przeniesione
+  ograniczenia w `docs/tickets/FE-001/log.md`.
 - Gate 4: TK-006 — wszystkie testy, restart/resume, screenshot QA i clean repo.
 
 ## Dług techniczny

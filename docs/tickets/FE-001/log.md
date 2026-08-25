@@ -2313,3 +2313,63 @@ Nie ma odchylenia produktowego ani nowej zależności. Jedyna odrzucona próba
 rozwiązania. `git diff --check 178bd68..HEAD` jest pusty. Commity FIX4 przed
 finalnym wpisem: `48cc92a` (ticket/status), `4c6abbd` (Design Plan) i `74a718b`
 (implementacja + regresje). Bez push i merge.
+
+## Domknięcie Gate 3 (2026-08-25)
+
+FE-001 jest kompletny: F1–F5 wykonane, TK-009 wykonany, cztery fixupy F5
+zamknięte niezależnym `ACCEPT`. Zaległą luką był FE-001-F3 — jedyny ticket
+FE-001 bez zapisanego niezależnego review. Uzupełniono ją zimnym review
+kontraktu na `main` po mergu F5, świadomie oceniającym stan bieżący, a nie
+archeologię commitów, bo `RegionOverlay` był potem rozszerzony przez F4 o tryb
+`draw`.
+
+Review: `artifacts/fe-001-f3-independent-contract-review/index.md`. Werdykt
+`REVISE` z jednym findingiem P2, bez P1 i P3. Siedem z ośmiu obszarów kontraktu
+F3 przeszło bez uwag: transformacja współrzędnych z wymiarów naturalnych,
+roving tabindex i usuwanie klawiaturą, walidacja geometrii, komunikaty
+`409 profile_name_exists` i `404 source_missing`, brak edycji po zapisie,
+opaque UUID assetu oraz `POST /profiles/reference-preview` rozwiązujący pętlę
+pierwszego profilu na pustej instalacji.
+
+### Finding P2 i poprawka
+
+`hasDuplicateNames` w `frontend/src/features/profiles/schemas.ts` normalizował
+nazwy przez `trim().toLowerCase()`, podczas gdy backendowe `_require_unique`
+w `backend/app/engines/definition/engine.py:158-163` używa `casefold()`. To nie
+jest ta sama funkcja: `"Straße".toLowerCase()` daje `"straße"`, a `casefold()`
+daje `"strasse"`. Dla pary `Straße`/`STRASSE` walidacja inline przepuszczała
+profil, a dopiero `POST /profiles` odrzucał go jako `duplicate_region_name`.
+Kontrakt F3 wymaga walidacji inline zgodnej z backendem, bez własnej
+interpretacji reguł.
+
+Dodano `caseFold`, które odwzorowuje `str.casefold()` dla osiągalnych
+przypadków: `normalize("NFKC")`, `toLowerCase()` oraz zwinięcie `ß` na `ss`
+i końcowej `ς` na `σ`. JavaScript nie ma pełnego case foldingu, więc egzotyczne
+pisma nadal mogą się różnić — backend pozostaje autorytetem, a jego błąd jest
+pokazywany bez zmian. Regresja `schemas.test.ts` pokrywa teraz parę
+`Straße`/`STRASSE`; wcześniejsze testy obejmowały wyłącznie ASCII.
+
+### Dowody domknięcia
+
+Bramki na zmergowanym `main` po poprawce:
+
+| Bramka | Wynik |
+| --- | --- |
+| Vitest | 33/33 plików, 439/439 testów |
+| architecture | 92/92 |
+| typecheck | 0 błędów |
+| build | 295 modułów; main 497.65 kB/gzip 152.63; exports 8.37 kB/gzip 3.12 |
+
+Backend dziedziczy 290/290 z FIX1 — `backend/app` nie zmienił się od `9362869`.
+Dowody E2E, screenshotów i determinizmu pochodzą z FIX4 i nie były powtarzane,
+bo merge `178bd68..b26cb09` był fast-forward i drzewo jest identyczne.
+
+### Świadome ograniczenia przeniesione dalej
+
+- Preview asset nie jest konsumowany przez `POST /profiles`; profil ponownie
+  kopiuje ścieżkę, a porzucone preview sprząta dopiero startup reconciliation.
+  Dług lifecycle i TOCTOU, nie naruszenie kontraktu F3.
+- Fallback `nth-of-type` w selektorze checkpointu screenshotów zależy od
+  stabilnej struktury trasy; guard failuje czytelnie, jeśli przestanie trafiać.
+- `npm run test:e2e-root` jest osobną bramką i nie wchodzi w `npm test`
+  ani `npm run e2e` — w CI trzeba go wywołać jawnie.
