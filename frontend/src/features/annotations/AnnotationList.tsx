@@ -31,6 +31,7 @@ function initialAnnotationFormState(annotation: Annotation): AnnotationFormState
 function syncAnnotationFormState(
   current: AnnotationFormState,
   annotation: Annotation,
+  frameSize: { width: number; height: number },
 ): AnnotationFormState {
   const nextGeometryBaseline = geometryDraft(annotation);
   const nextDraft = { ...current.draft };
@@ -51,7 +52,10 @@ function syncAnnotationFormState(
   );
   const categoryBaselineChanged = current.categoryBaselineId !== annotation.category_id;
   const categoryChanged = current.categoryId !== nextCategoryId;
-  const nextGeometryError = draftChanged ? null : current.geometryError;
+  const nextGeometryError =
+    current.geometryError === null
+      ? null
+      : parseGeometryDraft(nextDraft, frameSize).error;
 
   if (
     !baselineChanged &&
@@ -134,13 +138,15 @@ function AnnotationRow({
   const categoryOptions = categories.map((item) => ({ label: item.name, value: item.id }));
 
   useEffect(() => {
-    setForm((current) => syncAnnotationFormState(current, annotation));
+    setForm((current) => syncAnnotationFormState(current, annotation, frameSize));
   }, [
     annotation.category_id,
     annotation.height,
     annotation.width,
     annotation.x,
     annotation.y,
+    frameSize.height,
+    frameSize.width,
   ]);
 
   function setCoordinate(field: keyof GeometryDraft, value: string): void {

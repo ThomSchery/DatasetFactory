@@ -62,9 +62,76 @@ async function assertKeyboardFocus(page: Page, expected: Locator): Promise<void>
   });
   expect(focus.tag).not.toBe("BODY");
   expect(focus.visible).toBe(true);
-  await expected.evaluate((element) => {
-    element.setAttribute("data-visual-qa-focus", "true");
+}
+
+async function assertScreenshotFocus(expected: Locator): Promise<void> {
+  const focus = await expected.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const outlineColor = style.outlineColor;
+    return {
+      active: element === document.activeElement,
+      outlineColor,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: Number.parseFloat(style.outlineWidth),
+    };
   });
+
+  if (!focus.active) {
+    throw new Error("Visual QA: checkpoint utracił focus bezpośrednio przed screenshotem.");
+  }
+  if (
+    focus.outlineStyle === "none" ||
+    focus.outlineWidth <= 0 ||
+    focus.outlineColor === "transparent" ||
+    focus.outlineColor === "rgba(0, 0, 0, 0)"
+  ) {
+    throw new Error("Visual QA: checkpoint nie ma widocznego focus ringu przed screenshotem.");
+  }
+}
+
+async function pinScreenshotFocusRing(page: Page, expected: Locator): Promise<void> {
+  const selector = await expected.evaluate((element) => {
+    const segments: string[] = [];
+    let current: Element | null = element;
+
+    while (current !== null) {
+      if (current.id !== "") {
+        segments.unshift(`#${CSS.escape(current.id)}`);
+        break;
+      }
+      const parent: Element | null = current.parentElement;
+      const tag = current.tagName.toLowerCase();
+      if (parent === null) {
+        segments.unshift(tag);
+        break;
+      }
+      const matchingSiblings = Array.from(parent.children).filter(
+        (sibling) => sibling.tagName === current?.tagName,
+      );
+      const position = matchingSiblings.indexOf(current) + 1;
+      segments.unshift(`${tag}:nth-of-type(${String(position)})`);
+      current = parent;
+    }
+
+    return segments.join(" > ");
+  });
+
+  await page.addStyleTag({
+    content: `
+      ${selector} {
+        outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable) !important;
+        outline-offset: var(--focus-ring-offset) !important;
+      }
+    `,
+  });
+}
+
+async function withVerifiedScreenshotFocus<T>(
+  expected: Locator,
+  screenshot: () => Promise<T>,
+): Promise<T> {
+  await assertScreenshotFocus(expected);
+  return screenshot();
 }
 
 async function freezeMotion(page: Page): Promise<void> {
@@ -76,10 +143,6 @@ async function freezeMotion(page: Page): Promise<void> {
         caret-color: transparent !important;
         scroll-behavior: auto !important;
         transition: none !important;
-      }
-      [data-visual-qa-focus="true"] {
-        outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable) !important;
-        outline-offset: var(--focus-ring-offset) !important;
       }
     `,
   });
@@ -109,14 +172,18 @@ async function capture(
   await prepare?.(page);
   await assertNoOverflow(page);
   await assertResolvedCssVariables(page);
-  await assertKeyboardFocus(page, focusTarget(page));
+  const focusCheckpoint = focusTarget(page);
+  await assertKeyboardFocus(page, focusCheckpoint);
+  await pinScreenshotFocusRing(page, focusCheckpoint);
   expect(externalFonts).toEqual([]);
   await beforeScreenshot?.(page);
-  const screenshot = await page.screenshot({
-    animations: "disabled",
-    caret: "hide",
-    fullPage: true,
-  });
+  const screenshot = await withVerifiedScreenshotFocus(focusCheckpoint, () =>
+    page.screenshot({
+      animations: "disabled",
+      caret: "hide",
+      fullPage: true,
+    }),
+  );
   await writeFile(
     path.join(screenshotDirectory, `${name}-1440.png`),
     deterministicPng(screenshot),
@@ -177,4 +244,27 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     current.getByRole("button", { name: "Spróbuj ponownie" }), async (current) => {
       await expect(current.getByText("Nie udało się wczytać dashboardu")).toBeVisible();
     });
+});
+
+test("nie zapisuje screenshotu po utracie route-specific focusu", async ({ page }) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.goto("/materials");
+  await freezeMotion(page);
+  const focusCheckpoint = page.getByLabel("Ścieżka pliku wideo");
+  await assertKeyboardFocus(page, focusCheckpoint);
+  await pinScreenshotFocusRing(page, focusCheckpoint);
+  await focusCheckpoint.evaluate((element) => {
+    if (element instanceof HTMLElement) {
+      element.blur();
+    }
+  });
+
+  let screenshotAttempted = false;
+  await expect(
+    withVerifiedScreenshotFocus(focusCheckpoint, async () => {
+      screenshotAttempted = true;
+    }),
+  ).rejects.toThrow("checkpoint utracił focus bezpośrednio przed screenshotem");
+  expect(screenshotAttempted, "guard must fail before page.screenshot").toBe(false);
 });

@@ -1944,8 +1944,8 @@ alarmu geometrii po synchronizacji formularza z serwerem.
    „Spróbuj ponownie”). Trasy, ich layout 1440 px, query states i zawartość PNG
    pozostają bez zmian.
 2. **Focus evidence:** testowy arkusz motion-free przypina tokenowy ring regułą
-   CSS opartą na stabilnym stanie `:focus`, a nie atrybutem dopisywanym do węzła
-   React. Bezpośrednio po route-specific `beforeScreenshot` i przed zapisem PNG
+   CSS opartą na stabilnym selektorze ID/ścieżki DOM checkpointu, a nie atrybutem
+   dopisywanym do węzła React. Bezpośrednio po route-specific `beforeScreenshot` i przed zapisem PNG
    harness sprawdza, że dokładnie wskazany checkpoint jest `activeElement` oraz
    ma widoczny, nieprzezroczysty outline. Utrata focusu albo ringu kończy test
    czytelnym błędem; nie powstaje fałszywie zielony screenshot.
@@ -1964,7 +1964,7 @@ alarmu geometrii po synchronizacji formularza z serwerem.
    Harness nie przejmuje focusu, nie dodaje atrybutu do kontrolki i nie zmienia
    produkcyjnego `:focus-visible`; jedynie stabilizuje dowód w testowym arkuszu.
 2. Re-render pomiędzy pierwszą asercją a screenshotem może odświeżyć kontrolkę,
-   ale nie usuwa reguły `:focus`. Końcowy guard wykonuje się po
+   ale reguła nadal trafia w jej stabilne ID albo pozycję DOM. Końcowy guard wykonuje się po
    `beforeScreenshot`; dopiero jego sukces zezwala na `page.screenshot`.
 3. `syncAnnotationFormState` nadal synchronizuje baseline per pole. Gdy istnieje
    `geometryError`, wynikowy `nextDraft` jest ponownie parsowany względem
@@ -1980,7 +1980,7 @@ alarmu geometrii po synchronizacji formularza z serwerem.
 | --- | --- |
 | Siatka i odstępy | GRID-00–14, SPACING-01–13: brak zmian CSS/layoutu; desktop ≥1280, istniejące wysokości kontrolek, short fields, gap i brak overflow pozostają bez zmian |
 | Kolor i kontrast | COLOR-01–10, OPACITY-01/02: testowy ring korzysta z istniejącego `--color-fill-brand-impeccable`; guard odrzuca brak widocznego/nieprzezroczystego obrysu, bez nowych kolorów i zmian kontrastu produktu |
-| Obramowanie i focus | BORDER-01–03/05–09, BWIDTH-01–14: Stroke-Strong, `--focus-ring-width` i `--focus-ring-offset`; stabilna reguła `:focus` przeżywa re-render, a stan błędu pozostaje semantyczny i widoczny |
+| Obramowanie i focus | BORDER-01–03/05–09, BWIDTH-01–14: Stroke-Strong, `--focus-ring-width` i `--focus-ring-offset`; reguła stabilnego selektora przeżywa re-render, a stan błędu pozostaje semantyczny i widoczny |
 | Promień, overlay, cienie | RADIUS-01–05, OVERLAY-01–07, SHADOW-01–05: brak zmian produkcyjnych; istniejące `radius-md`, `RegionOverlay` i elevation pozostają bez zmian |
 | Typografia | TYPO-01–21, FONTSIZE-01–11, LHEIGHT-01–14, LSPACE-01–09, PARASPACE-01–06, CASING-01–03: brak nowego copy/skali; istniejące etykiety i alert zachowują czytelność oraz Sentence case |
 | Architektura frontend | FE-02/03/05/06/08/10: lokalny per-field draft, TanStack Query jako server state, walidacja całej geometrii, semantyczny `role="alert"`, klawiatura i regresje Testing Library/Playwright |
@@ -2238,3 +2238,13 @@ do obserwacji poza zamkniętym zakresem tego ticketu.
 Commity FIX3 przed raportem: `48b5b20` (ticket/status), `e2967e0` (Design Plan)
 i `99c3b51` (implementacja + regresje). TK-009, historia FIX1/FIX2, durable
 locator, COCO i runtime E2E nie zostały przepisane ani zmienione.
+
+## FE-001-F5-FIX4 — próba focus evidence (2026-08-25)
+
+Pierwsza implementacja zastąpiła imperatywny atrybut ogólną regułą `:focus` i
+dodała końcowy guard. Dwa targeted visual runs były zielone, ale PNG dowiodły,
+że rozwiązanie nadal ma okno wyścigu wewnątrz `page.screenshot`: dashboard w obu
+przebiegach, a empty w drugim utraciły cały brandowy ring już po przejściu
+guarda. Nie commitowano zmienionych PNG. Reguła zostaje zawężona do stabilnego
+selektora checkpointu wyliczonego bez mutacji węzła React; aktywny element i
+widoczność ringu nadal są weryfikowane po `beforeScreenshot`.

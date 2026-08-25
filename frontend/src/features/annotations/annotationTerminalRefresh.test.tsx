@@ -209,6 +209,77 @@ describe("terminal annotation refresh", () => {
     });
   });
 
+  it("keeps the geometry alarm when clean y syncs beside an empty dirty width", async () => {
+    const user = userEvent.setup();
+    const profile = profileFixture();
+    const originalAnnotation = annotationFixture({ version: 3 });
+    const serverUpdatedAnnotation = annotationFixture({ version: 4, y: 222 });
+    let runReads = 0;
+    let frameReads = 0;
+    let geometryWrites = 0;
+
+    stubFetch((url, init) => {
+      if (init?.method === "PATCH" && url === "/api/v1/annotations/ann-1") {
+        geometryWrites += 1;
+        return { body: serverUpdatedAnnotation, status: 200 };
+      }
+      if (url === "/api/v1/runs/run-1") {
+        runReads += 1;
+        return {
+          body: runFixture({
+            id: "run-1",
+            profile_id: profile.id,
+            status: runReads === 1 ? "running" : "review_ready",
+          }),
+          status: 200,
+        };
+      }
+      if (url === `/api/v1/profiles/${profile.id}`) {
+        return { body: profile, status: 200 };
+      }
+      if (url.startsWith("/api/v1/runs/run-1/frames?")) {
+        return { body: framePageFixture(), status: 200 };
+      }
+      if (url === "/api/v1/frames/frame-1") {
+        frameReads += 1;
+        return {
+          body: frameDetailFixture({
+            annotations: [frameReads === 1 ? originalAnnotation : serverUpdatedAnnotation],
+            version: frameReads === 1 ? 7 : 8,
+          }),
+          status: 200,
+        };
+      }
+      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+    });
+    const { queryClient } = renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    const row = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getByRole(
+      "listitem",
+    );
+    const widthField = within(row).getByLabelText("width");
+    await user.clear(widthField);
+    await user.click(within(row).getByRole("button", { name: "Zapisz geometrię" }));
+    expect(
+      await within(row).findByText("Początek nie może być ujemny, a rozmiar musi być dodatni."),
+    ).toBeVisible();
+
+    await act(async () => {
+      await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
+    });
+
+    await waitFor(() => {
+      expect(within(row).getByLabelText("y")).toHaveValue(222);
+      expect(widthField).toHaveValue(null);
+      expect(
+        within(row).getByText("Początek nie może być ujemny, a rozmiar musi być dodatni."),
+      ).toBeVisible();
+      expect(frameReads).toBe(2);
+    });
+    expect(geometryWrites).toBe(0);
+  });
+
   it("syncs every clean geometry field and category to the new server baseline", async () => {
     const profile = profileFixture({
       categories: [
