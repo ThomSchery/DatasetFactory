@@ -203,3 +203,47 @@ Dowody po zmianie:
 
 Nie znaleziono drugiego miejsca z kombinacja natywnego exe, stlumionego stderr
 i globalnego `$ErrorActionPreference = "Stop"`.
+
+### Dowody FIX1
+
+| Scenariusz | Wynik |
+| --- | --- |
+| `.env` bez `DF_TESSERACT_RUNTIME_SHA256`, hash obecny w srodowisku rodzica | exit 1; komunikat nazwal klucz i pelna sciezke `.env`; `uv sync` nie zostal uruchomiony |
+| kontrolowany proces piszacy na stderr, exit 0 | FFmpeg i ffprobe zaakceptowane; skrypt przeszedl do nastepnej walidacji |
+| kontrolowany proces piszacy na stderr, exit 23 | exit 1; komunikat zawieral kod 23 i instrukcje instalacji dev-only na `D:`; instalacja nie ruszyla |
+| parser Windows PowerShell 5.1 | 0 bledow |
+| pozytywny `bootstrap.ps1` po finalnej zmianie | exit 0; oba hashe Tesseract zgodne; 63 pakiety Python i 128 pakietow npm; bez instalacji globalnej i zmian systemowego `PATH` |
+
+Pelny `check.ps1` po poprawce zakonczyl sie `PASS 9/9` w jednym nieprzerwanym
+przebiegu:
+
+| Bramka | Dowod |
+| --- | --- |
+| Ruff format | 227 plikow, 0 wymagajacych formatowania |
+| Ruff lint | 0 bledow |
+| mypy | 96 plikow, 0 problemow |
+| pytest | 293/293 w 29:40; bramka 1788 s |
+| frontend typecheck | 0 bledow |
+| Vitest | 33/33 pliki, 439/439 testow w 33,34 s |
+| build | 295 modulow; main 497,65 kB/gzip 152,63; exports 8,37 kB/gzip 3,12 |
+| Playwright | 3/3 w 41,9 s |
+| E2E root safety | 2/2 |
+
+Osiem PNG pozostalo deterministycznych i mialo te same SHA-256 co dwa
+poprzednie przebiegi wykonawcy i dwa przebiegi zimnego review:
+
+| PNG | SHA-256 |
+| --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+Po przebiegu `git status --short` byl pusty, a `git diff --check
+62fd954..HEAD` nie zglosil bledow. Poprawka kodu jest w commicie `350cdf6`;
+nie zmieniono zachowania `check.ps1`, `dev.ps1`, kodu produkcyjnego ani
+konfiguracji bramek.
