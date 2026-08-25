@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 import shutil
 from collections.abc import Collection
@@ -7,7 +8,6 @@ from pathlib import Path
 
 import uvicorn
 
-from backend.app.access.status.service import ProbeResult
 from backend.app.composition import build_composition
 from backend.app.config import Settings
 from backend.app.engines.definition import BBox, OcrCandidate, OcrProvenance
@@ -48,54 +48,48 @@ class DeterministicE2eOcrEngine:
         return None
 
 
-class AvailableE2eResourceProbe:
-    def executable(
-        self,
-        path: Path,
-        *,
-        arguments: tuple[str, ...],
-        output_marker: str,
-        timeout_seconds: int,
-    ) -> ProbeResult:
-        del path, arguments, output_marker, timeout_seconds
-        return ProbeResult(True, "e2e_available")
-
-    def gpu(self, *, timeout_seconds: int) -> ProbeResult:
-        del timeout_seconds
-        return ProbeResult(True, "e2e_available")
-
-
 def _runtime_root() -> Path:
-    configured = os.environ.get(
-        "DATASETFACTORY_E2E_ROOT",
-        "D:/DatasetFactory/cache/playwright/runtime",
-    )
-    root = Path(configured).resolve()
-    if root.drive.upper() != "D:" or "playwright" not in {part.casefold() for part in root.parts}:
-        raise RuntimeError("DATASETFACTORY_E2E_ROOT must be a dedicated Playwright directory on D:")
+    cache_root_value = os.environ.get("DATASETFACTORY_CACHE_ROOT")
+    configured = os.environ.get("DATASETFACTORY_E2E_ROOT")
+    expected_marker = os.environ.get("DATASETFACTORY_E2E_MARKER_TOKEN")
+    if cache_root_value is None or configured is None or expected_marker is None:
+        raise RuntimeError("The E2E launcher must provide cache, runtime leaf and marker")
+
+    configured_path = Path(configured)
+    if configured_path.is_symlink():
+        raise RuntimeError("DATASETFACTORY_E2E_ROOT cannot be a symlink")
+    root = configured_path.resolve()
+    playwright_root = (Path(cache_root_value).resolve() / "playwright").resolve()
+    marker = root / ".datasetfactory-e2e-runtime"
+    if (
+        root.parent != playwright_root
+        or not root.name.startswith("runtime-")
+        or not root.is_dir()
+        or marker.is_symlink()
+        or not marker.is_file()
+    ):
+        raise RuntimeError("DATASETFACTORY_E2E_ROOT must be a marked launcher-owned leaf")
+    if not hmac.compare_digest(marker.read_text(encoding="utf-8"), expected_marker):
+        raise RuntimeError("DATASETFACTORY_E2E_ROOT marker does not match this launcher")
     return root
 
 
 def main() -> None:
     root = _runtime_root()
-    if root.exists():
-        shutil.rmtree(root)
-    root.mkdir(parents=True)
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
     if ffmpeg is None or ffprobe is None:
         raise RuntimeError("The real E2E backend requires ffmpeg and ffprobe on PATH")
-    settings = Settings(
-        workspace_dir=root / "workspace",
-        cache_dir=root / "cache",
-        ffmpeg_path=Path(ffmpeg),
-        ffprobe_path=Path(ffprobe),
-        tesseract_path=Path("D:/tools/e2e/tesseract.exe"),
-        tesseract_model_path=Path("D:/tools/e2e/tessdata/eng.traineddata"),
+    settings = Settings().model_copy(
+        update={
+            "workspace_dir": root / "workspace",
+            "cache_dir": root / "cache",
+            "ffmpeg_path": Path(ffmpeg),
+            "ffprobe_path": Path(ffprobe),
+        }
     )
     composition = build_composition(
         settings,
-        resource_probe=AvailableE2eResourceProbe(),
         ocr_engine=DeterministicE2eOcrEngine(),
     )
     try:

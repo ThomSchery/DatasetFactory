@@ -88,7 +88,12 @@ async function capture(
   await assertKeyboardFocus(page, focusTarget(page));
   expect(externalFonts).toEqual([]);
   await beforeScreenshot?.(page);
-  await page.screenshot({ fullPage: true, path: path.join(screenshotDirectory, `${name}-1440.png`) });
+  await page.screenshot({
+    animations: "disabled",
+    caret: "hide",
+    fullPage: true,
+    path: path.join(screenshotDirectory, `${name}-1440.png`),
+  });
   await page.goto("about:blank");
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
