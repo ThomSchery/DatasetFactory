@@ -15,6 +15,7 @@ function Import-DotEnv {
         throw "Brak pliku .env. Skopiuj .env.example do .env i ustaw lokalne sciezki na D:."
     }
 
+    $values = @{}
     foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
         $trimmed = $line.Trim()
         if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) {
@@ -32,18 +33,24 @@ function Import-DotEnv {
                 $value = $value.Substring(1, $value.Length - 2)
             }
         }
-        [Environment]::SetEnvironmentVariable($Matches.key, $value, "Process")
+        $key = $Matches.key
+        $values[$key] = $value
+        [Environment]::SetEnvironmentVariable($key, $value, "Process")
     }
+    return $values
 }
 
 function Get-RequiredEnvironmentValue {
-    param([Parameter(Mandatory = $true)][string]$Name)
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Values,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$SourcePath
+    )
 
-    $value = [Environment]::GetEnvironmentVariable($Name, "Process")
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        throw "Brak wymaganego klucza $Name w .env."
+    if (-not $Values.ContainsKey($Name) -or [string]::IsNullOrWhiteSpace($Values[$Name])) {
+        throw "Brak wymaganego klucza $Name w pliku '$SourcePath'."
     }
-    return $value
+    return $Values[$Name]
 }
 
 function Assert-PathOnDDrive {
@@ -70,9 +77,18 @@ function Assert-Executable {
         throw "Brak $Name pod sciezka '$Path'. $InstallHint"
     }
 
-    & $Path @Arguments *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Name istnieje pod '$Path', ale nie uruchamia sie poprawnie (exit $LASTEXITCODE). $InstallHint"
+    $exitCode = 1
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Path @Arguments 1> $null 2> $null
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($exitCode -ne 0) {
+        throw "$Name istnieje pod '$Path', ale nie uruchamia sie poprawnie (exit $exitCode). $InstallHint"
     }
     Write-Host "[bootstrap] OK: wykryto $Name pod '$Path'."
 }
@@ -107,16 +123,20 @@ function Assert-CommandAvailable {
 }
 
 try {
-    Import-DotEnv -Path $envPath
+    $dotenvValues = Import-DotEnv -Path $envPath
+    $requiredValueParameters = @{
+        Values = $dotenvValues
+        SourcePath = $envPath
+    }
 
-    $workspaceDir = Get-RequiredEnvironmentValue -Name "DF_WORKSPACE_DIR"
-    $cacheDir = Get-RequiredEnvironmentValue -Name "DF_CACHE_DIR"
-    $ffmpegPath = Get-RequiredEnvironmentValue -Name "DF_FFMPEG_PATH"
-    $ffprobePath = Get-RequiredEnvironmentValue -Name "DF_FFPROBE_PATH"
-    $tesseractPath = Get-RequiredEnvironmentValue -Name "DF_TESSERACT_PATH"
-    $tesseractModelPath = Get-RequiredEnvironmentValue -Name "DF_TESSERACT_MODEL_PATH"
-    $runtimeHash = Get-RequiredEnvironmentValue -Name "DF_TESSERACT_RUNTIME_SHA256"
-    $modelHash = Get-RequiredEnvironmentValue -Name "DF_TESSERACT_MODEL_SHA256"
+    $workspaceDir = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_WORKSPACE_DIR"
+    $cacheDir = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_CACHE_DIR"
+    $ffmpegPath = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_FFMPEG_PATH"
+    $ffprobePath = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_FFPROBE_PATH"
+    $tesseractPath = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_TESSERACT_PATH"
+    $tesseractModelPath = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_TESSERACT_MODEL_PATH"
+    $runtimeHash = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_TESSERACT_RUNTIME_SHA256"
+    $modelHash = Get-RequiredEnvironmentValue @requiredValueParameters -Name "DF_TESSERACT_MODEL_SHA256"
 
     Assert-PathOnDDrive -Name "DF_WORKSPACE_DIR" -Path $workspaceDir
     Assert-PathOnDDrive -Name "DF_CACHE_DIR" -Path $cacheDir
