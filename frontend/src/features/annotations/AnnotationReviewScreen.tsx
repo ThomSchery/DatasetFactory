@@ -51,7 +51,7 @@ function ReviewForRun({ runId }: { runId: string }) {
   const [filter, setFilter] = useState<ReviewStatusFilter>(DEFAULT_REVIEW_STATUS_FILTER);
   const [page, setPage] = useState(1);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
-  const previousRunStatus = useRef<RunStatus | undefined>(undefined);
+  const previousRunStatus = useRef<{ runId: string; status: RunStatus } | undefined>(undefined);
   const isWriting = useIsMutating({ mutationKey: reviewMutationKey(runId) }) > 0;
   const frameQuery = { review_status: reviewStatusQuery(filter), page, page_size: PAGE_SIZE };
   const runQuery = useQuery({
@@ -84,12 +84,13 @@ function ReviewForRun({ runId }: { runId: string }) {
 
   useEffect(() => {
     const status = runQuery.data?.status;
-    const previousStatus = previousRunStatus.current;
-    previousRunStatus.current = status;
+    const previous = previousRunStatus.current;
+    previousRunStatus.current = status === undefined ? undefined : { runId, status };
     if (
       status === undefined ||
-      previousStatus === undefined ||
-      isTerminalRunStatus(previousStatus) ||
+      previous === undefined ||
+      previous.runId !== runId ||
+      isTerminalRunStatus(previous.status) ||
       !isTerminalRunStatus(status)
     ) {
       return;
@@ -107,7 +108,7 @@ function ReviewForRun({ runId }: { runId: string }) {
     }
 
     void refetchTerminalFrameState();
-  }, [activeFrameId, framesQuery.refetch, queryClient, runQuery.data?.status]);
+  }, [activeFrameId, framesQuery.refetch, queryClient, runId, runQuery.data?.status]);
 
   useEffect(() => {
     if (framesQuery.data === undefined) {

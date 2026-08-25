@@ -15,10 +15,13 @@ import { appRoutes } from "../app/routes";
 
 export interface RenderAppResult extends RenderResult {
   queryClient: QueryClient;
+  router?: ReturnType<typeof createMemoryRouter>;
 }
 
 /** Renders the whole shell and route table at `initialEntries`. */
-export function renderApp(initialEntries: string[] = ["/"]): RenderAppResult {
+export function renderApp(
+  initialEntries: string[] = ["/"],
+): RenderAppResult & { router: ReturnType<typeof createMemoryRouter> } {
   const queryClient = createQueryClient();
   const router = createMemoryRouter(appRoutes, { initialEntries });
   const result = render(
@@ -26,7 +29,7 @@ export function renderApp(initialEntries: string[] = ["/"]): RenderAppResult {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return { ...result, queryClient };
+  return { ...result, queryClient, router };
 }
 
 /** Renders an arbitrary tree inside a query client, without routing. */

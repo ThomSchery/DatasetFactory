@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import type { Annotation, BBox, Category } from "../../api";
 import { Button } from "../../components/common/Button";
@@ -6,6 +6,71 @@ import { SelectField } from "../../components/common/SelectField";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
 import { geometryDraft, parseGeometryDraft, type GeometryDraft } from "./geometryForm";
+
+const GEOMETRY_FIELDS = ["x", "y", "width", "height"] as const;
+
+interface AnnotationFormState {
+  categoryBaselineId: string;
+  categoryId: string;
+  draft: GeometryDraft;
+  geometryBaseline: GeometryDraft;
+  geometryError: string | null;
+}
+
+function initialAnnotationFormState(annotation: Annotation): AnnotationFormState {
+  const baseline = geometryDraft(annotation);
+  return {
+    categoryBaselineId: annotation.category_id,
+    categoryId: annotation.category_id,
+    draft: baseline,
+    geometryBaseline: baseline,
+    geometryError: null,
+  };
+}
+
+function syncAnnotationFormState(
+  current: AnnotationFormState,
+  annotation: Annotation,
+): AnnotationFormState {
+  const nextGeometryBaseline = geometryDraft(annotation);
+  const nextDraft = { ...current.draft };
+  let draftChanged = false;
+
+  for (const field of GEOMETRY_FIELDS) {
+    const clean = current.draft[field] === current.geometryBaseline[field];
+    if (clean && current.draft[field] !== nextGeometryBaseline[field]) {
+      nextDraft[field] = nextGeometryBaseline[field];
+      draftChanged = true;
+    }
+  }
+
+  const categoryClean = current.categoryId === current.categoryBaselineId;
+  const nextCategoryId = categoryClean ? annotation.category_id : current.categoryId;
+  const baselineChanged = GEOMETRY_FIELDS.some(
+    (field) => current.geometryBaseline[field] !== nextGeometryBaseline[field],
+  );
+  const categoryBaselineChanged = current.categoryBaselineId !== annotation.category_id;
+  const categoryChanged = current.categoryId !== nextCategoryId;
+  const nextGeometryError = draftChanged ? null : current.geometryError;
+
+  if (
+    !baselineChanged &&
+    !categoryBaselineChanged &&
+    !draftChanged &&
+    !categoryChanged &&
+    nextGeometryError === current.geometryError
+  ) {
+    return current;
+  }
+
+  return {
+    categoryBaselineId: annotation.category_id,
+    categoryId: nextCategoryId,
+    draft: nextDraft,
+    geometryBaseline: nextGeometryBaseline,
+    geometryError: nextGeometryError,
+  };
+}
 
 interface AnnotationListProps {
   annotations: readonly Annotation[];
@@ -60,9 +125,7 @@ function AnnotationRow({
   onToggleDrawTarget,
   selectedId,
 }: AnnotationRowProps) {
-  const [draft, setDraft] = useState(() => geometryDraft(annotation));
-  const [categoryId, setCategoryId] = useState(annotation.category_id);
-  const [geometryError, setGeometryError] = useState<string | null>(null);
+  const [form, setForm] = useState(() => initialAnnotationFormState(annotation));
   const invalidDescriptionId = useId();
   const invalid = invalidIds.has(annotation.id);
   const selected = selectedId === annotation.id;
@@ -70,9 +133,22 @@ function AnnotationRow({
   const category = categories.find((item) => item.id === annotation.category_id);
   const categoryOptions = categories.map((item) => ({ label: item.name, value: item.id }));
 
+  useEffect(() => {
+    setForm((current) => syncAnnotationFormState(current, annotation));
+  }, [
+    annotation.category_id,
+    annotation.height,
+    annotation.width,
+    annotation.x,
+    annotation.y,
+  ]);
+
   function setCoordinate(field: keyof GeometryDraft, value: string): void {
-    setDraft((current) => ({ ...current, [field]: value }));
-    setGeometryError(null);
+    setForm((current) => ({
+      ...current,
+      draft: { ...current.draft, [field]: value },
+      geometryError: null,
+    }));
   }
 
   return (
@@ -117,16 +193,17 @@ function AnnotationRow({
         disabled={disabled}
         label="Klasa"
         onChange={(event) => {
-          setCategoryId(event.target.value);
+          const categoryId = event.target.value;
+          setForm((current) => ({ ...current, categoryId }));
         }}
         options={categoryOptions}
-        value={categoryId}
+        value={form.categoryId}
       />
       <Button
-        disabled={disabled || categoryId === annotation.category_id}
+        disabled={disabled || form.categoryId === annotation.category_id}
         loading={busyKey === `category:${annotation.id}`}
         onClick={() => {
-          onCategoryChange(annotation, categoryId);
+          onCategoryChange(annotation, form.categoryId);
         }}
         size="sm"
         variant="secondary"
@@ -135,7 +212,7 @@ function AnnotationRow({
       </Button>
 
       <div className="df-review-annotations__geometry">
-        {(["x", "y", "width", "height"] as const).map((field) => (
+        {GEOMETRY_FIELDS.map((field) => (
           <TextField
             disabled={disabled}
             inputMode="numeric"
@@ -145,14 +222,14 @@ function AnnotationRow({
               setCoordinate(field, event.target.value);
             }}
             type="number"
-            value={draft[field]}
+            value={form.draft[field]}
             width="short"
           />
         ))}
       </div>
-      {geometryError === null ? null : (
+      {form.geometryError === null ? null : (
         <p className="df-review-annotations__invalid" role="alert">
-          {geometryError}
+          {form.geometryError}
         </p>
       )}
 
@@ -172,8 +249,8 @@ function AnnotationRow({
           disabled={disabled}
           loading={busyKey === `geometry:${annotation.id}`}
           onClick={() => {
-            const parsed = parseGeometryDraft(draft, frameSize);
-            setGeometryError(parsed.error);
+            const parsed = parseGeometryDraft(form.draft, frameSize);
+            setForm((current) => ({ ...current, geometryError: parsed.error }));
             if (parsed.bbox !== null) {
               onGeometryChange(annotation, parsed.bbox);
             }
