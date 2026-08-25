@@ -2248,3 +2248,68 @@ przebiegach, a empty w drugim utraciły cały brandowy ring już po przejściu
 guarda. Nie commitowano zmienionych PNG. Reguła zostaje zawężona do stabilnego
 selektora checkpointu wyliczonego bez mutacji węzła React; aktywny element i
 widoczność ringu nadal są weryfikowane po `beforeScreenshot`.
+
+## FE-001-F5-FIX4 — wynik i Gate 3 (2026-08-25)
+
+FIX4 zamyka oba findings niezależnego re-review bez zmiany produktu, copy,
+backendu, runtime vertical, `deterministicPng`, właścicielstwa leaf, durable
+locatora, COCO ani TK-009.
+
+### Zamknięte findings
+
+- **F1 — trwały focus evidence:** `assertKeyboardFocus` nie mutuje już węzła
+  React. Harness wylicza stabilny selektor checkpointu (ID, a gdy go nie ma —
+  deterministyczna ścieżka DOM) i przypina tokenowy outline osobnym arkuszem.
+  Po `beforeScreenshot` i bezpośrednio przed callbackiem `page.screenshot`
+  sprawdza ponownie `document.activeElement`, styl, szerokość i kolor outline.
+  Negatywna regresja celowo wykonuje `blur()` i potwierdza czytelny błąd oraz
+  `screenshotAttempted === false`.
+- **F2 — uczciwy alarm geometrii:** `syncAnnotationFormState` reparsuje wynikowy
+  `nextDraft` względem `frameSize`, gdy alarm istnieje. Alarm znika wyłącznie po
+  walidacji całego widocznego draftu. Nowa regresja utrzymuje dirty `width=""`,
+  synchronizuje czyste `y=222`, zachowuje komunikat o niedodatnim rozmiarze i
+  potwierdza zero PATCH.
+
+### Bramki frontendowe i runtime
+
+| Bramka | Wynik |
+| --- | --- |
+| Targeted annotations | **4/4 pliki, 38/38 testów**; `annotationTerminalRefresh` **6/6** |
+| Targeted visual po finalnej poprawce | **2/2**; pozytywne 8 PNG + negatywny guard |
+| Frontend full Vitest | **33/33 pliki, 438/438 testów** |
+| Architecture | **92/92** |
+| TypeScript | `tsc --noEmit`, 0 błędów |
+| Build | **295 modułów**; exports 8.37 kB / gzip 3.12 kB; main 497.56 kB / gzip 152.58 kB |
+| Audit | `npm audit --audit-level=low`: **0 vulnerabilities** |
+| Plain combined E2E #1 | **3/3**, 37.3 s; real vertical + visual + negatywny focus guard; status `<clean>` |
+| Plain combined E2E #2 | **3/3**, 38.3 s; bez resetu; status `<clean>` |
+| Plain combined E2E #3 | **3/3**, 39.4 s; bez resetu; status `<clean>` |
+| Backend full pytest | odziedziczone **290/290** z FIX1; `git diff --stat 9362869..HEAD -- backend/app` pusty |
+
+Każdy z trzech kolejnych plain runs zapisał dokładnie te same osiem SHA-256:
+
+| PNG | Run 1 | Run 2 | Run 3 |
+| --- | --- | --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+| `git status --short` | `<clean>` | `<clean>` | `<clean>` |
+
+### Inspekcja, odchylenia i ryzyka
+
+Wizualnie obejrzano wszystkie osiem finalnych PNG. Checkpointy pięciu tras i
+loading/empty mają pełny brandowy ring, error ma ring akcji retry, nie ma ucięć,
+nakładania ani fałszywego stanu. `exports-1440.png` nadal pokazuje ukończony
+manifest, `exports/export-1`, provenance OCR/manual i niezmienną migawkę.
+Screenshoty mają dokładnie hashe HEAD FIX3; nie zacommitowano nowych PNG.
+
+Nie ma odchylenia produktowego ani nowej zależności. Jedyna odrzucona próba
+(`:focus`) jest zapisana powyżej wraz z dowodem driftu i nie weszła do finalnego
+rozwiązania. `git diff --check 178bd68..HEAD` jest pusty. Commity FIX4 przed
+finalnym wpisem: `48cc92a` (ticket/status), `4c6abbd` (Design Plan) i `74a718b`
+(implementacja + regresje). Bez push i merge.
