@@ -192,9 +192,7 @@ class ProfileRepository:
         categories = tuple(
             CategoryDraft(item.id, item.name, item.kind, item.ordinal)
             for item in session.scalars(
-                select(Category)
-                .where(Category.profile_id == profile.id)
-                .order_by(Category.ordinal)
+                select(Category).where(Category.profile_id == profile.id).order_by(Category.ordinal)
             )
         )
         return ProfileRecord(
