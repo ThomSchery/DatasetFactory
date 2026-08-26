@@ -541,3 +541,92 @@ zmienia kontrolera restartu ani kodu produkcyjnego.
 5. Po testach celowanych: trzy kolejne plain `npm run e2e` bez retry i edycji,
    osiem niezmienionych hashy oraz czysty status po kazdym; na koniec jeden
    pelny, nieprzerwany `scripts/check.ps1`.
+
+## TK-006-T2-FIX1 - wykonanie i dowody
+
+### Domkniete szczeliny zimnego review
+
+- Wyścig cache dashboardu został usunięty bez retry i bez wydłużenia timeoutu.
+  Oba scenariusze czekają na zakończenie początkowego `GET /dashboard`, zapisują
+  ID z `POST /runs`, a przed kliknięciem `Uruchom` wymagają invalidacyjnego
+  `GET /dashboard` z dokładnie tym ID i statusem `queued`. Dzięki temu starsza,
+  późno zakończona odpowiedź nie może zostać uznana za stan nowego runu.
+- Fixture 1,000 s jest próbkowany co 500 ms i daje dokładnie dwie klatki. Marker
+  zatrzymuje jedyny stub OCR dopiero dla `frame_index=1`, gdy klatka 0 ma już
+  trwały status `review_pending`, jedną obserwację, jedną anotację OCR oraz trzy
+  ukończone checkpointy (`crop`, `ocr`, `sample`) z `attempt=1`.
+- Przed prawdziwym `SIGKILL` test zapisuje snapshot API oraz read-only snapshot
+  SQLite klatki 0. Po wznowieniu wymaga niezmienionych ID, wersji, statusu,
+  observation/sample ID, annotation/observation ID i pełnych rekordów
+  checkpointów pierwszej klatki. Dokładne liczby końcowe to: 2 klatki, 2
+  obserwacje, 2 anotacje OCR i 6 ukończonych checkpointów; każda klatka ma po
+  jednej obserwacji, jednej anotacji i trzech checkpointach. Nie ma ponownego
+  przetworzenia ukończonej klatki 0.
+- `ControllableE2eWorkspace` i prywatne przepinanie composition zostały usunięte.
+  `503 dependency_unavailable` powstaje przez realny ACL Windows na prawdziwym
+  workspace: deny `DELETE_CHILD` na katalogu i dziedziczony deny `DELETE` dla
+  nowych plików bieżącej tożsamości. Produkcyjny `Workspace.check_writable()`
+  tworzy plik przez `mkstemp`, lecz jego realny `unlink` kończy się odmową.
+  `finally` usuwa deny ACL, sprząta `.df-write-*`, anuluje runy i wymaga ponownie
+  zielonego health. Próby z szerszym deny `W` i `WD` zostały odrzucone, ponieważ
+  blokowały również SQLite i prowadziły do zawieszenia health; nie weszły do
+  finalnego scenariusza.
+- Realistyczne `404 source_missing` i `409 active_run` pozostały bez zmiany
+  semantyki: każdy przypadek nadal asertuje kod backendu oraz polskie copy UI.
+
+### Weryfikacja celowana i potrójny plain E2E po FIX1
+
+- Scenariusz workspace z realnym ACL: `1/1` w 20,5 s.
+- Scenariusz restart/resume z dwiema klatkami: `1/1` w 28,4 s.
+- Oba scenariusze razem po finalnej barierze dashboardu: `2/2` w 34,9 s.
+- Ruff format/check dla `backend/tests/e2e_server.py`, typecheck i
+  `git diff --check` były zielone przed przebiegami pełnymi.
+
+Trzy kolejne plain `npm run e2e`, bez resetu, retry, edycji i czyszczenia bazy
+między przebiegami:
+
+| Przebieg | Wynik | Czas Playwright | Status po przebiegu |
+| --- | --- | --- | --- |
+| 1 | 4/4 | 55,1 s | czysty |
+| 2 | 4/4 | 54,1 s | czysty |
+| 3 | 4/4 | 51,9 s | czysty |
+
+Po każdym przebiegu osiem PNG było bitowo identyczne; po pełnej bramce hashe
+ponownie wynosiły:
+
+| PNG | SHA-256 |
+| --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+### Pełna bramka po FIX1
+
+Jeden nieprzerwany, niezmieniony `scripts/check.ps1` zakończył się `PASS 9/9`:
+
+| Bramka | Dowód |
+| --- | --- |
+| Ruff format | 229 plików; 0,4 s |
+| Ruff lint | 0 błędów; 0,2 s |
+| mypy | 96 plików, 0 problemów; 5,3 s |
+| pytest | 293/293 w 29:42; bramka 1789,8 s |
+| frontend typecheck | 0 błędów; 1,1 s |
+| Vitest | 33/33 pliki, 439/439 testów; bramka 30,7 s |
+| build | 295 modułów; bramka 2,8 s |
+| Playwright | 4/4 w 47,2 s; bramka 48,6 s |
+| E2E root safety | 2/2; bramka 0,7 s |
+
+Nie zmieniono kodu produkcyjnego, zależności, `check.ps1`, `dev.ps1`,
+normalizera PNG ani screenshotów. Wbudowany `node:sqlite` emituje na obecnym
+Node ostrzeżenie `ExperimentalWarning`; użycie jest tylko read-only w E2E i nie
+wymaga nowej zależności. Chwilowe `ECONNREFUSED` proxy podczas twardego restartu
+jest oczekiwanym śladem realnej niedostępności pomiędzy zabiciem starego i
+health nowego procesu, a nie retry maskującym zachowanie produktu.
+
+Commity FIX1: `2b18b85` (ustalenia review), `e893d4c` (addendum planu przed
+kodem) i `0b0c5ce` (implementacja). Bez push i merge.

@@ -1,6 +1,6 @@
 # TK-006-T2-FIX1 — realny dowód braku duplikatów i szczelny scenariusz negatywny
 
-Status: GOTOWY
+Status: WYKONANY
 
 ## Powód
 
