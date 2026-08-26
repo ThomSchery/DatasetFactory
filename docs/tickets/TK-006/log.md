@@ -506,3 +506,36 @@ health i jest to diagnostyka faktycznego kill/restart, nie ukryty retry.
 
 Commity wykonawcze: `06a9b99` (`test(e2e): cover restart resume and negative
 paths`) oraz `0b778ad` (`style(e2e): satisfy backend lint`). Bez push i merge.
+
+## TK-006-T2-FIX1 - addendum planu przed zmiana
+
+Cold review potwierdzil mechanizm restartu i otworzyl trzy szczeliny. FIX1 nie
+zmienia kontrolera restartu ani kodu produkcyjnego.
+
+1. Wyścig dashboardu zostanie usuniety przez jawna bariere odpowiedzi HTTP:
+   test poczeka na poczatkowy `GET /dashboard` po wejściu na Materials przed
+   `POST /runs`, przechwyci ID z odpowiedzi create i poczeka na wynik
+   invalidacyjnego `GET /dashboard`, ktory zawiera dokladnie to ID. Dopiero
+   wtedy użyje `Uruchom`. Nie bedzie retry ani wydluzenia timeoutu.
+2. Vertical flow ustawi interwal 500 ms, wiec jedn-sekundowy fixture da dwie
+   klatki. Marker `hold-ocr` bedzie zawieral docelowy `frame_index`; jedyny stub
+   OCR odczyta indeks z realnego `crop_relpath`, zasygnalizuje wejscie i zatrzyma
+   sie tylko dla klatki 1. Wtedy klatka 0 ma juz trwale `review_pending`, trzy
+   completed checkpointy, jedna obserwacje i jedna anotacje.
+3. Przed `SIGKILL` test zapisze snapshot API klatki 0 oraz read-only snapshot
+   prawdziwej SQLite przez wbudowane `node:sqlite`: ID/wersje/statusy obu klatek,
+   ID obserwacji i anotacji oraz pelne rekordy checkpointow klatki 0. Po resume
+   porowna je bitowo dla klatki 0 i sprawdzi dokladnie: dwa unikalne indeksy i
+   ID klatek, po jednej obserwacji i anotacji OCR na klatke, trzy completed
+   checkpointy na klatke oraz brak wzrostu attempt checkpointow pierwszej.
+4. `ControllableE2eWorkspace` i prywatne przepiecie composition zostana usuniete.
+   Scenariusz negatywny nalozy na prawdziwy runtime workspace odwracalny, jawny
+   deny ACL `W` dla biezacej tozsamosci Windows przez `icacls`. Lokalna proba na
+   jednorazowym katalogu potwierdzila bez administratora, ze tworzenie pliku
+   konczy sie `UnauthorizedAccessException`; usuniecie deny przywraca zapis.
+   Health wykona niezmienione produkcyjne `Workspace.check_writable()` i jego
+   realny `tempfile.mkstemp`. ACL jest usuwany w `finally`, a health po cleanupie
+   musi znow byc zielony.
+5. Po testach celowanych: trzy kolejne plain `npm run e2e` bez retry i edycji,
+   osiem niezmienionych hashy oraz czysty status po kazdym; na koniec jeden
+   pelny, nieprzerwany `scripts/check.ps1`.
