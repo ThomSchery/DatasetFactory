@@ -332,3 +332,87 @@ przebiegow (dwa wykonawcy, dwa zimnego review i jeden po FIX1):
 Po przebiegu `git status --short` byl pusty, a `git diff --check
 62fd954..HEAD` nie zglosil bledow. `TK-006-T1.md` i FIX2 maja status
 `WYKONANY`; bez push i merge.
+
+---
+
+# TK-006-T2 - restart, resume i pelna sciezka review w E2E
+
+## Zakres i plan wykonania
+
+1. Testowy launcher backendu zachowa jeden proces nadrzedny Node i udostepni
+   wylacznie na loopback kontrolowany restart potomnego procesu Python. Restart
+   twardo konczy stary PID, uruchamia nowy PID z tym samym
+   `DATASETFACTORY_E2E_ROOT`, baza SQLite i workspace, a odpowiedz wraca dopiero
+   po ponownej gotowosci realnego `/api/v1/health`.
+2. `DeterministicE2eOcrEngine` dostanie testowy punkt synchronizacji oparty na
+   markerach wewnatrz launcher-owned runtime leaf. Pozwala on zatrzymac worker
+   w trakcie realnego etapu OCR, zanim test zabije backend, bez zmiany workflow,
+   persistence ani kodu produkcyjnego. Osobny marker statusu wymusi negatywny
+   odczyt `workspace.available=false`, nadal przez prawdziwy composition root.
+3. `vertical-flow.spec.ts` wykona restart w OCR, potwierdzi zmiane PID i status
+   `paused`, wznowi run z UI, a nastepnie wykona geometry update, delete, manual
+   bbox przez gest rysowania, reject, filtr odrzuconych, reopen, accept, eksport
+   i CAS complete. API oraz artefakty posluza do asercji dokladnie jednej klatki,
+   jednej propozycji OCR po resume, jednego aktywnego manualnego bbox po review
+   i jednego katalogu eksportu.
+4. Nowy spec negatywny sprawdzi: `404 source_missing` przy imporcie wraz z copy i
+   kodem w UI; `409 active_run` na probie uruchomienia widocznego queued runu,
+   gdy drugi worker rzeczywiscie trzyma globalny slot, wraz z copy; oraz
+   `503 dependency_unavailable` z `workspace.available=false` wraz z copy
+   `Katalog roboczy / Niedostepny` na dashboardzie. Markery i oba runy zostana
+   posprzatane w `finally`, a runtime leaf pozostaje pod istniejacym bezpiecznym
+   cleanupem F5.
+5. Weryfikacja: testy celowane, trzy kolejne plain `npm run e2e` bez resetu z
+   hashami osmiu PNG i czystym statusem, a na koniec jeden pelny
+   `scripts/check.ps1` bez zmian jego tresci.
+
+## TK-006-T2 - Design Plan (test-only)
+
+Plan zapisany przed zmiana `frontend/` zgodnie z `frontend/src/AGENTS.md` oraz
+`new-component.md`. Przeczytano caly `tokens.css`, katalog i definicje
+komponentow common oraz cale moduly: Siatka i Odstepy, Stylizacja Elementow i
+Typografia z wytycznych UI/UX. Nie powstaje nowy komponent, copy, DOM, CSS ani
+token; E2E steruje i asertuje istniejacy interfejs.
+
+### Wszystkie elementy UI objete scenariuszami
+
+1. Profil: `TextField` „Nazwa profilu” i „Sciezka obrazu referencyjnego”,
+   `Button` „Wczytaj podglad”/„Utworz profil”, `RegionOverlay` regionow HUD oraz
+   przycisk klasy „7”.
+2. Material i run: `MaterialImportForm`, `TextField` sciezki, `InlineError` i
+   jawny kod bledu, `SelectField` materialu/profilu/interwalu, przyciski
+   „Zaimportuj material”/„Utworz run” oraz wspolny `RunPanel` z „Uruchom” i
+   „Wznow”.
+3. Review: `SelectField` „Status weryfikacji”, `FrameList`, `Panel` „Obraz i
+   bbox”, `RegionOverlay` bbox, lista „Aktywne anotacje”, pola geometrii,
+   `Button` „Zapisz geometrie”, „Usun”, manualny gest rysowania bbox,
+   „Odrzuc klatke”, „Otworz ponownie” i „Zaakceptuj klatke”, wraz z badge liczby
+   aktywnych anotacji.
+4. Eksport: link nawigacyjny „Eksporty”, przycisk „Uruchom eksport COCO”, panel
+   „Wynik eksportu COCO”, panel pochodzenia anotacji oraz „Zamknij run”.
+5. Scenariusze bledow: `InlineError` importu `source_missing` wraz z akapitem
+   kodu, `InlineError` mutacji `active_run` w `RunPanel`, a takze
+   `SystemStatusPanel`, status systemu i wiersz „Katalog roboczy” z errorowym
+   `StatusBadge` „Niedostepny”.
+
+### Moduly i ID wytycznych
+
+| Obszar | Zastosowanie w dowodzie E2E |
+| --- | --- |
+| Architektura frontend | FE-03: realny server state, polling i invalidacje; FE-04: `runId` oraz `export_id` w URL; FE-05: backendowa walidacja pozostaje autorytatywna; FE-06: loading/disabled/inline error i potwierdzony stan po mutacji; FE-08: selektory po rolach/labelach oraz klawiaturowo dostepne operacje; FE-10 wariant C: krytyczna sciezka Playwright przez prawdziwy backend. |
+| Komponenty | `new-component.md` sekcje 4-5: wylacznie istniejace `Button`, `UiStates.InlineError`, `NavItem`, `StatusBadge`, `Panel`, `Notice`, `TextField`, `SelectField`, `DataList`, `RegionOverlay`; brak nowego common component. |
+| Layout/Siatka | GRID-00..14 i SPACING-01..13: bez zmian DOM/CSS/layoutu; test korzysta z istniejacych hit area, grup formularzy, paneli i powierzchni obrazu. |
+| Kolor i status | COLOR-01..10 oraz OPACITY-01/02: bez zmian palety; asercje znaczenia uzywaja tekstu, roli i kodu, a nie samego koloru. `source_missing`, `active_run` i niedostepny workspace pozostaja semantycznymi stanami error. |
+| Obramowania i overlay | BORDER-01..03, BORDER-05..09, BWIDTH-01..14, RADIUS-01..05 i OVERLAY-01..07: bez zmian wizualnych; test uzywa istniejacego `RegionOverlay` i kontrolek common. |
+| Cienie | SHADOW-01..05: bez zmian; test nie dodaje ani nie asertuje dekoracyjnej glebi. |
+| Typografia | TYPO-01..21, FONTSIZE-01..11, LHEIGHT-01..14, LSPACE-01..09, PARASPACE-01..06 i CASING-01..03: bez nowego copy i bez zmian renderowania; asercje odwolują sie do istniejacego polskiego sentence case oraz jawnych kodow technicznych. |
+
+### Checklista `new-component.md` sekcja 2.2
+
+- [x] **Layout/Siatka:** bez zmian; E2E nie wprowadza wartosci ani styli.
+- [x] **Typografia:** bez zmian; selektory uzywaja istniejacych nazw dostepnosci i copy.
+- [x] **Kolory:** bez zmian; znaczenie stanow jest asertowane tekstem/rola/kodem.
+- [x] **Obramowania:** bez zmian.
+- [x] **Cienie:** bez zmian.
+- [x] **Interakcje:** prawdziwe klikniecia, formularze, drag `RegionOverlay`, filtry i lifecycle; stany bledow sa odpowiedziami realnego API.
+- [x] **Komponenty:** tylko istniejace komponenty z katalogu sekcji 4-5; brak nowego UI.
