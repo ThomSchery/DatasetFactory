@@ -15,7 +15,6 @@ from backend.app.config import Settings
 from backend.app.engines.definition import BBox, OcrCandidate, OcrProvenance
 from backend.app.main import create_app
 
-
 CONTROL_DIRECTORY = "control"
 OCR_ENTERED_MARKER = "ocr-entered"
 OCR_HOLD_MARKER = "hold-ocr"
@@ -120,7 +119,7 @@ def main() -> None:
         settings,
         ocr_engine=DeterministicE2eOcrEngine(control_root),
     )
-    composition.system_status._workspace = ControllableE2eWorkspace(  # noqa: SLF001
+    composition.system_status._workspace = ControllableE2eWorkspace(
         composition.workspace,
         control_root,
     )
