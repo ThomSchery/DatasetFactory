@@ -1,6 +1,6 @@
 # TK-006-T1-FIX2 — odróżnić brak startu procesu od natywnego zera
 
-Status: W TOKU
+Status: WYKONANY
 
 ## Powód
 

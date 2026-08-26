@@ -252,7 +252,7 @@ konfiguracji bramek.
 
 ### Plan
 
-`Assert-Executable` ustawi `$LASTEXITCODE = $null` bezposrednio przed
+`Assert-Executable` ustawi `$global:LASTEXITCODE = $null` bezposrednio przed
 wywolaniem. Uruchomiony proces natywny nadpisuje sentinel liczbowym kodem
 wyjscia. Jezeli operator `&` nie uruchomi procesu natywnego, sentinel pozostaje
 `$null` i walidator zwraca osobny blad z instrukcja instalacji. Dopiero liczbowy
@@ -276,3 +276,59 @@ stderr moze ustawic na falsz mimo poprawnego kodu natywnego procesu.
   pochodzi z biezacego wywolania.
 
 Zmiana zachowania `check.ps1` i `dev.ps1` nie jest potrzebna.
+
+### Dowody FIX2
+
+Pierwsza proba z sentinelem lokalnym wykryla istotna wlasciwosc PowerShella:
+lokalne przypisanie zaslanialo wartosc aktualizowana przez proces natywny i
+odrzucalo takze poprawny `.cmd`. Finalny mechanizm uzywa jawnego zakresu
+`$global:LASTEXITCODE`; proces natywny nadpisuje tam sentinel, a plik, ktory nie
+uruchamia procesu, pozostawia `$null`. Parser Windows PowerShell 5.1 nie zglosil
+bledow.
+
+Siedem wymaganych przypadkow:
+
+| Przypadek | Faktyczny wynik |
+| --- | --- |
+| `.txt` jako `DF_FFMPEG_PATH`, poprzedni natywny exit 0 | rzeczywisty `bootstrap.ps1` end-to-end: exit 1, osobny blad braku startu i instrukcja `D:\tools\ffmpeg`; brak falszywego `OK` i brak wejscia w `uv sync` |
+| plik bez rozszerzenia, poprzedni exit 0 | odrzucony przez dokladna funkcje z AST produkcyjnego skryptu, z instrukcja |
+| no-op `.ps1`, poprzedni exit 0 | odrzucony, z instrukcja |
+| uszkodzony `.exe`, poprzedni exit 0 | odrzucony, z instrukcja |
+| kontrolowany proces stderr, exit 0 po zasianym exit 23 | zaakceptowany; `$ErrorActionPreference` przywrocone do `Stop` |
+| kontrolowany proces stderr, exit 23 | odrzucony z kodem 23 i instrukcja |
+| pozytywny bootstrap na tym hoscie | exit 0 w 15,7 s; FFmpeg, ffprobe i Tesseract wykryte; oba SHA-256 zgodne; 63 pakiety Python i 128 npm; Playwright w lokalnym cache |
+
+Wszystkie kontrolowane pliki zostaly usuniete, a `.env` przywrocono przed
+pozytywnym bootstrapem i pelna bramka.
+
+Pelny, nieprzerwany `check.ps1` zakonczyl sie `PASS 9/9` w 1888,5 s:
+
+| Bramka | Dowod |
+| --- | --- |
+| Ruff format | 228 plikow, 0 wymagajacych formatowania |
+| Ruff lint | 0 bledow |
+| mypy | 96 plikow, 0 problemow |
+| pytest | 293/293 w 29:51; bramka 1798,9 s |
+| frontend typecheck | 0 bledow |
+| Vitest | 33/33 pliki, 439/439 testow w 29,30 s |
+| build | 295 modulow; main 497,65 kB/gzip 152,63; exports 8,37 kB/gzip 3,12 |
+| Playwright | 3/3 w 48,6 s |
+| E2E root safety | 2/2 |
+
+Osiem PNG mialo te same SHA-256 co wszystkie piec wczesniejszych pelnych
+przebiegow (dwa wykonawcy, dwa zimnego review i jeden po FIX1):
+
+| PNG | SHA-256 |
+| --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+Po przebiegu `git status --short` byl pusty, a `git diff --check
+62fd954..HEAD` nie zglosil bledow. `TK-006-T1.md` i FIX2 maja status
+`WYKONANY`; bez push i merge.
