@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -14,6 +15,7 @@ const backendControlBase = "http://127.0.0.1:8001";
 
 interface AnnotationSnapshot {
   id: string;
+  observation_id: string | null;
   source: "manual" | "ocr";
   status: string;
   version: number;
@@ -22,15 +24,45 @@ interface AnnotationSnapshot {
 
 interface FrameSnapshot {
   annotations: AnnotationSnapshot[];
+  frame_index: number;
   id: string;
   review_status: "accepted" | "pending" | "rejected";
+  stage_status: string;
+  version: number;
 }
 
 interface RunSnapshot {
   completed_frames: number;
+  current_frame_index: number | null;
+  current_stage: string | null;
+  id: string;
   status: string;
   total_frames: number;
   version: number;
+}
+
+interface FrameSummarySnapshot {
+  frame_index: number;
+  id: string;
+  review_status: string;
+  stage_status: string;
+  version: number;
+}
+
+interface DurableCheckpointSnapshot {
+  artifact_hash: string;
+  artifact_relpath: string;
+  attempt: number;
+  frame_index: number;
+  stage: string;
+  status: string;
+}
+
+interface DurableFrameSnapshot {
+  annotations: { frame_index: number; id: string; observation_id: string | null }[];
+  checkpoints: DurableCheckpointSnapshot[];
+  frames: FrameSummarySnapshot[];
+  observations: { frame_index: number; id: string; sample_id: string }[];
 }
 
 async function apiJson<T>(request: APIRequestContext, pathname: string): Promise<T> {
@@ -50,6 +82,59 @@ async function waitForRunStatus(
     })
     .toBe(status);
   return apiJson<RunSnapshot>(request, `/runs/${runId}`);
+}
+
+function isDashboardGet(response: { request(): { method(): string }; url(): string }): boolean {
+  return (
+    response.request().method() === "GET" &&
+    new URL(response.url()).pathname === "/api/v1/dashboard"
+  );
+}
+
+function durableFrameSnapshot(runtimeRoot: string, runId: string): DurableFrameSnapshot {
+  const database = new DatabaseSync(path.join(runtimeRoot, "workspace", "project.db"), {
+    readOnly: true,
+  });
+  try {
+    const frames = database
+      .prepare(
+        `SELECT id, frame_index, stage_status, review_status, version
+           FROM frames
+          WHERE run_id = ?
+          ORDER BY frame_index`,
+      )
+      .all(runId) as unknown as FrameSummarySnapshot[];
+    const observations = database
+      .prepare(
+        `SELECT f.frame_index, o.id, o.sample_id
+           FROM ocr_observations AS o
+           JOIN region_samples AS s ON s.id = o.sample_id
+           JOIN frames AS f ON f.id = s.frame_id
+          WHERE f.run_id = ?
+          ORDER BY f.frame_index, o.id`,
+      )
+      .all(runId) as unknown as DurableFrameSnapshot["observations"];
+    const annotations = database
+      .prepare(
+        `SELECT f.frame_index, a.id, a.observation_id
+           FROM annotations AS a
+           JOIN frames AS f ON f.id = a.frame_id
+          WHERE f.run_id = ? AND a.source = 'ocr'
+          ORDER BY f.frame_index, a.id`,
+      )
+      .all(runId) as unknown as DurableFrameSnapshot["annotations"];
+    const checkpoints = database
+      .prepare(
+        `SELECT frame_index, stage, attempt, status, artifact_relpath, artifact_hash
+           FROM stage_checkpoints
+          WHERE run_id = ?
+          ORDER BY frame_index, stage`,
+      )
+      .all(runId) as unknown as DurableCheckpointSnapshot[];
+    return { annotations, checkpoints, frames, observations };
+  } finally {
+    database.close();
+  }
 }
 
 function configuredRuntimeRoot(): string {
@@ -109,8 +194,10 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await profileSurface.dispatchEvent("pointerup", { ...profileTo, pointerId: 1 });
   await expect(profileSurface.getByRole("option", { name: /Region 1/ })).toBeVisible();
   await page.getByRole("button", { name: "7", exact: true }).click();
+  const initialDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.getByRole("button", { name: "Utwórz profil" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
+  expect((await initialDashboardResponse).ok()).toBe(true);
 
   await page.getByLabel("Ścieżka pliku wideo").fill(fixtureVideo);
   await page.getByRole("button", { name: "Zaimportuj materiał" }).click();
@@ -118,16 +205,86 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect(materialSelect).toContainText("synthetic-hud.mkv");
   await materialSelect.selectOption({ index: 1 });
   await page.getByRole("combobox", { name: "Profil gry", exact: true }).selectOption({ index: 1 });
+  await page.getByLabel("Interwał próbkowania (ms)").fill("500");
+  const createRunResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/v1/runs",
+  );
+  const createdDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.getByRole("button", { name: "Utwórz run" }).click();
+  const createdRunResponse = await createRunResponse;
+  expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
+  const createdRun = (await createdRunResponse.json()) as RunSnapshot;
+  const dashboardAfterCreate = await createdDashboardResponse;
+  expect(dashboardAfterCreate.ok(), await dashboardAfterCreate.text()).toBe(true);
+  expect((await dashboardAfterCreate.json()) as { run: RunSnapshot | null }).toMatchObject({
+    run: { id: createdRun.id, status: "queued" },
+  });
   const startRun = page.getByRole("button", { name: "Uruchom" });
   await expect(startRun).toBeVisible();
 
-  fs.writeFileSync(holdOcr, "hold", "utf8");
+  const runId = createdRun.id;
+  fs.writeFileSync(holdOcr, "1", "utf8");
   let restart: { previous_pid: number; restarted_pid: number } | null = null;
+  let durableBeforeRestart: DurableFrameSnapshot | null = null;
+  let firstFrameBeforeRestart: FrameSnapshot | null = null;
   try {
     await startRun.click();
     await page.waitForURL(/\/annotations\/[^/?]+$/);
-    await expect.poll(() => fs.existsSync(ocrEntered), { timeout: 20_000 }).toBe(true);
+    expect(new URL(page.url()).pathname).toBe(`/annotations/${runId}`);
+    await expect
+      .poll(
+        () => (fs.existsSync(ocrEntered) ? fs.readFileSync(ocrEntered, "utf8").trim() : null),
+        { timeout: 20_000 },
+      )
+      .toBe("1");
+
+    const runBeforeRestart = await apiJson<RunSnapshot>(request, `/runs/${runId}`);
+    expect(runBeforeRestart).toMatchObject({
+      completed_frames: 1,
+      current_frame_index: 1,
+      current_stage: "ocr",
+      total_frames: 2,
+    });
+    durableBeforeRestart = durableFrameSnapshot(runtimeRoot, runId);
+    expect(durableBeforeRestart.frames).toHaveLength(2);
+    expect(durableBeforeRestart.frames.map((frame) => frame.frame_index)).toEqual([0, 1]);
+    expect(durableBeforeRestart.frames[0]).toMatchObject({
+      frame_index: 0,
+      review_status: "pending",
+      stage_status: "review_pending",
+    });
+    expect(durableBeforeRestart.frames[1]).toMatchObject({
+      frame_index: 1,
+      review_status: "pending",
+      stage_status: "cropped",
+    });
+    expect(durableBeforeRestart.observations).toHaveLength(1);
+    expect(durableBeforeRestart.observations[0]?.frame_index).toBe(0);
+    expect(durableBeforeRestart.annotations).toHaveLength(1);
+    expect(durableBeforeRestart.annotations[0]?.frame_index).toBe(0);
+    expect(durableBeforeRestart.checkpoints.filter((item) => item.frame_index === 0)).toHaveLength(
+      3,
+    );
+    expect(
+      durableBeforeRestart.checkpoints
+        .filter((item) => item.frame_index === 0)
+        .map((item) => `${item.stage}:${item.status}:${String(item.attempt)}`),
+    ).toEqual(["crop:completed:1", "ocr:completed:1", "sample:completed:1"]);
+    const firstFrameId = durableBeforeRestart.frames[0]?.id;
+    expect(firstFrameId).toBeTruthy();
+    if (firstFrameId === undefined) {
+      throw new Error("First durable frame id missing before restart");
+    }
+    firstFrameBeforeRestart = await apiJson<FrameSnapshot>(request, `/frames/${firstFrameId}`);
+    expect(firstFrameBeforeRestart.annotations).toHaveLength(1);
+    expect(firstFrameBeforeRestart.annotations[0]).toMatchObject({
+      id: durableBeforeRestart.annotations[0]?.id,
+      observation_id: durableBeforeRestart.observations[0]?.id,
+      source: "ocr",
+      status: "proposed",
+    });
 
     const response = await request.post(`${backendControlBase}/restart`);
     expect(response.ok(), await response.text()).toBe(true);
@@ -140,12 +297,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   expect(restart?.previous_pid).toBeGreaterThan(0);
   expect(restart?.restarted_pid).toBeGreaterThan(0);
   expect(restart?.restarted_pid).not.toBe(restart?.previous_pid);
-
-  const runId = new URL(page.url()).pathname.split("/").at(-1);
-  expect(runId).toBeTruthy();
-  if (runId === undefined) {
-    throw new Error("Run id missing after start navigation");
-  }
+  expect(durableBeforeRestart).not.toBeNull();
+  expect(firstFrameBeforeRestart).not.toBeNull();
   const paused = await waitForRunStatus(request, runId, "paused");
 
   await page.goto("/");
@@ -153,24 +306,64 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect(resumeRun).toBeVisible();
   await resumeRun.click();
   const resumed = await waitForRunStatus(request, runId, "review_ready");
-  expect(resumed.total_frames).toBe(1);
-  expect(resumed.completed_frames).toBe(1);
+  expect(resumed.total_frames).toBe(2);
+  expect(resumed.completed_frames).toBe(2);
   expect(resumed.version).toBeGreaterThan(paused.version);
 
   const framesAfterResume = await apiJson<{
-    items: { id: string }[];
+    items: FrameSummarySnapshot[];
     total: number;
   }>(request, `/runs/${runId}/frames?page=1&page_size=100`);
-  expect(framesAfterResume.total).toBe(1);
-  expect(framesAfterResume.items).toHaveLength(1);
+  expect(framesAfterResume.total).toBe(2);
+  expect(framesAfterResume.items).toHaveLength(2);
+  expect(framesAfterResume.items.map((frame) => frame.frame_index)).toEqual([0, 1]);
   const frameId = framesAfterResume.items[0]?.id;
+  const secondFrameId = framesAfterResume.items[1]?.id;
   expect(frameId).toBeTruthy();
-  if (frameId === undefined) {
-    throw new Error("Frame id missing after resume");
+  expect(secondFrameId).toBeTruthy();
+  if (frameId === undefined || secondFrameId === undefined) {
+    throw new Error("Durable frame ids missing after resume");
   }
+  expect(frameId).toBe(firstFrameBeforeRestart?.id);
   const frameAfterResume = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
-  expect(frameAfterResume.annotations).toHaveLength(1);
-  expect(frameAfterResume.annotations[0]).toMatchObject({ source: "ocr", status: "proposed" });
+  expect(frameAfterResume).toEqual(firstFrameBeforeRestart);
+  const secondFrameAfterResume = await apiJson<FrameSnapshot>(request, `/frames/${secondFrameId}`);
+  for (const frame of [frameAfterResume, secondFrameAfterResume]) {
+    expect(frame.stage_status).toBe("review_pending");
+    expect(frame.annotations).toHaveLength(1);
+    expect(frame.annotations[0]).toMatchObject({ source: "ocr", status: "proposed" });
+  }
+
+  const durableAfterResume = durableFrameSnapshot(runtimeRoot, runId);
+  expect(durableAfterResume.frames).toHaveLength(2);
+  expect(new Set(durableAfterResume.frames.map((frame) => frame.id)).size).toBe(2);
+  expect(durableAfterResume.frames.map((frame) => frame.frame_index)).toEqual([0, 1]);
+  expect(durableAfterResume.observations).toHaveLength(2);
+  expect(durableAfterResume.annotations).toHaveLength(2);
+  expect(durableAfterResume.checkpoints).toHaveLength(6);
+  for (const frameIndex of [0, 1]) {
+    expect(
+      durableAfterResume.observations.filter((item) => item.frame_index === frameIndex),
+    ).toHaveLength(1);
+    expect(
+      durableAfterResume.annotations.filter((item) => item.frame_index === frameIndex),
+    ).toHaveLength(1);
+    expect(
+      durableAfterResume.checkpoints.filter(
+        (item) => item.frame_index === frameIndex && item.status === "completed",
+      ),
+    ).toHaveLength(3);
+  }
+  expect(durableAfterResume.frames[0]).toEqual(durableBeforeRestart?.frames[0]);
+  expect(durableAfterResume.observations.filter((item) => item.frame_index === 0)).toEqual(
+    durableBeforeRestart?.observations,
+  );
+  expect(durableAfterResume.annotations.filter((item) => item.frame_index === 0)).toEqual(
+    durableBeforeRestart?.annotations,
+  );
+  expect(durableAfterResume.checkpoints.filter((item) => item.frame_index === 0)).toEqual(
+    durableBeforeRestart?.checkpoints.filter((item) => item.frame_index === 0),
+  );
   expect(fs.readdirSync(path.join(runtimeRoot, "workspace", "exports"))).toHaveLength(0);
 
   await page.goto(`/annotations/${runId}`);
@@ -243,6 +436,18 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("accepted");
 
+  const frameListPanel = page.getByRole("region", { name: "Klatki" });
+  const secondFrameRow = frameListPanel.getByRole("listitem").filter({ hasText: "Klatka 1" });
+  await expect(secondFrameRow).toBeVisible();
+  await secondFrameRow.getByRole("button").click();
+  await expect(page.getByRole("img", { name: `Klatka 1 runu ${runId}` })).toBeVisible();
+  await page.getByRole("button", { name: "Zaakceptuj klatkę" }).click();
+  await expect
+    .poll(
+      async () => (await apiJson<FrameSnapshot>(request, `/frames/${secondFrameId}`)).review_status,
+    )
+    .toBe("accepted");
+
   await page.getByRole("link", { name: /Eksporty/ }).click();
   await expect(page.getByRole("button", { name: "Uruchom eksport COCO" })).toBeVisible();
   await page.getByRole("button", { name: "Uruchom eksport COCO" }).click();
@@ -265,18 +470,22 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     status: string;
   }>(request, `/exports/${exportId}`);
   expect(exported.status).toBe("completed");
-  expect(exported.manifest.annotation_sources).toEqual({ manual: 1, ocr: 0 });
+  expect(exported.manifest.annotation_sources).toEqual({ manual: 1, ocr: 1 });
   expect(exported.output_relpath).toBe(`exports/${exportId}`);
 
   const finalFrames = await apiJson<{ total: number }>(
     request,
     `/runs/${runId}/frames?review_status=accepted&page=1&page_size=100`,
   );
-  expect(finalFrames.total).toBe(1);
+  expect(finalFrames.total).toBe(2);
   const finalFrame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
   expect(finalFrame.annotations).toHaveLength(2);
   expect(finalFrame.annotations.filter((annotation) => annotation.status !== "deleted")).toEqual([
     expect.objectContaining({ source: "manual" }),
+  ]);
+  const finalSecondFrame = await apiJson<FrameSnapshot>(request, `/frames/${secondFrameId}`);
+  expect(finalSecondFrame.annotations).toEqual([
+    expect.objectContaining({ source: "ocr", status: "accepted" }),
   ]);
   expect(
     fs

@@ -9,7 +9,6 @@ from pathlib import Path
 
 import uvicorn
 
-from backend.app.access.store.workspace import Workspace
 from backend.app.composition import build_composition
 from backend.app.config import Settings
 from backend.app.engines.definition import BBox, OcrCandidate, OcrProvenance
@@ -18,7 +17,6 @@ from backend.app.main import create_app
 CONTROL_DIRECTORY = "control"
 OCR_ENTERED_MARKER = "ocr-entered"
 OCR_HOLD_MARKER = "hold-ocr"
-WORKSPACE_UNAVAILABLE_MARKER = "workspace-unavailable"
 
 
 class DeterministicE2eOcrEngine:
@@ -48,29 +46,23 @@ class DeterministicE2eOcrEngine:
         crop_relpath: Path,
         allowed_chars: Collection[str],
     ) -> tuple[OcrCandidate, ...]:
-        del crop_relpath
         self._control_root.mkdir(parents=True, exist_ok=True)
-        (self._control_root / OCR_ENTERED_MARKER).write_text("entered", encoding="utf-8")
-        while (self._control_root / OCR_HOLD_MARKER).exists():
-            time.sleep(0.05)
+        frame_index = int(crop_relpath.parent.name)
+        hold_marker = self._control_root / OCR_HOLD_MARKER
+        if hold_marker.exists() and hold_marker.read_text(encoding="utf-8").strip() == str(
+            frame_index
+        ):
+            (self._control_root / OCR_ENTERED_MARKER).write_text(
+                str(frame_index),
+                encoding="utf-8",
+            )
+            while hold_marker.exists():
+                time.sleep(0.05)
         character = sorted(allowed_chars)[0]
         return (OcrCandidate(character, BBox(8, 8, 24, 32), 0.99, self._provenance),)
 
     def cancel_current(self) -> None:
         return None
-
-
-class ControllableE2eWorkspace(Workspace):
-    """Expose an on-disk negative health probe without changing production code."""
-
-    def __init__(self, delegate: Workspace, control_root: Path) -> None:
-        super().__init__(delegate.root, delegate.cache_dir)
-        self._control_root = control_root
-
-    def check_writable(self) -> bool:
-        if (self._control_root / WORKSPACE_UNAVAILABLE_MARKER).exists():
-            return False
-        return super().check_writable()
 
 
 def _runtime_root() -> Path:
@@ -118,10 +110,6 @@ def main() -> None:
     composition = build_composition(
         settings,
         ocr_engine=DeterministicE2eOcrEngine(control_root),
-    )
-    composition.system_status._workspace = ControllableE2eWorkspace(
-        composition.workspace,
-        control_root,
     )
     try:
         uvicorn.run(

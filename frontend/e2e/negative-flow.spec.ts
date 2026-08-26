@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,42 @@ async function apiJson<T>(request: APIRequestContext, pathname: string): Promise
   return response.json() as Promise<T>;
 }
 
+function isDashboardGet(response: { request(): { method(): string }; url(): string }): boolean {
+  return (
+    response.request().method() === "GET" &&
+    new URL(response.url()).pathname === "/api/v1/dashboard"
+  );
+}
+
+function currentWindowsIdentity(): string {
+  const result = spawnSync("whoami.exe", [], { encoding: "utf8" });
+  expect(result.status, result.stderr).toBe(0);
+  const identity = result.stdout.trim();
+  expect(identity).not.toBe("");
+  return identity;
+}
+
+function denyWorkspaceWrites(workspaceRoot: string, identity: string): void {
+  const result = spawnSync(
+    "icacls.exe",
+    [workspaceRoot, "/deny", `${identity}:(DC)`, `${identity}:(OI)(IO)(D)`],
+    { encoding: "utf8" },
+  );
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+}
+
+function restoreWorkspaceWrites(workspaceRoot: string, identity: string): void {
+  const result = spawnSync("icacls.exe", [workspaceRoot, "/remove:d", identity], {
+    encoding: "utf8",
+  });
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+  for (const entry of fs.readdirSync(workspaceRoot)) {
+    if (entry.startsWith(".df-write-")) {
+      fs.rmSync(path.join(workspaceRoot, entry), { force: true });
+    }
+  }
+}
+
 async function createProfile(page: Page): Promise<void> {
   await page.goto("/profiles/new");
   await page.getByLabel("Nazwa profilu").fill("Gra testowa E2E błędy");
@@ -42,8 +79,10 @@ async function createProfile(page: Page): Promise<void> {
   await surface.dispatchEvent("pointermove", { ...to, pointerId: 11 });
   await surface.dispatchEvent("pointerup", { ...to, pointerId: 11 });
   await page.getByRole("button", { name: "7", exact: true }).click();
+  const initialDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.getByRole("button", { name: "Utwórz profil" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
+  expect((await initialDashboardResponse).ok()).toBe(true);
 }
 
 async function cancelRunBestEffort(request: APIRequestContext, runId: string | null) {
@@ -76,16 +115,19 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
   const controlRoot = path.join(runtimeRoot, "control");
   const holdOcr = path.join(controlRoot, "hold-ocr");
   const ocrEntered = path.join(controlRoot, "ocr-entered");
-  const workspaceUnavailable = path.join(controlRoot, "workspace-unavailable");
+  const workspaceRoot = path.join(runtimeRoot, "workspace");
+  const windowsIdentity = currentWindowsIdentity();
   fs.mkdirSync(controlRoot, { recursive: true });
   fs.rmSync(holdOcr, { force: true });
   fs.rmSync(ocrEntered, { force: true });
-  fs.rmSync(workspaceUnavailable, { force: true });
 
   let queuedRunId: string | null = null;
   let slotOwnerRunId: string | null = null;
+  let workspaceWriteDenied = false;
   try {
+    const initialMaterialsDashboard = page.waitForResponse(isDashboardGet);
     await page.goto("/materials");
+    expect((await initialMaterialsDashboard).ok()).toBe(true);
     const missingSource = path.join(runtimeRoot, "missing-source.mkv");
     expect(fs.existsSync(missingSource)).toBe(false);
     await page.getByLabel("Ścieżka pliku wideo").fill(missingSource);
@@ -114,14 +156,24 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
     await page
       .getByRole("combobox", { name: "Profil gry", exact: true })
       .selectOption({ index: 1 });
+    const createRunResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/runs",
+    );
+    const createdDashboardResponse = page.waitForResponse(isDashboardGet);
     await page.getByRole("button", { name: "Utwórz run" }).click();
+    const createdRunResponse = await createRunResponse;
+    expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
+    const queuedRun = (await createdRunResponse.json()) as RunSnapshot;
+    queuedRunId = queuedRun.id;
+    const dashboardAfterCreate = await createdDashboardResponse;
+    expect(dashboardAfterCreate.ok(), await dashboardAfterCreate.text()).toBe(true);
+    expect((await dashboardAfterCreate.json()) as { run: RunSnapshot | null }).toMatchObject({
+      run: { id: queuedRunId, status: "queued" },
+    });
     const visibleStart = page.getByRole("button", { name: "Uruchom" });
     await expect(visibleStart).toBeVisible();
-
-    const dashboard = await apiJson<{ run: RunSnapshot | null }>(request, "/dashboard");
-    expect(dashboard.run).toMatchObject({ status: "queued" });
-    queuedRunId = dashboard.run?.id ?? null;
-    expect(queuedRunId).toBeTruthy();
 
     const profile = await apiJson<{ id: string }>(request, "/profiles/current");
     const materials = await apiJson<{ items: { id: string }[] }>(
@@ -140,7 +192,7 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
     const slotOwner = (await createSlotOwner.json()) as RunSnapshot;
     slotOwnerRunId = slotOwner.id;
 
-    fs.writeFileSync(holdOcr, "hold", "utf8");
+    fs.writeFileSync(holdOcr, "0", "utf8");
     const startSlotOwner = await request.post(`${apiBase}/runs/${slotOwner.id}/start`, {
       data: { expected_version: slotOwner.version },
     });
@@ -171,7 +223,8 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
       .toBe("cancelled");
     await cancelRunBestEffort(request, queuedRunId);
 
-    fs.writeFileSync(workspaceUnavailable, "unavailable", "utf8");
+    denyWorkspaceWrites(workspaceRoot, windowsIdentity);
+    workspaceWriteDenied = true;
     const healthResponse = await request.get(`${apiBase}/health`);
     expect(healthResponse.status()).toBe(503);
     expect(
@@ -197,7 +250,10 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
     await expect(workspaceRow).toContainText("unavailable");
   } finally {
     fs.rmSync(holdOcr, { force: true });
-    fs.rmSync(workspaceUnavailable, { force: true });
+    if (workspaceWriteDenied) {
+      restoreWorkspaceWrites(workspaceRoot, windowsIdentity);
+      workspaceWriteDenied = false;
+    }
     await cancelRunBestEffort(request, slotOwnerRunId);
     await cancelRunBestEffort(request, queuedRunId);
   }

@@ -530,12 +530,14 @@ zmienia kontrolera restartu ani kodu produkcyjnego.
    checkpointy na klatke oraz brak wzrostu attempt checkpointow pierwszej.
 4. `ControllableE2eWorkspace` i prywatne przepiecie composition zostana usuniete.
    Scenariusz negatywny nalozy na prawdziwy runtime workspace odwracalny, jawny
-   deny ACL `W` dla biezacej tozsamosci Windows przez `icacls`. Lokalna proba na
-   jednorazowym katalogu potwierdzila bez administratora, ze tworzenie pliku
-   konczy sie `UnauthorizedAccessException`; usuniecie deny przywraca zapis.
-   Health wykona niezmienione produkcyjne `Workspace.check_writable()` i jego
-   realny `tempfile.mkstemp`. ACL jest usuwany w `finally`, a health po cleanupie
-   musi znow byc zielony.
+   deny ACL `DELETE_CHILD` na katalogu oraz dziedziczony `DELETE` dla nowych
+   plikow biezacej tozsamosci Windows przez `icacls`. Lokalna proba na
+   jednorazowym katalogu potwierdzila bez administratora, ze utworzenie pliku
+   nadal dziala, a jego usuniecie konczy sie `UnauthorizedAccessException`.
+   Health wykona niezmienione produkcyjne `Workspace.check_writable()`: realny
+   `tempfile.mkstemp` przejdzie, a realny `unlink` zwroci blad. ACL jest usuwany
+   w `finally`, pozostawiony `.df-write-*` jest usuwany po przywroceniu prawa,
+   a health po cleanupie musi znow byc zielony.
 5. Po testach celowanych: trzy kolejne plain `npm run e2e` bez retry i edycji,
    osiem niezmienionych hashy oraz czysty status po kazdym; na koniec jeden
    pelny, nieprzerwany `scripts/check.ps1`.
