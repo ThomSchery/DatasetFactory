@@ -416,3 +416,93 @@ token; E2E steruje i asertuje istniejacy interfejs.
 - [x] **Cienie:** bez zmian.
 - [x] **Interakcje:** prawdziwe klikniecia, formularze, drag `RegionOverlay`, filtry i lifecycle; stany bledow sa odpowiedziami realnego API.
 - [x] **Komponenty:** tylko istniejace komponenty z katalogu sekcji 4-5; brak nowego UI.
+
+## TK-006-T2 - wykonanie i dowody
+
+### Dostarczone zachowanie
+
+- Launcher E2E pozostaje jednym procesem nadrzednym Node i zarzadza potomnym
+  procesem Python. Kontroler tylko na `127.0.0.1:8001` wykonuje twardy restart:
+  stary proces jest konczony przez `SIGKILL`, a nowy startuje z tym samym
+  `DATASETFACTORY_E2E_ROOT`, baza SQLite i workspace. Odpowiedz restartu zawiera
+  oba dodatnie PID-y; spec wymaga, aby byly rozne, i czeka na realny health.
+- Jedyny stub OCR dostal punkt synchronizacji wewnatrz markerowanego runtime
+  leaf. Spec zatrzymuje prawdziwy worker w OCR, zabija backend, potwierdza stan
+  `paused`, usuwa blokade i wznawia run z istniejacego przycisku `Wznow`.
+- Po resume API dowodzi: `total_frames=1`, `completed_frames=1`, lista klatek
+  `total=1` i ma jeden element, klatka ma dokladnie jedna proponowana anotacje
+  OCR, a katalog eksportow ma `0` elementow. Po pelnym review klatka nadal jest
+  jedna, ma dwie historyczne anotacje (usunieta OCR oraz aktywna manualna), a
+  aktywna kolekcja zawiera tylko manualna. Powstaje dokladnie jeden katalog
+  eksportu z `manifest.json`; manifest ma zrodla `{manual: 1, ocr: 0}`.
+- Pelna sciezka UI wykonuje: zapis skorygowanej geometrii, usuniecie OCR bbox,
+  reczne narysowanie bbox przez `RegionOverlay`, reject, filtr odrzuconych,
+  reopen, filtr oczekujacych, accept, eksport oraz jawne zamkniecie runu. Body
+  complete jest asertowane jako aktualne `{expected_version: version}` i
+  koncowy status runu to `completed`.
+- Nowy scenariusz negatywny sprawdza rownoczesnie transport i UI: `404
+  source_missing` plus instrukcja przywrocenia pliku i jawny kod; realny `409
+  active_run` plus copy o aktywnym runie i instrukcja jego zatrzymania lub
+  dokonczenia; `503 dependency_unavailable` z
+  `workspace.available=false/critical=true/detail=unavailable` plus panel
+  `Stan systemu`, wiersz `Katalog roboczy` i copy `Niedostepny`/`unavailable`.
+  Markery i oba runy sa sprzatane w `finally`.
+
+### Weryfikacja celowana i potrojny plain E2E
+
+Test celowany scenariusza negatywnego przeszedl `1/1` w 17,6 s. Nastepnie
+wykonano trzy kolejne plain `npm run e2e` bez resetu i bez edycji pomiedzy
+przebiegami:
+
+| Przebieg | Wynik | Czas Playwright | Status po przebiegu |
+| --- | --- | --- | --- |
+| 1 | 4/4 | 44,0 s | czysty |
+| 2 | 4/4 | 43,8 s | czysty |
+| 3 | 4/4 | 44,9 s | czysty |
+
+We wszystkich trzech przebiegach osiem PNG bylo bitowo identyczne z baseline:
+
+| PNG | SHA-256 |
+| --- | --- |
+| `annotations-1440.png` | `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6` |
+| `dashboard-1440.png` | `429B9999EC458EF52DEF19837413CB05B9153DEC93427DE67CE13DF1E1009392` |
+| `empty-1440.png` | `8F1672303579D1AF489A5E069206985195E33804F6E437713157AACE5EB36DA5` |
+| `error-1440.png` | `885273365102EEB2E87DEFC71119FB3F2491844D90FCF701858C6C1B2B5A4835` |
+| `exports-1440.png` | `8B884A9FA5341021D9E99DB054B6E4379A4C2F96EEC581EEF65D0964243AAFB6` |
+| `loading-1440.png` | `A0A06CC068568015BA85E1688C8180883E11935B0C2A295AD0CB656D98039728` |
+| `materials-1440.png` | `0A1B50320376BC128A3CB9866828844FE730AB114AC63C2761FFF22A0F3E0A84` |
+| `profile-1440.png` | `A9CC0A5D169FBE548A152F86875220C06D356C829C0FD77F4C7074A71042EB74` |
+
+### Pelna bramka
+
+Pierwsza proba zatrzymala sie przed bramka 1, poniewaz nowy worktree nie mial
+ignorowanego `.env`; druga nie dotarla do skryptu przez zapis backslashy w
+posrednim Git Bash. Po utworzeniu lokalnego `.env` z cache/workspace na `D:` i
+rzeczywistymi sciezkami zainstalowanego FFmpeg, bramka 1 wykryla formatowanie,
+a nastepny fail-fast bramka 2 wykryla kolejnosc importow i zbedne `noqa` w
+`e2e_server.py`. Ruff zastosowal tylko te mechaniczne poprawki. Zadne z tych
+uruchomien nie weszlo do pozostalych bramek i nie bylo przedstawiane jako
+pelny wynik.
+
+Finalny, nieprzerwany `scripts/check.ps1` zakonczyl sie `PASS 9/9`:
+
+| Bramka | Dowod |
+| --- | --- |
+| Ruff format | 228 plikow, 0 wymagajacych formatowania; 0,1 s |
+| Ruff lint | 0 bledow; 0,1 s |
+| mypy | 96 plikow, 0 problemow; 51,3 s |
+| pytest | 293/293 w 29:32; bramka 1781,5 s |
+| frontend typecheck | 0 bledow; 3,2 s |
+| Vitest | 33/33 pliki, 439/439 testow w 38,65 s; bramka 40,5 s |
+| build | 295 modulow; main 497,65 kB/gzip 152,63; exports 8,37 kB/gzip 3,12; bramka 2,9 s |
+| Playwright | 4/4 w 45,1 s; bramka 46,8 s |
+| E2E root safety | 2/2; bramka 0,6 s |
+
+Po pelnej bramce osiem PNG nadal ma powyzsze SHA-256. Nie zmieniono kodu
+produkcyjnego, `check.ps1`, `dev.ps1`, normalizera PNG ani screenshot QA; nie
+dodano zaleznosci. Twardy restart moze wypisac chwilowy `ECONNREFUSED` proxy lub
+`ConnectionResetError` zabijanego procesu Windows; test czeka na nowy realny
+health i jest to diagnostyka faktycznego kill/restart, nie ukryty retry.
+
+Commity wykonawcze: `06a9b99` (`test(e2e): cover restart resume and negative
+paths`) oraz `0b778ad` (`style(e2e): satisfy backend lint`). Bez push i merge.
