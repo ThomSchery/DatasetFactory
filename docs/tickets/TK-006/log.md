@@ -642,10 +642,11 @@ kodem) i `0b0c5ce` (implementacja). Bez push i merge.
    repozytorium `ppwwyyxx/cocoapi`, kołem CPython 3.12 dla Windows i licencją
    FreeBSD/BSD. `uv.lock` przypina źródło, sdist oraz koła z SHA-256; nie dodano
    zależności runtime aplikacji.
-2. Test eksportu otwiera opublikowany `annotations.json` klasą
-   `pycocotools.coco.COCO`, buduje indeks API i pobiera obrazy/anotacje przez
-   `get*Ids` oraz `load*`. Wynik ma dokładnie 1 zaakceptowany obraz, 2 anotacje
-   i 2 kategorie.
+2. Zgodność opublikowanego `annotations.json` sprawdza niezależny strict
+   validator opisany w addendum FIX1 niżej. `pycocotools.coco.COCO` pozostaje
+   referencyjnym readerem: buduje indeks API i pobiera obrazy/anotacje przez
+   `get*Ids` oraz `load*`, ale samo to nie dowodzi zgodności. Reader otwiera
+   wynik zawierający dokładnie 1 zaakceptowany obraz, 2 anotacje i 2 kategorie.
 3. Negatywny dowód ma osobne markery danych: reopened/pending frame
    `00000000.jpg`, rejected frame `00000001.jpg`, ich bbox `(3,3,4,5)` i
    `(5,5,5,5)` oraz deleted bbox `(40,4,2,2)` na zaakceptowanej klatce. Żaden
@@ -717,7 +718,83 @@ się `PASS 9/9`:
 | E2E root safety | 2/2; bramka 0,7 s |
 
 Nie zmieniono kodu produkcyjnego, formatu eksportu, `check.ps1`, `dev.ps1`,
-frontendu ani screenshotów. Validator nie wykrył błędu produkcyjnego. Chwilowe
+frontendu ani screenshotów. Strict validator z FIX1 nie wykrył błędu w
+niezmienionym eksporcie produkcyjnym. Chwilowe
 `ECONNREFUSED` w Playwright pozostaje oczekiwanym śladem realnego restartu z T2.
 Nie ma odchylenia produktowego; packaged-local, jakość OCR, train/val i YOLO
 pozostają poza zakresem. Bez push i merge.
+
+---
+
+# TK-006-T3-FIX1 - ścisła walidacja zgodności COCO
+
+## Korekta findingu review
+
+Zimny review empirycznie wykazał, że `pycocotools.COCO` toleruje brak wymaganej
+sekcji, wiszące referencje, niepoprawną geometrię i zduplikowane ID. Jest więc
+referencyjnym readerem/indekserem, nie validatorem. FIX1 zachowuje go jako dowód
+otwieralności przez oficjalne API, natomiast zgodność sprawdza osobny
+`validate_coco_document`, niezależny od goldenu.
+
+Validator ma dwie warstwy bez nowej zależności:
+
+1. istniejąca Pydantic działa jako strict schema dla dokumentu, obrazów,
+   kategorii i anotacji: wymagane kolekcje oraz pola, dokładne typy bez coercion,
+   dodatnie wymiary obrazów, niepuste nazwy/ścieżki i bbox długości dokładnie 4;
+2. jawne niezmienniki sprawdzają unikalność ID każdej kolekcji, referencje
+   `image_id`/`category_id`, nieujemny początek i dodatni rozmiar bbox, granice
+   obrazu, zgodność `area == width * height` oraz `iscrowd ∈ {0,1}`.
+
+Rzeczywiście opublikowany dokument przechodzi strict validation przed
+porównaniem z goldenem i przed odczytem przez `pycocotools`. Osobny test
+mutacyjny nie czyta i nie porównuje goldenu: buduje prawidłowy dokument przez
+`CocoExportEngine`, mutuje go i woła wyłącznie `validate_coco_document`.
+
+## Dowód mutacyjny z dokładnymi komunikatami
+
+| Mutacja | Komunikat strict validatora |
+| --- | --- |
+| usunięta sekcja `images` | `schema:images:missing` |
+| wiszący `image_id` | `annotations[0].image_id:missing:999` |
+| wiszący `category_id` | `annotations[0].category_id:missing:999` |
+| ujemny początek bbox | `annotations[0].bbox:negative_origin` |
+| bbox poza obrazem | `annotations[0].bbox:outside_image` |
+| duplikat ID anotacji | `annotations.id:duplicate:1` |
+| duplikat ID obrazu | `images.id:duplicate:1` |
+| duplikat ID kategorii | `categories.id:duplicate:1` |
+| własna: bbox długości 3 | `schema:annotations.0.bbox:too_short` |
+| własna: `area` różne od pola bbox | `annotations[0].area:bbox_mismatch` |
+| własna: `iscrowd=2` | `annotations[0].iscrowd:expected_0_or_1` |
+
+Każdy przypadek ma osobny parametr i wymaga dokładnego komunikatu. Celowany
+przebieg mutacyjny: **11/11 passed**, 11 deselected, w 0,66 s. Cały moduł
+eksportu po FIX1: **22/22 passed** w 19,43 s. Ruff i mypy strict dla validatora
+oraz testu eksportu: PASS, 0 problemów.
+
+## Audit i pełna bramka po FIX1
+
+Nie dodano zależności: strict schema korzysta z przypiętej już runtime Pydantic.
+`uv lock --check` przeszedł, a ponowne `uv run --frozen pip-audit` rozwiązało
+65 pakietów i zwróciło `No known vulnerabilities found`.
+
+Pierwsza próba `scripts/check.ps1` zatrzymała się przed bramką 1, bo ignorowany
+lokalny `.env` nie był obecny; skrypt zgłosił `SKIP 9`. Po odtworzeniu wyłącznie
+lokalnej konfiguracji finalny, pełny i nieprzerwany przebieg zakończył się
+`PASS 9/9`:
+
+| Bramka | Dowód |
+| --- | --- |
+| Ruff format | 234 pliki; 0,1 s |
+| Ruff lint | 0 błędów; 0,1 s |
+| mypy | 97 plików, 0 problemów; 1,7 s |
+| pytest | 304/304 w 4:47; bramka 292,9 s |
+| frontend typecheck | 0 błędów; 0,8 s |
+| Vitest | 33/33 pliki, 439/439 testów; bramka 25,0 s |
+| build | 295 modułów; main 497,65 kB/gzip 152,63; exports 8,37 kB/gzip 3,12; bramka 2,3 s |
+| Playwright | 4/4 w 45,4 s; bramka 46,8 s |
+| E2E root safety | 2/2; bramka 0,6 s |
+
+Zakazy wycieku, test realnego Tesseracta, golden i referencyjny reader pozostały
+bez zmiany i są zielone w pełnym zestawie. Nie zmieniono kodu produkcyjnego,
+formatu eksportu, `check.ps1`, `dev.ps1`, frontendu ani screenshotów. Bez push
+i merge.

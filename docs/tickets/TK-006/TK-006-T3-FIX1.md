@@ -1,6 +1,6 @@
 # TK-006-T3-FIX1 — walidacja, która faktycznie odrzuca niezgodny eksport
 
-Status: GOTOWY
+Status: WYKONANY
 
 ## Powód
 
