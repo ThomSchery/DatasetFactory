@@ -798,3 +798,38 @@ Zakazy wycieku, test realnego Tesseracta, golden i referencyjny reader pozostał
 bez zmiany i są zielone w pełnym zestawie. Nie zmieniono kodu produkcyjnego,
 formatu eksportu, `check.ps1`, `dev.ps1`, frontendu ani screenshotów. Bez push
 i merge.
+
+### Domknięcie findingów P3 z niezależnego re-review FIX1
+
+Re-review dał `ACCEPT` bez P1 i P2, z trzema findingami P3. Dwa zamknięte,
+jeden przyjęty świadomie.
+
+**P3-1 — `NaN` w `bbox` przechodził walidację. Zamknięte.** Każde porównanie
+z `NaN` zwraca `False`, więc `x < 0`, `width <= 0` i `x + width > image.width`
+przepuszczały `NaN` na pozycji początkowej, a kontrola `area` zgadzała się
+dalej, bo liczy się z niezmutowanych `width` i `height`. Python przyjmuje też
+literał `NaN`, którego RFC 8259 zabrania, więc ręcznie zmieniony plik mógł go
+donieść aż tutaj. `coco_validation.py` sprawdza teraz `math.isfinite` dla
+całego `bbox` i dla `area`, zanim dojdzie do geometrii. Dodane dwie mutacje:
+`nan_bbox_origin` → `annotations[0].bbox:not_finite` oraz `nan_area` →
+`annotations[0].area:not_finite`. `test_coco_export.py`: 24/24.
+
+Ryzyko produkcyjne było zerowe — `CocoAnnotationInput.x/y` to `int` z kolumn
+całkowitych i silnik nie ma jak wyemitować `NaN`. To była szczelność
+validatora, nie wada eksportu.
+
+**P3-2 — ujemny i zerowy `id` przechodzi. Przyjęte świadomie.** Specyfikacja
+COCO nie wymaga dodatnich identyfikatorów, a `CocoExportEngine` numeruje od 1.
+Dodanie `ge=1` opisywałoby kontrakt silnika, nie formatu, i validator zacząłby
+odrzucać dokumenty zgodne ze specyfikacją. Kryterium z FIX1 mówi wprost, że
+niezmienniki mają wynikać z kontraktu, a nie z domysłu — więc validator zostaje
+na poziomie specyfikacji. Jeśli kiedykolwiek zacznie sprawdzać wyłącznie własne
+eksporty, to ograniczenie można dodać razem z uzasadnieniem.
+
+**P3-3 — sprzeczność w dokumentacji. Zamknięte.** `TK-006-T3.md` żądał
+„prawdziwego validatora COCO, nie własnej interpretacji schematu", a dostarczone
+rozwiązanie jest własnym schematem — dopuszczonym wprost przez FIX1. Pierwotne
+zdanie zakładało istnienie gotowego ścisłego validatora; taki nie istnieje
+w formie lekkiej biblioteki, co pokazał wynik `pycocotools`. Do kontraktu T3
+dopisana jest teraz nota odsyłająca do FIX1, żeby czytelnik za pół roku nie
+odczytał tego jako naruszenia zakresu.

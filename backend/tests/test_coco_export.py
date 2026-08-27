@@ -511,6 +511,18 @@ def test_export_api_publishes_only_accepted_snapshot(
             "annotations[0].iscrowd:expected_0_or_1",
             id="own-invalid-iscrowd",
         ),
+        # Every comparison against NaN is False, so an unguarded validator waves it
+        # through the geometry checks. Reported as P3-1 by the independent review.
+        pytest.param(
+            "nan_bbox_origin",
+            "annotations[0].bbox:not_finite",
+            id="nan-bbox-origin",
+        ),
+        pytest.param(
+            "nan_area",
+            "annotations[0].area:not_finite",
+            id="nan-area",
+        ),
     ],
 )
 def test_strict_coco_validation_rejects_mutations_without_golden(
@@ -565,6 +577,10 @@ def _mutate_coco_document(document: dict[str, object], mutation: str) -> None:
         annotation["area"] = 13
     elif mutation == "invalid_iscrowd":
         annotation["iscrowd"] = 2
+    elif mutation == "nan_bbox_origin":
+        annotation["bbox"] = [float("nan"), 2, 3, 4]
+    elif mutation == "nan_area":
+        annotation["area"] = float("nan")
     else:
         raise AssertionError(f"unknown mutation: {mutation}")
 

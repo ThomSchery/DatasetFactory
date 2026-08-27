@@ -76,6 +76,13 @@ def validate_coco_document(document: object) -> None:
             )
 
         x, y, width, height = annotation.bbox
+        # Every comparison against NaN is False, so the geometry checks below would
+        # wave it through. Python also accepts the `NaN` literal that RFC 8259 forbids,
+        # so a hand-edited file can carry one this far.
+        if not all(math.isfinite(float(value)) for value in annotation.bbox):
+            raise CocoComplianceError(f"annotations[{index}].bbox:not_finite")
+        if not math.isfinite(float(annotation.area)):
+            raise CocoComplianceError(f"annotations[{index}].area:not_finite")
         if x < 0 or y < 0:
             raise CocoComplianceError(f"annotations[{index}].bbox:negative_origin")
         if width <= 0 or height <= 0:
