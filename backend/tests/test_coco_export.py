@@ -38,6 +38,7 @@ from backend.app.engines.coco import (
 )
 from backend.app.main import create_app
 from backend.app.managers.workflow.export_use_cases import ExportUseCases
+from backend.tests.coco_validation import CocoComplianceError, validate_coco_document
 
 
 @dataclass(frozen=True)
@@ -392,6 +393,7 @@ def test_export_api_publishes_only_accepted_snapshot(
     second_output = composition.workspace.resolve_relpath(str(second_completed["output_relpath"]))
     assert document_bytes == (second_output / "annotations.json").read_bytes()
     document = json.loads(document_bytes)
+    validate_coco_document(document)
     expected = json.loads(
         Path("backend/tests/fixtures/expected-coco/accepted-review.json").read_text(
             encoding="utf-8"
@@ -453,6 +455,118 @@ def test_export_api_publishes_only_accepted_snapshot(
         for value in manifest.values()
         if isinstance(value, str)
     )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    [
+        pytest.param("missing_images", "schema:images:missing", id="missing-images"),
+        pytest.param(
+            "dangling_image_id",
+            "annotations[0].image_id:missing:999",
+            id="dangling-image-id",
+        ),
+        pytest.param(
+            "dangling_category_id",
+            "annotations[0].category_id:missing:999",
+            id="dangling-category-id",
+        ),
+        pytest.param(
+            "negative_bbox",
+            "annotations[0].bbox:negative_origin",
+            id="negative-bbox",
+        ),
+        pytest.param(
+            "outside_bbox",
+            "annotations[0].bbox:outside_image",
+            id="outside-bbox",
+        ),
+        pytest.param(
+            "duplicate_annotation_id",
+            "annotations.id:duplicate:1",
+            id="duplicate-annotation-id",
+        ),
+        pytest.param(
+            "duplicate_image_id",
+            "images.id:duplicate:1",
+            id="duplicate-image-id",
+        ),
+        pytest.param(
+            "duplicate_category_id",
+            "categories.id:duplicate:1",
+            id="duplicate-category-id",
+        ),
+        pytest.param(
+            "short_bbox",
+            "schema:annotations.0.bbox:too_short",
+            id="own-short-bbox",
+        ),
+        pytest.param(
+            "area_mismatch",
+            "annotations[0].area:bbox_mismatch",
+            id="own-area-mismatch",
+        ),
+        pytest.param(
+            "invalid_iscrowd",
+            "annotations[0].iscrowd:expected_0_or_1",
+            id="own-invalid-iscrowd",
+        ),
+    ],
+)
+def test_strict_coco_validation_rejects_mutations_without_golden(
+    mutation: str,
+    expected_error: str,
+) -> None:
+    document = json.loads(
+        CocoExportEngine().build(
+            images=(CocoImageInput("frame", 0, "images/00000000.jpg", 100, 50),),
+            categories=(CocoCategoryInput("category", 0, "zero"),),
+            annotations=(CocoAnnotationInput("annotation", "frame", "category", 1, 2, 3, 4),),
+        )
+    )
+    _mutate_coco_document(document, mutation)
+
+    with pytest.raises(CocoComplianceError) as error:
+        validate_coco_document(document)
+    assert str(error.value) == expected_error
+
+
+def _mutate_coco_document(document: dict[str, object], mutation: str) -> None:
+    images = document["images"]
+    annotations = document["annotations"]
+    categories = document["categories"]
+    assert (
+        isinstance(images, list) and isinstance(annotations, list) and isinstance(categories, list)
+    )
+    image = images[0]
+    annotation = annotations[0]
+    category = categories[0]
+    assert isinstance(image, dict) and isinstance(annotation, dict) and isinstance(category, dict)
+
+    if mutation == "missing_images":
+        del document["images"]
+    elif mutation == "dangling_image_id":
+        annotation["image_id"] = 999
+    elif mutation == "dangling_category_id":
+        annotation["category_id"] = 999
+    elif mutation == "negative_bbox":
+        annotation["bbox"] = [-1, 2, 3, 4]
+    elif mutation == "outside_bbox":
+        annotation["bbox"] = [98, 2, 3, 4]
+    elif mutation == "duplicate_annotation_id":
+        annotations.append({**annotation})
+    elif mutation == "duplicate_image_id":
+        images.append({**image, "file_name": "images/duplicate.jpg"})
+    elif mutation == "duplicate_category_id":
+        categories.append({**category, "name": "duplicate"})
+    elif mutation == "short_bbox":
+        annotation["bbox"] = [1, 2, 3]
+    elif mutation == "area_mismatch":
+        annotation["area"] = 13
+    elif mutation == "invalid_iscrowd":
+        annotation["iscrowd"] = 2
+    else:
+        raise AssertionError(f"unknown mutation: {mutation}")
 
 
 def test_manifest_annotation_sources_always_contains_zero_counts(
