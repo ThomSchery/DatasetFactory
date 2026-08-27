@@ -4,6 +4,7 @@ import hashlib
 import json
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from pycocotools.coco import COCO  # type: ignore[import-untyped]
 from sqlalchemy import select
 
 from backend.app.access.store.models import (
@@ -178,6 +180,7 @@ def _seed_export(composition: CompositionRoot, tmp_path: Path) -> ExportSeed:
         )
         session.flush()
         for frame_index, status in enumerate(("pending", "rejected", "accepted")):
+            review_status = "rejected" if status == "pending" else status
             session.add(
                 Frame(
                     id=frame_ids[status],
@@ -186,10 +189,10 @@ def _seed_export(composition: CompositionRoot, tmp_path: Path) -> ExportSeed:
                     timestamp_ms=frame_index * 1000,
                     image_relpath=image_relpaths[status],
                     stage_status="review_pending",
-                    review_status=status,
+                    review_status=review_status,
                     width=100,
                     height=50,
-                    version=2 if status != "pending" else 1,
+                    version=2,
                 )
             )
             session.add(
@@ -290,6 +293,12 @@ def _seed_export(composition: CompositionRoot, tmp_path: Path) -> ExportSeed:
                 ),
             ]
         )
+    reopened = composition.review_use_cases.review_frame(
+        frame_ids["pending"],
+        decision="reopen",
+        expected_version=2,
+    )
+    assert reopened.review_status == "pending"
     return ExportSeed(
         run_id,
         profile_id,
@@ -367,7 +376,7 @@ def test_export_api_publishes_only_accepted_snapshot(
         detail = client.get(f"/api/v1/exports/{export_id}")
         assert detail.status_code == 200
         assert detail.json()["status"] == "completed"
-        assert detail.json()["input_revision"] == 7
+        assert detail.json()["input_revision"] == 8
 
         second_response = client.post("/api/v1/exports", json={"run_id": seed.run_id})
         assert second_response.status_code == 202
@@ -378,7 +387,8 @@ def test_export_api_publishes_only_accepted_snapshot(
         )
 
     output = composition.workspace.resolve_relpath(str(completed["output_relpath"]))
-    document_bytes = (output / "annotations.json").read_bytes()
+    annotations_path = output / "annotations.json"
+    document_bytes = annotations_path.read_bytes()
     second_output = composition.workspace.resolve_relpath(str(second_completed["output_relpath"]))
     assert document_bytes == (second_output / "annotations.json").read_bytes()
     document = json.loads(document_bytes)
@@ -390,13 +400,54 @@ def test_export_api_publishes_only_accepted_snapshot(
     assert document == expected
     assert [item.name for item in (output / "images").iterdir()] == ["00000002.jpg"]
     assert (output / "images" / "00000002.jpg").read_bytes() == b"accepted-image"
+
+    # Load the published dataset through the reference COCO API. These exact
+    # negative assertions fail if a rejected/reopened frame or deleted annotation
+    # leaks into the export, even when the leaked record is otherwise valid COCO.
+    coco = COCO(str(annotations_path))
+    exported_images = coco.loadImgs(coco.getImgIds())
+    exported_annotations = coco.loadAnns(coco.getAnnIds())
+    assert {image["file_name"] for image in exported_images} == {"images/00000002.jpg"}
+    assert {tuple(annotation["bbox"]) for annotation in exported_annotations} == {
+        (1, 2, 3, 4),
+        (10, 4, 10, 8),
+    }
+    assert {
+        "images/00000000.jpg",  # reopened and still pending
+        "images/00000001.jpg",  # rejected
+    }.isdisjoint(image["file_name"] for image in exported_images)
+    assert {
+        (3, 3, 4, 5),  # reopened frame annotation
+        (5, 5, 5, 5),  # rejected frame annotation
+        (40, 4, 2, 2),  # deleted annotation on the accepted frame
+    }.isdisjoint(tuple(annotation["bbox"]) for annotation in exported_annotations)
+
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     assert manifest == completed["manifest"]
     assert manifest["schema"] == "datasetfactory-coco-export-v1"
     assert manifest["run_id"] == seed.run_id
     assert manifest["profile_id"] == seed.profile_id
-    assert manifest["annotation_sources"] == {"ocr": 1, "manual": 1}
-    assert sum(manifest["annotation_sources"].values()) == len(document["annotations"])
+    with composition.database.session() as session:
+        actual_sources = Counter(
+            session.scalars(
+                select(Annotation.source)
+                .join(Frame, Annotation.frame_id == Frame.id)
+                .where(
+                    Frame.run_id == seed.run_id,
+                    Frame.review_status == "accepted",
+                    Annotation.status == "accepted",
+                )
+            )
+        )
+    assert (
+        manifest["annotation_sources"]
+        == {
+            "ocr": actual_sources["ocr"],
+            "manual": actual_sources["manual"],
+        }
+        == {"ocr": 1, "manual": 1}
+    )
+    assert sum(manifest["annotation_sources"].values()) == len(exported_annotations)
     assert all(
         str(composition.workspace.root) not in value
         for value in manifest.values()

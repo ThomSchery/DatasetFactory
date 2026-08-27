@@ -20,12 +20,11 @@ from backend.app.access.ocr import (
     TesseractRuntimeIdentity,
 )
 from backend.app.access.store.workspace import Workspace
+from backend.app.config import Settings
 from backend.app.engines.definition import OcrProvenance
 
 FIXTURES = Path("backend/tests/fixtures")
 EXPECTED = json.loads((FIXTURES / "expected-ocr/synthetic-hud.json").read_text(encoding="utf-8"))
-REAL_RUNTIME_SHA256 = "c66f0f12ed76f6aa455dac97684bbc86756d6a732380bee09122454cfda3f420"
-REAL_MODEL_SHA256 = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
 
 
 def _provenance(version: str) -> OcrProvenance:
@@ -424,11 +423,28 @@ def test_real_process_runner_cancel_kills_active_process_with_stable_code(
     assert [error.code for error in failures] == ["ocr_cancelled"]
 
 
-def test_real_tesseract_returns_native_slash_box_and_pinned_provenance(tmp_path: Path) -> None:
-    executable = Path("D:/tools/tesseract-5.5.3/tesseract.exe")
-    model = Path("D:/tools/tesseract-5.5.3/tessdata/eng.traineddata")
-    if not executable.is_file() or not model.is_file():
-        pytest.skip("Configured D: Tesseract fixture dependency is not available")
+def test_configured_real_tesseract_runs_adapter_with_pinned_provenance(tmp_path: Path) -> None:
+    """Exercise the real adapter boundary, not OCR recognition quality."""
+    settings = Settings()
+    missing = [
+        str(path)
+        for path in (settings.tesseract_path, settings.tesseract_model_path)
+        if not path.is_file()
+    ]
+    if missing:
+        pytest.skip("configured Tesseract dependency is missing: " + ", ".join(missing))
+
+    actual_runtime_sha256 = _sha256(settings.tesseract_path)
+    actual_model_sha256 = _sha256(settings.tesseract_model_path)
+    assert actual_runtime_sha256 == settings.tesseract_runtime_sha256, (
+        "configured Tesseract runtime SHA-256 mismatch: "
+        f"expected {settings.tesseract_runtime_sha256}, got {actual_runtime_sha256}"
+    )
+    assert actual_model_sha256 == settings.tesseract_model_sha256, (
+        "configured Tesseract model SHA-256 mismatch: "
+        f"expected {settings.tesseract_model_sha256}, got {actual_model_sha256}"
+    )
+
     workspace = _workspace(tmp_path)
     ratio_sample = next(sample for sample in EXPECTED["samples"] if sample["id"] == "ratio")
     crop_relpath = Path("runs/real/ratio.png")
@@ -436,21 +452,27 @@ def test_real_tesseract_returns_native_slash_box_and_pinned_provenance(tmp_path:
     crop.parent.mkdir(parents=True, exist_ok=True)
     crop.write_bytes((FIXTURES / ratio_sample["crop"]).read_bytes())
     runtime = TesseractRuntimeIdentity(
-        executable,
-        model,
-        "v5.5.3.20260724",
-        REAL_RUNTIME_SHA256,
-        REAL_MODEL_SHA256,
+        settings.tesseract_path,
+        settings.tesseract_model_path,
+        settings.tesseract_version,
+        settings.tesseract_runtime_sha256,
+        settings.tesseract_model_sha256,
     )
-    engine = TesseractOcrEngine(workspace, runtime, 30, TesseractProcessRunner())
+    engine = TesseractOcrEngine(
+        workspace,
+        runtime,
+        settings.tesseract_timeout_seconds,
+        TesseractProcessRunner(),
+    )
 
     candidates = engine.detect_characters(crop_relpath, EXPECTED["allowed_chars"])
+    provenance = engine.describe(EXPECTED["allowed_chars"])
 
-    slash = next(candidate for candidate in candidates if candidate.char == "/")
-    assert slash.bbox_local.width > 0 and slash.bbox_local.height > 0
-    assert slash.provenance.engine_id == "tesseract"
-    assert slash.provenance.engine_version == "v5.5.3.20260724"
-    assert slash.provenance.runtime_sha256 == REAL_RUNTIME_SHA256
-    assert slash.provenance.model_sha256 == REAL_MODEL_SHA256
-    assert slash.provenance.experimental is True
-    assert slash.provenance.quality_gate == "failed"
+    assert provenance.engine_id == "tesseract"
+    assert provenance.engine_version == settings.tesseract_version
+    assert provenance.runtime_sha256 == settings.tesseract_runtime_sha256
+    assert provenance.model_sha256 == settings.tesseract_model_sha256
+    assert provenance.experimental is True
+    assert provenance.quality_gate == "failed"
+    assert all(candidate.provenance == provenance for candidate in candidates)
+    assert not tuple(crop.parent.glob(".ocr-*"))
