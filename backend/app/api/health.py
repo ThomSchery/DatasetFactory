@@ -45,7 +45,13 @@ def health_response(snapshot: SystemStatusSnapshot) -> HealthResponse:
     """Render one system snapshot. Shared so `/dashboard` cannot drift from `/health`."""
     return HealthResponse(
         version=__version__,
-        status="ok" if snapshot.operational else "unavailable",
+        status=(
+            "unavailable"
+            if not snapshot.operational
+            else "degraded"
+            if not snapshot.tesseract.available
+            else "ok"
+        ),
         database=_status_response(snapshot.database),
         workspace=_status_response(snapshot.workspace),
         ffmpeg=_status_response(snapshot.ffmpeg),

@@ -49,6 +49,49 @@ def test_health_503_uses_error_envelope(
     assert error["request_id"] == response.headers["X-Request-ID"]
 
 
+def test_missing_operator_tesseract_is_an_explicit_degraded_200_without_traceback(
+    settings: Settings,
+    composition: CompositionRoot,
+) -> None:
+    settings.tesseract_path.unlink()
+    settings.tesseract_model_path.unlink()
+
+    with TestClient(create_app(settings, composition=composition)) as client:
+        response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["tesseract"] == {
+        "available": False,
+        "critical": False,
+        "detail": (
+            "Stan zdegradowany: brak zweryfikowanej instalacji operatora; "
+            "realny OCR jest wylaczony (TD-015)."
+        ),
+    }
+
+
+def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_available(
+    settings: Settings,
+    composition: CompositionRoot,
+) -> None:
+    settings.tesseract_model_path.write_bytes(b"tampered model")
+
+    with TestClient(create_app(settings, composition=composition)) as client:
+        response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["tesseract"] == {
+        "available": False,
+        "critical": False,
+        "detail": (
+            "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna; "
+            "realny OCR jest wylaczony (TD-015)."
+        ),
+    }
+
+
 def test_unmatched_route_uses_safe_error_envelope_and_request_id(
     settings: Settings,
     composition: CompositionRoot,

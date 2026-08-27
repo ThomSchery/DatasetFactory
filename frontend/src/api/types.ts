@@ -49,7 +49,7 @@ export interface DependencyStatus {
 
 export interface Health {
   version: string;
-  status: string;
+  status: "ok" | "degraded" | "unavailable";
   database: DependencyStatus;
   workspace: DependencyStatus;
   ffmpeg: DependencyStatus;

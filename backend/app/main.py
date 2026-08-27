@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app import __version__
@@ -30,6 +32,26 @@ from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import MaterialUseCases
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCases
 from backend.app.managers.workflow.review_use_cases import ReviewUseCases
+
+
+def _mount_spa(application: FastAPI, spa_dir: Path) -> None:
+    """Serve one built Vite application without exposing arbitrary files."""
+    index_path = spa_dir / "index.html"
+    assets_dir = spa_dir / "assets"
+    if not index_path.is_file() or not assets_dir.is_dir():
+        raise RuntimeError("DF_SPA_DIR must contain a built index.html and assets directory")
+
+    application.mount("/assets", StaticFiles(directory=assets_dir), name="spa-assets")
+
+    @application.get("/", include_in_schema=False)
+    def spa_index() -> FileResponse:
+        return FileResponse(index_path)
+
+    @application.get("/{client_path:path}", include_in_schema=False)
+    def spa_client_route(client_path: str) -> FileResponse:
+        if client_path == "api" or client_path.startswith("api/"):
+            raise StarletteHTTPException(status_code=404)
+        return FileResponse(index_path)
 
 
 def create_app(
@@ -100,6 +122,9 @@ def create_app(
     application.include_router(create_frames_router(get_review_use_cases))
     application.include_router(create_exports_router(get_export_use_cases))
     application.include_router(create_dashboard_router(get_dashboard_use_cases))
+
+    if runtime_settings.spa_dir is not None:
+        _mount_spa(application, runtime_settings.spa_dir)
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

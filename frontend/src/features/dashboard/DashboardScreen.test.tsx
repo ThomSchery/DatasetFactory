@@ -113,6 +113,31 @@ describe("frame counts", () => {
 });
 
 describe("system status", () => {
+  it("shows the packaged-local OCR fallback as an explicit degraded state", async () => {
+    stubFetch(() => ({
+      status: 200,
+      body: dashboardFixture({
+        system: healthFixture({
+          status: "degraded",
+          tesseract: {
+            available: false,
+            critical: false,
+            detail:
+              "Stan zdegradowany: brak zweryfikowanej instalacji operatora; realny OCR jest wylaczony (TD-015).",
+          },
+        }),
+      }),
+    }));
+    renderApp(["/"]);
+
+    const system = await screen.findByRole("region", { name: "Stan systemu" });
+    expect(system).toHaveTextContent("Ograniczony");
+    expect(system).toHaveTextContent("TD-015");
+    const tesseract = within(system).getByText("Tesseract").closest("li");
+    expect(tesseract).not.toBeNull();
+    expect(within(tesseract as HTMLElement).getByText("Niedostępny")).toBeInTheDocument();
+  });
+
   it("names every dependency CF-07 requires and marks SAM 3 as out of v1", async () => {
     stubFetch(() => ({
       status: 200,

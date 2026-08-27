@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
@@ -40,13 +41,21 @@ class AvailableResourceProbe:
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
+    tesseract_path = tmp_path / "tools" / "tesseract.exe"
+    model_path = tmp_path / "tools" / "tessdata" / "eng.traineddata"
+    tesseract_path.parent.mkdir(parents=True)
+    model_path.parent.mkdir(parents=True)
+    tesseract_path.write_bytes(b"fixture tesseract runtime")
+    model_path.write_bytes(b"fixture eng model")
     return Settings(
         workspace_dir=tmp_path / "workspace",
         cache_dir=tmp_path / "cache",
         ffmpeg_path=tmp_path / "tools" / "ffmpeg.exe",
         ffprobe_path=tmp_path / "tools" / "ffprobe.exe",
-        tesseract_path=tmp_path / "tools" / "tesseract.exe",
-        tesseract_model_path=tmp_path / "tools" / "tessdata" / "eng.traineddata",
+        tesseract_path=tesseract_path,
+        tesseract_model_path=model_path,
+        tesseract_runtime_sha256=hashlib.sha256(tesseract_path.read_bytes()).hexdigest(),
+        tesseract_model_sha256=hashlib.sha256(model_path.read_bytes()).hexdigest(),
     )
 
 

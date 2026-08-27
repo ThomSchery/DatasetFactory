@@ -22,6 +22,11 @@ export interface SystemStatusPanelProps {
  * `warning` — being unplanned is not a fault (COLOR-09).
  */
 export function SystemStatusPanel({ system }: SystemStatusPanelProps) {
+  const overall = {
+    degraded: { label: "Ograniczony", tone: "warning" as const },
+    ok: { label: "Sprawny", tone: "success" as const },
+    unavailable: { label: "Niedostępny", tone: "error" as const },
+  }[system.status];
   const rows: DependencyRow[] = [
     { label: "FFmpeg", status: system.ffmpeg },
     { label: "Tesseract", status: system.tesseract },
@@ -33,8 +38,8 @@ export function SystemStatusPanel({ system }: SystemStatusPanelProps) {
   return (
     <Panel
       aside={
-        <StatusBadge srLabel="Stan systemu:" tone={system.status === "ok" ? "success" : "error"}>
-          {system.status === "ok" ? "Sprawny" : "Niedostępny"}
+        <StatusBadge srLabel="Stan systemu:" tone={overall.tone}>
+          {overall.label}
         </StatusBadge>
       }
       description={`Wersja backendu ${system.version}.`}

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from backend.app.access.media.processing import (
     MediaProcessingError,
 )
 from backend.app.access.store.workspace import Workspace
+from backend.app.config import Settings
 from backend.app.engines.definition import BBox
 
 FIXTURES = Path("backend/tests/fixtures")
@@ -111,15 +111,14 @@ def test_frame_output_escape_is_rejected_before_mkdir_or_subprocess(
 def test_real_ffmpeg_frame_and_opencv_crops_stay_under_requested_workspace(
     tmp_path: Path,
 ) -> None:
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        pytest.skip("Local FFmpeg is not available")
+    ffmpeg = Settings().ffmpeg_path
+    assert ffmpeg.is_file(), "DF_FFMPEG_PATH must point to the real integration runtime"
     workspace = _workspace(tmp_path)
     source_video = FIXTURES / "video/synthetic-hud.mkv"
     reference_frame = FIXTURES / "video/synthetic-frame.png"
     frame_relpath = Path("runs/run-1/frames/0.png")
     frame_output = workspace.resolve_relpath(frame_relpath)
-    access = MediaProcessingAccess(workspace, Path(ffmpeg), 60, ProcessTreeRunner())
+    access = MediaProcessingAccess(workspace, ffmpeg, 60, ProcessTreeRunner())
 
     sampled = access.sample_frame(source_video, 0, frame_relpath)
 

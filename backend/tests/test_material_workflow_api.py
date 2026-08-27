@@ -24,6 +24,7 @@ from backend.app.access.media.probe import (
 from backend.app.access.store.repositories.materials import MaterialRepository
 from backend.app.access.store.repositories.projects import ProjectRepository
 from backend.app.composition import CompositionRoot
+from backend.app.config import Settings
 from backend.app.main import create_app
 from backend.app.managers.workflow.material_use_cases import (
     MAX_VIDEO_BYTES,
@@ -278,10 +279,11 @@ def test_ffprobe_container_aliases_are_explicit(format_name: str, expected: str)
 
 
 def test_real_local_ffprobe_reads_generated_video(tmp_path: Path) -> None:
-    ffmpeg = shutil.which("ffmpeg")
-    ffprobe = shutil.which("ffprobe")
-    if ffmpeg is None or ffprobe is None:
-        pytest.skip("Local FFmpeg/ffprobe is not available")
+    configured = Settings()
+    ffmpeg = configured.ffmpeg_path
+    ffprobe = configured.ffprobe_path
+    assert ffmpeg.is_file(), "DF_FFMPEG_PATH must point to the real integration runtime"
+    assert ffprobe.is_file(), "DF_FFPROBE_PATH must point to the real integration runtime"
     source = tmp_path / "real-probe.mp4"
     subprocess.run(
         [
@@ -302,7 +304,7 @@ def test_real_local_ffprobe_reads_generated_video(tmp_path: Path) -> None:
         timeout=30,
     )
 
-    metadata = FfprobeMediaProbe(Path(ffprobe), 30, ProcessTreeRunner()).inspect(source)
+    metadata = FfprobeMediaProbe(ffprobe, 30, ProcessTreeRunner()).inspect(source)
 
     assert metadata.width == 64
     assert metadata.height == 48
@@ -314,10 +316,11 @@ def test_real_container_allowlist_accepts_mp4_mkv_mov_and_rejects_disguised_avi(
     composition: CompositionRoot,
     tmp_path: Path,
 ) -> None:
-    ffmpeg = shutil.which("ffmpeg")
-    ffprobe = shutil.which("ffprobe")
-    if ffmpeg is None or ffprobe is None:
-        pytest.skip("Local FFmpeg/ffprobe is not available")
+    configured = Settings()
+    ffmpeg = configured.ffmpeg_path
+    ffprobe = configured.ffprobe_path
+    assert ffmpeg.is_file(), "DF_FFMPEG_PATH must point to the real integration runtime"
+    assert ffprobe.is_file(), "DF_FFPROBE_PATH must point to the real integration runtime"
 
     def generate(path: Path) -> None:
         subprocess.run(
@@ -339,7 +342,7 @@ def test_real_container_allowlist_accepts_mp4_mkv_mov_and_rejects_disguised_avi(
             timeout=30,
         )
 
-    probe = FfprobeMediaProbe(Path(ffprobe), 30, ProcessTreeRunner())
+    probe = FfprobeMediaProbe(ffprobe, 30, ProcessTreeRunner())
     use_cases = MaterialUseCases(
         probe,
         StaticDiskSpace(10 * 1024**3),

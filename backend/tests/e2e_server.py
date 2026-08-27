@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hmac
 import os
-import shutil
 import time
 from collections.abc import Collection
 from pathlib import Path
@@ -95,16 +94,24 @@ def main() -> None:
     root = _runtime_root()
     control_root = root / CONTROL_DIRECTORY
     control_root.mkdir(parents=True, exist_ok=True)
-    ffmpeg = shutil.which("ffmpeg")
-    ffprobe = shutil.which("ffprobe")
-    if ffmpeg is None or ffprobe is None:
-        raise RuntimeError("The real E2E backend requires ffmpeg and ffprobe on PATH")
-    settings = Settings().model_copy(
+    configured_settings = Settings()
+    missing_media_tools = [
+        name
+        for name, path in (
+            ("DF_FFMPEG_PATH", configured_settings.ffmpeg_path),
+            ("DF_FFPROBE_PATH", configured_settings.ffprobe_path),
+        )
+        if not path.is_file()
+    ]
+    if missing_media_tools:
+        raise RuntimeError(
+            "The real E2E backend requires configured media tools: "
+            + ", ".join(missing_media_tools)
+        )
+    settings = configured_settings.model_copy(
         update={
             "workspace_dir": root / "workspace",
             "cache_dir": root / "cache",
-            "ffmpeg_path": Path(ffmpeg),
-            "ffprobe_path": Path(ffprobe),
         }
     )
     composition = build_composition(

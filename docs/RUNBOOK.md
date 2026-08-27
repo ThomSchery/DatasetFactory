@@ -12,6 +12,15 @@ Backend dziala pod `http://127.0.0.1:8000`, frontend pod
 `http://127.0.0.1:5173`. Zakoncz przez `Ctrl+C`; skrypt sprzata oba drzewa
 procesow, wlacznie z procesami potomnymi uvicorn/Vite.
 
+Tryb spakowany (FastAPI i zbudowana SPA pod jednym adresem, bez serwera Vite):
+
+```powershell
+.\scripts\package-local.ps1
+```
+
+Aplikacja dziala wtedy pod `http://127.0.0.1:8000`. `frontend/dist` jest
+artefaktem ignorowanym przez Git i nie zawiera runtime ani modelu OCR.
+
 Pelna lokalna bramka:
 
 ```powershell
@@ -60,17 +69,27 @@ sa jednym stanem projektu.
 
 ## Brak Tesseracta lub modelu
 
-Tesseract jest eksperymentalnym adapterem dev-only. Umiesc zweryfikowany runtime
-na `D:`, na przyklad w `D:\tools\tesseract-5.5.3`, i ustaw w `.env`:
+Tesseract jest eksperymentalnym adapterem dostarczanym wylacznie przez operatora;
+repozytorium i packaged-local nie zawieraja binarki ani modelu. Aby wlaczyc
+realny OCR, umiesc zweryfikowany runtime na `D:`, na przyklad w
+`D:\tools\tesseract-5.5.3`, i ustaw w `.env`:
 
 - `DF_TESSERACT_PATH`;
 - `DF_TESSERACT_MODEL_PATH`;
 - `DF_TESSERACT_RUNTIME_SHA256` dla `tesseract.exe`;
 - `DF_TESSERACT_MODEL_SHA256` dla `eng.traineddata`.
 
-Bootstrap zatrzyma sie przed instalacja zaleznosci, jesli pliku brakuje albo hash
-jest inny. Nie obchodz weryfikacji przez wpisanie hasha nieznanego artefaktu.
-Obecny runtime nie moze wejsc do pakietu produkcyjnego.
+Gdy obu plikow nie ma, bootstrap kontynuuje z ostrzezeniem, a status systemu i
+Dashboard pokazuja stan zdegradowany z TD-015; utworzenie realnego runu OCR daje
+kontrolowany blad konfiguracji, nie traceback ani sztuczny wynik. Gdy pliki sa,
+bootstrap i aplikacja wymagaja zgodnych sum. Mismatch jest bledem i nie wolno go
+obchodzic przez wpisanie hasha nieznanego artefaktu.
+
+## Autorytatywne sciezki FFmpeg
+
+`DF_FFMPEG_PATH` i `DF_FFPROBE_PATH` z `.env` sa jedynym zrodlem prawdy dla
+bootstrapu, aplikacji i realnego E2E. Sam wpis w systemowym `PATH` nie wystarcza;
+popraw `.env`, jesli narzedzia sa zainstalowane w innym miejscu.
 
 ## Typowe problemy
 

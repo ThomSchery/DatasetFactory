@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+from backend.app.config import Settings
 
 ROOT = Path(__file__).resolve().parent
 CROPS = ROOT / "hud-crops"
@@ -76,9 +77,9 @@ def main() -> None:
         )
     frame_path = VIDEO / "synthetic-frame.png"
     frame.save(frame_path, optimize=True)
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise SystemExit("Fixture regeneration requires ffmpeg")
+    ffmpeg = Settings().ffmpeg_path
+    if not ffmpeg.is_file():
+        raise SystemExit("Fixture regeneration requires DF_FFMPEG_PATH")
     subprocess.run(
         [
             ffmpeg,

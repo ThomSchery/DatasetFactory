@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     workspace_dir: Path = Path("D:/DatasetFactory/workspace")
     cache_dir: Path = Path("D:/DatasetFactory/cache")
+    spa_dir: Path | None = None
     ffmpeg_path: Path = Path("D:/tools/ffmpeg/bin/ffmpeg.exe")
     ffprobe_path: Path = Path("D:/tools/ffmpeg/bin/ffprobe.exe")
     tesseract_path: Path = Path("D:/tools/tesseract-5.5.3/tesseract.exe")

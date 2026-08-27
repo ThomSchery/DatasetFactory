@@ -13,7 +13,12 @@ from backend.app.access.ocr import (
     TesseractProcessRunner,
     TesseractRuntimeIdentity,
 )
-from backend.app.access.status.service import ResourceProbe, SystemResourceProbe, SystemStatusAccess
+from backend.app.access.status.service import (
+    ResourceProbe,
+    SystemResourceProbe,
+    SystemStatusAccess,
+    TesseractDependencyProbe,
+)
 from backend.app.access.store.database import Database
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, upgrade_database
 from backend.app.access.store.reconciliation import ExportReconciler, ReferenceAssetReconciler
@@ -143,11 +148,24 @@ def build_composition(
         projects,
         materials,
     )
+    active_resource_probe = resource_probe or SystemResourceProbe()
+    tesseract_identity = TesseractRuntimeIdentity(
+        executable=settings.tesseract_path,
+        model=settings.tesseract_model_path,
+        expected_version=settings.tesseract_version,
+        expected_runtime_sha256=settings.tesseract_runtime_sha256,
+        expected_model_sha256=settings.tesseract_model_sha256,
+    )
     status = SystemStatusAccess(
         database,
         workspace,
         settings,
-        resource_probe or SystemResourceProbe(),
+        active_resource_probe,
+        TesseractDependencyProbe(
+            tesseract_identity,
+            active_resource_probe,
+            timeout_seconds=settings.tesseract_timeout_seconds,
+        ),
     )
     media_processing = MediaProcessingAccess(
         workspace,
@@ -157,13 +175,7 @@ def build_composition(
     )
     active_ocr_engine = ocr_engine or TesseractOcrEngine(
         workspace,
-        TesseractRuntimeIdentity(
-            executable=settings.tesseract_path,
-            model=settings.tesseract_model_path,
-            expected_version=settings.tesseract_version,
-            expected_runtime_sha256=settings.tesseract_runtime_sha256,
-            expected_model_sha256=settings.tesseract_model_sha256,
-        ),
+        tesseract_identity,
         settings.tesseract_timeout_seconds,
         TesseractProcessRunner(),
     )

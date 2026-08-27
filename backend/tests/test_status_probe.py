@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -8,7 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
-from backend.app.access.status.service import SystemResourceProbe, SystemStatusAccess
+from backend.app.access.ocr import TesseractRuntimeIdentity
+from backend.app.access.status.service import (
+    SystemResourceProbe,
+    SystemStatusAccess,
+    TesseractDependencyProbe,
+)
 from backend.app.composition import CompositionRoot
 from backend.app.config import Settings
 from backend.app.main import create_app
@@ -118,19 +122,29 @@ def test_real_local_ffmpeg_and_ffprobe_are_available(
     settings: Settings,
     composition: CompositionRoot,
 ) -> None:
-    ffmpeg = shutil.which("ffmpeg")
-    ffprobe = shutil.which("ffprobe")
-    assert ffmpeg is not None, "The Gate 1 workstation must provide local ffmpeg"
-    assert ffprobe is not None, "The Gate 1 workstation must provide local ffprobe"
+    configured = Settings()
+    ffmpeg = configured.ffmpeg_path
+    ffprobe = configured.ffprobe_path
+    assert ffmpeg.is_file(), "DF_FFMPEG_PATH must point to the real integration runtime"
+    assert ffprobe.is_file(), "DF_FFPROBE_PATH must point to the real integration runtime"
 
-    real_settings = settings.model_copy(
-        update={"ffmpeg_path": Path(ffmpeg), "ffprobe_path": Path(ffprobe)}
-    )
+    real_settings = settings.model_copy(update={"ffmpeg_path": ffmpeg, "ffprobe_path": ffprobe})
     composition.system_status = SystemStatusAccess(
         composition.database,
         composition.workspace,
         real_settings,
         SystemResourceProbe(),
+        TesseractDependencyProbe(
+            TesseractRuntimeIdentity(
+                real_settings.tesseract_path,
+                real_settings.tesseract_model_path,
+                real_settings.tesseract_version,
+                real_settings.tesseract_runtime_sha256,
+                real_settings.tesseract_model_sha256,
+            ),
+            SystemResourceProbe(),
+            timeout_seconds=real_settings.tesseract_timeout_seconds,
+        ),
     )
     with TestClient(create_app(real_settings, composition=composition)) as client:
         response = client.get("/api/v1/health")

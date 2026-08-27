@@ -154,9 +154,16 @@ try {
     $tesseractHint = "Umiesc zweryfikowany runtime dev-only w D:\tools\tesseract-5.5.3 i ustaw sciezki oraz sumy SHA-256 w .env; bootstrap nie instaluje go globalnie."
     Assert-Executable -Name "FFmpeg" -Path $ffmpegPath -Arguments @("-version") -InstallHint $ffmpegHint
     Assert-Executable -Name "ffprobe" -Path $ffprobePath -Arguments @("-version") -InstallHint $ffmpegHint
-    Assert-Sha256 -Name "runtime Tesseract" -Path $tesseractPath -ExpectedHash $runtimeHash
-    Assert-Sha256 -Name "model Tesseract" -Path $tesseractModelPath -ExpectedHash $modelHash
-    Assert-Executable -Name "Tesseract" -Path $tesseractPath -Arguments @("--version") -InstallHint $tesseractHint
+    $hasTesseractRuntime = Test-Path -LiteralPath $tesseractPath -PathType Leaf
+    $hasTesseractModel = Test-Path -LiteralPath $tesseractModelPath -PathType Leaf
+    if ($hasTesseractRuntime -and $hasTesseractModel) {
+        Assert-Sha256 -Name "runtime Tesseract" -Path $tesseractPath -ExpectedHash $runtimeHash
+        Assert-Sha256 -Name "model Tesseract" -Path $tesseractModelPath -ExpectedHash $modelHash
+        Assert-Executable -Name "Tesseract" -Path $tesseractPath -Arguments @("--version") -InstallHint $tesseractHint
+    }
+    else {
+        Write-Warning "Brak kompletnej instalacji Tesseract operatora. Bootstrap kontynuuje; aplikacja uruchomi sie w stanie zdegradowanym bez realnego OCR (TD-015)."
+    }
 
     Assert-CommandAvailable -Name "uv"
     Assert-CommandAvailable -Name "node"
