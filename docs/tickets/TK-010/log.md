@@ -6,7 +6,8 @@
   Kod produkcyjny pozostaje nietkniety.
 - Sesyjny fixture tworzy jedna baze wzorcowa przez prawdziwe migracje do `head`.
   Funkcyjny fixture `composition` kopiuje plik do prywatnego workspace testu i
-  pomija tylko ponowne wywolanie `upgrade_database` dla tej gotowej kopii.
+  uruchamia standardowe `build_composition`, lacznie z prawdziwym
+  `upgrade_database`, ktore potwierdza, ze kopia jest juz na `head`.
 - Fixture `settings` pozostaje bez zmian i nadal wskazuje pusty, prywatny
   workspace. Dzieki temu `backend/tests/test_migrations.py`, w tym
   `test_initial_migration_up_down_up` oraz
@@ -94,3 +95,44 @@ Finalne `scripts/check.ps1` zakonczylo sie `PASS 9/9`:
 Wczesniejszy pelny backendowy przebieg po zmianie byl rowniez zielony 293/293
 w 277,18 s. Dwa niezalezne pelne pomiary po optymalizacji roznia sie o 1,11 s,
 co potwierdza powtarzalnosc wyniku.
+
+## TK-010-FIX1 - przywrocenie prawdziwego startu aplikacji
+
+Zimny review zaakceptowal baze szablonowa, izolacje i wynik wydajnosciowy, ale
+wykryl zbyt szeroki kompromis w pierwszej wersji: fixture `composition`
+podmienial `upgrade_database` na no-op. Pomiar recenzenta pokazal, ze na kopii
+bazy juz na `head` prawdziwe wywolanie kosztuje srednio 14,3 ms (mediana
+13,4 ms z 12 prob), a caly `build_composition` 160,4 ms wobec 144,5 ms z
+no-opem. Dla 163 z 293 przypadkow oszczednosc wynosila tylko okolo 2,6 s,
+czyli okolo 1% suite trwajacego 268,27 s.
+
+No-op zostal wycofany, poniewaz za ten marginalny zysk 163 testy tracily realne
+przejscie `build_composition -> upgrade_database`, w tym
+`test_full_composition_root_builds_without_server`. Osobne testy migracyjne
+sprawdzaja lancuch rewizji, ale nie zastepuja integracji startu aplikacji.
+Sesyjny szablon i `shutil.copy2` pozostaja bez zmian i nadal daja praktycznie
+caly zysk wydajnosciowy.
+
+Pelny backend po FIX1 zebral i zaliczyl 293/293 testow w 283,63 s (4:43),
+290,5 s zegarowo. To o 6,45 s wiecej od pierwszego pomiaru wykonawcy z no-opem
+(277,18 s), przy zachowaniu realnej integracji startowej w 163 przypadkach.
+Wynik nadal miesci sie wyraznie ponizej progu 8 minut, a dokumentacyjne
+"okolo 5 minut" pozostaje prawdziwe.
+
+Finalne `scripts/check.ps1` po FIX1 przeszlo jednym nieprzerwanym przebiegiem
+`PASS 9/9`:
+
+| Bramka | Dowod FIX1 |
+| --- | --- |
+| Ruff format | 232 pliki, bez zmian formatowania |
+| Ruff lint | 0 bledow |
+| mypy | 96 plikow, 0 problemow |
+| pytest | 293 zebrane, 293 zielone w 281,35 s; gate 287,0 s |
+| Frontend typecheck | 0 bledow |
+| Vitest | 33/33 pliki, 439/439 testow |
+| Build | 295 modulow; main 497,65 kB/gzip 152,63; exports 8,37 kB/gzip 3,12 |
+| Playwright | 4/4 w 46,4 s |
+| E2E root safety | 2/2 |
+
+Do bramki uzyto tymczasowej kopii `.env.example`; plik zostal usuniety po
+przebiegu. README i RUNBOOK nie wymagaly dalszej korekty czasu.

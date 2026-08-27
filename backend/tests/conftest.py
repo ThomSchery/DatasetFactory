@@ -7,7 +7,6 @@ from typing import ClassVar
 
 import pytest
 
-from backend.app import composition as composition_module
 from backend.app.access.status.service import ProbeResult
 from backend.app.access.store.migrations import upgrade_database
 from backend.app.composition import CompositionRoot, build_composition
@@ -63,19 +62,13 @@ def migrated_database_template(tmp_path_factory: pytest.TempPathFactory) -> Path
     return template_settings.database_path
 
 
-def _database_already_upgraded(settings: Settings) -> None:
-    del settings
-
-
 @pytest.fixture
 def composition(
     settings: Settings,
     migrated_database_template: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[CompositionRoot]:
     settings.workspace_dir.mkdir(parents=True)
     shutil.copy2(migrated_database_template, settings.database_path)
-    monkeypatch.setattr(composition_module, "upgrade_database", _database_already_upgraded)
     root = build_composition(settings, resource_probe=AvailableResourceProbe())
     try:
         yield root
