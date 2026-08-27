@@ -61,6 +61,6 @@ def test_packaged_local_rejects_an_incomplete_spa_build(
 
     with pytest.raises(
         RuntimeError,
-        match="DF_SPA_DIR must contain a built index.html and assets directory",
+        match=r"DF_SPA_DIR must contain a built index\.html and assets directory",
     ):
         create_app(settings.model_copy(update={"spa_dir": spa_dir}))
