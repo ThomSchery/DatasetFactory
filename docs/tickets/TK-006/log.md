@@ -630,3 +630,94 @@ health nowego procesu, a nie retry maskującym zachowanie produktu.
 
 Commity FIX1: `2b18b85` (ustalenia review), `e893d4c` (addendum planu przed
 kodem) i `0b0c5ce` (implementacja). Bez push i merge.
+
+---
+
+# TK-006-T3 - validator COCO, realny Tesseract i zapis zależności
+
+## Zakres i wykonanie
+
+1. Do grupy dev dodano dokładnie przypięty `pycocotools==2.0.11`. Jest to
+   stabilne wydanie oficjalnego pakietu Python COCO API z PyPI, z oficjalnym
+   repozytorium `ppwwyyxx/cocoapi`, kołem CPython 3.12 dla Windows i licencją
+   FreeBSD/BSD. `uv.lock` przypina źródło, sdist oraz koła z SHA-256; nie dodano
+   zależności runtime aplikacji.
+2. Test eksportu otwiera opublikowany `annotations.json` klasą
+   `pycocotools.coco.COCO`, buduje indeks API i pobiera obrazy/anotacje przez
+   `get*Ids` oraz `load*`. Wynik ma dokładnie 1 zaakceptowany obraz, 2 anotacje
+   i 2 kategorie.
+3. Negatywny dowód ma osobne markery danych: reopened/pending frame
+   `00000000.jpg`, rejected frame `00000001.jpg`, ich bbox `(3,3,4,5)` i
+   `(5,5,5,5)` oraz deleted bbox `(40,4,2,2)` na zaakceptowanej klatce. Żaden
+   nie występuje w indeksie COCO; test pada przy wycieku dowolnego z nich.
+   Manifest ma `{ocr: 1, manual: 1}` porównane z faktycznym zapytaniem do
+   zaakceptowanych rekordów bazy, a suma `2` jest równa liczbie anotacji
+   zwróconych przez COCO API.
+4. Jedyny test realnego Tesseracta czyta ścieżki, wersję, timeout i piny z
+   `Settings`/`DF_*`. Brak binarki lub modelu daje jawny `pytest.skip` z listą
+   brakujących skonfigurowanych ścieżek. Jeśli pliki istnieją, test najpierw
+   wymaga zgodnych SHA-256; mismatch jest FAIL, nie skip. Następnie realny
+   `TesseractProcessRunner` przechodzi przez `TesseractOcrEngine`, parser,
+   cleanup temp i provenance. Nie ma asercji na trafność odczytu; status
+   `experimental`, `quality_gate=failed` i TD-014 pozostają bez zmiany.
+
+## Audit i licencje backendu
+
+`uv lock --check` przeszedł. `uv run --frozen pip-audit` rozwiązał 65 pakietów
+i zwrócił `No known vulnerabilities found`. Metadane wszystkich 63 dystrybucji
+backendowych w środowisku (bez narzędzia `pip`) zawierają rozpoznaną licencję;
+wśród 64 zainstalowanych dystrybucji, łącznie z `pip`, nie ma prerelease ani
+dev release. Licencje przejściowe to permisywne MIT/BSD/Apache/PSF/FreeBSD,
+MIT-CMU/Zlib/0BSD/CC0 oraz MPL-2.0 dla `certifi` i `pathspec`; nie ma brakującej
+licencji w metadanych.
+
+| Bezpośrednia zależność | Wersja | Zakres | Licencja z metadanych pakietu |
+| --- | --- | --- | --- |
+| alembic | 1.18.5 | runtime | MIT |
+| fastapi | 0.141.1 | runtime | MIT |
+| opencv-python-headless | 4.13.0.92 | runtime | Apache-2.0 |
+| pillow | 12.3.0 | runtime | MIT-CMU |
+| pydantic-settings | 2.14.2 | runtime | MIT |
+| sqlalchemy | 2.0.51 | runtime | MIT |
+| uvicorn | 0.52.0 | runtime | BSD-3-Clause |
+| httpx2 | 2.9.1 | dev | BSD-3-Clause |
+| mypy | 2.3.0 | dev | MIT |
+| pip-audit | 2.10.1 | dev | Apache-2.0 |
+| pycocotools | 2.0.11 | dev | FreeBSD |
+| pytest | 9.1.1 | dev | MIT |
+| ruff | 0.16.0 | dev | MIT |
+
+## Weryfikacja
+
+- Celowane Ruff dla obu zmienionych testów: PASS.
+- Celowane COCO + Tesseract: **31/31 passed** w 19,03 s.
+- Celowany realny Tesseract z `-ra`: **1/1 passed**, 0 skipped, w 0,36 s.
+- Celowane mypy strict dla obu testów: 0 problemów.
+- `uv lock --check`: PASS; `pip-audit`: 0 znanych podatności.
+
+Pierwszy pełny `scripts/check.ps1` nie został uznany za bramkę: backend przeszedł
+293/293 w 4:53, ale świeży worktree nie miał `frontend/node_modules`, więc
+typecheck zakończył się brakującymi definicjami typów. `npm ci` odtworzył dokładnie
+128 pakietów z `package-lock.json` i zgłosił 0 podatności. Po tej jedynej naprawie
+środowiska pełny przebieg był zielony. Następnie fixture doprecyzowano tak, aby
+reopened/pending frame faktycznie przeszedł produkcyjne `rejected → reopen`; po
+tej zmianie finalny, pełny i nieprzerwany `scripts/check.ps1` ponownie zakończył
+się `PASS 9/9`:
+
+| Bramka | Dowód |
+| --- | --- |
+| Ruff format | 232 pliki; 0,3 s |
+| Ruff lint | 0 błędów; 0,1 s |
+| mypy | 96 plików, 0 problemów; 2,4 s |
+| pytest | 293/293 w 4:40; bramka 286,7 s |
+| frontend typecheck | 0 błędów; 1,5 s |
+| Vitest | 33/33 pliki, 439/439 testów; bramka 27,3 s |
+| build | 295 modułów; main 497,65 kB/gzip 152,63; exports 8,37 kB/gzip 3,12; bramka 1,6 s |
+| Playwright | 4/4 w 50,7 s; bramka 52,1 s |
+| E2E root safety | 2/2; bramka 0,7 s |
+
+Nie zmieniono kodu produkcyjnego, formatu eksportu, `check.ps1`, `dev.ps1`,
+frontendu ani screenshotów. Validator nie wykrył błędu produkcyjnego. Chwilowe
+`ECONNREFUSED` w Playwright pozostaje oczekiwanym śladem realnego restartu z T2.
+Nie ma odchylenia produktowego; packaged-local, jakość OCR, train/val i YOLO
+pozostają poza zakresem. Bez push i merge.
