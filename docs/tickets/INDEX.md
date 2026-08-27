@@ -23,7 +23,7 @@
 | TK-006 | E2E, hardening i uruchomienie jedną komendą | rozbity na T1–T4 | wszystkie powyższe | Gate 4 |
 | TK-006-T1 | Skrypty uruchomieniowe, jedna bramka i dokumentacja | wykonany | FE-001 | część Gate 4 ✓ |
 | TK-006-T2 | Restart, resume i pełna ścieżka review w E2E | wykonany | TK-006-T1 | część Gate 4 ✓ |
-| TK-006-T3 | Validator COCO, realny Tesseract i zapis zależności | do zrobienia | TK-006-T2 | część Gate 4 |
+| TK-006-T3 | Validator COCO, realny Tesseract i zapis zależności | wykonany | TK-006-T2 | część Gate 4 ✓ |
 | TK-006-T4 | Packaged-local bez binarki OCR i audyty domykające | do zrobienia | TK-006-T3 | Gate 4 |
 | TK-010 | Skrócenie backendowej bramki testowej | wykonany | TK-006-T2 | przed TK-006-T3 ✓ |
 
