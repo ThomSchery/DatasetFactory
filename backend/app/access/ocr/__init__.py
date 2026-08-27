@@ -1,6 +1,5 @@
-from backend.app.access.ocr.protocol import OcrEngine
+from backend.app.access.ocr.protocol import OcrEngine, OcrProcessError
 from backend.app.access.ocr.tesseract import (
-    OcrProcessError,
     OcrProcessResult,
     TesseractOcrEngine,
     TesseractOutputParser,

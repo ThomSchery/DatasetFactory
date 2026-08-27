@@ -13,8 +13,7 @@ from backend.app.access.media.processing import (
     RegionCrop,
     SampledFrame,
 )
-from backend.app.access.ocr import OcrEngine
-from backend.app.access.ocr.tesseract import OcrProcessError
+from backend.app.access.ocr import OcrEngine, OcrProcessError
 from backend.app.access.store.repositories.checkpoints import (
     CheckpointArtifactError,
     CheckpointRepository,

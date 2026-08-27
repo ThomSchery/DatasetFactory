@@ -6,8 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from backend.app.access.ocr import OcrEngine
-from backend.app.access.ocr.tesseract import OcrProcessError
+from backend.app.access.ocr import OcrEngine, OcrProcessError
 from backend.app.access.store.repositories.checkpoints import CheckpointReservationError
 from backend.app.access.store.repositories.frames import (
     FrameNotFoundError,

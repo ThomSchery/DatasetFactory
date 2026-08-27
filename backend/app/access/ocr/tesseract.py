@@ -20,18 +20,10 @@ from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
 
+from backend.app.access.ocr.protocol import OcrProcessError
 from backend.app.access.store.workspace import Workspace, WorkspaceError
 from backend.app.engines.definition import BBox
 from backend.app.engines.definition.ocr_mapping import OcrCandidate, OcrProvenance
-
-
-class OcrProcessError(RuntimeError):
-    """Sanitized OCR infrastructure failure with explicit retry semantics."""
-
-    def __init__(self, code: str, *, retryable: bool = False) -> None:
-        super().__init__(code)
-        self.code = code
-        self.retryable = retryable
 
 
 @dataclass(frozen=True)
