@@ -6,7 +6,7 @@
 |------|------|
 | `docs/CONTEXT.md` | wiążący zakres, stack, NFR i frontend decisions |
 | `docs/MODULES.md` | 9 modułów IDesign, zależności, PERT i kolejność |
-| `docs/TECH_DEBT.md` | TD-001…013, ledger świadomych uproszczeń |
+| `docs/TECH_DEBT.md` | TD-001…019, ledger świadomych uproszczeń |
 | `docs/EPIC_BRIEF.md` | wynik, sukces MVP i out-of-scope |
 | `docs/CORE_FLOWS.md` | CF-01…07, happy/error/recovery flows |
 | `docs/TECH_PLAN.md` | dane, API, worker, filesystem, testy i walidacja 3.1–3.4 |
@@ -16,7 +16,7 @@
 
 ## Strategia i implikacje
 
-Strategia Pragmatyczna: nie rozszerzaj zakresu poza F01/F03–08/F11–16. Utrzymuj
+Strategia Pragmatyczna: nie rozszerzaj zakresu poza F01/F03–09/F11–16. Utrzymuj
 zależności Client → Manager → Engine/Access; engine'y nie znają HTTP/DB/filesystem.
 Jeden `DatasetWorkflow` nie może stać się God Objectem: use cases mogą być
 oddzielnymi klasami/funkcjami wewnątrz modułu z jednym publicznym kontraktem.
@@ -37,7 +37,10 @@ oddzielnymi klasami/funkcjami wewnątrz modułu z jednym publicznym kontraktem.
 - Gate 3: TK-005 + TK-007 + FE-001 — pełny workflow API/UI, ręczna korekta
   boksów oraz poprawny COCO. Domknięty 2026-08-25; dowody i przeniesione
   ograniczenia w `docs/tickets/FE-001/log.md`.
-- Gate 4: TK-006 — wszystkie testy, restart/resume, screenshot QA i clean repo.
+- Gate 4: TK-006 — zamknięty 2026-08-27. Packaged-local serwuje SPA z FastAPI
+  bez Vite i bez dołączonej binarki/modelu OCR; brak Tesseracta daje jawny stan
+  zdegradowany TD-015. Finalna bramka: PASS 9/9 (319 backend, 440 frontend,
+  4 Playwright, 2 testy E2E root safety); audyty w `docs/tickets/TK-006/log.md`.
 
 ## Dług techniczny
 

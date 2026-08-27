@@ -1027,3 +1027,36 @@ poza koncem pliku. TD-011 pozostaje jawnie bez implementacji backupu;
 TD-012 pozostaje otwarte bez CI z triggerem **pierwszy wspolpracownik lub
 publikacja repo** (`docs/TECH_DEBT.md:24`, `docs/TECH_DEBT.md:25`). Nie wprowadzono nowego
 uproszczenia wymagajacego TD-020.
+
+## Packaged-local smoke i finalna bramka
+
+Realny start `scripts/package-local.ps1` zbudowal 295 modulow SPA i uruchomil
+wylacznie Uvicorn/FastAPI. Pod jednym adresem odpowiedzi mialy: `/` 200,
+`/profile-gier` 200 oraz `/api/v1/health` 200; Vite nie byl procesem runtime.
+Build mial 0 plikow `.exe`, 0 modeli `.traineddata` i 0 nazw `tesseract`.
+Powtorzony start z nieistniejacymi sciezkami runtime/modelu dal `/` 200 oraz
+health 200 ze `status=degraded`, `tesseract.available=false` i diagnostyka
+TD-015. Nie bylo tracebacku ani deklaracji, ze OCR dziala. Po obu startach
+`git status --short` byl pusty: `dist`, workspace, cache, baza i logi pozostaly
+ignorowane.
+
+Pierwszy finalny `scripts/check.ps1` przeszedl format (236 plikow), a lint
+zatrzymal go na RUF043 w regexie nowego testu; 7 krokow zostalo jawnie SKIP.
+Poprawiono tylko matcher testowy w osobnym commicie `fdba962`, bez zmiany
+produkcji. Nastepny pelny przebieg od kroku 1 zakonczyl sie `PASS 9/9`:
+
+| Bramka | Dowod |
+| --- | --- |
+| backend format | 236/236 plikow, 0,1 s |
+| backend lint | 0 bledow, 0,1 s |
+| mypy | 99 plikow, 0 problemow, 26,4 s |
+| pytest | 319/319 w 281,28 s; krok 287 s |
+| frontend typecheck | 0 bledow, 1,1 s |
+| Vitest | 33/33 pliki, 440/440 testow; krok 28,7 s |
+| build | 295 modulow; main 497,73 kB / gzip 152,66 kB; krok 1,6 s |
+| Playwright | 4/4 w 56,6 s; krok 58 s |
+| E2E root safety | 2/2; krok 0,7 s |
+
+Gate 4 i caly MVP sa zamkniete. Nie zmieniono `scripts/check.ps1`, nie dodano
+zaleznosci, binarki/modelu OCR, CI, chmury ani implementacji F02/F10. Bez push
+i bez merge.
