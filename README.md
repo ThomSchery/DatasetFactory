@@ -56,6 +56,7 @@ Po bootstrapie uruchom z katalogu repozytorium:
 
 Skrypt wykonuje kolejno backend format/lint/typy/testy, frontend typy/testy/build,
 Playwright oraz osobna bramke `npm run test:e2e-root`. Zatrzymuje sie na pierwszym
-bledzie i zawsze drukuje podsumowanie. Pelny `pytest` moze trwac okolo 30 minut.
+bledzie i zawsze drukuje podsumowanie. Pelny `pytest` trwa okolo 5 minut na
+zweryfikowanej maszynie deweloperskiej.
 
 Codzienna obsluga, lokalizacje danych i diagnostyka: [docs/RUNBOOK.md](docs/RUNBOOK.md).

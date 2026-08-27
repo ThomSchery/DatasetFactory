@@ -21,7 +21,8 @@ Pelna lokalna bramka:
 Kolejnosc jest stala: `ruff format --check`, `ruff check`, `python -m mypy`,
 `pytest`, `npm run typecheck`, `npm test`, `npm run build`, `npm run e2e`,
 `npm run test:e2e-root`. Pierwsza czerwona bramka zatrzymuje przebieg, a
-podsumowanie wskazuje blad i liczbe pominietych bramek.
+podsumowanie wskazuje blad i liczbe pominietych bramek. Pelny backendowy
+`pytest` trwa okolo 5 minut na zweryfikowanej maszynie deweloperskiej.
 
 ## Layout na D:
 
