@@ -833,3 +833,63 @@ zdanie zakładało istnienie gotowego ścisłego validatora; taki nie istnieje
 w formie lekkiej biblioteki, co pokazał wynik `pycocotools`. Do kontraktu T3
 dopisana jest teraz nota odsyłająca do FIX1, żeby czytelnik za pół roku nie
 odczytał tego jako naruszenia zakresu.
+
+### Domknięcie pytań otwartych z re-review: koercja, `extra` i źródło niezmienników
+
+Przy zlecaniu re-review FIX1 padły trzy pytania, których wykonawca nie mógł
+rozstrzygnąć na sobie. Odpowiedzi poniżej są wynikiem uruchomienia mutacji
+wyłącznie przeciwko `validate_coco_document`, bez udziału goldenu.
+
+**Czy niezmienniki nie są za ostre — zwłaszcza `area == szerokość × wysokość`?**
+Nie. To nie jest domysł, tylko odwzorowanie istniejącego kontraktu
+produkcyjnego: `backend/app/engines/coco/engine.py:98` emituje `area` dokładnie
+jako `annotation.width * annotation.height`, a produkcyjny `_validate_document`
+w `engine.py:163` sam odrzuca dokument, w którym `annotation["area"] !=
+bbox[2] * bbox[3]`. Validator nie dokłada więc wymagania, którego kod nie ma —
+powtarza to, które kod już egzekwuje. Analogicznie `iscrowd`: silnik emituje
+zawsze `0` i wymusza `iscrowd != 0`, a validator dopuszcza `{0, 1}`, czyli jest
+świadomie **luźniejszy** niż produkcja i pozostaje na poziomie specyfikacji.
+To ta sama zasada, którą P3-2 zastosował do `id`.
+
+**Czy walidacja bierze artefakt z dysku, czy dokument z pamięci?** Z dysku.
+`backend/tests/test_coco_export.py` czyta opublikowany plik przez
+`annotations_path.read_bytes()`, parsuje go `json.loads` i dopiero ten wynik
+podaje do `validate_coco_document` — przed porównaniem z goldenem i przed
+`pycocotools`. Walidowany jest artefakt, nie stan silnika.
+
+**Czy jakieś mutacje prześlizgują się przez Pydantic w trybie strict?**
+Sprawdzone osiem kandydatów wskazanych jako podejrzane. Siedem jest
+odrzucanych i zostało dopisanych do tabeli mutacji jako stałe przypadki:
+
+| Mutacja | Komunikat |
+| --- | --- |
+| liczba jako string (`image_id`) | `schema:annotations.0.image_id:int_type` |
+| float zamiast int (`id` anotacji) | `schema:annotations.0.id:int_type` |
+| float zamiast int (`width` obrazu) | `schema:images.0.width:int_type` |
+| `null` w polu wymaganym (`category_id`) | `schema:annotations.0.category_id:int_type` |
+| `bool` jako `iscrowd` | `schema:annotations.0.iscrowd:int_type` |
+| string wewnątrz `bbox` | `schema:annotations.0.bbox.2.int:int_type` |
+| pusta lista kategorii przy niepustych anotacjach | `annotations[0].category_id:missing:1` |
+
+Że te przypadki są nośne, a nie dekoracyjne, potwierdza osobny probe: po
+tymczasowej zamianie `strict=True` na `strict=False` w `coco_validation.py`
+pięć z nich czerwienieje z `DID NOT RAISE CocoComplianceError` — liczba jako
+string, oba floaty, `bool` i string w `bbox`. Pozostałe dwa trzymają się bez
+trybu strict, bo `null` jest odrzucany także przy koercji, a pusta lista
+kategorii to naruszenie referencyjne, nie schematu. Plik validatora został po
+probie przywrócony z HEAD i nie zawiera żadnej zmiany z tego eksperymentu.
+
+**Ósmy kandydat przechodzi i ma przechodzić: nadmiarowe pole.** Modele używają
+`extra="allow"` i jest to decyzja, nie niedopatrzenie. COCO definiuje opcjonalne
+`info`, `licenses` i `segmentation`, a konsumenci dokładają własne klucze, więc
+`extra="forbid"` odrzucałby pliki zgodne ze specyfikacją. Żeby ta decyzja nie
+została za pół roku odczytana jako luka i „naprawiona”, dowodzi jej teraz jawny
+test `test_strict_coco_validation_allows_extra_keys_but_not_missing_ones`:
+dokument z `info`, `licenses`, `segmentation`, `license` i `supercategory`
+przechodzi, a po usunięciu wymaganego `area` z tej samej anotacji walidacja
+pada na `schema:annotations.0.area:missing`. Zaostrzenie modeli do
+`extra="forbid"` łamie ten test celowo.
+
+Tabela mutacji ma po tej zmianie 20 przypadków, a `test_coco_export.py` 32
+testy. Nie zmieniono kodu produkcyjnego, formatu eksportu, zakazów wycieku,
+testu realnego Tesseracta, goldenu, `check.ps1`, `dev.ps1` ani frontendu.

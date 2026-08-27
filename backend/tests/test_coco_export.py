@@ -523,6 +523,45 @@ def test_export_api_publishes_only_accepted_snapshot(
             "annotations[0].area:not_finite",
             id="nan-area",
         ),
+        # A non-strict Pydantic model coerces every one of these into a valid
+        # document instead of rejecting it, so they pin `strict=True` in place.
+        pytest.param(
+            "number_as_string_image_id",
+            "schema:annotations.0.image_id:int_type",
+            id="number-as-string-image-id",
+        ),
+        pytest.param(
+            "float_annotation_id",
+            "schema:annotations.0.id:int_type",
+            id="float-annotation-id",
+        ),
+        pytest.param(
+            "float_image_width",
+            "schema:images.0.width:int_type",
+            id="float-image-width",
+        ),
+        pytest.param(
+            "null_category_id",
+            "schema:annotations.0.category_id:int_type",
+            id="null-category-id",
+        ),
+        pytest.param(
+            "bool_iscrowd",
+            "schema:annotations.0.iscrowd:int_type",
+            id="bool-iscrowd",
+        ),
+        pytest.param(
+            "string_in_bbox",
+            "schema:annotations.0.bbox.2.int:int_type",
+            id="string-in-bbox",
+        ),
+        # Not a schema violation: the categories list stays well formed, so only
+        # the referential check can catch the annotation left pointing nowhere.
+        pytest.param(
+            "empty_categories",
+            "annotations[0].category_id:missing:1",
+            id="empty-categories",
+        ),
     ],
 )
 def test_strict_coco_validation_rejects_mutations_without_golden(
@@ -581,8 +620,63 @@ def _mutate_coco_document(document: dict[str, object], mutation: str) -> None:
         annotation["bbox"] = [float("nan"), 2, 3, 4]
     elif mutation == "nan_area":
         annotation["area"] = float("nan")
+    elif mutation == "number_as_string_image_id":
+        annotation["image_id"] = "1"
+    elif mutation == "float_annotation_id":
+        annotation["id"] = 1.0
+    elif mutation == "float_image_width":
+        image["width"] = 100.0
+    elif mutation == "null_category_id":
+        annotation["category_id"] = None
+    elif mutation == "bool_iscrowd":
+        annotation["iscrowd"] = True
+    elif mutation == "string_in_bbox":
+        bbox = annotation["bbox"]
+        assert isinstance(bbox, list)
+        bbox[2] = "3"
+    elif mutation == "empty_categories":
+        categories.clear()
     else:
         raise AssertionError(f"unknown mutation: {mutation}")
+
+
+def test_strict_coco_validation_allows_extra_keys_but_not_missing_ones() -> None:
+    """`extra="allow"` is a decision, not an oversight.
+
+    COCO defines optional `info`, `licenses` and `segmentation` keys and consumers
+    add their own, so rejecting unknown keys would reject spec-compliant files.
+    Tightening the models to `extra="forbid"` breaks this test on purpose. What the
+    permissive setting must never do is let a *missing* required key through.
+    """
+    document = json.loads(
+        CocoExportEngine().build(
+            images=(CocoImageInput("frame", 0, "images/00000000.jpg", 100, 50),),
+            categories=(CocoCategoryInput("category", 0, "zero"),),
+            annotations=(CocoAnnotationInput("annotation", "frame", "category", 1, 2, 3, 4),),
+        )
+    )
+    document["info"] = {"description": "unknown to the validator"}
+    document["licenses"] = []
+    annotations = document["annotations"]
+    images = document["images"]
+    categories = document["categories"]
+    assert (
+        isinstance(annotations, list) and isinstance(images, list) and isinstance(categories, list)
+    )
+    annotation = annotations[0]
+    image = images[0]
+    category = categories[0]
+    assert isinstance(annotation, dict) and isinstance(image, dict) and isinstance(category, dict)
+    annotation["segmentation"] = []
+    image["license"] = 1
+    category["supercategory"] = "text"
+
+    validate_coco_document(document)
+
+    del annotation["area"]
+    with pytest.raises(CocoComplianceError) as error:
+        validate_coco_document(document)
+    assert str(error.value) == "schema:annotations.0.area:missing"
 
 
 def test_manifest_annotation_sources_always_contains_zero_counts(
