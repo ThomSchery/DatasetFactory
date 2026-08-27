@@ -893,3 +893,137 @@ pada na `schema:annotations.0.area:missing`. Zaostrzenie modeli do
 Tabela mutacji ma po tej zmianie 20 przypadków, a `test_coco_export.py` 32
 testy. Nie zmieniono kodu produkcyjnego, formatu eksportu, zakazów wycieku,
 testu realnego Tesseracta, goldenu, `check.ps1`, `dev.ps1` ani frontendu.
+
+---
+
+# TK-006-T4 - packaged-local bez binarki OCR i audyty domykajace
+
+## Design Plan (przed kodem UI)
+
+Zakres UI jest waski i nie wprowadza nowego ekranu ani komponentu: Dashboard ma
+dalej renderowac istniejacy `SystemStatusPanel`, a w nim wiersz `Tesseract`,
+`StatusBadge` tonu warning dla niedostepnej zaleznosci oraz tekst diagnostyczny
+z `TD-015`. Kontener pozostaje istniejacym `Panel`. Nie powstaje przycisk,
+formularz, interakcja ani nowy CSS; stan jest nieinteraktywny i pochodzi z
+`GET /api/v1/health` / `GET /api/v1/dashboard`.
+
+- [ ] Layout/Siatka: bez nowego ukladu; istniejacy panel i lista zachowuja
+  `--size-xs/sm/md/lg` zgodnie z GRID-01/02 oraz grupowanie SPACING-01/02.
+- [ ] Typografia: bez nowych stylow; etykieta, badge i detail dziedzicza
+  istniejace FONTSIZE-02..10, LHEIGHT-09/10/11, TYPO-02..11 i sentence case
+  (CASING-02).
+- [ ] Kolory: stan niedostepnego opcjonalnego OCR uzywa istniejacego
+  `--color-status-warning-default`; znaczenie jest tez w tekscie i badge,
+  zgodnie z COLOR-08/09/10.
+- [ ] Obramowania: bez nowych obrysow; istniejacy Panel/StatusBadge zachowuja
+  BORDER-02/03, BWIDTH-06/10 oraz tokeny `--color-stroke-weak-default`.
+- [ ] Promien i cienie: bez zmian; istniejace komponenty zachowuja
+  RADIUS-02/03 i SHADOW-03.
+- [ ] Interakcje: brak elementu interaktywnego, wiec COLOR-07 i OPACITY-02 nie
+  wymagaja nowego stanu hover/active/disabled.
+- [ ] Komponenty: wykorzystane sa tylko istniejace `Panel` i `StatusBadge` z
+  katalogu `common`; nowy komponent nie jest potrzebny.
+
+Plan wykonania: (1) dodac opt-in montowanie zbudowanej SPA w FastAPI i skrypt
+jednokomendowy; (2) wykrywac skonfigurowany runtime/model Tesseracta wraz z
+pinami SHA-256, a brak lub mismatch raportowac jako degradacje z TD-015;
+(3) uznac `DF_FFMPEG_PATH`/`DF_FFPROBE_PATH` za jedyne zrodlo prawdy rowniez
+w realnym E2E; (4) dopisac testy i dokumentacje; (5) wykonac trzy audyty z
+`plik:linia`, domknac TD-001..019 i dopiero potem uruchomic cale `check.ps1`.
+
+## Audyt 1/3 - pokrycie funkcji MVP
+
+Porownano liste funkcji z `docs/CONTEXT.md:138` oraz `docs/CONTEXT.md:153` z realnymi testami i
+artefaktami. Wynik: 14/14 funkcji v1 objetych kontraktem T4 ma dowod, a dwie
+funkcje oznaczone jako `pozniej` sa jawnie nieobecne.
+
+| Funkcja | Dowod backend / artefakt | Dowod UI / E2E | Wynik |
+| --- | --- | --- | --- |
+| F01 - profil gry | `backend/tests/test_profile_workflow_api.py:141` | `frontend/src/features/profiles/profileFlow.test.tsx:189` | pokryta |
+| F03 - import nagrania | `backend/tests/test_material_workflow_api.py:126` | `frontend/src/features/materials/materialsFlow.test.tsx:95` | pokryta |
+| F04 - probkowanie klatek | `backend/tests/test_media_processing.py:111` | `frontend/e2e/vertical-flow.spec.ts:149` | pokryta realnym FFmpeg |
+| F05 - wycinanie HUD | `backend/tests/test_media_processing.py:111` | `frontend/e2e/vertical-flow.spec.ts:149` | pokryta realnym OpenCV i pelnym flow |
+| F06 - OCR | `backend/tests/test_tesseract_ocr.py:426` | `frontend/e2e/vertical-flow.spec.ts:149` | pokryta realnym Tesseractem i osobnym testowym portem E2E |
+| F07 - mapowanie znakow | `backend/tests/test_ocr_mapping.py:30` | `frontend/src/features/annotations/annotationReviewFlow.test.tsx:93` | pokryta wraz z provenance |
+| F08 - weryfikacja | `backend/tests/test_review_api.py:271`, `backend/tests/test_review_api.py:442`, `backend/tests/test_review_api.py:506` | `frontend/e2e/vertical-flow.spec.ts:369` | pokryta korekta, reject i reopen |
+| F09 - reczne boksy | `backend/tests/test_review_api.py:337` | `frontend/src/features/annotations/annotationReviewFlow.test.tsx:343`, `frontend/e2e/vertical-flow.spec.ts:399` | pokryta bez masek |
+| F11 - COCO JSON | `backend/tests/test_coco_export.py:366`, strict validator `backend/tests/coco_validation.py:52` | `frontend/src/features/exports/exportsFlow.test.tsx:347` | pokryta publikacja i provenance |
+| F12 - dashboard | `backend/tests/test_dashboard_api.py:200` | `frontend/src/features/dashboard/DashboardScreen.test.tsx:78` | pokryta |
+| F13 - materialy | `backend/tests/test_material_workflow_api.py:126` | `frontend/e2e/vertical-flow.spec.ts:204` | pokryta lista i wybor materialu |
+| F14 - stan pipeline'u | `backend/tests/test_workflow_state_machine.py:57`, `backend/tests/test_workflow_state_machine.py:63` | `frontend/src/api/queryKeys.test.ts:71` | pokryta tabela stanow i polling |
+| F15 - trwalosc | `backend/tests/test_migrations.py:14`, `backend/tests/test_durable_workflow.py:488` | `frontend/e2e/vertical-flow.spec.ts:149` | pokryta migracja i restart |
+| F16 - powloka UI | `frontend/src/app/routes.test.tsx:105` | `frontend/e2e/visual-qa.spec.ts:195`, artefakty `docs/tickets/FE-001/screenshots/dashboard-1440.png` i pozostale ekrany | pokryta |
+| F02 - lista/edycja profili | jawnie `pozniej`: `docs/CONTEXT.md:151` | brak trasy produkcyjnej; nie jest zastepowana mockiem | **nie zaimplementowano** |
+| F10 - SAM 3 | jawnie `pozniej`: `docs/CONTEXT.md:153` | `frontend/src/app/routes.test.tsx:124` dowodzi, ze shell nie udaje dzialajacego SAM 3 | **nie zaimplementowano** |
+
+Kontrola kodu produkcyjnego `git grep -n -E 'mock|stub|fake' -- backend/app
+frontend/src` nie znalazla implementacji F02 ani F10. Trafienia sa w testach albo
+w komentarzu `frontend/src/app/navigation.ts:57`, ktory wprost oznacza etap jako
+poza v1. Deterministyczny `OcrEngine` istnieje tylko w harnessie testowym
+`backend/tests/e2e_server.py:21`; nie jest adapterem produkcyjnym.
+
+## Audyt 2/3 - class responsibility gate
+
+| Klasa / grupa | Odpowiedzialnosc i szerokosc API | Ocena |
+| --- | --- | --- |
+| `CocoComplianceError` (`backend/tests/coco_validation.py:13`) | jeden sanitizowany blad validatora testowego | PASS |
+| `_CocoImage`, `_CocoCategory`, `_CocoAnnotation`, `_CocoDocument` (`backend/tests/coco_validation.py:17`, `:26`, `:33`, `:44`) | cztery deklaratywne fragmenty strict schema; bez I/O i logiki workflow | PASS |
+| `TesseractDependencyProbe` (`backend/app/access/status/service.py:88`) | jeden publiczny `probe()` (`:112`): istnienie, zgodnosc pinow i start instalacji operatora; wynik to `ProbeResult` | PASS |
+| `DatasetWorkflow` (`backend/app/managers/workflow/manager.py:75`) | fasada przypadkow uzycia runu: 5 wstrzyknietych wspolpracownikow (`:78`), deleguje wykonanie do `WorkflowWorker` i odtwarzanie do `WorkflowRecovery`; TK-006 nie dodal mu operacji | PASS - nie jest God Object |
+| `WorkflowWorker` (`backend/app/managers/workflow/worker.py:51`) | waskie API `process()`/`cancel_current()` (`:83`, `:121`); prywatne metody odpowiadaja kolejnym etapom sample/crop/OCR (`:125`, `:136`, `:167`) | PASS; hotspot rozmiaru, ale jedna odpowiedzialnosc i brak wzrostu API w TK-006 |
+| adapter Tesseract | proces `TesseractProcessRunner` (`backend/app/access/ocr/tesseract.py:40`), tozsamosc i piny `TesseractRuntimeIdentity` (`:126`), parser `TesseractOutputParser` (`:253`) oraz orkiestracja portu `TesseractOcrEngine` (`:318`) pozostaja osobnymi klasami | PASS - brak skupienia provider/parser/provenance w jednym obiekcie |
+| `DeterministicE2eOcrEngine` (`backend/tests/e2e_server.py:21`) | testowa implementacja trzy-metodowego portu, bez produkcyjnego fallbacku | PASS |
+
+W TK-006 nie dodano nowej klasy o mieszanej odpowiedzialnosci. Granica dla
+ewentualnego splitu `WorkflowWorker`: kolejny niezalezny etap pipeline'u albo
+trzecie publiczne wejscie; obecny stan nie spelnia tego triggera.
+
+## Audyt 3/3 - AI/ML boundary gate
+
+| Granica | Kod | Test pilnujacy |
+| --- | --- | --- |
+| input | `TesseractOcrEngine.detect_characters` w `backend/app/access/ocr/tesseract.py:363`; sciezka przechodzi przez `Workspace.resolve_relpath` w `:411`, obraz przez walidacje PIL w `:482` | ucieczka sciezki `backend/tests/test_tesseract_ocr.py:335` |
+| provider | `TesseractProcessRunner` w `backend/app/access/ocr/tesseract.py:40`; `Popen` dostaje liste argumentow w `:49`, nie string shellowy | missing/timeout/cancel `backend/tests/test_tesseract_ocr.py:361`, `:372`, `:391` |
+| parser | `TesseractOutputParser` w `backend/app/access/ocr/tesseract.py:253`, bez subprocessu i persystencji | poprawne i bledne dane `backend/tests/test_tesseract_ocr.py:111`, `:130`, `:149` |
+| walidacja/mapowanie | czysta funkcja `map_ocr_candidates` w `backend/app/engines/definition/ocr_mapping.py:52`; worker porownuje provenance w `backend/app/managers/workflow/worker.py:259` | geometria i provenance `backend/tests/test_ocr_mapping.py:30`, `:49` |
+| persystencja | worker publikuje manifest w `backend/app/managers/workflow/worker.py:213` i przekazuje wynik do repozytorium w `:227`; zapis kandydatow/provenance jest w `backend/app/access/store/repositories/frames.py:220` | restart `backend/tests/test_durable_workflow.py:488` i blokada zlego provenance `backend/tests/test_durable_workflow.py:730` |
+| timeout i retry | timeout w providerze `backend/app/access/ocr/tesseract.py:70`; retry tylko dla `ocr_timeout`/abnormal w `backend/app/access/ocr/tesseract.py:417` i decyzja w `:448` | dokladnie jedna ponowna proba `backend/tests/test_tesseract_ocr.py:186`, brak retry dla zwyklego bledu `:267` i unavailable `:281` |
+| provenance | piny sa mierzone w `backend/app/access/ocr/tesseract.py:146`, potem wymagane przez managera `backend/app/managers/workflow/manager.py:283` | pomiar/podmiana `backend/tests/test_tesseract_ocr.py:210`, `:232`; realny runtime `:426` |
+| fallback | `TesseractDependencyProbe` zwraca kontrolowana degradacje w `backend/app/access/status/service.py:112`; health mapuje ja na `degraded` w `backend/app/api/health.py:45` | brak runtime i mismatch `backend/tests/test_health_api.py:52`, `:74`; UI `frontend/src/features/dashboard/DashboardScreen.test.tsx:116` |
+
+Audyt wykryl realny przeciek zaleznosci: `DatasetWorkflow` i `WorkflowWorker`
+zalezne od portu `OcrEngine` importowaly `OcrProcessError` z konkretnego adaptera
+`access/ocr/tesseract.py`. Po zgloszeniu i decyzji wlasciciela kontrakt bledu
+zostal czysto mechanicznie przeniesiony obok portu do
+`backend/app/access/ocr/protocol.py:10` w osobnym commicie `da882c9`. Adapter
+reeksportuje nazwe przez import dla kompatybilnosci (`tesseract.py:23`), ale
+zrodlem prawdy jest modul kontraktu. Kody, komunikaty, hierarchia i retry nie
+zmienily sie. `git grep -n 'backend.app.access.ocr.tesseract' --
+backend/app/managers` zwraca 0 trafien; testy portu i workflow: 47/47 PASS.
+
+Po poprawce granica jest szczelna: manager i worker importuja port oraz blad z
+`backend.app.access.ocr` (`manager.py:9`, `worker.py:16`), a adapter zalezy od
+kontraktu (`tesseract.py:23`). Nie powstaje swobodny string shellowy ani sciezka
+sklejana poza `Workspace`; komenda OCR jest lista argumentow od
+`backend/app/access/ocr/tesseract.py:418`.
+
+## Rozstrzygniecie konfiguracji narzedzi zewnetrznych
+
+Autorytatywne sa `DF_FFMPEG_PATH` i `DF_FFPROBE_PATH` z `Settings`/`.env`.
+Bootstrap czyta je w `scripts/bootstrap.ps1:141`, realny E2E od teraz czyta te
+same wartosci w `backend/tests/e2e_server.py:94`, a testy realnych narzedzi
+w `backend/tests/test_material_workflow_api.py:281` i
+`backend/tests/test_media_processing.py:111` nie korzystaja z `PATH`.
+`git grep -n 'shutil.which'` pozostawia tylko niezalezna detekcje opcjonalnego
+GPU w `backend/app/access/status/service.py:68`.
+
+## Audyt TD-001..TD-019
+
+Rejestr ma 19/19 wierszy. Automatyczna kontrola wzorca dala 18 wierszy z co
+najmniej jednym realnym `plik:linia` i 2 jawne `Nie zaimplementowano` (zbiory
+nakladaja sie dla TD-012, bo wskazuje lokalna bramke, ale nie hostowane CI).
+Lacznie sprawdzono 41 referencji: 41 istnieje, 0 brakujacych plikow i 0 numerow
+poza koncem pliku. TD-011 pozostaje jawnie bez implementacji backupu;
+TD-012 pozostaje otwarte bez CI z triggerem **pierwszy wspolpracownik lub
+publikacja repo** (`docs/TECH_DEBT.md:24`, `docs/TECH_DEBT.md:25`). Nie wprowadzono nowego
+uproszczenia wymagajacego TD-020.
