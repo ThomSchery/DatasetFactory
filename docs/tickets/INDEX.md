@@ -25,7 +25,7 @@
 | TK-006-T2 | Restart, resume i pełna ścieżka review w E2E | wykonany | TK-006-T1 | część Gate 4 ✓ |
 | TK-006-T3 | Validator COCO, realny Tesseract i zapis zależności | do zrobienia | TK-006-T2 | część Gate 4 |
 | TK-006-T4 | Packaged-local bez binarki OCR i audyty domykające | do zrobienia | TK-006-T3 | Gate 4 |
-| TK-010 | Skrócenie backendowej bramki testowej | do zrobienia | TK-006-T2 | przed TK-006-T3 |
+| TK-010 | Skrócenie backendowej bramki testowej | wykonany | TK-006-T2 | przed TK-006-T3 ✓ |
 
 Fixup `TK-001-F1` wykonany i ponownie zweryfikowany: 25/25 testów backendu,
 15/15 frontendu, pełny lint/typecheck/build/audit bez ostrzeżeń.

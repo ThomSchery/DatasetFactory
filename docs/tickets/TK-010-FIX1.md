@@ -1,6 +1,6 @@
 # TK-010-FIX1 — przywrócić prawdziwy start aplikacji w testach
 
-Status: GOTOWY
+Status: WYKONANY (2026-08-27)
 
 ## Powód
 
