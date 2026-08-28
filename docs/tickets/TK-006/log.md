@@ -1334,3 +1334,25 @@ treści testu, który miał jej pilnować. Audyt zapisał też `19/19`, choć po
 rejestr zawierał 20 pozycji. To nie jest dług produktu, lecz reguła wykonywania
 audytu: **gdy artefakt twierdzi, że zachowanie ma pokrycie, raz celowo zepsuć to,
 co test rzekomo chroni, i wymagać czerwonego wyniku**.
+
+Pierwsze uruchomienie `check.ps1` po próbie mutacyjnej zatrzymało się na
+`backend format`: przywrócenie linii zachowało blob Git, ale zostawiło mieszane
+zakończenia linii w dotkniętym fragmencie `worker.py`. Formatter znormalizował
+wyłącznie zakończenia linii; blob produkcyjnego pliku nadal był identyczny z
+HEAD (`d3775b7c28e99ce5a85158010b645f72c4f2aa69`). Następny pełny
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`
+przeszedł jednym nieprzerwanym przebiegiem `PASS 9/9`:
+
+| Bramka | Dowód |
+| --- | --- |
+| backend format | 238/238 plików, 0 wymagających formatowania |
+| backend lint | 0 błędów |
+| mypy | 99 plików, 0 problemów |
+| pytest | 331/331 w 294,70 s; krok 301,0 s |
+| frontend typecheck | 0 błędów; krok 1,1 s |
+| Vitest | 33/33 pliki, 446/446 testów w 24,34 s; krok 25,3 s |
+| build | 295 modułów; main 498,48 kB / gzip 152,88 kB; krok 1,5 s |
+| Playwright | 4/4 w 50,2 s; krok 51,5 s |
+| E2E root safety | 2/2; krok 0,7 s |
+
+Tymczasowy `.env` został usunięty po bramce. Bez push i merge.
