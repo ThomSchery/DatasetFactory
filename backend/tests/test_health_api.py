@@ -116,7 +116,7 @@ def test_missing_operator_tesseract_is_an_explicit_degraded_200_without_tracebac
         "critical": False,
         "detail": (
             "Stan zdegradowany: brak zweryfikowanej instalacji operatora; "
-            "realny OCR jest wylaczony (TD-015)."
+            "realny OCR jest wyłączony (TD-015)."
         ),
     }
 
@@ -137,7 +137,7 @@ def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_ava
         "critical": False,
         "detail": (
             "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna; "
-            "realny OCR jest wylaczony (TD-015)."
+            "realny OCR jest wyłączony (TD-015)."
         ),
     }
 
@@ -148,12 +148,12 @@ def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_ava
         (
             "ffmpeg_path",
             "missing-ffmpeg.exe",
-            "Stan zdegradowany: FFmpeg jest niedostepny (not_found).",
+            "Stan zdegradowany: FFmpeg jest niedostępny (not_found).",
         ),
         (
             "ffprobe_path",
             "missing-ffprobe.exe",
-            "Stan zdegradowany: ffprobe jest niedostepny (not_found).",
+            "Stan zdegradowany: ffprobe jest niedostępny (not_found).",
         ),
     ],
 )

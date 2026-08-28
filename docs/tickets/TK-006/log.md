@@ -1214,3 +1214,18 @@ lokalizacyjna przywraca polskie znaki w istniejących pełnych zdaniach.
 Tryb `impeccable clarify` potwierdza kierunek: producent i fixture muszą używać
 jednej terminologii, pełnych tłumaczalnych zdań i rzeczywistego tekstu produktu.
 Nie zmieniamy faktów, hierarchii komunikatu ani działania naprawczego.
+
+## P2-3 - granica UTF-8 i próby
+
+Wszystkie wystąpienia `wylaczony`/`niedostepny` w produkowanych komunikatach
+statusu zostały zmienione na `wyłączony`/`niedostępny`. Przepływ tych wartości
+to wyłącznie `service.py` -> `HealthResponse`/`DashboardResponse` -> JSON FastAPI
+-> `SystemStatusPanel`; żaden zmieniony ciąg nie trafia do loggera, konsoli ani
+PowerShella. Warunek zatrzymania nie zachodzi.
+
+Pierwsze targetowane wywołanie objęło także realny `test_status_probe.py` i
+dało 13/14, ponieważ re-review poprawnie usunął tymczasowy `.env`, a domyślna
+przykładowa ścieżka `D:\tools\ffmpeg` nie istnieje na hoście. To błąd zakresu
+wywołania, nie regresja copy. Właściwe testy bez zależności od lokalnego `.env`:
+backend health 9/9 i Dashboard 7/7 PASS. Przed finalnym `check.ps1` `.env`
+zostanie odtworzony z rzeczywistą ścieżką i ponownie usunięty po bramce.

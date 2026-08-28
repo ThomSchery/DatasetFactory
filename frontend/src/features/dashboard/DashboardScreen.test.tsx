@@ -123,7 +123,7 @@ describe("system status", () => {
             available: false,
             critical: false,
             detail:
-              "Stan zdegradowany: brak zweryfikowanej instalacji operatora; realny OCR jest wylaczony (TD-015).",
+              "Stan zdegradowany: brak zweryfikowanej instalacji operatora; realny OCR jest wyłączony (TD-015).",
           },
         }),
       }),

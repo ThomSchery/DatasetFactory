@@ -89,11 +89,11 @@ class TesseractDependencyProbe:
 
     _MISSING_DETAIL = (
         "Stan zdegradowany: brak zweryfikowanej instalacji operatora; "
-        "realny OCR jest wylaczony (TD-015)."
+        "realny OCR jest wyłączony (TD-015)."
     )
     _MISMATCH_DETAIL = (
         "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna; "
-        "realny OCR jest wylaczony (TD-015)."
+        "realny OCR jest wyłączony (TD-015)."
     )
 
     def __init__(
@@ -127,7 +127,7 @@ class TesseractDependencyProbe:
             return ProbeResult(
                 False,
                 "Stan zdegradowany: zweryfikowany runtime nie odpowiada "
-                f"({executable.detail}); realny OCR jest wylaczony (TD-015).",
+                f"({executable.detail}); realny OCR jest wyłączony (TD-015).",
             )
         return ProbeResult(True, "Zweryfikowana instalacja operatora (SHA-256).")
 
@@ -211,11 +211,11 @@ class SystemStatusAccess:
         if not ffmpeg.available:
             return ProbeResult(
                 False,
-                f"Stan zdegradowany: FFmpeg jest niedostepny ({ffmpeg.detail}).",
+                f"Stan zdegradowany: FFmpeg jest niedostępny ({ffmpeg.detail}).",
             )
         if not ffprobe.available:
             return ProbeResult(
                 False,
-                f"Stan zdegradowany: ffprobe jest niedostepny ({ffprobe.detail}).",
+                f"Stan zdegradowany: ffprobe jest niedostępny ({ffprobe.detail}).",
             )
         return ProbeResult(True, "available")
