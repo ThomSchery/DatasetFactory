@@ -119,6 +119,55 @@ def test_worker_require_provenance_rejects_mismatched_ocr_candidates() -> None:
     assert caught.value.retryable is False
 
 
+def test_worker_ocr_path_rejects_mismatched_provenance_before_persistence(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    expected_ocr = StubOcrEngine()
+    initial_workflow, _, _ = _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        expected_ocr,
+    )
+    record = initial_workflow.create_run(
+        profile_id=seeded.profile_id,
+        video_id=seeded.video_id,
+        interval_ms=1000,
+    )
+    initial_workflow.shutdown()
+
+    mismatched = replace(expected_ocr.describe(()), runtime_sha256="9" * 64)
+    mismatched_ocr = StubOcrEngine(provenance=mismatched)
+    _install_workflow(
+        composition,
+        StubMediaAccess(composition),
+        mismatched_ocr,
+    )
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        started = client.post(
+            f"/api/v1/runs/{record.id}/start",
+            json={"expected_version": record.version},
+        )
+        assert started.status_code == 202
+        failed = _wait_status(client, record.id, "failed")
+        assert failed["error_code"] == "ocr_provenance_mismatch"
+
+    assert mismatched_ocr.detect_calls == 1
+    with composition.database.session() as session:
+        assert session.scalar(select(func.count()).select_from(OcrObservation)) == 0
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(StageCheckpoint)
+                .where(StageCheckpoint.run_id == record.id, StageCheckpoint.stage == "ocr")
+            )
+            == 0
+        )
+
+
 class StubMediaAccess:
     def __init__(
         self,

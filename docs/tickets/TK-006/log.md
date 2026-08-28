@@ -986,7 +986,7 @@ trzecie publiczne wejscie; obecny stan nie spelnia tego triggera.
 | provider | `TesseractProcessRunner` w `backend/app/access/ocr/tesseract.py:40`; `Popen` dostaje liste argumentow w `:49`, nie string shellowy | missing/timeout/cancel `backend/tests/test_tesseract_ocr.py:361`, `:372`, `:391` |
 | parser | `TesseractOutputParser` w `backend/app/access/ocr/tesseract.py:253`, bez subprocessu i persystencji | poprawne i bledne dane `backend/tests/test_tesseract_ocr.py:111`, `:130`, `:149` |
 | walidacja/mapowanie | czysta funkcja `map_ocr_candidates` w `backend/app/engines/definition/ocr_mapping.py:52`; worker porownuje provenance w `backend/app/managers/workflow/worker.py:259` | geometria i provenance `backend/tests/test_ocr_mapping.py:30`, `:49` |
-| persystencja | worker sprawdza zgodnosc provenance przed mapowaniem i persystencja (`backend/app/managers/workflow/worker.py:182`, guard `:259`), nastepnie publikuje manifest (`:212`) i zapisuje wynik w repozytorium (`:227`); zapis kandydatow/provenance jest w `backend/app/access/store/repositories/frames.py:220` | restart bez duplikatow `backend/tests/test_durable_workflow.py:504`; ujawnianie `experimental`/`quality_gate=failed` `:325`; ostrzezenie pozostajace waznym provenance `:1354`; blokada kandydata z niedopasowanym provenance `:107` |
+| persystencja | worker sprawdza zgodnosc provenance przed mapowaniem i persystencja (`backend/app/managers/workflow/worker.py:182`, guard `:259`), nastepnie publikuje manifest (`:212`) i zapisuje wynik w repozytorium (`:227`); zapis kandydatow/provenance jest w `backend/app/access/store/repositories/frames.py:220` | restart bez duplikatow `backend/tests/test_durable_workflow.py:553`; ujawnianie `experimental`/`quality_gate=failed` `:374`; ostrzezenie pozostajace waznym provenance `:1403`; jednostkowa blokada kandydata z niedopasowanym provenance `:107`; podpiecie guardu w sciezce workera przed persystencja `:122` |
 | timeout i retry | timeout w providerze `backend/app/access/ocr/tesseract.py:70`; retry tylko dla `ocr_timeout`/abnormal w `backend/app/access/ocr/tesseract.py:417` i decyzja w `:448` | dokladnie jedna ponowna proba `backend/tests/test_tesseract_ocr.py:186`, brak retry dla zwyklego bledu `:267` i unavailable `:281` |
 | provenance | piny sa mierzone w `backend/app/access/ocr/tesseract.py:146`, potem wymagane przez managera `backend/app/managers/workflow/manager.py:283` | pomiar/podmiana `backend/tests/test_tesseract_ocr.py:210`, `:232`; realny runtime `:426` |
 | fallback | `TesseractDependencyProbe` zwraca kontrolowana degradacje w `backend/app/access/status/service.py:112`; health mapuje ja na `degraded` w `backend/app/api/health.py:45` | brak runtime i mismatch `backend/tests/test_health_api.py:52`, `:74`; UI `frontend/src/features/dashboard/DashboardScreen.test.tsx:116` |
@@ -1308,3 +1308,29 @@ i merge.
 Po finalnej weryfikacji zapisano jeszcze odziedziczony rozjazd końcowego
 ukośnika jako TD-020. To wyłącznie korekta prawdziwości audytu: nie zmienia kodu,
 wyniku bramki ani zakresu FIX2.
+
+## TK-006-T4-FIX3 - domknięcie dowodu persystencji
+
+`test_worker_ocr_path_rejects_mismatched_provenance_before_persistence` uruchamia
+realną ścieżkę workera z runem pinującym oczekiwane provenance i istniejącym
+`StubOcrEngine(provenance=...)`, który zwraca mismatch. Test wymaga kontrolowanego
+`failed` z `ocr_provenance_mismatch`, jednego wywołania OCR oraz braku obserwacji
+i checkpointu OCR.
+
+Dowód nośności usunął wyłącznie wywołanie
+`self._require_provenance(candidates, expected)` z `worker.py:182`, pozostawiając
+guard nietknięty. Nowy test poczerwieniał komunikatem
+`AssertionError: run did not reach failed; last={... 'status': 'review_ready',
+'error_code': None, ...}`. Po przywróceniu wywołania test przeszedł 1/1, a blob
+`worker.py` miał ten sam hash co HEAD:
+`d3775b7c28e99ce5a85158010b645f72c4f2aa69`.
+
+### Wniosek metodyczny z zimnego review
+
+Weryfikacja zatrzymywała się wcześniej na pierwszej zieleni. Regresja F3 wybrała
+POST, czyli tę połowę semantyki metod, która już działała. Wiersz persystencji
+przeszedł trzy rundy, ponieważ sprawdzano istnienie wskazanej linii zamiast
+treści testu, który miał jej pilnować. Audyt zapisał też `19/19`, choć po FIX2
+rejestr zawierał 20 pozycji. To nie jest dług produktu, lecz reguła wykonywania
+audytu: **gdy artefakt twierdzi, że zachowanie ma pokrycie, raz celowo zepsuć to,
+co test rzekomo chroni, i wymagać czerwonego wyniku**.
