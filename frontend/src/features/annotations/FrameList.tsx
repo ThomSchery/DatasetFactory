@@ -26,6 +26,7 @@ export function FrameList({ disabled, frames, onPageChange, onSelect, selectedId
           {frames.total}
         </StatusBadge>
       }
+      className="df-review-workspace__frames-column"
       description="Lista nie pobiera obrazów. Otwiera jedną klatkę naraz."
       eyebrow="Run"
       title="Klatki"

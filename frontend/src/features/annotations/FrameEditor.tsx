@@ -248,6 +248,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
             {review.label}
           </StatusBadge>
         }
+        className="df-review-workspace__preview"
         description="Współrzędne bbox są pikselami naturalnego obrazu klatki. Boksy mogą się nakładać."
         eyebrow={`Klatka ${frame.frame_index}`}
         title="Obraz i bbox"
@@ -452,6 +453,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
             {activeAnnotations.length}
           </StatusBadge>
         }
+        className="df-review-workspace__inspector"
         description="Każdą operację v1 wykonasz z klawiatury bez trafiania w bbox na obrazie."
         eyebrow="Inspektor"
         title="Anotacje"

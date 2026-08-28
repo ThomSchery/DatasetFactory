@@ -6,6 +6,8 @@ export interface PanelProps {
   /** Rendered at the top right of the header, e.g. a status badge. */
   aside?: ReactNode;
   children: ReactNode;
+  /** Optional feature layout hook; the visual authority remains `df-panel`. */
+  className?: string;
   description?: string;
   /** Small uppercase label above the title; groups panels that belong together. */
   eyebrow?: string;
@@ -21,11 +23,12 @@ export interface PanelProps {
  * Always a landmark `<section>` labelled by its own heading, so the page has a
  * real outline for keyboard and screen reader users (FE-08).
  */
-export function Panel({ aside, children, description, eyebrow, title }: PanelProps) {
+export function Panel({ aside, children, className, description, eyebrow, title }: PanelProps) {
   const titleId = useId();
+  const classes = ["df-panel", className].filter(Boolean).join(" ");
 
   return (
-    <section aria-labelledby={titleId} className="df-panel">
+    <section aria-labelledby={titleId} className={classes}>
       <header className="df-panel__header">
         <div className="df-panel__heading">
           {eyebrow === undefined ? null : <p className="df-panel__eyebrow">{eyebrow}</p>}

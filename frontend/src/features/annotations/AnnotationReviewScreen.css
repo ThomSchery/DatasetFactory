@@ -6,10 +6,12 @@
 
 .df-review-workspace {
   display: grid;
+  grid-template-areas:
+    "preview preview"
+    "frames inspector";
   grid-template-columns:
-    minmax(calc(var(--size-xxl) * 3), 24%)
-    minmax(0, 1fr)
-    minmax(calc(var(--control-height-md) * 8), 32%);
+    minmax(calc(var(--size-xxl) * 3), 1fr)
+    minmax(0, 3fr);
   align-items: start;
   gap: var(--size-md);
   min-width: 0;
@@ -26,11 +28,29 @@
 }
 
 .df-review-workspace__query-state {
-  grid-column: span 2;
+  grid-area: preview;
 }
 
 .df-review-workspace__all-state {
   grid-column: 1 / -1;
+}
+
+.df-review-workspace__preview {
+  grid-area: preview;
+}
+
+.df-review-workspace__frames-column {
+  grid-area: frames;
+}
+
+.df-review-workspace__inspector {
+  grid-area: inspector;
+}
+
+.df-review-workspace__preview,
+.df-review-workspace__frames-column,
+.df-review-workspace__inspector {
+  min-width: 0;
 }
 
 .df-review-frames,
