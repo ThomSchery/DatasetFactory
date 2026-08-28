@@ -1239,3 +1239,56 @@ do jednej próby (`backend/app/access/ocr/tesseract.py:443`, `:448`). Pozostałe
 kody opisują awarię już zainstalowanego i zweryfikowanego runtime, wejścia lub
 workspace, a nie wspierany przez T4 stan braku OCR. Rozszerzanie ich copy nie
 wchodzi do FIX2; nie zmieniono fallbacku ani `REQUIRED_ERROR_CODES`.
+
+## Wynik TK-006-T4-FIX2
+
+Zmiany zostały rozdzielone według findingów:
+
+- `d8bc01b` — P2-1: strażnik catch-all SPA korzysta z predykatu znanej trasy
+  również dla GET i zachowuje 405 `http_error`;
+- `6e3e7c6` — P3-1: regresja przechodzi po wszystkich efektywnych ścieżkach
+  `/api/*` z OpenAPI i wymaga ich rozpoznania przez predykat;
+- `22de69c` — P2-2: test guardu mismatch provenance i uczciwe referencje audytu;
+- `ea8daca` — P2-3: poprawna polszczyzna w produkowanych szczegółach statusu
+  oraz zgodne asercje backendu i fixture Dashboardu;
+- `fa5ed21` — P3-2: zapisana świadoma granica centralnego fallbacku OCR.
+
+Macierz zmierzona po zmianie porównuje pełną kopertę odpowiedzi poza unikalnym
+`request_id`:
+
+| Trasa | Metoda | Dev | Packaged |
+| --- | --- | --- | --- |
+| znana `/api/v1/runs` | GET | 405 `http_error` | 405 `http_error` |
+| znana `/api/v1/health` | POST | 405 `http_error` | 405 `http_error` |
+| znana `/api/v1/health` | PATCH | 405 `http_error` | 405 `http_error` |
+| nieznana `/api/v1/not-a-route` | GET | 404 `route_not_found` | 404 `route_not_found` |
+| nieznana `/api/v1/not-a-route` | POST | 404 `route_not_found` | 404 `route_not_found` |
+| nieznana `/api/v1/not-a-route` | PATCH | 404 `route_not_found` | 404 `route_not_found` |
+
+`test_worker_require_provenance_rejects_mismatched_ocr_candidates` buduje
+kandydatów istniejącym `StubOcrEngine(provenance=...)` i asertuje kontrolowany,
+sanityzowany `OcrProcessError`: kod `ocr_provenance_mismatch` oraz
+`retryable is False`. Nie zmieniono kodu produkcyjnego ani stuba.
+
+`test_declared_api_path_predicate_recognizes_every_effective_openapi_path`
+przechodzi po efektywnych ścieżkach OpenAPI i zabezpiecza przyszłe użycie
+`include_router(prefix=...)`. Pozostałe kody `ocr_*` świadomie zachowują fallback
+opisany wyżej.
+
+Pełny `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+scripts/check.ps1` zakończył się w jednym nieprzerwanym przebiegu `PASS 9/9`:
+
+| Bramka | Dowód |
+| --- | --- |
+| backend format | 238/238 plików, 0 wymagających formatowania |
+| backend lint | 0 błędów |
+| mypy | 99 plików, 0 problemów |
+| pytest | 330/330 w 282,03 s; krok 287,3 s |
+| frontend typecheck | 0 błędów |
+| Vitest | 33/33 pliki, 446/446 testów w 20,05 s; krok 20,9 s |
+| build | 295 modułów; main 498,48 kB / gzip 152,88 kB; krok 1,4 s |
+| Playwright | 4/4 w 45,0 s; krok 46,2 s |
+| E2E root safety | 2/2; krok 0,6 s |
+
+Ignorowany tymczasowy `.env` został bezpiecznie usunięty po bramce. Bez push
+i merge.

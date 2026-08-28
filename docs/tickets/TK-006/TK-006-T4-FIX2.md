@@ -1,6 +1,6 @@
 # TK-006-T4-FIX2 — szczelność kontraktu packaged i dowodu Gate 4
 
-Status: W TRAKCIE
+Status: WYKONANY
 
 ## Powód
 
