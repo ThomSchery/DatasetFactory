@@ -143,17 +143,23 @@ describe("system status", () => {
       status: 200,
       body: dashboardFixture({
         system: healthFixture({
-          ffmpeg: { available: false, critical: false, detail: "Nie znaleziono ffprobe w PATH." },
+          status: "degraded",
+          ffmpeg: {
+            available: false,
+            critical: false,
+            detail: "Stan zdegradowany: ffprobe jest niedostępny (not_found).",
+          },
         }),
       }),
     }));
     renderApp(["/"]);
 
     const system = await screen.findByRole("region", { name: "Stan systemu" });
+    expect(system).toHaveTextContent("Ograniczony");
     for (const label of ["FFmpeg", "Tesseract", "Katalog roboczy", "GPU"]) {
       expect(within(system).getByText(label)).toBeInTheDocument();
     }
-    expect(system).toHaveTextContent("Nie znaleziono ffprobe w PATH.");
+    expect(system).toHaveTextContent("ffprobe jest niedostępny");
 
     const sam = within(system).getByText("SAM 3").closest("li");
     expect(sam).not.toBeNull();

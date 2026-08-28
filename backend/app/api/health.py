@@ -49,7 +49,7 @@ def health_response(snapshot: SystemStatusSnapshot) -> HealthResponse:
             "unavailable"
             if not snapshot.operational
             else "degraded"
-            if not snapshot.tesseract.available
+            if not snapshot.ffmpeg.available or not snapshot.tesseract.available
             else "ok"
         ),
         database=_status_response(snapshot.database),

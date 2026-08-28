@@ -2,14 +2,51 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
+from backend.app.access.ocr import TesseractRuntimeIdentity
+from backend.app.access.status.service import (
+    ProbeResult,
+    SystemStatusAccess,
+    TesseractDependencyProbe,
+)
 from backend.app.composition import CompositionRoot
 from backend.app.config import Settings
 from backend.app.main import create_app
+
+
+class FilePresenceResourceProbe:
+    """Test probe whose availability follows the configured filesystem path."""
+
+    _EXPECTED: ClassVar[dict[str, tuple[tuple[str, ...], str]]] = {
+        "ffmpeg.exe": (("-version",), "ffmpeg version"),
+        "ffprobe.exe": (("-version",), "ffprobe version"),
+        "tesseract.exe": (("--version",), "tesseract"),
+    }
+
+    def executable(
+        self,
+        path: Path,
+        *,
+        arguments: tuple[str, ...],
+        output_marker: str,
+        timeout_seconds: int,
+    ) -> ProbeResult:
+        del timeout_seconds
+        if not path.is_file():
+            return ProbeResult(False, "not_found")
+        if self._EXPECTED.get(path.name.lower()) != (arguments, output_marker):
+            return ProbeResult(False, "unexpected_probe")
+        return ProbeResult(True, "available")
+
+    def gpu(self, *, timeout_seconds: int) -> ProbeResult:
+        del timeout_seconds
+        return ProbeResult(True, "available")
 
 
 def test_health_200_reports_all_dependencies(
@@ -89,6 +126,65 @@ def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_ava
             "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna; "
             "realny OCR jest wylaczony (TD-015)."
         ),
+    }
+
+
+@pytest.mark.parametrize(
+    ("missing_setting", "missing_name", "expected_detail"),
+    [
+        (
+            "ffmpeg_path",
+            "missing-ffmpeg.exe",
+            "Stan zdegradowany: FFmpeg jest niedostepny (not_found).",
+        ),
+        (
+            "ffprobe_path",
+            "missing-ffprobe.exe",
+            "Stan zdegradowany: ffprobe jest niedostepny (not_found).",
+        ),
+    ],
+)
+def test_missing_configured_media_dependency_is_explicit_degraded_200(
+    tmp_path: Path,
+    settings: Settings,
+    composition: CompositionRoot,
+    missing_setting: str,
+    missing_name: str,
+    expected_detail: str,
+) -> None:
+    settings.ffmpeg_path.write_bytes(b"fixture ffmpeg runtime")
+    settings.ffprobe_path.write_bytes(b"fixture ffprobe runtime")
+    degraded_settings = settings.model_copy(
+        update={missing_setting: tmp_path / "tools" / missing_name}
+    )
+    resource_probe = FilePresenceResourceProbe()
+    composition.system_status = SystemStatusAccess(
+        composition.database,
+        composition.workspace,
+        degraded_settings,
+        resource_probe,
+        TesseractDependencyProbe(
+            TesseractRuntimeIdentity(
+                degraded_settings.tesseract_path,
+                degraded_settings.tesseract_model_path,
+                degraded_settings.tesseract_version,
+                degraded_settings.tesseract_runtime_sha256,
+                degraded_settings.tesseract_model_sha256,
+            ),
+            resource_probe,
+            timeout_seconds=degraded_settings.tesseract_timeout_seconds,
+        ),
+    )
+
+    with TestClient(create_app(degraded_settings, composition=composition)) as client:
+        response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["ffmpeg"] == {
+        "available": False,
+        "critical": False,
+        "detail": expected_detail,
     }
 
 

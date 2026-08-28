@@ -209,7 +209,13 @@ class SystemStatusAccess:
     @staticmethod
     def _combined_ffmpeg_status(ffmpeg: ProbeResult, ffprobe: ProbeResult) -> ProbeResult:
         if not ffmpeg.available:
-            return ProbeResult(False, f"ffmpeg_{ffmpeg.detail}")
+            return ProbeResult(
+                False,
+                f"Stan zdegradowany: FFmpeg jest niedostepny ({ffmpeg.detail}).",
+            )
         if not ffprobe.available:
-            return ProbeResult(False, f"ffprobe_{ffprobe.detail}")
+            return ProbeResult(
+                False,
+                f"Stan zdegradowany: ffprobe jest niedostepny ({ffprobe.detail}).",
+            )
         return ProbeResult(True, "available")
