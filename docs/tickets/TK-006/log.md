@@ -1121,6 +1121,14 @@ Poprawne wywolanie z `frontend/` dalo 1/1 plik i 46/46 testow PASS.
 Wzorcem zostal development: nieznane `/api/*` oznacza brak trasy, wiec GET,
 POST i PATCH zwracaja 404 `route_not_found` niezaleznie od zamontowania SPA.
 Montaż SPA jest warstwa prezentacji i nie powinien zmieniac semantyki API.
+Jawny wyjątek od tego zdania stanowi odziedziczona sprzed FIX1 obsługa końcowego
+ukośnika: `GET /api/v1/health/` zwraca w development 307 z przekierowaniem do
+`/api/v1/health`, a w packaged 404 `route_not_found`. Wbudowany frontend nie
+wywołuje tego wariantu — wszystkie ścieżki przekazywane do klienta API są bez
+końcowego ukośnika — dlatego rozjazd nie wpływa na v1. Nie jest jednak uznany za
+docelową granicę kontraktu: zapisano go jako TD-020 z triggerem pierwszego
+zewnętrznego konsumenta API, bo wtedy zgodność development/packaged staje się
+obserwowalnym wymaganiem integracyjnym.
 Znana trasa wywolana z niedozwolona metoda nadal zwraca 405 `http_error`.
 
 Pierwsza proba testu F3 dala 5/7: wstawienie funkcji pomocniczej przypadkowo
@@ -1292,3 +1300,7 @@ scripts/check.ps1` zakończył się w jednym nieprzerwanym przebiegu `PASS 9/9`:
 
 Ignorowany tymczasowy `.env` został bezpiecznie usunięty po bramce. Bez push
 i merge.
+
+Po finalnej weryfikacji zapisano jeszcze odziedziczony rozjazd końcowego
+ukośnika jako TD-020. To wyłącznie korekta prawdziwości audytu: nie zmienia kodu,
+wyniku bramki ani zakresu FIX2.
