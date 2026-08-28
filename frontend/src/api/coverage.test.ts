@@ -75,6 +75,9 @@ const REQUIRED_ERROR_CODES = [
   "active_run",
   "export_running",
   "no_accepted_frames",
+  "ocr_provenance_unknown",
+  "ocr_provenance_mismatch",
+  "ocr_configuration_invalid",
   "export_revision_conflict",
   "export_source_missing",
   "export_process_interrupted",
@@ -97,5 +100,16 @@ describe("central error code dictionary", () => {
 
   it("falls back on a null export error_code", () => {
     expect(describeErrorCode(null).message).toBe("Operacja nie powiodła się.");
+  });
+
+  it.each([
+    "ocr_provenance_unknown",
+    "ocr_provenance_mismatch",
+    "ocr_configuration_invalid",
+  ])("explains how to repair non-retryable OCR error %s", (code) => {
+    const copy = describeErrorCode(code);
+    expect(`${copy.message} ${copy.action}`).toContain("Tesseract");
+    expect(copy.action).toContain("TD-015");
+    expect(copy.action).not.toMatch(/spróbuj|ponow/i);
   });
 });

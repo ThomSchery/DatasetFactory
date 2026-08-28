@@ -86,6 +86,23 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Worker przetwarzający run jest niedostępny.",
     action: "Sprawdź, czy backend działa, i spróbuj ponownie.",
   },
+  ocr_provenance_unknown: {
+    message:
+      "Nie można uruchomić runu, ponieważ brakuje zweryfikowanego runtime’u lub modelu Tesseracta.",
+    action:
+      "Zainstaluj Tesseracta zgodnie z TD-015 i ustaw jego ścieżki oraz sumy SHA-256 w konfiguracji.",
+  },
+  ocr_provenance_mismatch: {
+    message:
+      "Nie można uruchomić runu, ponieważ runtime lub model Tesseracta nie zgadza się z przypiętą sumą SHA-256.",
+    action:
+      "Zainstaluj zweryfikowaną wersję Tesseracta zgodną z TD-015 albo popraw przypięte sumy w konfiguracji.",
+  },
+  ocr_configuration_invalid: {
+    message: "Nie można uruchomić runu, ponieważ konfiguracja Tesseracta jest niepełna albo niepoprawna.",
+    action:
+      "Zainstaluj Tesseracta zgodnie z TD-015 i uzupełnij ścieżki, wersję oraz sumy SHA-256 w konfiguracji.",
+  },
 
   // --- profiles ---
   profile_name_exists: {

@@ -1060,3 +1060,58 @@ produkcji. Nastepny pelny przebieg od kroku 1 zakonczyl sie `PASS 9/9`:
 Gate 4 i caly MVP sa zamkniete. Nie zmieniono `scripts/check.ps1`, nie dodano
 zaleznosci, binarki/modelu OCR, CI, chmury ani implementacji F02/F10. Bez push
 i bez merge.
+
+---
+
+# TK-006-T4-FIX1 - Design Plan przed zmiana `frontend/src/`
+
+Fixup dotyka czterech istniejacych elementow prezentacji, bez nowego ekranu,
+komponentu ani stylu:
+
+1. centralnego copy bledu renderowanego przez istniejace `UiStates.InlineError`
+   po odmowie utworzenia runu;
+2. istniejacego `SystemStatusPanel` na Dashboardzie;
+3. zagregowanego `StatusBadge` stanu systemu (`Ograniczony`);
+4. istniejacego tekstu `detail` w wierszu `FFmpeg`, ktory nazywa brakujacy
+   `ffmpeg` albo `ffprobe`.
+
+Zmiana typowania `HealthResponse.status` zamyka istniejacy trojstanowy kontrakt
+`ok | degraded | unavailable`; nie zmienia DOM ani copy. Copy trzech bledow OCR
+korzysta z istniejacej pary `message` + `action` i nie dodaje interakcji.
+
+## Moduly i ID
+
+| Obszar | Zastosowanie |
+| --- | --- |
+| Architektura frontend | FE-03: stan pochodzi z istniejacego query Dashboardu; FE-06: odmowa runu uzywa centralnego `InlineError`, a status pozostaje jawnym stanem UI; FE-08: badge ma `srLabel`, a znaczenie degradacji jest rowniez w tekscie; FE-10: regresje copy i Dashboardu; FE-11: frontend nie interpretuje ani nie uruchamia OCR poza odpowiedzia API |
+| Komponenty | `new-component.md` sekcje 4-5: istniejace `UiStates.InlineError`, `Panel` i `StatusBadge`; brak nowego komponentu common i brak elementu interaktywnego |
+| Layout/Siatka | GRID-01/02 oraz SPACING-01/02: bez zmian DOM, CSS, ukladu panelu i listy; copy pozostaje w istniejacych kontenerach |
+| Typografia | TYPO-01..11, FONTSIZE-02..10, LHEIGHT-09/10/11 i CASING-02: bez nowych stylow; trzy komunikaty sa zdaniami w sentence case, detail dziedziczy istniejace tokeny |
+| Kolor | COLOR-08/09/10: degradacja nadal uzywa semantycznego tonu warning i nie polega wylacznie na kolorze; brak nowej pary kolorow |
+| Obramowania i promien | BORDER-02/03, BWIDTH-06/10 oraz RADIUS-02/03/05: istniejace `Panel`, `InlineError` i `StatusBadge` bez zmian wizualnych |
+| Cienie i przezroczystosc | SHADOW-03 oraz OPACITY-01/02: brak zmian cieni i stanow interakcji |
+
+## Checklista `new-component.md` sekcja 2.2
+
+- [x] **Layout/Siatka:** bez zmian; istniejacy panel, lista i kontener bledu
+  zachowuja tokeny siatki i odstepow.
+- [x] **Typografia:** nowe copy i detail uzywaja istniejacej typografii;
+  sentence case, bez nowych rozmiarow, wag lub wysokosci linii.
+- [x] **Kolory:** `Ograniczony` pozostaje warning; status i nazwa zaleznosci sa
+  rowniez tekstowe zgodnie z COLOR-09.
+- [x] **Obramowania:** bez zmian.
+- [x] **Cienie:** bez zmian.
+- [x] **Interakcje:** brak nowej interakcji; komunikaty nie sugeruja retry dla
+  bledow z `retryable=False`.
+- [x] **Komponenty:** tylko istniejace `UiStates.InlineError`, `Panel` i
+  `StatusBadge`; katalog common pozostaje bez zmian.
+
+Plan wykonania: (1) dodac trzy komunikaty OCR i gate kompletnosci; (2) rozszerzyc
+`degraded` o brak `ffmpeg`/`ffprobe` oraz przetestowac backend i Dashboard przez
+skonfigurowana nieistniejaca sciezke; (3) ujednolicic 404 dla nieznanego
+`/api/*` w dev i packaged przy GET/POST/PATCH; (4) zamknac typ statusu i poprawic
+referencje audytu; (5) wykonac jeden pelny, nieprzerwany `scripts/check.ps1`.
+
+Pierwsza proba testu F1 zostala uruchomiona z katalogu repo i zakonczyla sie
+`ENOENT`, bo `package.json` lezy w `frontend/`. To blad wywolania, nie testu.
+Poprawne wywolanie z `frontend/` dalo 1/1 plik i 46/46 testow PASS.
