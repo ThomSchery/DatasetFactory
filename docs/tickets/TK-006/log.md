@@ -1160,3 +1160,57 @@ scripts/check.ps1` zakonczyl sie w jednym nieprzerwanym przebiegu `PASS 9/9`:
 | E2E root safety | 2/2; krok 0,7 s |
 
 Ignorowany tymczasowy `.env` zostal usuniety po bramce. Bez push i merge.
+
+---
+
+# TK-006-T4-FIX2 - Design Plan przed zmiana `frontend/src/`
+
+## Granice przed kodem
+
+Pięć literałów z brakującymi polskimi znakami jest produkowanych wyłącznie w
+`SystemStatusAccess`/`TesseractDependencyProbe`, kopiowanych do modeli
+`HealthResponse` i `DashboardResponse`, kodowanych przez FastAPI jako JSON UTF-8
+i renderowanych dosłownie przez `SystemStatusPanel`. `git grep` nie wykazał ich
+w loggerze, konsoli ani skryptach PowerShell; warunek zatrzymania P2-3 nie
+zachodzi. Test provenance może wywołać istniejący statyczny guard z kandydatem
+zbudowanym przez `StubOcrEngine(provenance=...)`; nie wymaga zmiany produkcji ani
+stuba, więc drugi warunek zatrzymania także nie zachodzi.
+
+## Elementy UI
+
+1. Istniejący `SystemStatusPanel` na Dashboardzie.
+2. Istniejący wiersz zależności `Tesseract` i jego tekst `detail`.
+3. Istniejący wiersz zależności `FFmpeg` (obejmujący ffmpeg/ffprobe) i jego
+   tekst `detail`.
+4. Istniejący zagregowany `StatusBadge` `Ograniczony` — bez zmiany copy lub tonu.
+5. Fixture `DashboardScreen.test.tsx`, który ma odtwarzać tekst producenta JSON,
+   a nie wymyśloną odmianę kontraktu.
+
+Nie powstaje ekran, komponent, CSS, interakcja ani nowa wiadomość. Zmiana
+lokalizacyjna przywraca polskie znaki w istniejących pełnych zdaniach.
+
+## Moduły i ID
+
+| Obszar | Zastosowanie |
+| --- | --- |
+| Architektura frontend | FE-03: stan pochodzi z query Dashboardu; FE-06: jawny stan zdegradowany; FE-08: znaczenie pozostaje tekstowe obok badge; FE-10: fixture ma odpowiadać producentowi; FE-11: frontend wyłącznie renderuje lokalne API |
+| Komponenty | `new-component.md` sekcje 4-5: istniejące `Panel` i `StatusBadge`; detail jest istniejącym nieinteraktywnym akapitem, brak nowego common component |
+| Layout/Siatka | GRID-01/02 i SPACING-01/02: bez zmian DOM, wymiarów, odstępów i grupowania |
+| Typografia i copy | TYPO-01..11, FONTSIZE-02..10, LHEIGHT-09/10/11, LSPACE-02/03/09 i CASING-02: pełne polskie zdania w sentence case, istniejące tokeny bez zmian |
+| Kolor | COLOR-08/09/10: degradacja nadal ma warning i tekstową nazwę zależności; bez nowej palety |
+| Obramowania/promień | BORDER-02/03, BWIDTH-06/10 i RADIUS-02/03/05: bez zmian |
+| Cienie/przezroczystość | SHADOW-03 i OPACITY-01/02: bez zmian, brak nowych stanów interakcji |
+
+## Checklista `new-component.md` sekcja 2.2
+
+- [x] **Layout/Siatka:** bez zmian.
+- [x] **Typografia:** tylko korekta `wyłączony`/`niedostępny`; obecne tokeny.
+- [x] **Kolory:** bez zmian; warning pozostaje opisany tekstem.
+- [x] **Obramowania:** bez zmian.
+- [x] **Cienie:** bez zmian.
+- [x] **Interakcje:** brak elementów interaktywnych.
+- [x] **Komponenty:** tylko istniejące `Panel` i `StatusBadge`.
+
+Tryb `impeccable clarify` potwierdza kierunek: producent i fixture muszą używać
+jednej terminologii, pełnych tłumaczalnych zdań i rzeczywistego tekstu produktu.
+Nie zmieniamy faktów, hierarchii komunikatu ani działania naprawczego.
