@@ -1115,3 +1115,18 @@ referencje audytu; (5) wykonac jeden pelny, nieprzerwany `scripts/check.ps1`.
 Pierwsza proba testu F1 zostala uruchomiona z katalogu repo i zakonczyla sie
 `ENOENT`, bo `package.json` lezy w `frontend/`. To blad wywolania, nie testu.
 Poprawne wywolanie z `frontend/` dalo 1/1 plik i 46/46 testow PASS.
+
+## Rozstrzygniecie F3 i proby implementacyjne
+
+Wzorcem zostal development: nieznane `/api/*` oznacza brak trasy, wiec GET,
+POST i PATCH zwracaja 404 `route_not_found` niezaleznie od zamontowania SPA.
+Montaż SPA jest warstwa prezentacji i nie powinien zmieniac semantyki API.
+Znana trasa wywolana z niedozwolona metoda nadal zwraca 405 `http_error`.
+
+Pierwsza proba testu F3 dala 5/7: wstawienie funkcji pomocniczej przypadkowo
+przenioslo dekorator klientowej trasy poza `_mount_spa`, a rozpoznanie znanej
+trasy nie uwzglednialo routerow zagniezdzonych przez obecna wersje FastAPI.
+Po przywroceniu dekoratora i przejsciu po deklarowanych routerach wynik wynosi
+7/7 PASS. Porownanie dev/package obejmuje GET, POST i PATCH oraz pelna koperte
+poza unikalnym `request_id`; osobna regresja utrzymuje 405 dla POST na znane
+`/api/v1/health`.

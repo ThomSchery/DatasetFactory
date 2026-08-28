@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +21,12 @@ def _built_spa(root: Path) -> Path:
     )
     (assets_dir / "app.js").write_text("globalThis.packagedLocal = true;", encoding="utf-8")
     return spa_dir
+
+
+def _error_without_request_id(response_body: dict[str, object]) -> dict[str, object]:
+    error = dict(cast(dict[str, object], response_body["error"]))
+    error.pop("request_id")
+    return error
 
 
 def test_packaged_local_serves_spa_client_routes_and_api_from_one_app(
@@ -44,6 +51,49 @@ def test_packaged_local_serves_spa_client_routes_and_api_from_one_app(
     assert health.headers["content-type"].startswith("application/json")
     assert missing_api.status_code == 404
     assert missing_api.json()["error"]["code"] == "route_not_found"
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "PATCH"])
+def test_packaged_local_preserves_dev_unknown_api_route_contract_for_every_method(
+    tmp_path: Path,
+    settings: Settings,
+    composition: CompositionRoot,
+    method: str,
+) -> None:
+    packaged_settings = settings.model_copy(update={"spa_dir": _built_spa(tmp_path)})
+
+    with TestClient(create_app(settings, composition=composition)) as dev_client:
+        dev_response = dev_client.request(method, "/api/v1/not-a-route")
+    with TestClient(create_app(packaged_settings, composition=composition)) as packaged_client:
+        packaged_response = packaged_client.request(method, "/api/v1/not-a-route")
+
+    assert packaged_response.status_code == dev_response.status_code == 404
+    assert (
+        _error_without_request_id(packaged_response.json())
+        == _error_without_request_id(dev_response.json())
+        == {
+            "code": "route_not_found",
+            "message": "Route not found.",
+            "details": {},
+        }
+    )
+    assert (
+        packaged_response.json()["error"]["request_id"] == packaged_response.headers["X-Request-ID"]
+    )
+
+
+def test_packaged_local_keeps_405_for_a_known_api_path_with_the_wrong_method(
+    tmp_path: Path,
+    settings: Settings,
+    composition: CompositionRoot,
+) -> None:
+    packaged_settings = settings.model_copy(update={"spa_dir": _built_spa(tmp_path)})
+
+    with TestClient(create_app(packaged_settings, composition=composition)) as client:
+        response = client.post("/api/v1/health")
+
+    assert response.status_code == 405
+    assert response.json()["error"]["code"] == "http_error"
 
 
 @pytest.mark.parametrize("missing", ["index", "assets"])

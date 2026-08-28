@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import BaseRoute
 
 from backend.app import __version__
 from backend.app.api.annotations import create_annotations_router
@@ -52,6 +53,29 @@ def _mount_spa(application: FastAPI, spa_dir: Path) -> None:
         if client_path == "api" or client_path.startswith("api/"):
             raise StarletteHTTPException(status_code=404)
         return FileResponse(index_path)
+
+
+def _iter_declared_routes(routes: Iterable[BaseRoute]) -> Iterator[BaseRoute]:
+    for route in routes:
+        included_router = getattr(route, "original_router", None)
+        if included_router is None:
+            yield route
+        else:
+            yield from _iter_declared_routes(included_router.routes)
+
+
+def _matches_declared_api_path(application: FastAPI, request: Request) -> bool:
+    """Distinguish a known API path with the wrong method from the SPA catch-all."""
+    for route in _iter_declared_routes(application.router.routes):
+        route_path = getattr(route, "path", "")
+        path_regex = getattr(route, "path_regex", None)
+        if (
+            (route_path == "/api" or route_path.startswith("/api/"))
+            and path_regex is not None
+            and path_regex.match(request.url.path) is not None
+        ):
+            return True
+    return False
 
 
 def create_app(
@@ -146,10 +170,18 @@ def create_app(
 
     @application.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        code = "route_not_found" if exc.status_code == 404 else "http_error"
-        message = "Route not found." if exc.status_code == 404 else "HTTP request failed."
+        status_code = exc.status_code
+        is_api_path = request.url.path == "/api" or request.url.path.startswith("/api/")
+        if (
+            status_code == 405
+            and is_api_path
+            and not _matches_declared_api_path(application, request)
+        ):
+            status_code = 404
+        code = "route_not_found" if status_code == 404 else "http_error"
+        message = "Route not found." if status_code == 404 else "HTTP request failed."
         envelope = error_envelope(request, code=code, message=message)
-        return JSONResponse(status_code=exc.status_code, content=envelope.model_dump())
+        return JSONResponse(status_code=status_code, content=envelope.model_dump())
 
     @application.exception_handler(Exception)
     async def unhandled_error(request: Request, _: Exception) -> JSONResponse:
