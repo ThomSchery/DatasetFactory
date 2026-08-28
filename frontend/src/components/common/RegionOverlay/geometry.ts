@@ -89,6 +89,37 @@ export function clientPointToSource(
   };
 }
 
+/** Inclusive edges match how a visible SVG rectangle is perceived as a hit. */
+export function rectContainsPoint(rect: SourceRect, point: SourcePoint): boolean {
+  return (
+    point.x >= rect.x &&
+    point.y >= rect.y &&
+    point.x <= rect.x + rect.width &&
+    point.y <= rect.y + rect.height
+  );
+}
+
+/**
+ * OCR may return a word bbox around smaller character bboxes. Choosing the
+ * smallest containing rectangle keeps every character reachable regardless of
+ * SVG paint order; equal-area ties preserve the caller's stable list order.
+ */
+export function smallestRectAtPoint<T extends SourceRect>(
+  rects: readonly T[],
+  point: SourcePoint,
+): T | undefined {
+  let smallest: T | undefined;
+  for (const rect of rects) {
+    if (!rectContainsPoint(rect, point)) {
+      continue;
+    }
+    if (smallest === undefined || rect.width * rect.height < smallest.width * smallest.height) {
+      smallest = rect;
+    }
+  }
+  return smallest;
+}
+
 /** The rectangle spanned by two corners, in any drag direction. */
 export function rectFromPoints(origin: SourcePoint, current: SourcePoint): SourceRect {
   return {

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -110,6 +110,32 @@ describe("annotation review query states", () => {
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     expect(screen.getByText("Manual")).toBeInTheDocument();
     expect(screen.getAllByText("91%")).toHaveLength(1);
+  });
+
+  it("keeps image and inspector selection synchronized through one selectedId", async () => {
+    const user = userEvent.setup();
+    const second = annotationFixture({ id: "ann-2", category_id: "category-2", x: 400 });
+    reviewApi({ frame: frameDetailFixture({ annotations: [annotationFixture(), second] }) });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const options = within(overlay).getAllByRole("option");
+    const rows = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getAllByRole(
+      "listitem",
+    );
+    const firstFill = options[0]?.querySelector(".df-region-overlay__shape-fill");
+    expect(firstFill).not.toBeNull();
+
+    fireEvent.click(firstFill as Element);
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    expect(rows[0]).toHaveAttribute("data-selected", "true");
+    expect(within(rows[0]!).getByRole("button", { name: "Zaznaczona" })).toBeVisible();
+
+    await user.click(within(rows[1]!).getByRole("button", { name: "Zaznacz" }));
+    expect(options[0]).toHaveAttribute("aria-selected", "false");
+    expect(options[1]).toHaveAttribute("aria-selected", "true");
+    expect(rows[0]).not.toHaveAttribute("data-selected");
+    expect(rows[1]).toHaveAttribute("data-selected", "true");
   });
 
   it("renders the selected-frame error state with retry", async () => {

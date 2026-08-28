@@ -433,6 +433,32 @@ describe("keyboard reach", () => {
 
     expect(first).toHaveAttribute("aria-selected", "true");
   });
+
+  it("selects the smaller bbox even when a larger overlapping bbox is painted last", () => {
+    const onSelect = vi.fn();
+    renderOverlay({
+      initialShapes: [
+        { id: "character", label: "Pojedyncza cyfra", x: 120, y: 110, width: 19, height: 40 },
+        { id: "word", label: "Dwie cyfry", x: 100, y: 100, width: 101, height: 57 },
+      ],
+      onSelect,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const largeOption = screen.getByRole("option", { name: /Dwie cyfry/ });
+    const largeFill = largeOption.querySelector(".df-region-overlay__shape-fill");
+    expect(largeFill).not.toBeNull();
+
+    // Source (130, 130) lies inside both boxes. The event is deliberately sent
+    // to the larger, later-painted element to prove DOM order is irrelevant.
+    fireEvent.click(largeFill as Element, { clientX: 65, clientY: 65 });
+
+    expect(onSelect).toHaveBeenCalledWith("character");
+    expect(screen.getByRole("option", { name: /Pojedyncza cyfra/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
 });
 
 describe("the picture itself", () => {

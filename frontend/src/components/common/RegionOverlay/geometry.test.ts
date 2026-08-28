@@ -5,7 +5,9 @@ import {
   clientPointToSource,
   fitsInSource,
   isDrawableRect,
+  rectContainsPoint,
   rectFromPoints,
+  smallestRectAtPoint,
   sourceViewBox,
 } from "./geometry";
 
@@ -109,6 +111,24 @@ describe("rectFromPoints", () => {
       width: 0,
       height: 0,
     });
+  });
+});
+
+describe("overlapping rectangle hit testing", () => {
+  const large = { id: "word", x: 100, y: 100, width: 101, height: 57 };
+  const small = { id: "character", x: 120, y: 110, width: 19, height: 40 };
+
+  it("treats the visible rectangle edges as part of the hit", () => {
+    expect(rectContainsPoint(small, { x: 120, y: 110 })).toBe(true);
+    expect(rectContainsPoint(small, { x: 139, y: 150 })).toBe(true);
+    expect(rectContainsPoint(small, { x: 140, y: 150 })).toBe(false);
+  });
+
+  it("chooses the smaller bbox independent of input and paint order", () => {
+    const point = { x: 130, y: 130 };
+
+    expect(smallestRectAtPoint([small, large], point)).toBe(small);
+    expect(smallestRectAtPoint([large, small], point)).toBe(small);
   });
 });
 

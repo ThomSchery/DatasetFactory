@@ -5,6 +5,7 @@ import {
   clientPointToSource,
   isDrawableRect,
   rectFromPoints,
+  smallestRectAtPoint,
   sourceViewBox,
   type SourcePoint,
   type SourceRect,
@@ -125,17 +126,27 @@ export function RegionOverlay({
   const canDraw = onDraw !== undefined && !disabled && source !== null;
   const canInteract = !disabled;
 
-  function pointFrom(event: PointerEvent<SVGSVGElement>): SourcePoint | null {
+  function sourcePointAt(clientX: number, clientY: number): SourcePoint | null {
     const surface = surfaceRef.current;
     if (surface === null || source === null) {
       return null;
     }
     const box = surface.getBoundingClientRect();
     return clientPointToSource(
-      { x: event.clientX, y: event.clientY },
+      { x: clientX, y: clientY },
       { left: box.left, top: box.top, width: box.width, height: box.height },
       source,
     );
+  }
+
+  function pointFrom(event: PointerEvent<SVGSVGElement>): SourcePoint | null {
+    return sourcePointAt(event.clientX, event.clientY);
+  }
+
+  function selectShapeAt(clientX: number, clientY: number, fallbackId: string): void {
+    const point = sourcePointAt(clientX, clientY);
+    const hit = point === null ? undefined : smallestRectAtPoint(shapes, point);
+    onSelect?.(hit?.id ?? fallbackId);
   }
 
   function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
@@ -197,7 +208,7 @@ export function RegionOverlay({
     if (isDrawableRect(rect)) {
       onDraw?.(rect);
     } else if (draft.originShapeId !== null) {
-      onSelect?.(draft.originShapeId);
+      selectShapeAt(event.clientX, event.clientY, draft.originShapeId);
     }
   }
 
@@ -288,6 +299,13 @@ export function RegionOverlay({
               suppressCapturedClickRef.current = false;
               event.preventDefault();
               event.stopPropagation();
+              return;
+            }
+            const fallbackId = shapeIdFromTarget(event.target);
+            if (fallbackId !== null && canInteract) {
+              event.preventDefault();
+              event.stopPropagation();
+              selectShapeAt(event.clientX, event.clientY, fallbackId);
             }
           }}
           onPointerDown={handlePointerDown}
@@ -307,7 +325,6 @@ export function RegionOverlay({
               index={index}
               key={shape.id}
               onKeyDown={handleKeyDown}
-              onSelect={canInteract ? onSelect : undefined}
               refCallback={(element) => {
                 if (element === null) {
                   optionRefs.current.delete(shape.id);
@@ -339,7 +356,6 @@ export function RegionOverlay({
 interface ShapeOptionProps {
   index: number;
   onKeyDown: (event: KeyboardEvent<SVGGElement>, shape: OverlayShape, index: number) => void;
-  onSelect?: (id: string) => void;
   refCallback: (element: SVGGElement | null) => void;
   selected: boolean;
   shape: OverlayShape;
@@ -354,7 +370,6 @@ function shapeName(shape: OverlayShape): string {
 function ShapeOption({
   index,
   onKeyDown,
-  onSelect,
   refCallback,
   selected,
   shape,
@@ -372,9 +387,6 @@ function ShapeOption({
       className={classes}
       data-overlay-shape-id={shape.id}
       data-selected={selected || undefined}
-      onClick={() => {
-        onSelect?.(shape.id);
-      }}
       onKeyDown={(event) => {
         onKeyDown(event, shape, index);
       }}
