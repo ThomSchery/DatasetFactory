@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import cast
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
+from starlette.types import Scope
 
 from backend.app.composition import CompositionRoot
 from backend.app.config import Settings
-from backend.app.main import create_app
+from backend.app.main import _matches_declared_api_path, create_app
 
 
 def _built_spa(root: Path) -> Path:
@@ -27,6 +30,24 @@ def _error_without_request_id(response_body: dict[str, object]) -> dict[str, obj
     error = dict(cast(dict[str, object], response_body["error"]))
     error.pop("request_id")
     return error
+
+
+def _request_for_path(path: str) -> Request:
+    scope: Scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 80),
+    }
+    return Request(scope)
 
 
 def test_packaged_local_serves_spa_client_routes_and_api_from_one_app(
@@ -114,6 +135,22 @@ def test_packaged_local_preserves_dev_known_api_path_wrong_method_contract(
             "details": {},
         }
     )
+
+
+def test_declared_api_path_predicate_recognizes_every_effective_openapi_path(
+    settings: Settings,
+    composition: CompositionRoot,
+) -> None:
+    application = create_app(settings, composition=composition)
+    api_paths = [path for path in application.openapi()["paths"] if path.startswith("/api/")]
+
+    assert api_paths
+    for path_template in api_paths:
+        concrete_path = re.sub(r"{[^}]+}", "probe", path_template)
+        assert _matches_declared_api_path(
+            application,
+            _request_for_path(concrete_path),
+        ), path_template
 
 
 @pytest.mark.parametrize("missing", ["index", "assets"])
