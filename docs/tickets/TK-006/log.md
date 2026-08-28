@@ -1022,11 +1022,15 @@ GPU w `backend/app/access/status/service.py:68`.
 Rejestr ma 19/19 wierszy. Automatyczna kontrola wzorca dala 18 wierszy z co
 najmniej jednym realnym `plik:linia` i 2 jawne `Nie zaimplementowano` (zbiory
 nakladaja sie dla TD-012, bo wskazuje lokalna bramke, ale nie hostowane CI).
+Liczba 19/19 opisuje stan sprzed FIX2; późniejsze dodanie TD-020 wyjaśnia
+[sekcja wyniku FIX2](#wynik-tk-006-t4-fix2).
 Lacznie sprawdzono 41 referencji: 41 istnieje, 0 brakujacych plikow i 0 numerow
 poza koncem pliku. TD-011 pozostaje jawnie bez implementacji backupu;
 TD-012 pozostaje otwarte bez CI z triggerem **pierwszy wspolpracownik lub
 publikacja repo** (`docs/TECH_DEBT.md:24`, `docs/TECH_DEBT.md:25`). Nie wprowadzono nowego
 uproszczenia wymagajacego TD-020.
+To rozstrzygnięcie opisuje stan sprzed FIX2; późniejsze dodanie TD-020 wyjaśnia
+[sekcja wyniku FIX2](#wynik-tk-006-t4-fix2).
 
 ## Packaged-local smoke i finalna bramka
 
