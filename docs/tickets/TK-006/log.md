@@ -1229,3 +1229,13 @@ przykładowa ścieżka `D:\tools\ffmpeg` nie istnieje na hoście. To błąd zakr
 wywołania, nie regresja copy. Właściwe testy bez zależności od lokalnego `.env`:
 backend health 9/9 i Dashboard 7/7 PASS. Przed finalnym `check.ps1` `.env`
 zostanie odtworzony z rzeczywistą ścieżką i ponownie usunięty po bramce.
+
+## P3-2 - świadoma granica copy OCR
+
+Poza trzema kodami konfiguracji/provenance objętymi F1 pozostałe kody `ocr_*`
+zachowują centralny fallback. Dla `ocr_timeout` i `ocr_process_abnormal` rada
+ponowienia jest prawdziwa: adapter oznacza je jako retryable i ogranicza retry
+do jednej próby (`backend/app/access/ocr/tesseract.py:443`, `:448`). Pozostałe
+kody opisują awarię już zainstalowanego i zweryfikowanego runtime, wejścia lub
+workspace, a nie wspierany przez T4 stan braku OCR. Rozszerzanie ich copy nie
+wchodzi do FIX2; nie zmieniono fallbacku ani `REQUIRED_ERROR_CODES`.
