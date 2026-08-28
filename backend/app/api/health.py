@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Annotated, Protocol
+from typing import Annotated, Literal, Protocol
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -25,7 +25,7 @@ class DependencyStatusResponse(StrictModel):
 
 class HealthResponse(StrictModel):
     version: str
-    status: str
+    status: Literal["ok", "degraded", "unavailable"]
     database: DependencyStatusResponse
     workspace: DependencyStatusResponse
     ffmpeg: DependencyStatusResponse

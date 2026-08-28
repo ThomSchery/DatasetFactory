@@ -70,6 +70,19 @@ def test_health_200_reports_all_dependencies(
     )
 
 
+def test_health_openapi_closes_the_overall_status_contract(
+    settings: Settings,
+    composition: CompositionRoot,
+) -> None:
+    with TestClient(create_app(settings, composition=composition)) as client:
+        response = client.get("/openapi.json")
+
+    status_schema = response.json()["components"]["schemas"]["HealthResponse"]["properties"][
+        "status"
+    ]
+    assert status_schema["enum"] == ["ok", "degraded", "unavailable"]
+
+
 def test_health_503_uses_error_envelope(
     settings: Settings,
     composition: CompositionRoot,
