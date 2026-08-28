@@ -82,18 +82,38 @@ def test_packaged_local_preserves_dev_unknown_api_route_contract_for_every_metho
     )
 
 
-def test_packaged_local_keeps_405_for_a_known_api_path_with_the_wrong_method(
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/v1/runs"),
+        ("POST", "/api/v1/health"),
+        ("PATCH", "/api/v1/health"),
+    ],
+)
+def test_packaged_local_preserves_dev_known_api_path_wrong_method_contract(
     tmp_path: Path,
     settings: Settings,
     composition: CompositionRoot,
+    method: str,
+    path: str,
 ) -> None:
     packaged_settings = settings.model_copy(update={"spa_dir": _built_spa(tmp_path)})
 
-    with TestClient(create_app(packaged_settings, composition=composition)) as client:
-        response = client.post("/api/v1/health")
+    with TestClient(create_app(settings, composition=composition)) as dev_client:
+        dev_response = dev_client.request(method, path)
+    with TestClient(create_app(packaged_settings, composition=composition)) as packaged_client:
+        packaged_response = packaged_client.request(method, path)
 
-    assert response.status_code == 405
-    assert response.json()["error"]["code"] == "http_error"
+    assert packaged_response.status_code == dev_response.status_code == 405
+    assert (
+        _error_without_request_id(packaged_response.json())
+        == _error_without_request_id(dev_response.json())
+        == {
+            "code": "http_error",
+            "message": "HTTP request failed.",
+            "details": {},
+        }
+    )
 
 
 @pytest.mark.parametrize("missing", ["index", "assets"])

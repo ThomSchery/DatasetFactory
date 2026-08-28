@@ -49,9 +49,10 @@ def _mount_spa(application: FastAPI, spa_dir: Path) -> None:
         return FileResponse(index_path)
 
     @application.get("/{client_path:path}", include_in_schema=False)
-    def spa_client_route(client_path: str) -> FileResponse:
+    def spa_client_route(request: Request, client_path: str) -> FileResponse:
         if client_path == "api" or client_path.startswith("api/"):
-            raise StarletteHTTPException(status_code=404)
+            status_code = 405 if _matches_declared_api_path(application, request) else 404
+            raise StarletteHTTPException(status_code=status_code)
         return FileResponse(index_path)
 
 
