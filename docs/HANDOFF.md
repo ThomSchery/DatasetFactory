@@ -39,7 +39,7 @@ oddzielnymi klasami/funkcjami wewnątrz modułu z jednym publicznym kontraktem.
   ograniczenia w `docs/tickets/FE-001/log.md`.
 - Gate 4: TK-006 — zamknięty 2026-08-27. Packaged-local serwuje SPA z FastAPI
   bez Vite i bez dołączonej binarki/modelu OCR; brak Tesseracta daje jawny stan
-  zdegradowany TD-015. Finalna bramka: PASS 9/9 (319 backend, 440 frontend,
+  zdegradowany TD-015. Finalna bramka po FIX1: PASS 9/9 (326 backend, 446 frontend,
   4 Playwright, 2 testy E2E root safety); audyty w `docs/tickets/TK-006/log.md`.
 
 ## Dług techniczny

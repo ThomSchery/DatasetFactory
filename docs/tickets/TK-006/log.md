@@ -1130,3 +1130,33 @@ Po przywroceniu dekoratora i przejsciu po deklarowanych routerach wynik wynosi
 7/7 PASS. Porownanie dev/package obejmuje GET, POST i PATCH oraz pelna koperte
 poza unikalnym `request_id`; osobna regresja utrzymuje 405 dla POST na znane
 `/api/v1/health`.
+
+## Wynik TK-006-T4-FIX1
+
+Zmiany zostaly rozdzielone wedlug findingow:
+
+- `35ec6b3` - F1: trzy komunikaty OCR bez sugestii ponowienia, gate copy oraz
+  ticket FIX1 i Design Plan;
+- `bf9a898` - F2: `degraded` dla braku FFmpeg/ffprobe, konkretne `detail` oraz
+  regresje backendu i Dashboardu;
+- `ae57d2d` - F3: 404 `route_not_found` zgodne z dev dla GET/POST/PATCH bez
+  zmiany 405 znanej trasy;
+- `d4acfec` - F4: zamkniety typ statusu w Python/OpenAPI oraz poprawione
+  referencje provenance `:309` i `:1338`.
+
+Pelny `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+scripts/check.ps1` zakonczyl sie w jednym nieprzerwanym przebiegu `PASS 9/9`:
+
+| Bramka | Dowod |
+| --- | --- |
+| backend format | 237/237 plikow, 0 wymagajacych formatowania |
+| backend lint | 0 bledow |
+| mypy | 99 plikow, 0 problemow |
+| pytest | 326/326 w 280,83 s; krok 286,9 s |
+| frontend typecheck | 0 bledow |
+| Vitest | 33/33 pliki, 446/446 testow; krok 26,2 s |
+| build | 295 modulow; main 498,48 kB / gzip 152,88 kB; krok 1,9 s |
+| Playwright | 4/4 w 58,7 s; krok 60,6 s |
+| E2E root safety | 2/2; krok 0,7 s |
+
+Ignorowany tymczasowy `.env` zostal usuniety po bramce. Bez push i merge.

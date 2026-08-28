@@ -1,6 +1,6 @@
 # TK-006-T4-FIX1 — uczciwość na ostatnim metrze prezentacji
 
-Status: GOTOWY
+Status: WYKONANY
 
 ## Powód
 
