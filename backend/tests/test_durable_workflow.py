@@ -5,7 +5,7 @@ import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -21,6 +21,7 @@ from backend.app.access.media.processing import (
     RegionCrop,
     SampledFrame,
 )
+from backend.app.access.ocr import OcrProcessError
 from backend.app.access.store.models import (
     Annotation,
     Category,
@@ -101,6 +102,21 @@ class StubOcrEngine:
 
     def cancel_current(self) -> None:
         self.cancelled.set()
+
+
+def test_worker_require_provenance_rejects_mismatched_ocr_candidates() -> None:
+    expected = StubOcrEngine().describe(())
+    mismatched = replace(expected, runtime_sha256="9" * 64)
+    candidates = StubOcrEngine(provenance=mismatched).detect_characters(
+        Path("workspace/crop.png"),
+        (),
+    )
+
+    with pytest.raises(OcrProcessError, match="ocr_provenance_mismatch") as caught:
+        WorkflowWorker._require_provenance(candidates, expected)
+
+    assert caught.value.code == "ocr_provenance_mismatch"
+    assert caught.value.retryable is False
 
 
 class StubMediaAccess:
