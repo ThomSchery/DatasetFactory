@@ -30,6 +30,7 @@ import { FatalError, InlineError, Loading } from "../../components/common/UiStat
 import { AnnotationList } from "./AnnotationList";
 import {
   EMPTY_GEOMETRY_DRAFT,
+  geometryDraft,
   parseGeometryDraft,
   type GeometryDraft,
 } from "./geometryForm";
@@ -109,11 +110,17 @@ interface RedrawMode {
   kind: "redraw";
 }
 
+interface GeometryPreview {
+  annotationId: string;
+  bbox: BBox;
+}
+
 function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   const queryClient = useQueryClient();
   const imageErrorCopy = describeErrorCode("frame_image_not_found");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [redrawMode, setRedrawMode] = useState<RedrawMode | null>(null);
+  const [geometryPreview, setGeometryPreview] = useState<GeometryPreview | null>(null);
   const [newCategoryId, setNewCategoryId] = useState(profile.categories[0]?.id ?? "");
   const [newGeometry, setNewGeometry] = useState<GeometryDraft>(() => ({
     ...EMPTY_GEOMETRY_DRAFT,
@@ -137,6 +144,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
     mutationKey: reviewMutationKey(runId),
     mutationFn: (intent) => executeReviewMutation(frame.id, intent),
     onError: async (error, intent) => {
+      if (intent.kind === "geometry") {
+        setGeometryPreview(null);
+      }
       const presentation = describeApiError(error);
       setActionError(presentation);
       if (presentation.code === "bbox_invalid") {
@@ -173,6 +183,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
         frameId: frame.id,
         runId,
       });
+      if (intent.kind === "geometry") {
+        setGeometryPreview(null);
+      }
     },
   });
 
@@ -181,14 +194,16 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   const shapes: OverlayShape[] = activeAnnotations.map((annotation) => {
     const categoryName = categoryById.get(annotation.category_id) ?? annotation.category_id;
     const sourceLabel = annotation.source === "ocr" ? "OCR" : "manual";
+    const geometry =
+      geometryPreview?.annotationId === annotation.id ? geometryPreview.bbox : annotation;
     return {
       id: annotation.id,
       label: `${categoryName}, źródło ${sourceLabel}`,
       tone: invalidSet.has(annotation.id) ? "error" : "brand",
-      x: annotation.x,
-      y: annotation.y,
-      width: annotation.width,
-      height: annotation.height,
+      x: geometry.x,
+      y: geometry.y,
+      width: geometry.width,
+      height: geometry.height,
     };
   });
   const stage = describeFrameStage(frame.stage_status);
@@ -200,6 +215,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
     redrawTarget === undefined
       ? null
       : `${categoryById.get(redrawTarget.category_id) ?? redrawTarget.category_id} (${redrawTarget.id})`;
+  const canDirectEdit = capabilities.canEdit && redrawMode === null;
 
   function submit(intent: ReviewMutationIntent): void {
     setActionError(null);
@@ -210,16 +226,41 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
     return activeAnnotations.find((annotation) => annotation.id === annotationId);
   }
 
+  function changeAnnotationGeometry(annotation: Annotation, bbox: BBox): void {
+    submit({
+      annotationId: annotation.id,
+      bbox,
+      expectedVersion: annotation.version,
+      kind: "geometry",
+    });
+  }
+
+  function previewAnnotationGeometry(annotationId: string, bbox: BBox): void {
+    setGeometryPreview({ annotationId, bbox });
+  }
+
+  function commitAnnotationGeometry(annotationId: string, bbox: BBox): void {
+    const annotation = annotationById(annotationId);
+    if (annotation === undefined) {
+      setGeometryPreview(null);
+      return;
+    }
+    const parsed = parseGeometryDraft(geometryDraft(bbox), {
+      width: frame.width,
+      height: frame.height,
+    });
+    if (parsed.bbox === null) {
+      setGeometryPreview(null);
+      return;
+    }
+    changeAnnotationGeometry(annotation, parsed.bbox);
+  }
+
   function handleDraw(bbox: BBox): void {
     if (redrawMode !== null) {
       const annotation = annotationById(redrawMode.annotationId);
       if (annotation !== undefined) {
-        submit({
-          annotationId: annotation.id,
-          bbox,
-          expectedVersion: annotation.version,
-          kind: "geometry",
-        });
+        changeAnnotationGeometry(annotation, bbox);
       }
       return;
     }
@@ -235,6 +276,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
 
   function selectAnnotation(annotationId: string): void {
     setSelectedId(annotationId);
+    setGeometryPreview((current) =>
+      current?.annotationId === annotationId ? current : null,
+    );
     // Selection means inspection. It cancels redraw so a later gesture cannot
     // silently PATCH the previously armed annotation.
     setRedrawMode(null);
@@ -403,6 +447,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
               : undefined
           }
           onSelect={selectAnnotation}
+          onShapeChange={canDirectEdit ? previewAnnotationGeometry : undefined}
+          onShapeChangeCancel={canDirectEdit ? () => setGeometryPreview(null) : undefined}
+          onShapeChangeEnd={canDirectEdit ? commitAnnotationGeometry : undefined}
           selectedId={selectedId}
           shapes={shapes}
           source={{ width: frame.width, height: frame.height }}
@@ -465,6 +512,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           disabled={editorDisabled}
           drawTargetId={redrawMode?.annotationId ?? null}
           frameSize={{ width: frame.width, height: frame.height }}
+          geometryPreview={geometryPreview}
           invalidIds={invalidSet}
           onCategoryChange={(annotation, categoryId) => {
             submit({
@@ -482,12 +530,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
             });
           }}
           onGeometryChange={(annotation, bbox) => {
-            submit({
-              annotationId: annotation.id,
-              bbox,
-              expectedVersion: annotation.version,
-              kind: "geometry",
-            });
+            changeAnnotationGeometry(annotation, bbox);
           }}
           onSelect={selectAnnotation}
           onToggleDrawTarget={(annotationId) => {

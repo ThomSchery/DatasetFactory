@@ -138,6 +138,58 @@ describe("annotation review query states", () => {
     expect(rows[1]).toHaveAttribute("data-selected", "true");
   });
 
+  it("updates geometry fields live and saves the dragged bbox through the existing PATCH", async () => {
+    const user = userEvent.setup();
+    const updated = annotationFixture({ x: 300, y: 220, width: 40, height: 32, version: 4 });
+    const fetchSpy = reviewApi({
+      mutation: () => ({ status: 200, body: updated }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const row = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getByRole(
+      "listitem",
+    );
+    await user.click(within(row).getByRole("button", { name: "Zaznacz" }));
+    const fill = within(overlay)
+      .getByRole("option")
+      .querySelector(".df-region-overlay__shape-fill");
+    expect(fill).not.toBeNull();
+
+    // The surface is exactly half the source dimensions. A 100/50 CSS-pixel
+    // move is therefore a 200/100 source-pixel move.
+    fireEvent.pointerDown(fill as Element, { clientX: 55, clientY: 65, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 155, clientY: 115, pointerId: 1 });
+
+    expect(within(row).getByLabelText("x")).toHaveValue(300);
+    expect(within(row).getByLabelText("y")).toHaveValue(220);
+    expect(within(row).getByLabelText("width")).toHaveValue(40);
+    expect(within(row).getByLabelText("height")).toHaveValue(32);
+
+    fireEvent.pointerUp(overlay, { clientX: 155, clientY: 115, pointerId: 1 });
+
+    await waitFor(() => {
+      const patchCall = fetchSpy.mock.calls.find(
+        ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+      );
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+        bbox: { x: 300, y: 220, width: 40, height: 32 },
+        expected_version: 3,
+      });
+    });
+  });
+
   it("renders the selected-frame error state with retry", async () => {
     stubFetch((url) => {
       if (url === "/api/v1/runs/run-1") {

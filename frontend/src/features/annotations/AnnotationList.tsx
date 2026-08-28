@@ -83,6 +83,7 @@ interface AnnotationListProps {
   disabled: boolean;
   drawTargetId: string | null;
   frameSize: { width: number; height: number };
+  geometryPreview: { annotationId: string; bbox: BBox } | null;
   invalidIds: ReadonlySet<string>;
   onCategoryChange: (annotation: Annotation, categoryId: string) => void;
   onDelete: (annotation: Annotation) => void;
@@ -121,6 +122,7 @@ function AnnotationRow({
   disabled,
   drawTargetId,
   frameSize,
+  geometryPreview,
   invalidIds,
   onCategoryChange,
   onDelete,
@@ -136,6 +138,8 @@ function AnnotationRow({
   const drawing = drawTargetId === annotation.id;
   const category = categories.find((item) => item.id === annotation.category_id);
   const categoryOptions = categories.map((item) => ({ label: item.name, value: item.id }));
+  const preview = geometryPreview?.annotationId === annotation.id ? geometryPreview.bbox : null;
+  const displayedDraft = preview === null ? form.draft : geometryDraft(preview);
 
   useEffect(() => {
     setForm((current) => syncAnnotationFormState(current, annotation, frameSize));
@@ -228,7 +232,7 @@ function AnnotationRow({
               setCoordinate(field, event.target.value);
             }}
             type="number"
-            value={form.draft[field]}
+            value={displayedDraft[field]}
             width="short"
           />
         ))}

@@ -48,22 +48,28 @@ function dragAcross(
 
 interface HarnessProps {
   initialShapes?: OverlayShape[];
+  initialSelectedId?: string | null;
   interactionMode?: "select" | "draw";
   onDraw?: (rect: SourceRect) => void;
   onSelect?: (id: string) => void;
+  onShapeChange?: (id: string, rect: SourceRect) => void;
+  onShapeChangeEnd?: (id: string, rect: SourceRect) => void;
   readOnly?: boolean;
 }
 
 /** The overlay driven the way a feature drives it: it owns the shape list. */
 function Harness({
   initialShapes = [],
+  initialSelectedId = null,
   interactionMode = "select",
   onDraw,
   onSelect,
+  onShapeChange,
+  onShapeChangeEnd,
   readOnly = false,
 }: HarnessProps) {
   const [shapes, setShapes] = useState<OverlayShape[]>(initialShapes);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [source, setSource] = useState<SourceSize | null>(null);
 
   return (
@@ -95,6 +101,17 @@ function Harness({
         onSelect?.(id);
         setSelectedId(id);
       }}
+      onShapeChange={
+        onShapeChange === undefined && onShapeChangeEnd === undefined
+          ? undefined
+          : (id, rect) => {
+              onShapeChange?.(id, rect);
+              setShapes((current) =>
+                current.map((shape) => (shape.id === id ? { ...shape, ...rect } : shape)),
+              );
+            }
+      }
+      onShapeChangeEnd={onShapeChangeEnd}
       onSourceResolved={setSource}
       selectedId={selectedId}
       shapes={shapes}
@@ -458,6 +475,76 @@ describe("keyboard reach", () => {
       "aria-selected",
       "true",
     );
+  });
+});
+
+describe("direct editing in source coordinates", () => {
+  const selected: OverlayShape = {
+    id: "selected",
+    label: "Wybrany bbox",
+    x: 100,
+    y: 120,
+    width: 40,
+    height: 32,
+  };
+
+  it("moves the selected bbox and keeps the edited geometry after a resize", () => {
+    const onShapeChangeEnd = vi.fn();
+    renderOverlay({
+      initialSelectedId: selected.id,
+      initialShapes: [selected],
+      onShapeChangeEnd,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const option = screen.getByRole("option");
+    const fill = option.querySelector(".df-region-overlay__shape-fill");
+    expect(fill).not.toBeNull();
+
+    fireEvent.pointerDown(fill as Element, { clientX: 55, clientY: 65, pointerId: 1 });
+    fireEvent.pointerMove(surface, { clientX: 155, clientY: 115, pointerId: 1 });
+
+    expect(shapeGeometry(option)).toEqual({ x: 300, y: 220, width: 40, height: 32 });
+
+    fireEvent.pointerUp(surface, { clientX: 155, clientY: 115, pointerId: 1 });
+    expect(onShapeChangeEnd).toHaveBeenCalledWith("selected", {
+      x: 300,
+      y: 220,
+      width: 40,
+      height: 32,
+    });
+
+    layOutSurface(surface, 480, 137, 89);
+    expect(shapeGeometry(option)).toEqual({ x: 300, y: 220, width: 40, height: 32 });
+    expect(surface).toHaveAttribute("viewBox", "0 0 1920 1080");
+  });
+
+  it("resizes from a fixed-size south-east handle", () => {
+    const onShapeChangeEnd = vi.fn();
+    renderOverlay({
+      initialSelectedId: selected.id,
+      initialShapes: [selected],
+      onShapeChangeEnd,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const option = screen.getByRole("option");
+    const handle = option.querySelector(
+      '[data-overlay-handle="south-east"] .df-region-overlay__shape-handle-hit',
+    );
+    expect(handle).not.toBeNull();
+
+    fireEvent.pointerDown(handle as Element, { clientX: 70, clientY: 76, pointerId: 1 });
+    fireEvent.pointerMove(surface, { clientX: 90, clientY: 90, pointerId: 1 });
+    fireEvent.pointerUp(surface, { clientX: 90, clientY: 90, pointerId: 1 });
+
+    expect(onShapeChangeEnd).toHaveBeenCalledWith("selected", {
+      x: 100,
+      y: 120,
+      width: 80,
+      height: 60,
+    });
+    expect(shapeGeometry(option)).toEqual({ x: 100, y: 120, width: 80, height: 60 });
   });
 });
 

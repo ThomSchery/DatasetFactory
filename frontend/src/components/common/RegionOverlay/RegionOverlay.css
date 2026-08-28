@@ -43,6 +43,10 @@
   cursor: pointer;
 }
 
+.df-region-overlay__shape[data-selected][data-editable] {
+  cursor: move;
+}
+
 .df-region-overlay__shape-fill {
   fill: var(--color-surface-transparent);
   stroke: var(--color-fill-brand-impeccable);
@@ -86,6 +90,39 @@
   stroke-width: var(--size-xs);
   vector-effect: non-scaling-stroke;
   pointer-events: stroke;
+}
+
+/* Handles stay a constant CSS size while their anchor remains a source-pixel
+   corner. The 32 px transparent stroke is the desktop hit area from GRID-05;
+   unlike an invisible overlay, it only receives the resize interaction it
+   advertises (OVERLAY-06). */
+.df-region-overlay__shape-handle-visual,
+.df-region-overlay__shape-handle-hit {
+  vector-effect: non-scaling-stroke;
+}
+
+.df-region-overlay__shape-handle-visual {
+  fill: var(--color-text-strong-default);
+  stroke: var(--color-text-strong-default);
+  stroke-width: var(--size-xs);
+  pointer-events: none;
+}
+
+.df-region-overlay__shape-handle-hit {
+  fill: var(--color-surface-transparent);
+  stroke: var(--color-surface-transparent);
+  stroke-width: var(--size-lg);
+  pointer-events: stroke;
+}
+
+.df-region-overlay__shape-handle[data-overlay-handle="north-west"],
+.df-region-overlay__shape-handle[data-overlay-handle="south-east"] {
+  cursor: nwse-resize;
+}
+
+.df-region-overlay__shape-handle[data-overlay-handle="north-east"],
+.df-region-overlay__shape-handle[data-overlay-handle="south-west"] {
+  cursor: nesw-resize;
 }
 
 /* `outline` on an SVG shape is not drawn consistently across engines, so focus

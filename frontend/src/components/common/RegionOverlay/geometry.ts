@@ -45,6 +45,8 @@ export interface ClientPoint {
   y: number;
 }
 
+export type ResizeCorner = "north-west" | "north-east" | "south-west" | "south-east";
+
 /**
  * The `viewBox` that makes source coordinates the SVG user unit. Paired with
  * `preserveAspectRatio="none"` this is an exact linear map from the rendered
@@ -118,6 +120,55 @@ export function smallestRectAtPoint<T extends SourceRect>(
     }
   }
   return smallest;
+}
+
+/** Moves a rectangle by a source-pixel delta without letting any edge escape. */
+export function moveRectWithinSource(
+  rect: SourceRect,
+  delta: SourcePoint,
+  source: SourceSize,
+): SourceRect {
+  const maxX = Math.max(0, source.width - rect.width);
+  const maxY = Math.max(0, source.height - rect.height);
+  return {
+    ...rect,
+    x: clamp(rect.x + delta.x, maxX),
+    y: clamp(rect.y + delta.y, maxY),
+  };
+}
+
+/** Resizes from one corner while the opposite corner stays anchored. */
+export function resizeRectFromCorner(
+  rect: SourceRect,
+  corner: ResizeCorner,
+  point: SourcePoint,
+  source: SourceSize,
+): SourceRect {
+  const clampedPoint = {
+    x: clamp(point.x, source.width),
+    y: clamp(point.y, source.height),
+  };
+  const oppositeCorners: Record<ResizeCorner, SourcePoint> = {
+    "north-west": { x: rect.x + rect.width, y: rect.y + rect.height },
+    "north-east": { x: rect.x, y: rect.y + rect.height },
+    "south-west": { x: rect.x + rect.width, y: rect.y },
+    "south-east": { x: rect.x, y: rect.y },
+  };
+  const opposite = oppositeCorners[corner];
+  const clampedOpposite = {
+    x: clamp(opposite.x, source.width),
+    y: clamp(opposite.y, source.height),
+  };
+  return rectFromPoints(clampedOpposite, clampedPoint);
+}
+
+export function sourceRectsEqual(left: SourceRect, right: SourceRect): boolean {
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
 }
 
 /** The rectangle spanned by two corners, in any drag direction. */

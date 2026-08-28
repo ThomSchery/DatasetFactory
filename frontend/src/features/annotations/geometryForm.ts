@@ -14,7 +14,9 @@ export const EMPTY_GEOMETRY_DRAFT: GeometryDraft = {
   height: "",
 };
 
-export function geometryDraft(annotation: Annotation): GeometryDraft {
+export function geometryDraft(
+  annotation: Pick<Annotation, "x" | "y" | "width" | "height">,
+): GeometryDraft {
   return {
     x: String(annotation.x),
     y: String(annotation.y),

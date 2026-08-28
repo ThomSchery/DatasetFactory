@@ -4,9 +4,13 @@ import {
   clampRectToSource,
   clientPointToSource,
   isDrawableRect,
+  moveRectWithinSource,
   rectFromPoints,
+  resizeRectFromCorner,
   smallestRectAtPoint,
+  sourceRectsEqual,
   sourceViewBox,
+  type ResizeCorner,
   type SourcePoint,
   type SourceRect,
   type SourceSize,
@@ -39,6 +43,12 @@ export interface RegionOverlayProps {
   /** Absent means shapes cannot be removed from the surface. */
   onRemove?: (id: string) => void;
   onSelect?: (id: string) => void;
+  /** Live source-pixel geometry while the selected shape is manipulated. */
+  onShapeChange?: (id: string, rect: SourceRect) => void;
+  /** Final source-pixel geometry after a changed pointer gesture. */
+  onShapeChangeEnd?: (id: string, rect: SourceRect) => void;
+  /** Reverts a preview when a gesture is cancelled or did not change geometry. */
+  onShapeChangeCancel?: (id: string) => void;
   /** Natural dimensions, reported once the browser has decoded the image. */
   onSourceResolved?: (source: SourceSize) => void;
   selectedId?: string | null;
@@ -57,11 +67,34 @@ interface Draft {
   current: SourcePoint;
 }
 
+interface Manipulation {
+  corner: ResizeCorner | null;
+  currentRect: SourceRect;
+  originPoint: SourcePoint;
+  originRect: SourceRect;
+  shapeId: string;
+}
+
+const RESIZE_CORNERS: readonly ResizeCorner[] = [
+  "north-west",
+  "north-east",
+  "south-west",
+  "south-east",
+];
+
 function shapeIdFromTarget(target: EventTarget | null): string | null {
   if (!(target instanceof Element)) {
     return null;
   }
   return target.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ?? null;
+}
+
+function resizeCornerFromTarget(target: EventTarget | null): ResizeCorner | null {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+  const value = target.closest("[data-overlay-handle]")?.getAttribute("data-overlay-handle");
+  return RESIZE_CORNERS.find((corner) => corner === value) ?? null;
 }
 
 /**
@@ -113,6 +146,9 @@ export function RegionOverlay({
   onImageError,
   onRemove,
   onSelect,
+  onShapeChange,
+  onShapeChangeCancel,
+  onShapeChangeEnd,
   onSourceResolved,
   selectedId = null,
   shapes = [],
@@ -122,9 +158,12 @@ export function RegionOverlay({
   const optionRefs = useRef(new Map<string, SVGGElement>());
   const suppressCapturedClickRef = useRef(false);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [manipulation, setManipulation] = useState<Manipulation | null>(null);
 
   const canDraw = onDraw !== undefined && !disabled && source !== null;
   const canInteract = !disabled;
+  const canEditShapes =
+    onShapeChange !== undefined && onShapeChangeEnd !== undefined && canInteract && source !== null;
 
   function sourcePointAt(clientX: number, clientY: number): SourcePoint | null {
     const surface = surfaceRef.current;
@@ -149,11 +188,56 @@ export function RegionOverlay({
     onSelect?.(hit?.id ?? fallbackId);
   }
 
+  function rectForManipulation(current: Manipulation, point: SourcePoint): SourceRect {
+    if (source === null) {
+      return current.originRect;
+    }
+    if (current.corner !== null) {
+      return resizeRectFromCorner(current.originRect, current.corner, point, source);
+    }
+    return moveRectWithinSource(
+      current.originRect,
+      {
+        x: point.x - current.originPoint.x,
+        y: point.y - current.originPoint.y,
+      },
+      source,
+    );
+  }
+
   function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
     // If a browser omitted the click after the previous captured gesture, the
     // next physical pointerdown starts a new sequence and must not inherit its
     // deduplication marker.
     suppressCapturedClickRef.current = false;
+    const point = pointFrom(event);
+    if (canEditShapes && point !== null && selectedId !== null) {
+      const corner = resizeCornerFromTarget(event.target);
+      const targetId = shapeIdFromTarget(event.target);
+      const hitId = smallestRectAtPoint(shapes, point)?.id ?? targetId;
+      const editId = corner === null ? hitId : targetId;
+      const shape = editId === selectedId ? shapes.find((item) => item.id === editId) : undefined;
+      if (shape !== undefined) {
+        event.preventDefault();
+        const originRect: SourceRect = {
+          x: shape.x,
+          y: shape.y,
+          width: shape.width,
+          height: shape.height,
+        };
+        setManipulation({
+          corner,
+          currentRect: originRect,
+          originPoint: point,
+          originRect,
+          shapeId: shape.id,
+        });
+        if (surfaceRef.current !== null) {
+          capturePointer(surfaceRef.current, event.pointerId, true);
+        }
+        return;
+      }
+    }
     // Selection mode preserves F3: only the bare surface starts a drawing.
     // Explicit draw mode is for overlapping review boxes, where a drag must be
     // allowed to begin inside a shape. Pointer capture may retarget the later
@@ -164,7 +248,6 @@ export function RegionOverlay({
     ) {
       return;
     }
-    const point = pointFrom(event);
     if (point === null) {
       return;
     }
@@ -179,6 +262,15 @@ export function RegionOverlay({
   }
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (manipulation !== null) {
+      const point = pointFrom(event);
+      if (point !== null) {
+        const currentRect = rectForManipulation(manipulation, point);
+        setManipulation({ ...manipulation, currentRect });
+        onShapeChange?.(manipulation.shapeId, currentRect);
+      }
+      return;
+    }
     if (draft === null) {
       return;
     }
@@ -191,6 +283,21 @@ export function RegionOverlay({
   function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
     if (surfaceRef.current !== null) {
       capturePointer(surfaceRef.current, event.pointerId, false);
+    }
+    if (manipulation !== null) {
+      const point = pointFrom(event);
+      const rect = point === null ? manipulation.currentRect : rectForManipulation(manipulation, point);
+      setManipulation(null);
+      suppressCapturedClickRef.current = true;
+      if (!sourceRectsEqual(rect, manipulation.originRect) && isDrawableRect(rect)) {
+        onShapeChange?.(manipulation.shapeId, rect);
+        onShapeChangeEnd?.(manipulation.shapeId, rect);
+      } else {
+        onShapeChange?.(manipulation.shapeId, manipulation.originRect);
+        onShapeChangeCancel?.(manipulation.shapeId);
+        selectShapeAt(event.clientX, event.clientY, manipulation.shapeId);
+      }
+      return;
     }
     if (draft === null || source === null) {
       return;
@@ -262,6 +369,9 @@ export function RegionOverlay({
     draft === null || source === null
       ? null
       : clampRectToSource(rectFromPoints(draft.origin, draft.current), source);
+  const renderedShapes = shapes.map((shape) =>
+    manipulation?.shapeId === shape.id ? { ...shape, ...manipulation.currentRect } : shape,
+  );
 
   const surfaceClasses = [
     "df-region-overlay__surface",
@@ -291,6 +401,11 @@ export function RegionOverlay({
           aria-label={label}
           className={surfaceClasses}
           onPointerCancel={() => {
+            if (manipulation !== null) {
+              onShapeChange?.(manipulation.shapeId, manipulation.originRect);
+              onShapeChangeCancel?.(manipulation.shapeId);
+            }
+            setManipulation(null);
             setDraft(null);
             suppressCapturedClickRef.current = false;
           }}
@@ -320,8 +435,9 @@ export function RegionOverlay({
           role="listbox"
           viewBox={sourceViewBox(source)}
         >
-          {shapes.map((shape, index) => (
+          {renderedShapes.map((shape, index) => (
             <ShapeOption
+              editable={canEditShapes && shape.id === selectedId}
               index={index}
               key={shape.id}
               onKeyDown={handleKeyDown}
@@ -354,6 +470,7 @@ export function RegionOverlay({
 }
 
 interface ShapeOptionProps {
+  editable: boolean;
   index: number;
   onKeyDown: (event: KeyboardEvent<SVGGElement>, shape: OverlayShape, index: number) => void;
   refCallback: (element: SVGGElement | null) => void;
@@ -368,6 +485,7 @@ function shapeName(shape: OverlayShape): string {
 }
 
 function ShapeOption({
+  editable,
   index,
   onKeyDown,
   refCallback,
@@ -385,6 +503,7 @@ function ShapeOption({
       aria-label={shapeName(shape)}
       aria-selected={selected}
       className={classes}
+      data-editable={editable || undefined}
       data-overlay-shape-id={shape.id}
       data-selected={selected || undefined}
       onKeyDown={(event) => {
@@ -411,6 +530,33 @@ function ShapeOption({
         x={shape.x}
         y={shape.y}
       />
+      {editable
+        ? RESIZE_CORNERS.map((corner) => {
+            const marker = handleMarker(shape, corner);
+            return (
+              <g
+                aria-hidden="true"
+                className="df-region-overlay__shape-handle"
+                data-overlay-handle={corner}
+                key={corner}
+              >
+                <rect className="df-region-overlay__shape-handle-visual" {...marker} />
+                <rect className="df-region-overlay__shape-handle-hit" {...marker} />
+              </g>
+            );
+          })
+        : null}
     </g>
   );
+}
+
+function handleMarker(shape: OverlayShape, corner: ResizeCorner): SourceRect {
+  const east = shape.x + Math.max(0, shape.width - 1);
+  const south = shape.y + Math.max(0, shape.height - 1);
+  return {
+    x: corner.endsWith("east") ? east : shape.x,
+    y: corner.startsWith("south") ? south : shape.y,
+    width: 1,
+    height: 1,
+  };
 }

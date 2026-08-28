@@ -23,30 +23,30 @@ kolory ani wymiary. Nie powstają nowe assety ani nowy komponent common.
 
 ### Moduły i ID wytycznych UI/UX
 
-- [ ] Layout/siatka: `GRID-01`, `GRID-02`, `GRID-05`, `GRID-08`, `GRID-10`,
+- [x] Layout/siatka: `GRID-01`, `GRID-02`, `GRID-05`, `GRID-08`, `GRID-10`,
   `GRID-12`; `SPACING-01`, `SPACING-02`, `SPACING-06`, `SPACING-07`,
   `SPACING-11`. Użyć wyłącznie `--size-*`, `--control-height-*` i istniejącego
   progu `--workspace-min-width`; podgląd zajmuje oba tory, niżej lista ma 1fr,
   inspektor 3fr.
-- [ ] Typografia: `TYPO-02`, `TYPO-06`, `TYPO-07`, `TYPO-08`, `TYPO-11`;
+- [x] Typografia: `TYPO-02`, `TYPO-06`, `TYPO-07`, `TYPO-08`, `TYPO-11`;
   `FONTSIZE-02`, `FONTSIZE-08`, `FONTSIZE-09`, `FONTSIZE-10`;
   `LHEIGHT-09`, `LHEIGHT-10`, `LHEIGHT-11`; `LSPACE-02`, `LSPACE-09`;
   `CASING-02`, `CASING-03`. Zachować istniejące tokeny i polskie sentence case.
-- [ ] Kolory: `COLOR-07`, `COLOR-08`, `COLOR-09`, `COLOR-10`;
+- [x] Kolory: `COLOR-07`, `COLOR-08`, `COLOR-09`, `COLOR-10`;
   `OPACITY-02`. Stany używają semantycznych tokenów; zaznaczenie ma
   `aria-selected`, wypełnienie i uchwyty, więc nie zależy wyłącznie od koloru.
-- [ ] Obramowania: `BORDER-02`, `BORDER-03`, `BORDER-05`, `BORDER-06`,
+- [x] Obramowania: `BORDER-02`, `BORDER-03`, `BORDER-05`, `BORDER-06`,
   `BORDER-07`; `BWIDTH-06`, `BWIDTH-08`, `BWIDTH-09`, `BWIDTH-10`,
   `BWIDTH-11`, `BWIDTH-13`, `BWIDTH-14`; `RADIUS-01`, `RADIUS-02`,
   `RADIUS-03`, `RADIUS-04`, `RADIUS-05`. Bbox pozostaje ostrym prostokątem,
   a kreski i uchwyty nie skalują się wraz z obrazem.
-- [ ] Cienie: `SHADOW-03`, `SHADOW-05` — brak nowych cieni; ciemny baseline
+- [x] Cienie: `SHADOW-03`, `SHADOW-05` — brak nowych cieni; ciemny baseline
   zachowuje istniejącą separację powierzchni.
-- [ ] Interakcje/nakładki: `GRID-05`, `COLOR-07`, `OPACITY-02`, `BORDER-06`,
+- [x] Interakcje/nakładki: `GRID-05`, `COLOR-07`, `OPACITY-02`, `BORDER-06`,
   `OVERLAY-06`, `FE-08`. Widoczne uchwyty mają powiększony, funkcjonalny
   hit-target; klawiaturowy listbox/option i formularze pozostają pełną drogą
   alternatywną.
-- [ ] Komponenty: reużywane `Panel`, `RegionOverlay`, `Button`, `TextField`,
+- [x] Komponenty: reużywane `Panel`, `RegionOverlay`, `Button`, `TextField`,
   `SelectField`, `StatusBadge`, `DataList`, `Notice`, `UiStates`, `FrameList`
   i `AnnotationList`. Nie dodawać inline `<button>`/`<input>` ani nowego common.
 
@@ -69,3 +69,7 @@ kolory ani wymiary. Nie powstają nowe assety ani nowy komponent common.
 
 - `rg` nie jest dostępny na hoście; dalsze wyszukiwanie wykonano przez
   `Get-ChildItem` i `Select-String` bez zmiany zakresu.
+- Pierwszy test move ujawnił, że callback otrzymywał strukturalnie poprawny
+  `SourceRect`, ale runtime przenosił także `id` i `label` z `OverlayShape`.
+  Stan gestu został zawężony do jawnej kopii czterech pól geometrii; test
+  celowo wymaga dokładnego payloadu.

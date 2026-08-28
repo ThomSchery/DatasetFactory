@@ -5,8 +5,10 @@ import {
   clientPointToSource,
   fitsInSource,
   isDrawableRect,
+  moveRectWithinSource,
   rectContainsPoint,
   rectFromPoints,
+  resizeRectFromCorner,
   smallestRectAtPoint,
   sourceViewBox,
 } from "./geometry";
@@ -129,6 +131,43 @@ describe("overlapping rectangle hit testing", () => {
 
     expect(smallestRectAtPoint([small, large], point)).toBe(small);
     expect(smallestRectAtPoint([large, small], point)).toBe(small);
+  });
+});
+
+describe("direct rectangle editing", () => {
+  const rect = { x: 100, y: 120, width: 40, height: 32 };
+
+  it("moves in source pixels and clamps the whole bbox to the frame", () => {
+    expect(moveRectWithinSource(rect, { x: 200, y: 100 }, SOURCE)).toEqual({
+      x: 300,
+      y: 220,
+      width: 40,
+      height: 32,
+    });
+    expect(moveRectWithinSource(rect, { x: 5000, y: 5000 }, SOURCE)).toEqual({
+      x: 1880,
+      y: 1048,
+      width: 40,
+      height: 32,
+    });
+  });
+
+  it.each([
+    ["north-west", { x: 80, y: 90 }, { x: 80, y: 90, width: 60, height: 62 }],
+    ["north-east", { x: 180, y: 90 }, { x: 100, y: 90, width: 80, height: 62 }],
+    ["south-west", { x: 80, y: 180 }, { x: 80, y: 120, width: 60, height: 60 }],
+    ["south-east", { x: 180, y: 180 }, { x: 100, y: 120, width: 80, height: 60 }],
+  ] as const)("keeps the opposite corner fixed while resizing %s", (corner, point, expected) => {
+    expect(resizeRectFromCorner(rect, corner, point, SOURCE)).toEqual(expected);
+  });
+
+  it("keeps a resize inside source bounds", () => {
+    expect(resizeRectFromCorner(rect, "south-east", { x: 5000, y: 5000 }, SOURCE)).toEqual({
+      x: 100,
+      y: 120,
+      width: 1820,
+      height: 960,
+    });
   });
 });
 
