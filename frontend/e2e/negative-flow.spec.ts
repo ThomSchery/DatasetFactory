@@ -63,6 +63,7 @@ function restoreWorkspaceWrites(workspaceRoot: string, identity: string): void {
 async function createProfile(page: Page): Promise<void> {
   await page.goto("/profiles/new");
   await page.getByLabel("Nazwa profilu").fill("Gra testowa E2E błędy");
+  await page.getByRole("button", { name: "Użyj ścieżki ręcznej" }).click();
   await page.getByLabel("Ścieżka obrazu referencyjnego").fill(referenceImage);
   await page.getByRole("button", { name: "Wczytaj podgląd" }).click();
   const surface = page.getByRole("listbox", {

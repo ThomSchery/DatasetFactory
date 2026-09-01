@@ -188,6 +188,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
 
   await page.goto("/profiles/new");
   await page.getByLabel("Nazwa profilu").fill("Gra testowa E2E restart");
+  await page.getByRole("button", { name: "Użyj ścieżki ręcznej" }).click();
   await page.getByLabel("Ścieżka obrazu referencyjnego").fill(referenceImage);
   await page.getByRole("button", { name: "Wczytaj podgląd" }).click();
 
