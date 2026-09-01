@@ -555,6 +555,55 @@ describe("direct editing in source coordinates", () => {
     });
     expect(shapeGeometry(option)).toEqual({ x: 100, y: 120, width: 80, height: 60 });
   });
+
+  /*
+   * Every other resize test presses the handle's exact centre, so a zero grab
+   * offset was the only case ever covered — which is how an absolute corner
+   * assignment survived two review rounds. This one grabs beside the corner on
+   * purpose and pins the bbox that comes out.
+   */
+  it("resizes by how far the pointer travelled, not by where the handle was grabbed", () => {
+    const onShapeChange = vi.fn();
+    const onShapeChangeEnd = vi.fn();
+    renderOverlay({
+      initialSelectedId: selected.id,
+      initialShapes: [selected],
+      onShapeChange,
+      onShapeChangeEnd,
+    });
+    const surface = surfaceElement();
+    // 960 CSS px for a 1920 px source: one CSS pixel is two source pixels.
+    layOutSurface(surface, 960);
+    const option = screen.getByRole("option");
+    const handle = option.querySelector(
+      '[data-overlay-handle="south-east"] .df-region-overlay__shape-handle-hit',
+    );
+    expect(handle).not.toBeNull();
+
+    // The south-east corner is (140, 152); this grab misses it by 6 source
+    // pixels on both axes.
+    fireEvent.pointerDown(handle as Element, { clientX: 73, clientY: 79, pointerId: 1 });
+
+    // Holding the handle is not an edit: nothing may change before the pointer
+    // moves, least of all by the size of the miss.
+    expect(onShapeChange).not.toHaveBeenCalled();
+    expect(shapeGeometry(option)).toEqual({ x: 100, y: 120, width: 40, height: 32 });
+
+    fireEvent.pointerMove(surface, { clientX: 78, clientY: 83, pointerId: 1 });
+    fireEvent.pointerUp(surface, { clientX: 78, clientY: 83, pointerId: 1 });
+
+    // The pointer travelled +10 and +8 source pixels, so the bbox grows by
+    // exactly that. Dropping the offset would add the 6 px miss on top and
+    // give 56×46.
+    expect(onShapeChangeEnd).toHaveBeenCalledWith("selected", {
+      x: 100,
+      y: 120,
+      width: 50,
+      height: 40,
+    });
+    expect(shapeGeometry(option)).toEqual({ x: 100, y: 120, width: 50, height: 40 });
+  });
+
 });
 
 describe("the picture itself", () => {

@@ -137,6 +137,21 @@ export function moveRectWithinSource(
   };
 }
 
+/**
+ * The corner a resize gesture drags, in source pixels.
+ *
+ * `resizeRectFromCorner` puts this corner wherever the pointer is, so a grab
+ * that landed beside the corner would teleport it by the distance of the miss.
+ * Subtracting this point from the grab gives the offset the gesture has to
+ * carry, exactly as the move branch carries `originPoint`.
+ */
+export function resizeCornerPoint(rect: SourceRect, corner: ResizeCorner): SourcePoint {
+  return {
+    x: corner.endsWith("east") ? rect.x + rect.width : rect.x,
+    y: corner.startsWith("south") ? rect.y + rect.height : rect.y,
+  };
+}
+
 /** Resizes from one corner while the opposite corner stays anchored. */
 export function resizeRectFromCorner(
   rect: SourceRect,

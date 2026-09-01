@@ -8,6 +8,7 @@ import {
   moveRectWithinSource,
   rectContainsPoint,
   rectFromPoints,
+  resizeCornerPoint,
   resizeRectFromCorner,
   smallestRectAtPoint,
   sourceViewBox,
@@ -159,6 +160,15 @@ describe("direct rectangle editing", () => {
     ["south-east", { x: 180, y: 180 }, { x: 100, y: 120, width: 80, height: 60 }],
   ] as const)("keeps the opposite corner fixed while resizing %s", (corner, point, expected) => {
     expect(resizeRectFromCorner(rect, corner, point, SOURCE)).toEqual(expected);
+  });
+
+  it.each([
+    ["north-west", { x: 100, y: 120 }],
+    ["north-east", { x: 140, y: 120 }],
+    ["south-west", { x: 100, y: 152 }],
+    ["south-east", { x: 140, y: 152 }],
+  ] as const)("names the corner the %s gesture drags", (corner, expected) => {
+    expect(resizeCornerPoint(rect, corner)).toEqual(expected);
   });
 
   it("keeps a resize inside source bounds", () => {

@@ -6,6 +6,7 @@ import {
   isDrawableRect,
   moveRectWithinSource,
   rectFromPoints,
+  resizeCornerPoint,
   resizeRectFromCorner,
   smallestRectAtPoint,
   sourceRectsEqual,
@@ -70,6 +71,8 @@ interface Draft {
 interface Manipulation {
   corner: ResizeCorner | null;
   currentRect: SourceRect;
+  /** Where the grab landed relative to the dragged corner; zero for a move. */
+  grabOffset: SourcePoint;
   originPoint: SourcePoint;
   originRect: SourceRect;
   shapeId: string;
@@ -199,7 +202,14 @@ export function RegionOverlay({
       return current.originRect;
     }
     if (current.corner !== null) {
-      return resizeRectFromCorner(current.originRect, current.corner, point, source);
+      // The corner follows the pointer's *travel*, not its position: the first
+      // pixel of movement is one pixel of resize however far from the corner
+      // the handle was grabbed.
+      const draggedCorner = {
+        x: point.x - current.grabOffset.x,
+        y: point.y - current.grabOffset.y,
+      };
+      return resizeRectFromCorner(current.originRect, current.corner, draggedCorner, source);
     }
     return moveRectWithinSource(
       current.originRect,
@@ -236,9 +246,11 @@ export function RegionOverlay({
           width: shape.width,
           height: shape.height,
         };
+        const cornerPoint = corner === null ? point : resizeCornerPoint(originRect, corner);
         setManipulation({
           corner,
           currentRect: originRect,
+          grabOffset: { x: point.x - cornerPoint.x, y: point.y - cornerPoint.y },
           originPoint: point,
           originRect,
           shapeId: shape.id,
