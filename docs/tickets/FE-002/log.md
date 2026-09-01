@@ -73,3 +73,41 @@ kolory ani wymiary. Nie powstają nowe assety ani nowy komponent common.
   `SourceRect`, ale runtime przenosił także `id` i `label` z `OverlayShape`.
   Stan gestu został zawężony do jawnej kopii czterech pól geometrii; test
   celowo wymaga dokładnego payloadu.
+
+## Runda poprawek po cold review
+
+Werdykt `artifacts/fe-002-cold-review`: REJECT. Sprawdzona matematyka skali,
+smallest-hit, clamping i wspólna ścieżka mutacji pozostają bez zmian. Poprawka
+dotyczy wyłącznie układu inspektora, prawdziwego pokrycia przeglądarkowego,
+świadomej aktualizacji dowodu wizualnego i rejestru długu harnessu.
+
+### Design Plan korekty P1-2
+
+Tryb: **Operate**, komenda Impeccable: **layout**. Główna ścieżka pozostaje
+`obraz → lista klatek → inspektor`; cztery współrzędne jednej anotacji są jedną
+grupą i mają tworzyć jeden zwarty wiersz w szerokim inspektorze. Formularz
+tworzenia nowego bbox pozostaje w bazowym układzie 2×2.
+
+- [x] Elementy interfejsu: istniejący panel „Anotacje”, wiersz anotacji,
+  `TextField` x/y/width/height; overlay, akcje, typografia i kolory bez zmian.
+- [x] Layout/siatka: pełny moduł `GRID-00..14` i `SPACING-01..06` przeczytany;
+  zastosowanie `GRID-01`, `GRID-02`, `GRID-08`, `GRID-10`, `GRID-12` oraz
+  `SPACING-01`. Scoped selector inspektora dostaje cztery równe kolumny,
+  zachowując istniejące gapy `--size-xs` / `--size-sm` i próg 1280 px.
+- [x] Typografia, kolory, obramowania i cienie: bez zmian; istniejące tokeny
+  i stany `TextField` pozostają autorytetem.
+- [x] Interakcje: układ nie zmienia kolejności DOM ani tab order. P2 rozszerzy
+  vertical flow o real-browser move i resize SE, z asercją pól, API bbox oraz
+  `expected_version`.
+- [x] Komponenty: tylko istniejące `Panel`, `AnnotationList`, `TextField` i
+  `RegionOverlay`; brak nowego common i brak inline kontrolek.
+- [x] Weryfikacja P1-2: Chromium przy viewport 1280 px mierzy cztery pola
+  `getBoundingClientRect`; wszystkie muszą mieć ten sam `top` i mieścić się
+  w granicach inspektora. Sam `WidthGuard` nie jest traktowany jako dowód.
+- [x] Weryfikacja wizualna P1-1: po korekcie wygenerować
+  `annotations-1440.png`, zapisać old/new SHA-256 i commitować PNG jako
+  celową aktualizację dowodu.
+
+Wstępny `impeccable detect --scope layout` dla CSS/FrameEditor zwrócił pustą
+listę. To nie unieważnia findingu: obecna wada jest relacją semantyczną 2×2,
+której detektor mechaniczny nie rozpoznaje.

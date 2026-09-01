@@ -142,6 +142,10 @@
   gap: var(--size-xs) var(--size-sm);
 }
 
+.df-review-workspace__inspector .df-review-annotations__geometry {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .df-review-annotations__invalid {
   margin: var(--size-none);
   color: var(--color-status-error-default);

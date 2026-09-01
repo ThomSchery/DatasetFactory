@@ -25,6 +25,37 @@ async function assertNoOverflow(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
+async function assertInspectorGeometrySingleRow(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  const inspector = page.getByRole("region", { name: "Anotacje" });
+  const annotation = inspector.getByRole("listitem").first();
+  await expect(annotation).toBeVisible();
+
+  const fieldBounds = await Promise.all(
+    ["x", "y", "width", "height"].map(async (label) => {
+      const bounds = await annotation.getByLabel(label, { exact: true }).boundingBox();
+      expect(bounds, `${label} field has no browser geometry at 1280 px`).not.toBeNull();
+      if (bounds === null) {
+        throw new Error(`${label} field has no browser geometry at 1280 px`);
+      }
+      return bounds;
+    }),
+  );
+  const inspectorBounds = await inspector.boundingBox();
+  expect(inspectorBounds).not.toBeNull();
+  if (inspectorBounds === null) {
+    throw new Error("Annotation inspector has no browser geometry at 1280 px");
+  }
+
+  expect(new Set(fieldBounds.map((bounds) => Math.round(bounds.y))).size).toBe(1);
+  for (const bounds of fieldBounds) {
+    expect(bounds.x).toBeGreaterThanOrEqual(inspectorBounds.x);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(inspectorBounds.x + inspectorBounds.width);
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+}
+
 async function assertResolvedCssVariables(page: Page): Promise<void> {
   const unresolved = await page.evaluate(() => {
     const css = Array.from(document.styleSheets)
@@ -209,6 +240,7 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     (current) => current.getByRole("combobox", { name: "Status weryfikacji" }),
     async (current) => {
       await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
+      await assertInspectorGeometrySingleRow(current);
     },
   );
   await capture(
