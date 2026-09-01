@@ -111,3 +111,20 @@ tworzenia nowego bbox pozostaje w bazowym układzie 2×2.
 Wstępny `impeccable detect --scope layout` dla CSS/FrameEditor zwrócił pustą
 listę. To nie unieważnia findingu: obecna wada jest relacją semantyczną 2×2,
 której detektor mechaniczny nie rozpoznaje.
+
+### P1-1 — świadoma aktualizacja dowodu wizualnego
+
+Po przejściu celowanego Chromium visual-QA z asercją 1280 px wygenerowano i
+obejrzano `docs/tickets/FE-001/screenshots/annotations-1440.png` w pełnym
+rozmiarze 1440×2389. Obraz pokazuje pełnoszeroki podgląd nad dolnymi panelami,
+formularz nowego bbox w zachowanym układzie 2×2 oraz x/y/width/height aktywnej
+anotacji w jednym wierszu inspektora.
+
+- poprzedni SHA-256:
+  `973CC93CBF0C3726EB9D030E4F17062615F307E72284708F22FD5C20D7BB95E6`;
+- nowy SHA-256:
+  `EA040242C7F3EAF3085A200C368AB1E6EEC89095BC80619B0044DC04C7B55A74`.
+
+PNG jest generowany przez `visual-qa.spec.ts`, ale w tej rundzie stanowi celową,
+wersjonowaną aktualizację ludzkiego dowodu po zmianie układu, a nie artefakt do
+przywrócenia do poprzedniego HEAD.
