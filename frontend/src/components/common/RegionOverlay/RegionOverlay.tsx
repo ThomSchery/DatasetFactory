@@ -97,6 +97,12 @@ function resizeCornerFromTarget(target: EventTarget | null): ResizeCorner | null
   return RESIZE_CORNERS.find((corner) => corner === value) ?? null;
 }
 
+function pointIsInsideShape(point: SourcePoint, shape: SourceRect): boolean {
+  const east = shape.x + Math.max(0, shape.width - 1);
+  const south = shape.y + Math.max(0, shape.height - 1);
+  return point.x > shape.x && point.x < east && point.y > shape.y && point.y < south;
+}
+
 /**
  * Pointer capture keeps a drag alive when it leaves the surface. It is a
  * progressive enhancement: engines without it — jsdom among them — still get a
@@ -212,13 +218,18 @@ export function RegionOverlay({
     suppressCapturedClickRef.current = false;
     const point = pointFrom(event);
     if (canEditShapes && point !== null && selectedId !== null) {
-      const corner = resizeCornerFromTarget(event.target);
+      const targetCorner = resizeCornerFromTarget(event.target);
       const targetId = shapeIdFromTarget(event.target);
       const hitId = smallestRectAtPoint(shapes, point)?.id ?? targetId;
-      const editId = corner === null ? hitId : targetId;
+      const editId = targetCorner === null ? hitId : targetId;
       const shape = editId === selectedId ? shapes.find((item) => item.id === editId) : undefined;
       if (shape !== undefined) {
         event.preventDefault();
+        // Fixed 32 CSS-pixel handle targets can overlap the complete interior
+        // of a small OCR box. The interior still belongs to move; resize is
+        // selected at the corner or from the outside half of its hit target.
+        const corner =
+          targetCorner !== null && pointIsInsideShape(point, shape) ? null : targetCorner;
         const originRect: SourceRect = {
           x: shape.x,
           y: shape.y,

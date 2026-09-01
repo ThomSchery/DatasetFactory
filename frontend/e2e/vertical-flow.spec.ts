@@ -19,16 +19,26 @@ interface AnnotationSnapshot {
   source: "manual" | "ocr";
   status: string;
   version: number;
+  height: number;
+  width: number;
   x: number;
+  y: number;
 }
 
 interface FrameSnapshot {
   annotations: AnnotationSnapshot[];
   frame_index: number;
+  height: number;
   id: string;
   review_status: "accepted" | "pending" | "rejected";
   stage_status: string;
   version: number;
+  width: number;
+}
+
+interface GeometryMutationBody {
+  bbox: { height: number; width: number; x: number; y: number };
+  expected_version: number;
 }
 
 interface RunSnapshot {
@@ -160,9 +170,19 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   fs.rmSync(ocrEntered, { force: true });
 
   let completeBody: unknown = null;
+  const geometryBodies: GeometryMutationBody[] = [];
   page.on("request", (outgoing) => {
     if (outgoing.method() === "POST" && outgoing.url().endsWith("/complete")) {
       completeBody = outgoing.postDataJSON();
+    }
+    if (
+      outgoing.method() === "PATCH" &&
+      new URL(outgoing.url()).pathname.startsWith("/api/v1/annotations/")
+    ) {
+      const body = outgoing.postDataJSON() as Partial<GeometryMutationBody>;
+      if (body.bbox !== undefined && body.expected_version !== undefined) {
+        geometryBodies.push(body as GeometryMutationBody);
+      }
     }
   });
 
@@ -370,19 +390,149 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   const annotationList = page.getByRole("list", { name: "Aktywne anotacje" });
   const annotationRow = annotationList.getByRole("listitem").first();
   await expect(annotationRow).toBeVisible();
-  const originalX = frameAfterResume.annotations[0]?.x;
-  expect(originalX).toBeDefined();
-  if (originalX === undefined) {
-    throw new Error("OCR annotation geometry missing after resume");
+  const initialAnnotation = frameAfterResume.annotations[0];
+  if (initialAnnotation === undefined) {
+    throw new Error("OCR annotation missing after resume");
   }
-  await annotationRow.getByLabel("x", { exact: true }).fill(String(originalX + 1));
+
+  await annotationRow.getByRole("button", { name: "Zaznacz" }).click();
+  const frameSurface = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const selectedOption = frameSurface.getByRole("option").first();
+  await expect(selectedOption).toHaveAttribute("aria-selected", "true");
+  await selectedOption.scrollIntoViewIfNeeded();
+  const frameBounds = await frameSurface.boundingBox();
+  const fillBounds = await selectedOption.locator(".df-region-overlay__shape-fill").boundingBox();
+  expect(frameBounds).not.toBeNull();
+  expect(fillBounds).not.toBeNull();
+  if (frameBounds === null || fillBounds === null) {
+    throw new Error("Selected bbox has no browser geometry");
+  }
+
+  const clientPointForSource = (x: number, y: number) => ({
+    x: frameBounds.x + (x / frameAfterResume.width) * frameBounds.width,
+    y: frameBounds.y + (y / frameAfterResume.height) * frameBounds.height,
+  });
+  const moveFrom = {
+    x: fillBounds.x + fillBounds.width / 2,
+    y: fillBounds.y + fillBounds.height / 2,
+  };
+  const browserMoveTarget = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return {
+      corner: target?.closest("[data-overlay-handle]")?.getAttribute("data-overlay-handle"),
+      shapeId: target?.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id"),
+    };
+  }, moveFrom);
+  expect(browserMoveTarget).toEqual({
+    corner: "south-east",
+    shapeId: initialAnnotation.id,
+  });
+  const moveFromSource = {
+    x: Math.round(((moveFrom.x - frameBounds.x) / frameBounds.width) * frameAfterResume.width),
+    y: Math.round(((moveFrom.y - frameBounds.y) / frameBounds.height) * frameAfterResume.height),
+  };
+  const moveDelta = { x: 20, y: 12 };
+  const moveTo = clientPointForSource(
+    moveFromSource.x + moveDelta.x,
+    moveFromSource.y + moveDelta.y,
+  );
+  const movedBbox = {
+    x: initialAnnotation.x + moveDelta.x,
+    y: initialAnnotation.y + moveDelta.y,
+    width: initialAnnotation.width,
+    height: initialAnnotation.height,
+  };
+
+  await page.mouse.move(moveFrom.x, moveFrom.y);
+  await page.mouse.down();
+  await page.mouse.move(moveTo.x, moveTo.y, { steps: 3 });
+  await expect(annotationRow.getByLabel("x", { exact: true })).toHaveValue(String(movedBbox.x));
+  await expect(annotationRow.getByLabel("y", { exact: true })).toHaveValue(String(movedBbox.y));
+  await expect(annotationRow.getByLabel("width", { exact: true })).toHaveValue(
+    String(movedBbox.width),
+  );
+  await expect(annotationRow.getByLabel("height", { exact: true })).toHaveValue(
+    String(movedBbox.height),
+  );
+  await page.mouse.up();
+
+  await expect.poll(() => geometryBodies.length).toBe(1);
+  expect(geometryBodies[0]).toEqual({
+    bbox: movedBbox,
+    expected_version: initialAnnotation.version,
+  });
+  await expect
+    .poll(async () => {
+      const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+      const annotation = frame.annotations[0];
+      return annotation === undefined
+        ? null
+        : { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
+    })
+    .toEqual(movedBbox);
+  const afterMove = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+  const movedAnnotation = afterMove.annotations[0];
+  if (movedAnnotation === undefined) {
+    throw new Error("Moved annotation missing after direct edit");
+  }
+
+  const southEastHandle = selectedOption.locator(
+    '[data-overlay-handle="south-east"] .df-region-overlay__shape-handle-hit',
+  );
+  const handleBounds = await southEastHandle.boundingBox();
+  expect(handleBounds).not.toBeNull();
+  if (handleBounds === null) {
+    throw new Error("South-east resize handle has no browser geometry");
+  }
+  const resizedBbox = {
+    ...movedBbox,
+    width: movedBbox.width + 16,
+    height: movedBbox.height + 8,
+  };
+  const resizeTo = clientPointForSource(
+    resizedBbox.x + resizedBbox.width,
+    resizedBbox.y + resizedBbox.height,
+  );
+
+  await page.mouse.move(
+    handleBounds.x + handleBounds.width / 2,
+    handleBounds.y + handleBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(resizeTo.x, resizeTo.y, { steps: 3 });
+  await expect(annotationRow.getByLabel("x", { exact: true })).toHaveValue(String(resizedBbox.x));
+  await expect(annotationRow.getByLabel("y", { exact: true })).toHaveValue(String(resizedBbox.y));
+  await expect(annotationRow.getByLabel("width", { exact: true })).toHaveValue(
+    String(resizedBbox.width),
+  );
+  await expect(annotationRow.getByLabel("height", { exact: true })).toHaveValue(
+    String(resizedBbox.height),
+  );
+  await page.mouse.up();
+
+  await expect.poll(() => geometryBodies.length).toBe(2);
+  expect(geometryBodies[1]).toEqual({
+    bbox: resizedBbox,
+    expected_version: movedAnnotation.version,
+  });
+  await expect
+    .poll(async () => {
+      const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+      const annotation = frame.annotations[0];
+      return annotation === undefined
+        ? null
+        : { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
+    })
+    .toEqual(resizedBbox);
+
+  await annotationRow.getByLabel("x", { exact: true }).fill(String(resizedBbox.x + 1));
   await annotationRow.getByRole("button", { name: "Zapisz geometrię" }).click();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
       return frame.annotations[0]?.x;
     })
-    .toBe(originalX + 1);
+    .toBe(resizedBbox.x + 1);
 
   await annotationRow.getByRole("button", { name: "Usuń" }).click();
   await expect(page.getByText("Ta klatka nie ma aktywnych anotacji.")).toBeVisible();
@@ -390,19 +540,19 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   expect(afterDelete.annotations).toHaveLength(1);
   expect(afterDelete.annotations[0]?.status).toBe("deleted");
 
-  const frameSurface = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
-  const frameBounds = await frameSurface.boundingBox();
-  expect(frameBounds).not.toBeNull();
-  if (frameBounds === null) {
+  await frameSurface.scrollIntoViewIfNeeded();
+  const manualFrameBounds = await frameSurface.boundingBox();
+  expect(manualFrameBounds).not.toBeNull();
+  if (manualFrameBounds === null) {
     throw new Error("Frame drawing surface has no browser geometry");
   }
   const manualFrom = {
-    clientX: frameBounds.x + frameBounds.width * 0.3,
-    clientY: frameBounds.y + frameBounds.height * 0.3,
+    clientX: manualFrameBounds.x + manualFrameBounds.width * 0.3,
+    clientY: manualFrameBounds.y + manualFrameBounds.height * 0.3,
   };
   const manualTo = {
-    clientX: frameBounds.x + frameBounds.width * 0.45,
-    clientY: frameBounds.y + frameBounds.height * 0.45,
+    clientX: manualFrameBounds.x + manualFrameBounds.width * 0.45,
+    clientY: manualFrameBounds.y + manualFrameBounds.height * 0.45,
   };
   await frameSurface.dispatchEvent("pointerdown", { ...manualFrom, pointerId: 2 });
   await frameSurface.dispatchEvent("pointermove", { ...manualTo, pointerId: 2 });

@@ -498,24 +498,33 @@ describe("direct editing in source coordinates", () => {
     const surface = surfaceElement();
     layOutSurface(surface, 960);
     const option = screen.getByRole("option");
-    const fill = option.querySelector(".df-region-overlay__shape-fill");
-    expect(fill).not.toBeNull();
+    const overlappingHandle = option.querySelector(
+      '[data-overlay-handle="south-east"] .df-region-overlay__shape-handle-hit',
+    );
+    expect(overlappingHandle).not.toBeNull();
 
-    fireEvent.pointerDown(fill as Element, { clientX: 55, clientY: 65, pointerId: 1 });
+    // The 32 CSS-pixel handle target overlaps this small bbox's centre. A real
+    // browser therefore targets the handle element there, but the interior
+    // gesture must still move instead of accidentally resizing south-east.
+    fireEvent.pointerDown(overlappingHandle as Element, {
+      clientX: 60,
+      clientY: 68,
+      pointerId: 1,
+    });
     fireEvent.pointerMove(surface, { clientX: 155, clientY: 115, pointerId: 1 });
 
-    expect(shapeGeometry(option)).toEqual({ x: 300, y: 220, width: 40, height: 32 });
+    expect(shapeGeometry(option)).toEqual({ x: 290, y: 214, width: 40, height: 32 });
 
     fireEvent.pointerUp(surface, { clientX: 155, clientY: 115, pointerId: 1 });
     expect(onShapeChangeEnd).toHaveBeenCalledWith("selected", {
-      x: 300,
-      y: 220,
+      x: 290,
+      y: 214,
       width: 40,
       height: 32,
     });
 
     layOutSurface(surface, 480, 137, 89);
-    expect(shapeGeometry(option)).toEqual({ x: 300, y: 220, width: 40, height: 32 });
+    expect(shapeGeometry(option)).toEqual({ x: 290, y: 214, width: 40, height: 32 });
     expect(surface).toHaveAttribute("viewBox", "0 0 1920 1080");
   });
 

@@ -128,3 +128,32 @@ anotacji w jednym wierszu inspektora.
 PNG jest generowany przez `visual-qa.spec.ts`, ale w tej rundzie stanowi celową,
 wersjonowaną aktualizację ludzkiego dowodu po zmianie układu, a nie artefakt do
 przywrócenia do poprzedniego HEAD.
+
+### P2 — prawdziwy move i resize w Chromium
+
+Vertical flow zaznacza istniejącą anotację OCR, przewija overlay do viewportu,
+wykonuje `page.mouse` move oraz resize uchwytem `south-east`. Przed puszczeniem
+wskaźnika asertuje live x/y/width/height, a po każdym geście dokładny bbox API
+i body istniejącego PATCH wraz z kolejnym `expected_version`.
+
+Test ujawnił dodatkową przeglądarkową kolizję, której jsdom nie modeluje: bbox
+24×32 px źródłowo renderuje się jako około 22×28 CSS px, więc cztery stałe
+32-pikselowe hit-targety narożników przykrywają całe wnętrze. Chromium wskazuje
+tam ostatni uchwyt `south-east`; bez rozstrzygnięcia move był nieosiągalny dla
+małych boksów. `RegionOverlay` traktuje teraz ścisłe wnętrze zaznaczonego
+prostokąta jako move nawet wtedy, gdy DOM trafił nakładający się handle; sam
+narożnik i zewnętrzna część celu pozostają resize. Test komponentu celowo wysyła
+pointerdown do uchwytu w środku małego bboxa, a Playwright przypina rzeczywisty
+wynik `elementFromPoint` przed gestem.
+
+Próby harnessu:
+
+- pierwszy real-browser move użył ujemnego `y` — po zmianie trasy overlay był
+  nad viewportem, więc `elementFromPoint` nie miał celu. Dodano jawne
+  `scrollIntoViewIfNeeded()` przed pomiarem;
+- po przejściu move/resize stary krok rysowania manualnego używał bounds sprzed
+  usunięcia wiersza. Scroll anchoring zmienił pozycję, dlatego przed niezależnym
+  gestem manualnym powierzchnia jest ponownie przewijana i mierzona.
+
+Weryfikacja celowana po poprawce: TypeScript 0 błędów; Vitest 2/2 pliki,
+39/39 testów; pełny `vertical-flow.spec.ts` 1/1 w Chromium.
