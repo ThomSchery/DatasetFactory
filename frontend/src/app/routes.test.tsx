@@ -6,6 +6,7 @@ import {
   emptyDashboard,
   framePageFixture,
   profileFixture,
+  profileSummaryFixture,
   runFixture,
 } from "../test/fixtures";
 import { renderApp, stubFetch } from "../test/harness";
@@ -31,6 +32,9 @@ beforeEach(() => {
     }
     if (url.includes("/profiles/current")) {
       return { status: 200, body: profileFixture() };
+    }
+    if (url.endsWith("/profiles")) {
+      return { status: 200, body: [profileSummaryFixture()] };
     }
     if (url.includes("/profiles/profile-1")) {
       return { status: 200, body: profileFixture() };
@@ -164,7 +168,7 @@ describe("navigation shell", () => {
     expect(screen.getByRole("link", { name: /Profil gry/ })).toHaveFocus();
 
     await user.keyboard("{Enter}");
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nowy profil gry");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Profile gier");
   });
 
   it("navigates between routes by activating a destination", async () => {

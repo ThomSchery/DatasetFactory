@@ -206,7 +206,7 @@ def test_profile_use_case_translates_missing_profile_and_keeps_historical_record
     assert error.value.code == "profile_not_found"
 
 
-def test_profile_api_returns_historical_profile_while_current_stays_latest(
+def test_profile_collection_keeps_explicit_selection_when_new_profiles_are_created(
     composition: CompositionRoot,
     tmp_path: Path,
 ) -> None:
@@ -224,15 +224,40 @@ def test_profile_api_returns_historical_profile_while_current_stays_latest(
         )
         historical = client.get(f"/api/v1/profiles/{first.json()['id']}")
         current = client.get("/api/v1/profiles/current")
+        profiles_before = client.get("/api/v1/profiles")
+        activated = client.post(f"/api/v1/profiles/{second.json()['id']}/activate")
+        selected = client.get("/api/v1/profiles/current")
+        third_source = tmp_path / "newest.png"
+        _write_png(third_source)
+        third = client.post(
+            "/api/v1/profiles",
+            json=_payload(third_source, name="Newest profile"),
+        )
+        current_after_create = client.get("/api/v1/profiles/current")
+        profiles_after = client.get("/api/v1/profiles")
         missing = client.get("/api/v1/profiles/missing-profile")
 
     assert first.status_code == 201
     assert second.status_code == 201
     assert historical.status_code == 200
     assert historical.json() == first.json()
-    # Defining `/current` before `/{profile_id}` keeps the literal route static.
+    # The first profile becomes active; creating the second does not switch it.
     assert current.status_code == 200
-    assert current.json() == second.json()
+    assert current.json() == first.json()
+    assert profiles_before.status_code == 200
+    assert [profile["name"] for profile in profiles_before.json()] == [
+        "Current profile",
+        "Old profile",
+    ]
+    assert [profile["active"] for profile in profiles_before.json()] == [False, True]
+    assert profiles_before.json()[0]["region_count"] == 1
+    assert profiles_before.json()[0]["category_count"] == 2
+    assert activated.status_code == 200
+    assert activated.json() == second.json()
+    assert selected.json() == second.json()
+    assert third.status_code == 201
+    assert current_after_create.json() == second.json()
+    assert [profile["active"] for profile in profiles_after.json()] == [False, True, False]
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "profile_not_found"
 

@@ -43,6 +43,7 @@ export const queryKeys = {
  */
 export type MutationEvent =
   | { type: "profile-created" }
+  | { type: "profile-selected" }
   | { type: "material-imported" }
   | { type: "run-created" }
   | { type: "run-transitioned"; runId: string }
@@ -54,7 +55,9 @@ export type MutationEvent =
 function keysFor(event: MutationEvent): readonly (readonly unknown[])[] {
   switch (event.type) {
     case "profile-created":
-      return [queryKeys.profiles()];
+      return [queryKeys.profiles(), queryKeys.dashboard()];
+    case "profile-selected":
+      return [queryKeys.profiles(), queryKeys.dashboard()];
     case "material-imported":
       return [queryKeys.materials()];
     case "run-created":

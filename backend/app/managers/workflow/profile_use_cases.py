@@ -23,6 +23,8 @@ from backend.app.access.store.repositories.profiles import (
     ProfilePersistenceError,
     ProfileRecord,
     ProfileRepository,
+    ProfileSelectionBlockedError,
+    ProfileSummaryRecord,
     RegionDraft,
 )
 from backend.app.access.store.repositories.projects import ProjectRepository
@@ -207,6 +209,17 @@ class ProfileUseCases:
 
     def get_current_profile(self) -> ProfileRecord | None:
         return self._profiles.current()
+
+    def list_profiles(self) -> tuple[ProfileSummaryRecord, ...]:
+        return self._profiles.list()
+
+    def activate_profile(self, profile_id: str) -> ProfileRecord:
+        try:
+            return self._profiles.activate(profile_id)
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
+        except ProfileSelectionBlockedError as exc:
+            raise ProfileUseCaseError("active_run") from exc
 
     def get_profile(self, profile_id: str) -> ProfileRecord:
         try:

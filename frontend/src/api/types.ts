@@ -114,6 +114,18 @@ export interface GameProfile {
   categories: Category[];
 }
 
+export interface ProfileSummary {
+  id: string;
+  name: string;
+  reference_asset_url: string;
+  source_width: number;
+  source_height: number;
+  region_count: number;
+  category_count: number;
+  created_at: string;
+  active: boolean;
+}
+
 // --- materials ------------------------------------------------------------
 
 export interface CreateMaterialRequest {

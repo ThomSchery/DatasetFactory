@@ -38,7 +38,7 @@ function messageOf(error: unknown): string | undefined {
   return undefined;
 }
 
-export function ProfileCreateScreen() {
+export function ProfileCreateScreen({ onCancel }: { onCancel?: () => void } = {}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [source, setSource] = useState<SourceSize | null>(null);
@@ -228,6 +228,11 @@ export function ProfileCreateScreen() {
         >
           Utwórz profil
         </Button>
+        {onCancel === undefined ? null : (
+          <Button disabled={busy} onClick={onCancel} type="button" variant="secondary">
+            Wróć do profili
+          </Button>
+        )}
       </div>
 
       {failure === null ? null : (

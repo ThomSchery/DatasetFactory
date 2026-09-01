@@ -9,6 +9,7 @@ import type {
   Material,
   Page,
   PipelineRun,
+  ProfileSummary,
 } from "../api";
 
 /*
@@ -85,6 +86,21 @@ export function profileFixture(overrides: Partial<GameProfile> = {}): GameProfil
     version: 1,
     regions: [{ id: "region-1", name: "Pasek zdrowia", x: 10, y: 20, width: 100, height: 40 }],
     categories: [{ id: "category-1", name: "7", kind: "character" }],
+    ...overrides,
+  };
+}
+
+export function profileSummaryFixture(overrides: Partial<ProfileSummary> = {}): ProfileSummary {
+  return {
+    id: "profile-1",
+    name: "Gra testowa",
+    reference_asset_url: "/api/v1/assets/references/asset-1",
+    source_width: 1920,
+    source_height: 1080,
+    region_count: 1,
+    category_count: 1,
+    created_at: "2026-08-07T09:00:00Z",
+    active: true,
     ...overrides,
   };
 }

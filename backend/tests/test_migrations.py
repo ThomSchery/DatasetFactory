@@ -19,6 +19,7 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     inspector = inspect(engine)
     assert set(inspector.get_table_names()) >= EXPECTED_TABLES
     profile_columns = {column["name"]: column for column in inspector.get_columns("game_profiles")}
+    project_columns = {column["name"]: column for column in inspector.get_columns("projects")}
     region_columns = {column["name"]: column for column in inspector.get_columns("hud_regions")}
     reference_columns = {
         column["name"]: column for column in inspector.get_columns("reference_assets")
@@ -30,6 +31,7 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     assert {"id", "relpath", "content_type", "size_bytes"} <= reference_columns.keys()
     assert "status" in reference_columns
     assert "normalized_name" in profile_columns
+    assert project_columns["active_profile_id"]["nullable"] is True
     category_columns = {column["name"] for column in inspector.get_columns("categories")}
     assert "ordinal" in category_columns
     run_columns = {column["name"] for column in inspector.get_columns("pipeline_runs")}
@@ -80,6 +82,13 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
         and foreign_key["referred_table"] == "reference_assets"
         for foreign_key in profile_foreign_keys
     )
+    project_foreign_keys = inspector.get_foreign_keys("projects")
+    assert any(
+        foreign_key["constrained_columns"] == ["active_profile_id"]
+        and foreign_key["referred_table"] == "game_profiles"
+        and foreign_key["options"].get("ondelete") == "SET NULL"
+        for foreign_key in project_foreign_keys
+    )
     profile_checks = {
         constraint["name"] for constraint in inspector.get_check_constraints("game_profiles")
     }
@@ -99,6 +108,77 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     engine = create_engine(settings.database_url)
     assert set(inspect(engine).get_table_names()) >= EXPECTED_TABLES
     engine.dispose()
+
+
+def test_active_profile_migration_backfills_latest_and_downgrades_without_data_loss(
+    settings: Settings,
+) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0005")
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects (id,name,workspace_path,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace','2026-08-01','2026-08-01')"
+            )
+        )
+        for asset_id in ("a-old", "a-new"):
+            connection.execute(
+                text(
+                    "INSERT INTO reference_assets "
+                    "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+                    "VALUES (:id,:relpath,'image/png',1,'ready','2026-08-01','2026-08-01')"
+                ),
+                {"id": asset_id, "relpath": f"assets/references/{asset_id}.png"},
+            )
+        for profile_id, name, asset_id, created_at in (
+            ("g-old", "Old", "a-old", "2026-08-01"),
+            ("g-new", "Quake Champions", "a-new", "2026-08-02"),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO game_profiles "
+                    "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+                    "source_height,version,created_at,updated_at) "
+                    "VALUES (:id,'p',:name,:normalized,:asset,1920,1080,1,:created,:created)"
+                ),
+                {
+                    "id": profile_id,
+                    "name": name,
+                    "normalized": name.casefold(),
+                    "asset": asset_id,
+                    "created": created_at,
+                },
+            )
+    engine.dispose()
+
+    command.upgrade(config, "head")
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT active_profile_id FROM projects WHERE id='p'")
+            ).scalar_one()
+            == "g-new"
+        )
+    engine.dispose()
+
+    command.downgrade(config, "0005")
+    engine = create_engine(settings.database_url)
+    inspector = inspect(engine)
+    assert "active_profile_id" not in {
+        column["name"] for column in inspector.get_columns("projects")
+    }
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT count(*) FROM game_profiles")).scalar_one() == 2
+        assert (
+            connection.execute(text("SELECT name FROM game_profiles WHERE id='g-new'")).scalar_one()
+            == "Quake Champions"
+        )
+    engine.dispose()
+
+    command.upgrade(config, "head")
 
 
 def test_integrity_migration_backfills_and_round_trips_existing_data(settings: Settings) -> None:
@@ -274,7 +354,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0005"
+            "0006"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -385,7 +465,7 @@ def test_documented_cleanup_sql_actually_unblocks_the_migration(settings: Settin
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0005"
+            "0006"
         )
     engine.dispose()
 
@@ -484,6 +564,6 @@ def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Set
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0005"
+            "0006"
         )
     engine.dispose()

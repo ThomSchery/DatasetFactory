@@ -1,11 +1,12 @@
 from collections.abc import Callable
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from backend.app.access.store.repositories.profiles import ProfileRecord
+from backend.app.access.store.repositories.profiles import ProfileRecord, ProfileSummaryRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
 from backend.app.engines.definition import CategoryDefinition, RegionDefinition
 from backend.app.managers.workflow.profile_use_cases import (
@@ -72,6 +73,18 @@ class GameProfileResponse(StrictModel):
     categories: tuple[CategoryResponse, ...]
 
 
+class ProfileSummaryResponse(StrictModel):
+    id: str
+    name: str
+    reference_asset_url: str
+    source_width: int
+    source_height: int
+    region_count: int
+    category_count: int
+    created_at: datetime
+    active: bool
+
+
 ProfileUseCasesProvider = Callable[[], ProfileUseCases]
 
 
@@ -92,10 +105,24 @@ def _response(record: ProfileRecord) -> GameProfileResponse:
     )
 
 
+def _summary_response(record: ProfileSummaryRecord) -> ProfileSummaryResponse:
+    return ProfileSummaryResponse(
+        id=record.id,
+        name=record.name,
+        reference_asset_url=f"/api/v1/assets/references/{record.reference_asset_id}",
+        source_width=record.source_width,
+        source_height=record.source_height,
+        region_count=record.region_count,
+        category_count=record.category_count,
+        created_at=record.created_at,
+        active=record.active,
+    )
+
+
 def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
     if error.code in {"profile_not_found", "source_missing"}:
         status_code = 404
-    elif error.code == "profile_name_exists":
+    elif error.code in {"profile_name_exists", "active_run"}:
         status_code = 409
     elif error.code == "reference_asset_copy_failed":
         status_code = 502
@@ -184,12 +211,34 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
             return _profile_error(request, error)
         return _response(record)
 
+    @router.get("", response_model=tuple[ProfileSummaryResponse, ...])
+    def list_profiles(
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> tuple[ProfileSummaryResponse, ...]:
+        return tuple(_summary_response(record) for record in use_cases.list_profiles())
+
     @router.get("/current", response_model=GameProfileResponse | None)
     def current_profile(
         use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
     ) -> GameProfileResponse | None:
         record = use_cases.get_current_profile()
         return _response(record) if record is not None else None
+
+    @router.post(
+        "/{profile_id}/activate",
+        response_model=GameProfileResponse,
+        responses={404: {"model": ErrorEnvelope}, 409: {"model": ErrorEnvelope}},
+    )
+    def activate_profile(
+        profile_id: str,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> GameProfileResponse | JSONResponse:
+        try:
+            record = use_cases.activate_profile(profile_id)
+        except ProfileUseCaseError as error:
+            return _profile_error(request, error)
+        return _response(record)
 
     @router.get(
         "/{profile_id}",

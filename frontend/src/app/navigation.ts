@@ -20,7 +20,7 @@ export const NAV_DESTINATIONS: readonly NavDestination[] = [
     end: true,
   },
   {
-    path: "/profiles/new",
+    path: "/profiles",
     label: "Profil gry",
     description: "Obraz referencyjny, regiony HUD i klasy",
   },

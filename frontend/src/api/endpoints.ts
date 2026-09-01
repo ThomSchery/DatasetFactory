@@ -17,6 +17,7 @@ import type {
   Material,
   Page,
   PipelineRun,
+  ProfileSummary,
   ReferencePreview,
   ReferencePreviewRequest,
   ReviewFrameRequest,
@@ -64,6 +65,18 @@ export function createProfile(body: CreateProfileRequest): Promise<GameProfile> 
 /** `GET /profiles/current` → profile or `null` */
 export function getCurrentProfile(signal?: AbortSignal): Promise<GameProfile | null> {
   return apiRequest<GameProfile | null>("/profiles/current", { signal });
+}
+
+/** `GET /profiles` — every profile in the one local project. */
+export function listProfiles(signal?: AbortSignal): Promise<ProfileSummary[]> {
+  return apiRequest<ProfileSummary[]>("/profiles", { signal });
+}
+
+/** `POST /profiles/{profile_id}/activate` — persist the project selection. */
+export function activateProfile(profileId: string): Promise<GameProfile> {
+  return apiRequest<GameProfile>(`/profiles/${encodeURIComponent(profileId)}/activate`, {
+    method: "POST",
+  });
 }
 
 /** `GET /profiles/{profile_id}` → the exact full profile assigned to a run. */

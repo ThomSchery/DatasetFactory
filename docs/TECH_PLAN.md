@@ -109,7 +109,9 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `GET /assets/references/{asset_id}` | opaque UUID zapisany w profilu | stream obrazu z relpath z bazy | `404`; nigdy arbitrary path |
 | `POST /profiles/reference-preview` | `{reference_image_path}` | `201 {asset_id, width, height}` | `400 reference_path_not_absolute`, `404 source_missing`, `502 reference_asset_copy_failed` |
 | `POST /profiles` | `{name, reference_image_path, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing`, `409 profile_name_exists` |
+| `GET /profiles` | — | lista podsumowań profili z licznikami i `active` | `500` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
+| `POST /profiles/{profile_id}/activate` | — | wybrany `GameProfile` | `404 profile_not_found`, `409 active_run` |
 | `GET /profiles/{profile_id}` | — | dokładny `GameProfile` przypisany do runu | `404 profile_not_found` |
 | `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404`, `503 ffprobe_unavailable`, `504 ffprobe_timeout` |
 | `GET /materials` | `page,page_size<=100` | paged list | `400` |

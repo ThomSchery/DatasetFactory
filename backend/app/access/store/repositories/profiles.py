@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.access.store.database import Database
-from backend.app.access.store.models import Category, GameProfile, HudRegion, ReferenceAsset
+from backend.app.access.store.models import (
+    Category,
+    GameProfile,
+    HudRegion,
+    PipelineRun,
+    Project,
+    ReferenceAsset,
+)
 
 
 class ProfileNameExistsError(RuntimeError):
@@ -20,6 +28,10 @@ class ProfilePersistenceError(RuntimeError):
 
 
 class ProfileNotFoundError(LookupError):
+    pass
+
+
+class ProfileSelectionBlockedError(RuntimeError):
     pass
 
 
@@ -76,6 +88,19 @@ class ProfileRecord:
     categories: tuple[CategoryDraft, ...]
 
 
+@dataclass(frozen=True)
+class ProfileSummaryRecord:
+    id: str
+    name: str
+    reference_asset_id: str
+    source_width: int
+    source_height: int
+    region_count: int
+    category_count: int
+    created_at: datetime
+    active: bool
+
+
 class ProfileRepository:
     """Persist and hydrate a profile aggregate in one database transaction."""
 
@@ -108,6 +133,9 @@ class ProfileRepository:
                     )
                 )
                 session.flush()
+                project = session.get(Project, draft.project_id)
+                if project is not None and project.active_profile_id is None:
+                    project.active_profile_id = draft.id
                 session.add_all(
                     [
                         HudRegion(
@@ -163,13 +191,88 @@ class ProfileRepository:
 
     def current(self) -> ProfileRecord | None:
         with self._database.session() as session:
-            profile = session.scalar(
-                select(GameProfile)
-                .order_by(GameProfile.created_at.desc(), GameProfile.id.desc())
-                .limit(1)
+            project = session.scalar(
+                select(Project).order_by(Project.created_at, Project.id).limit(1)
+            )
+            if project is None:
+                return None
+            profile = (
+                session.get(GameProfile, project.active_profile_id)
+                if project.active_profile_id is not None
+                else None
             )
             if profile is None:
+                profile = session.scalar(
+                    select(GameProfile)
+                    .where(GameProfile.project_id == project.id)
+                    .order_by(GameProfile.created_at.desc(), GameProfile.id.desc())
+                    .limit(1)
+                )
+            if profile is None:
                 return None
+            return self._record(session, profile)
+
+    def list(self) -> tuple[ProfileSummaryRecord, ...]:
+        with self._database.session() as session:
+            project = session.scalar(
+                select(Project).order_by(Project.created_at, Project.id).limit(1)
+            )
+            if project is None:
+                return ()
+            profiles = tuple(
+                session.scalars(
+                    select(GameProfile)
+                    .where(GameProfile.project_id == project.id)
+                    .order_by(GameProfile.created_at.desc(), GameProfile.id.desc())
+                )
+            )
+            fallback_id = profiles[0].id if project.active_profile_id is None and profiles else None
+            active_id = project.active_profile_id or fallback_id
+            return tuple(
+                ProfileSummaryRecord(
+                    id=profile.id,
+                    name=profile.name,
+                    reference_asset_id=profile.reference_asset_id,
+                    source_width=profile.source_width,
+                    source_height=profile.source_height,
+                    region_count=int(
+                        session.scalar(
+                            select(func.count())
+                            .select_from(HudRegion)
+                            .where(HudRegion.profile_id == profile.id)
+                        )
+                        or 0
+                    ),
+                    category_count=int(
+                        session.scalar(
+                            select(func.count())
+                            .select_from(Category)
+                            .where(Category.profile_id == profile.id)
+                        )
+                        or 0
+                    ),
+                    created_at=profile.created_at,
+                    active=profile.id == active_id,
+                )
+                for profile in profiles
+            )
+
+    def activate(self, profile_id: str) -> ProfileRecord:
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            profile = session.get(GameProfile, profile_id)
+            if profile is None:
+                raise ProfileNotFoundError
+            slot_owner = session.scalar(
+                select(PipelineRun.id).where(PipelineRun.workflow_slot == 1).limit(1)
+            )
+            if slot_owner is not None:
+                raise ProfileSelectionBlockedError
+            project = session.get(Project, profile.project_id)
+            if project is None:
+                raise ProfileNotFoundError
+            project.active_profile_id = profile.id
+            session.flush()
             return self._record(session, profile)
 
     def get(self, profile_id: str) -> ProfileRecord:
