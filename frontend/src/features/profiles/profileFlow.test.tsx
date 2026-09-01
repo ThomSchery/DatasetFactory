@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { errorEnvelope, profileFixture } from "../../test/fixtures";
+import { errorEnvelope, materialFixture, profileFixture } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 
 /*
@@ -16,11 +16,19 @@ const SOURCE = { width: 1920, height: 1080 };
 interface StubOptions {
   /** What `POST /profiles/reference-preview` answers. */
   preview?: StubbedResponse;
+  /** What `POST /profiles/reference-frame` answers. */
+  frame?: StubbedResponse;
   /** What `POST /profiles` answers. */
   create?: StubbedResponse;
+  /** What `GET /materials` answers. Empty page unless a test imports one. */
+  materials?: StubbedResponse;
 }
 
-function stubProfileApi({ create, preview }: StubOptions = {}) {
+function materialPage(...items: ReturnType<typeof materialFixture>[]): StubbedResponse {
+  return { status: 200, body: { items, page: 1, page_size: 100, total: items.length } };
+}
+
+function stubProfileApi({ create, frame, materials, preview }: StubOptions = {}) {
   return stubFetch((url, init) => {
     if (url.includes("/profiles/reference-preview") && init?.method === "POST") {
       return preview ?? {
@@ -28,11 +36,17 @@ function stubProfileApi({ create, preview }: StubOptions = {}) {
         body: { asset_id: "preview-asset-1", width: SOURCE.width, height: SOURCE.height },
       };
     }
+    if (url.includes("/profiles/reference-frame") && init?.method === "POST") {
+      return frame ?? {
+        status: 201,
+        body: { asset_id: "frame-asset-1", width: SOURCE.width, height: SOURCE.height },
+      };
+    }
     if (url.endsWith("/profiles") && init?.method === "POST") {
       return create ?? { status: 201, body: profileFixture() };
     }
     if (url.includes("/materials")) {
-      return { status: 200, body: { items: [], page: 1, page_size: 100, total: 0 } };
+      return materials ?? materialPage();
     }
     return { status: 200, body: null };
   });
@@ -47,7 +61,15 @@ async function loadReferenceImage(): Promise<HTMLElement> {
   return screen.getByRole("listbox", { name: /Regiony HUD/ });
 }
 
+async function useManualSource(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const switchButton = screen.queryByRole("button", { name: "Użyj ścieżki ręcznej" });
+  if (switchButton !== null) {
+    await user.click(switchButton);
+  }
+}
+
 async function requestPreview(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  await useManualSource(user);
   const path = screen.getByLabelText("Ścieżka obrazu referencyjnego");
   if (!String((path as HTMLInputElement).value)) {
     await user.type(path, "D:\\gry\\hud.png");
@@ -87,7 +109,7 @@ function drawRegion(
 
 function requestBodies(
   spy: ReturnType<typeof stubFetch>,
-  endpoint: "/profiles" | "/profiles/reference-preview",
+  endpoint: "/profiles" | "/profiles/reference-preview" | "/profiles/reference-frame",
 ): unknown[] {
   return spy.mock.calls
     .filter(([input, init]) => {
@@ -112,6 +134,7 @@ describe("the reference image view has every state", () => {
       screen.getByRole("region", { name: "Wczytaj obraz do rysowania" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Użyj ścieżki ręcznej" })).toBeInTheDocument();
   });
 
   it("surfaces a failed preview through the central error dictionary", async () => {
@@ -121,6 +144,7 @@ describe("the reference image view has every state", () => {
     });
     renderApp(["/profiles/new"]);
 
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\missing.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
 
@@ -142,6 +166,7 @@ describe("the reference image view has every state", () => {
     );
     renderApp(["/profiles/new"]);
 
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
 
@@ -177,6 +202,7 @@ describe("the reference image view has every state", () => {
     stubProfileApi();
     renderApp(["/profiles/new"]);
 
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const image = await screen.findByAltText(/Obraz referencyjny profilu/);
@@ -192,6 +218,7 @@ describe("creating a profile", () => {
     renderApp(["/profiles/new"]);
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
+    await useManualSource(user);
     await user.type(
       screen.getByLabelText("Ścieżka obrazu referencyjnego"),
       "D:\\gry\\hud.png",
@@ -239,7 +266,9 @@ describe("creating a profile", () => {
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
 
     expect(await screen.findByText("Podaj nazwę profilu.")).toBeInTheDocument();
-    expect(screen.getByText("Podaj ścieżkę do obrazu referencyjnego.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Najpierw przygotuj podgląd obrazu referencyjnego."),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Zaznacz przynajmniej jeden region HUD na obrazie."),
     ).toBeInTheDocument();
@@ -254,6 +283,7 @@ describe("creating a profile", () => {
     renderApp(["/profiles/new"]);
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra");
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "gry\\hud.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
 
@@ -285,12 +315,16 @@ describe("creating a profile", () => {
             answerCreate = resolve;
           });
         }
+        if (String(input).includes("/materials")) {
+          return Promise.resolve(json({ items: [], page: 1, page_size: 100, total: 0 }, 200));
+        }
         return Promise.resolve(json(null, 200));
       }),
     );
     renderApp(["/profiles/new"]);
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();
@@ -324,6 +358,89 @@ describe("creating a profile", () => {
  * through the central dictionary. Neither of these is folded into a generic
  * "profile could not be created": they name different repairs.
  */
+describe("the reference frame comes from an imported material", () => {
+  /** Picks the material and the moment, then cuts the frame server-side. */
+  async function cutFrame(
+    user: ReturnType<typeof userEvent.setup>,
+    seconds = "12.5",
+  ): Promise<void> {
+    await user.selectOptions(await screen.findByLabelText("Materiał źródłowy"), "video-1");
+    const moment = screen.getByLabelText("Moment klatki (s)");
+    await user.clear(moment);
+    await user.type(moment, seconds);
+    await user.click(screen.getByRole("button", { name: "Wytnij i pokaż klatkę" }));
+  }
+
+  it("creates the profile from the cut frame instead of a typed path", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = stubProfileApi({ materials: materialPage(materialFixture()) });
+    renderApp(["/profiles/new"]);
+
+    await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
+    await cutFrame(user);
+    const surface = await loadReferenceImage();
+    drawRegion(surface, { xRatio: 0.25, yRatio: 0.25 }, { xRatio: 0.75, yRatio: 0.5 });
+    await user.click(screen.getByRole("button", { name: "7" }));
+
+    await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
+
+    await waitFor(() => {
+      expect(requestBodies(fetchSpy, "/profiles")).toHaveLength(1);
+    });
+    expect(requestBodies(fetchSpy, "/profiles/reference-frame")).toEqual([
+      { video_id: "video-1", timestamp_ms: 12_500 },
+    ]);
+    // The cut frame is promoted by its `asset_id`; the manual path stays out of
+    // the request entirely rather than travelling as an empty string.
+    expect(requestBodies(fetchSpy, "/profiles")[0]).toEqual({
+      name: "Gra testowa",
+      reference_asset_id: "frame-asset-1",
+      regions: [{ name: "Region 1", x: 480, y: 270, width: 960, height: 270 }],
+      categories: [{ kind: "character", name: "7" }],
+    });
+  });
+
+  it("keeps a moment past the end of the material inside the browser", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = stubProfileApi({ materials: materialPage(materialFixture()) });
+    renderApp(["/profiles/new"]);
+
+    await cutFrame(user, "125");
+
+    expect(
+      await screen.findByText("Podaj moment od 0 do mniej niż 125.000 s."),
+    ).toBeInTheDocument();
+    expect(requestBodies(fetchSpy, "/profiles/reference-frame")).toHaveLength(0);
+  });
+
+  it("surfaces a refused extraction through the central error dictionary", async () => {
+    const user = userEvent.setup();
+    stubProfileApi({
+      frame: { status: 503, body: errorEnvelope("ffmpeg_unavailable") },
+      materials: materialPage(materialFixture()),
+    });
+    renderApp(["/profiles/new"]);
+
+    await cutFrame(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "FFmpeg jest niedostępny, więc nie da się wyciąć klatki referencyjnej.",
+    );
+    expect(screen.queryByAltText(/Obraz referencyjny profilu/)).not.toBeInTheDocument();
+  });
+
+  it("offers the manual path when nothing has been imported yet", async () => {
+    stubProfileApi();
+    renderApp(["/profiles/new"]);
+
+    expect(
+      await screen.findByRole("region", { name: "Brak zaimportowanych materiałów" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Materiał źródłowy")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Użyj ścieżki ręcznej" })).toBeInTheDocument();
+  });
+});
+
 describe("backend rejections", () => {
   async function submitAgainst(create: StubbedResponse) {
     const user = userEvent.setup();
@@ -331,6 +448,7 @@ describe("backend rejections", () => {
     renderApp(["/profiles/new"]);
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();
@@ -400,6 +518,7 @@ describe("regions are reachable without precise clicking", () => {
     renderApp(["/profiles/new"]);
 
     await user.type(screen.getByLabelText("Nazwa profilu"), "Gra testowa");
+    await useManualSource(user);
     await user.type(screen.getByLabelText("Ścieżka obrazu referencyjnego"), "D:\\gry\\hud.png");
     await user.click(screen.getByRole("button", { name: "Wczytaj podgląd" }));
     const surface = await loadReferenceImage();

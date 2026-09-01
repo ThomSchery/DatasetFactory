@@ -95,8 +95,10 @@ export const profileCreateSchema = z
     reference_image_path: z
       .string()
       .trim()
-      .min(1, "Podaj ścieżkę do obrazu referencyjnego.")
-      .regex(ABSOLUTE_PATH, "Ścieżka musi być bezwzględna, np. D:\\gry\\hud.png."),
+      .refine(
+        (value) => value === "" || ABSOLUTE_PATH.test(value),
+        "Ścieżka musi być bezwzględna, np. D:\\gry\\hud.png.",
+      ),
     // `Field(min_length=1)` on both collections, and `regions_required` /
     // `categories_required` in the definition engine behind it.
     regions: z.array(regionSchema).min(1, "Zaznacz przynajmniej jeden region HUD na obrazie."),

@@ -13,6 +13,16 @@
   gap: var(--size-md);
 }
 
+.df-profiles__reference-source {
+  display: grid;
+  gap: var(--size-sm);
+  max-width: var(--measure-copy);
+}
+
+.df-profiles__reference-source .df-button {
+  justify-self: start;
+}
+
 .df-profiles__hint {
   margin: 0;
   max-width: var(--measure-copy);

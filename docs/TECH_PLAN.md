@@ -108,7 +108,8 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `GET /dashboard` | — | `DashboardResponse` — kształt poniżej tabeli | `500` |
 | `GET /assets/references/{asset_id}` | opaque UUID zapisany w profilu | stream obrazu z relpath z bazy | `404`; nigdy arbitrary path |
 | `POST /profiles/reference-preview` | `{reference_image_path}` | `201 {asset_id, width, height}` | `400 reference_path_not_absolute`, `404 source_missing`, `502 reference_asset_copy_failed` |
-| `POST /profiles` | `{name, reference_image_path, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing`, `409 profile_name_exists` |
+| `POST /profiles/reference-frame` | `{video_id,timestamp_ms}` | `201 {asset_id,width,height}` | `400/404/409/502/503/504` |
+| `POST /profiles` | `{name, reference_image_path xor reference_asset_id, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing/asset_not_found`, `409 profile_name_exists` |
 | `GET /profiles` | — | lista podsumowań profili z licznikami i `active` | `500` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
 | `POST /profiles/{profile_id}/activate` | — | wybrany `GameProfile` | `404 profile_not_found`, `409 active_run` |
@@ -325,12 +326,11 @@ w całości dekodowany przez Pillow i dopiero publikowany przez atomic rename.
 Startup usuwa stare temp i finalne orphany, zachowuje committed valid assety oraz
 oznacza rekordy bez pliku jako `missing`; reconciliation jest idempotentne.
 
-`POST /profiles/reference-preview` staguje i publikuje obraz tą samą ścieżką co
-`POST /profiles`, ale nie tworzy profilu — zwraca `asset_id` i wymiary do
-rysowania regionów w UI. To rozwiązuje pierwszy profil w świeżej instalacji:
-bez tego endpointu nie ma jak zobaczyć obrazu przed zapisaniem regionów, a
-regiony są wymagane do zapisania profilu. `POST /profiles` nadal staguje
-niezależnie z własnym `asset_id`; podglądowy asset, jeśli użytkownik porzuci
+`POST /profiles/reference-preview` staguje i publikuje ręcznie wskazany obraz,
+a `POST /profiles/reference-frame` wycina klatkę z zapisanego materiału. Oba
+zwracają `asset_id` i wymiary do rysowania regionów w UI bez tworzenia profilu.
+`POST /profiles` może atomowo utrwalić podgląd przez `reference_asset_id` albo
+zachować zgodną ścieżkę ręczną przez `reference_image_path`; podglądowy asset, jeśli użytkownik porzuci
 formularz, staje się orphanem i ginie przy najbliższym startup reconciliation
 — nie wymaga osobnego mechanizmu czyszczenia.
 

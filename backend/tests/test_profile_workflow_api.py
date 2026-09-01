@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import struct
 import zlib
 from concurrent.futures import ThreadPoolExecutor
@@ -9,10 +10,17 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import func, select
 
 from backend.app.access.media.image import ReferenceImageProbe
-from backend.app.access.store.models import GameProfile, ReferenceAsset
+from backend.app.access.media.processing import SampledFrame
+from backend.app.access.store.models import (
+    GameProfile,
+    Project,
+    ReferenceAsset,
+    VideoAsset,
+)
 from backend.app.access.store.repositories.profiles import (
     ProfileNotFoundError,
     ProfileRepository,
@@ -136,6 +144,111 @@ def test_reference_preview_rejects_missing_and_relative_paths(
     assert relative.json()["error"]["code"] == "reference_path_not_absolute"
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "source_missing"
+
+
+def test_reference_frame_from_material_is_previewed_and_promoted_atomically(
+    composition: CompositionRoot,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "quake.mp4"
+    source.write_bytes(b"fixture-video")
+    stat = source.stat()
+    fingerprint = hashlib.sha256(f"{stat.st_size}:{stat.st_mtime_ns}".encode()).hexdigest()
+    project_id = str(uuid4())
+    video_id = str(uuid4())
+    with composition.database.session() as session:
+        session.add(Project(id=project_id, name="DatasetFactory", workspace_path="workspace"))
+        session.flush()
+        session.add(
+            VideoAsset(
+                id=video_id,
+                project_id=project_id,
+                local_path=str(source),
+                size_bytes=stat.st_size,
+                duration_ms=30_000,
+                width=1920,
+                height=1080,
+                fingerprint=fingerprint,
+            )
+        )
+
+    def sample_frame(video: Path, timestamp_ms: int, output_relpath: Path) -> SampledFrame:
+        assert video == source
+        assert timestamp_ms == 12_500
+        output = composition.workspace.resolve_relpath(output_relpath)
+        Image.new("RGB", (1920, 1080), color=(8, 16, 32)).save(output, format="JPEG")
+        return SampledFrame(output_relpath, 1920, 1080, timestamp_ms)
+
+    monkeypatch.setattr(composition.media_processing, "sample_frame", sample_frame)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        preview = client.post(
+            "/api/v1/profiles/reference-frame",
+            json={"video_id": video_id, "timestamp_ms": 12_500},
+        )
+        assert preview.status_code == 201
+        preview_body = preview.json()
+        assert preview_body["width"] == 1920
+        assert preview_body["height"] == 1080
+        image = client.get(f"/api/v1/assets/references/{preview_body['asset_id']}")
+        assert image.status_code == 200
+        assert image.headers["content-type"] == "image/jpeg"
+
+        payload = _payload(source, name="Quake Champions")
+        payload.pop("reference_image_path")
+        payload["reference_asset_id"] = preview_body["asset_id"]
+        created = client.post("/api/v1/profiles", json=payload)
+
+    assert created.status_code == 201
+    assert created.json()["reference_asset_id"] == preview_body["asset_id"]
+    assert created.json()["source_width"] == 1920
+    assert created.json()["source_height"] == 1080
+    with composition.database.session() as session:
+        assert session.scalar(select(func.count()).select_from(GameProfile)) == 1
+        assert session.scalar(select(func.count()).select_from(ReferenceAsset)) == 1
+
+
+def test_reference_frame_rejects_unknown_material_and_out_of_range_timestamp(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "short.mp4"
+    source.write_bytes(b"fixture-video")
+    stat = source.stat()
+    fingerprint = hashlib.sha256(f"{stat.st_size}:{stat.st_mtime_ns}".encode()).hexdigest()
+    project_id = str(uuid4())
+    video_id = str(uuid4())
+    with composition.database.session() as session:
+        session.add(Project(id=project_id, name="DatasetFactory", workspace_path="workspace"))
+        session.flush()
+        session.add(
+            VideoAsset(
+                id=video_id,
+                project_id=project_id,
+                local_path=str(source),
+                size_bytes=stat.st_size,
+                duration_ms=1000,
+                width=32,
+                height=24,
+                fingerprint=fingerprint,
+            )
+        )
+
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        missing = client.post(
+            "/api/v1/profiles/reference-frame",
+            json={"video_id": "missing", "timestamp_ms": 0},
+        )
+        out_of_range = client.post(
+            "/api/v1/profiles/reference-frame",
+            json={"video_id": video_id, "timestamp_ms": 1000},
+        )
+
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "video_not_found"
+    assert out_of_range.status_code == 400
+    assert out_of_range.json()["error"]["code"] == "invalid_frame_timestamp"
 
 
 def test_profile_aggregate_and_reference_asset_are_created_atomically(

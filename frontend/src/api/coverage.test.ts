@@ -22,6 +22,7 @@ const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["GET /dashboard", "getDashboard"],
   ["GET /assets/references/{asset_id}", "referenceAssetUrl"],
   ["POST /profiles/reference-preview", "createReferencePreview"],
+  ["POST /profiles/reference-frame", "createReferenceFrame"],
   ["POST /profiles", "createProfile"],
   ["GET /profiles", "listProfiles"],
   ["GET /profiles/current", "getCurrentProfile"],

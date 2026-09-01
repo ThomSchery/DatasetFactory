@@ -19,6 +19,7 @@ import type {
   Page,
   PipelineRun,
   ProfileSummary,
+  ReferenceFrameRequest,
   ReferencePreview,
   ReferencePreviewRequest,
   RunSummary,
@@ -57,6 +58,11 @@ export function getDashboard(signal?: AbortSignal): Promise<Dashboard> {
 /** `POST /profiles/reference-preview` → `201` with an ephemeral opaque asset. */
 export function createReferencePreview(body: ReferencePreviewRequest): Promise<ReferencePreview> {
   return apiRequest<ReferencePreview>("/profiles/reference-preview", { method: "POST", body });
+}
+
+/** `POST /profiles/reference-frame` → `201` with a material-derived preview asset. */
+export function createReferenceFrame(body: ReferenceFrameRequest): Promise<ReferencePreview> {
+  return apiRequest<ReferencePreview>("/profiles/reference-frame", { method: "POST", body });
 }
 
 /** `POST /profiles` → `201` */

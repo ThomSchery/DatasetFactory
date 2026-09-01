@@ -31,6 +31,21 @@ class MaterialPage:
     total: int
 
 
+class MaterialNotFoundError(LookupError):
+    pass
+
+
+@dataclass(frozen=True)
+class MaterialSourceRecord:
+    id: str
+    path: Path
+    size_bytes: int
+    duration_ms: int
+    width: int
+    height: int
+    fingerprint: str
+
+
 class MaterialRepository:
     """Persist local video references and return path-redacted projections."""
 
@@ -78,6 +93,21 @@ class MaterialRepository:
                 page=page,
                 page_size=page_size,
                 total=total,
+            )
+
+    def source(self, material_id: str) -> MaterialSourceRecord:
+        with self._database.session() as session:
+            asset = session.get(VideoAsset, material_id)
+            if asset is None:
+                raise MaterialNotFoundError
+            return MaterialSourceRecord(
+                id=asset.id,
+                path=Path(asset.local_path),
+                size_bytes=asset.size_bytes,
+                duration_ms=asset.duration_ms,
+                width=asset.width,
+                height=asset.height,
+                fingerprint=asset.fingerprint,
             )
 
     @staticmethod

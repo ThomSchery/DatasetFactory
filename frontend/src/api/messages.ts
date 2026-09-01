@@ -185,6 +185,30 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Nie udało się skopiować obrazu referencyjnego do katalogu roboczego.",
     action: "Sprawdź miejsce na dysku i uprawnienia katalogu roboczego, po czym powtórz zapis.",
   },
+  reference_source_required: {
+    message: "Nie wskazano źródła obrazu referencyjnego.",
+    action: "Wybierz materiał i moment albo użyj bezwzględnej ścieżki do obrazu.",
+  },
+  invalid_frame_timestamp: {
+    message: "Wybrany moment nie mieści się w czasie trwania materiału.",
+    action: "Podaj moment od początku materiału do jego czasu końcowego.",
+  },
+  ffmpeg_unavailable: {
+    message: "FFmpeg jest niedostępny, więc nie da się wyciąć klatki referencyjnej.",
+    action: "Zainstaluj FFmpeg albo popraw jego ścieżkę w konfiguracji i spróbuj ponownie.",
+  },
+  frame_extraction_timeout: {
+    message: "Wycinanie klatki referencyjnej przekroczyło limit czasu.",
+    action: "Sprawdź materiał i spróbuj ponownie z innym momentem.",
+  },
+  reference_frame_extraction_failed: {
+    message: "Nie udało się wyciąć poprawnej klatki referencyjnej z materiału.",
+    action: "Wybierz inny moment albo użyj alternatywnej ścieżki do obrazu.",
+  },
+  reference_frame_resolution_mismatch: {
+    message: "Wycięta klatka ma inne wymiary niż zaimportowany materiał.",
+    action: "Zaimportuj materiał ponownie, a następnie ponów wybór klatki.",
+  },
   profile_persistence_failed: {
     message: "Zapis profilu nie powiódł się i nic nie zostało utrwalone.",
     action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",

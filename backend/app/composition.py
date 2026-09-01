@@ -128,6 +128,12 @@ def build_composition(
     profiles = ProfileRepository(database)
     assets = AssetRepository(database, workspace)
     materials = MaterialRepository(database)
+    media_processing = MediaProcessingAccess(
+        workspace,
+        settings.ffmpeg_path,
+        settings.frame_extraction_timeout_seconds,
+        ProcessTreeRunner(),
+    )
     profile_use_cases = ProfileUseCases(
         DatasetDefinitionEngine(),
         ReferenceImageProbe(),
@@ -135,6 +141,8 @@ def build_composition(
         profiles,
         assets,
         ReferenceAssetStore(workspace),
+        materials,
+        media_processing,
     )
     active_media_probe = media_probe or FfprobeMediaProbe(
         settings.ffprobe_path,
@@ -166,12 +174,6 @@ def build_composition(
             active_resource_probe,
             timeout_seconds=settings.tesseract_timeout_seconds,
         ),
-    )
-    media_processing = MediaProcessingAccess(
-        workspace,
-        settings.ffmpeg_path,
-        settings.frame_extraction_timeout_seconds,
-        ProcessTreeRunner(),
     )
     active_ocr_engine = ocr_engine or TesseractOcrEngine(
         workspace,

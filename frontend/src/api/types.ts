@@ -76,13 +76,19 @@ export interface CategoryInput {
 
 export interface CreateProfileRequest {
   name: string;
-  reference_image_path: string;
+  reference_image_path?: string;
+  reference_asset_id?: string;
   regions: RegionInput[];
   categories: CategoryInput[];
 }
 
 export interface ReferencePreviewRequest {
   reference_image_path: string;
+}
+
+export interface ReferenceFrameRequest {
+  video_id: string;
+  timestamp_ms: number;
 }
 
 export interface ReferencePreview {

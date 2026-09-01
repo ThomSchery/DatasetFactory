@@ -72,6 +72,11 @@ describe("profile collection and explicit selection", () => {
       if (url.endsWith("/profiles")) {
         return { status: 200, body: [] };
       }
+      // The creation screen offers the reference frame from imported material,
+      // so it asks for the material page as soon as it mounts.
+      if (url.includes("/materials")) {
+        return { status: 200, body: { items: [], page: 1, page_size: 100, total: 0 } };
+      }
       return { status: 200, body: {} };
     });
 

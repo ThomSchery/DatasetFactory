@@ -31,13 +31,19 @@ class CategoryRequest(StrictModel):
 
 class CreateProfileRequest(StrictModel):
     name: str = Field(min_length=1, max_length=200)
-    reference_image_path: str = Field(min_length=1)
+    reference_image_path: str | None = Field(default=None, min_length=1)
+    reference_asset_id: str | None = Field(default=None, min_length=1)
     regions: tuple[RegionRequest, ...] = Field(min_length=1)
     categories: tuple[CategoryRequest, ...] = Field(min_length=1)
 
 
 class ReferencePreviewRequest(StrictModel):
     reference_image_path: str = Field(min_length=1)
+
+
+class ReferenceFrameRequest(StrictModel):
+    video_id: str = Field(min_length=1)
+    timestamp_ms: int = Field(ge=0)
 
 
 class ReferencePreviewResponse(StrictModel):
@@ -120,11 +126,19 @@ def _summary_response(record: ProfileSummaryRecord) -> ProfileSummaryResponse:
 
 
 def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
-    if error.code in {"profile_not_found", "source_missing"}:
+    if error.code in {"profile_not_found", "video_not_found", "asset_not_found", "source_missing"}:
         status_code = 404
-    elif error.code in {"profile_name_exists", "active_run"}:
+    elif error.code in {"profile_name_exists", "active_run", "source_changed"}:
         status_code = 409
-    elif error.code == "reference_asset_copy_failed":
+    elif error.code == "ffmpeg_unavailable":
+        status_code = 503
+    elif error.code == "frame_extraction_timeout":
+        status_code = 504
+    elif error.code in {
+        "reference_frame_extraction_failed",
+        "reference_frame_resolution_mismatch",
+        "reference_asset_copy_failed",
+    }:
         status_code = 502
     elif error.code == "profile_persistence_failed":
         status_code = 500
@@ -171,6 +185,37 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
         )
 
     @router.post(
+        "/reference-frame",
+        response_model=ReferencePreviewResponse,
+        status_code=201,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            502: {"model": ErrorEnvelope},
+            503: {"model": ErrorEnvelope},
+            504: {"model": ErrorEnvelope},
+        },
+    )
+    def create_reference_frame(
+        payload: ReferenceFrameRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> ReferencePreviewResponse | JSONResponse:
+        try:
+            preview = use_cases.create_reference_frame(
+                video_id=payload.video_id,
+                timestamp_ms=payload.timestamp_ms,
+            )
+        except ProfileUseCaseError as error:
+            return _profile_error(request, error)
+        return ReferencePreviewResponse(
+            asset_id=preview.asset_id,
+            width=preview.width,
+            height=preview.height,
+        )
+
+    @router.post(
         "",
         response_model=GameProfileResponse,
         status_code=201,
@@ -204,6 +249,7 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
             record = use_cases.create_profile(
                 name=payload.name,
                 reference_image_path=payload.reference_image_path,
+                reference_asset_id=payload.reference_asset_id,
                 regions=regions,
                 categories=categories,
             )
