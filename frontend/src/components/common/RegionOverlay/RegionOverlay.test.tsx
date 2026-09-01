@@ -604,6 +604,74 @@ describe("direct editing in source coordinates", () => {
     expect(shapeGeometry(option)).toEqual({ x: 100, y: 120, width: 50, height: 40 });
   });
 
+  /*
+   * A reading the size of the ones this screen actually edits. Both gestures
+   * have to exist on it: the interior moves even when the event was aimed at a
+   * handle, and the corner still resizes.
+   */
+  describe("a bbox the size of a real OCR reading", () => {
+    const reading: OverlayShape = {
+      id: "selected",
+      label: "Odczyt OCR",
+      x: 300,
+      y: 260,
+      width: 19,
+      height: 40,
+    };
+
+    function renderReading() {
+      const onShapeChangeEnd = vi.fn();
+      renderOverlay({
+        initialSelectedId: reading.id,
+        initialShapes: [reading],
+        onShapeChangeEnd,
+      });
+      const surface = surfaceElement();
+      layOutSurface(surface, 960);
+      const option = screen.getByRole("option");
+      const handle = option.querySelector(
+        '[data-overlay-handle="south-east"] .df-region-overlay__shape-handle-hit',
+      );
+      expect(handle).not.toBeNull();
+      return { handle: handle as Element, onShapeChangeEnd, option, surface };
+    }
+
+    it("moves from a point inside it, even when the event reached a handle", () => {
+      const { handle, onShapeChangeEnd, option, surface } = renderReading();
+
+      // Source (309, 280): strictly inside the 19×40 box.
+      fireEvent.pointerDown(handle, { clientX: 154.5, clientY: 140, pointerId: 1 });
+      fireEvent.pointerMove(surface, { clientX: 162, clientY: 152.5, pointerId: 1 });
+      fireEvent.pointerUp(surface, { clientX: 162, clientY: 152.5, pointerId: 1 });
+
+      expect(onShapeChangeEnd).toHaveBeenCalledWith("selected", {
+        x: 315,
+        y: 285,
+        width: 19,
+        height: 40,
+      });
+      expect(shapeGeometry(option)).toEqual({ x: 315, y: 285, width: 19, height: 40 });
+    });
+
+    it("resizes from a point diagonally outside its south-east corner", () => {
+      const { handle, onShapeChangeEnd, option, surface } = renderReading();
+
+      // Source (322, 302): three and two pixels past the corner (319, 300),
+      // inside the corner target that `handleTargetRect` puts there.
+      fireEvent.pointerDown(handle, { clientX: 161, clientY: 151, pointerId: 1 });
+      fireEvent.pointerMove(surface, { clientX: 165, clientY: 160, pointerId: 1 });
+      fireEvent.pointerUp(surface, { clientX: 165, clientY: 160, pointerId: 1 });
+
+      expect(onShapeChangeEnd).toHaveBeenCalledWith("selected", {
+        x: 300,
+        y: 260,
+        width: 27,
+        height: 58,
+      });
+      expect(shapeGeometry(option)).toEqual({ x: 300, y: 260, width: 27, height: 58 });
+    });
+  });
+
 });
 
 describe("the picture itself", () => {

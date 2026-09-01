@@ -4,6 +4,8 @@ import {
   clampRectToSource,
   clientPointToSource,
   fitsInSource,
+  handleTargetRect,
+  handleTargetSize,
   isDrawableRect,
   moveRectWithinSource,
   rectContainsPoint,
@@ -178,6 +180,73 @@ describe("direct rectangle editing", () => {
       width: 1820,
       height: 960,
     });
+  });
+});
+
+/*
+ * The size of a real OCR reading, not of a demo rectangle: 19×40 source pixels
+ * is the case where a fixed 32 px corner target covered the entire box.
+ */
+describe("corner targets", () => {
+  const reading = { x: 300, y: 260, width: 19, height: 40 };
+  const corners = ["north-west", "north-east", "south-west", "south-east"] as const;
+
+  it("takes the target from the shorter side, inside its bounds", () => {
+    expect(handleTargetSize(reading)).toBe(10);
+    expect(handleTargetSize({ x: 0, y: 0, width: 400, height: 300 })).toBe(32);
+    expect(handleTargetSize({ x: 0, y: 0, width: 6, height: 90 })).toBe(8);
+  });
+
+  it("anchors each target on the outermost pixel and extends it outwards", () => {
+    expect(handleTargetRect(reading, "north-west")).toEqual({
+      x: 290,
+      y: 250,
+      width: 10,
+      height: 10,
+    });
+    expect(handleTargetRect(reading, "north-east")).toEqual({
+      x: 318,
+      y: 250,
+      width: 10,
+      height: 10,
+    });
+    expect(handleTargetRect(reading, "south-west")).toEqual({
+      x: 290,
+      y: 299,
+      width: 10,
+      height: 10,
+    });
+    expect(handleTargetRect(reading, "south-east")).toEqual({
+      x: 318,
+      y: 299,
+      width: 10,
+      height: 10,
+    });
+  });
+
+  it("leaves every strictly interior pixel of the reading to the move gesture", () => {
+    const trapped: string[] = [];
+    for (let x = reading.x + 1; x < reading.x + reading.width - 1; x += 1) {
+      for (let y = reading.y + 1; y < reading.y + reading.height - 1; y += 1) {
+        const inTarget = corners.some((corner) =>
+          rectContainsPoint(handleTargetRect(reading, corner), { x, y }),
+        );
+        if (inTarget) {
+          trapped.push(`${String(x)},${String(y)}`);
+        }
+      }
+    }
+
+    expect(trapped).toEqual([]);
+  });
+
+  it("keeps the corner and its diagonal reachable for a resize", () => {
+    const target = handleTargetRect(reading, "south-east");
+
+    // The corner itself, and the diagonal outside it where a dense OCR row
+    // leaves room even when neighbours own the perpendicular zones.
+    expect(rectContainsPoint(target, { x: 319, y: 300 })).toBe(true);
+    expect(rectContainsPoint(target, { x: 322, y: 302 })).toBe(true);
   });
 });
 

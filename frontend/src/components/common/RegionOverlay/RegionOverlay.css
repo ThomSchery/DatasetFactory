@@ -92,27 +92,25 @@
   pointer-events: stroke;
 }
 
-/* Handles stay a constant CSS size while their anchor remains a source-pixel
-   corner. The 32 px transparent stroke is the desktop hit area from GRID-05;
-   unlike an invisible overlay, it only receives the resize interaction it
-   advertises (OVERLAY-06). */
-.df-region-overlay__shape-handle-visual,
-.df-region-overlay__shape-handle-hit {
-  vector-effect: non-scaling-stroke;
-}
-
+/* The marker stays a constant CSS size on its source-pixel corner: it says
+   where the corner is, at any scale. */
 .df-region-overlay__shape-handle-visual {
   fill: var(--color-text-strong-default);
   stroke: var(--color-text-strong-default);
   stroke-width: var(--size-xs);
+  vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
+/* The target is not this marker. `handleTargetRect` sizes it from the shape and
+   places it outside the shape, in source pixels, so it cannot cover the
+   interior that the move gesture owns — a 32 px square centred on the corner
+   covers a whole OCR reading. Invisible, but it *is* the resize target rather
+   than a blind blocker, and it takes no event the interior needs
+   (OVERLAY-06). */
 .df-region-overlay__shape-handle-hit {
   fill: var(--color-surface-transparent);
-  stroke: var(--color-surface-transparent);
-  stroke-width: var(--size-lg);
-  pointer-events: stroke;
+  pointer-events: fill;
 }
 
 .df-region-overlay__shape-handle[data-overlay-handle="north-west"],

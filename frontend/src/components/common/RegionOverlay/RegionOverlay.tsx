@@ -3,6 +3,7 @@ import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode
 import {
   clampRectToSource,
   clientPointToSource,
+  handleTargetRect,
   isDrawableRect,
   moveRectWithinSource,
   rectFromPoints,
@@ -235,9 +236,11 @@ export function RegionOverlay({
       const shape = editId === selectedId ? shapes.find((item) => item.id === editId) : undefined;
       if (shape !== undefined) {
         event.preventDefault();
-        // Fixed 32 CSS-pixel handle targets can overlap the complete interior
-        // of a small OCR box. The interior still belongs to move; resize is
-        // selected at the corner or from the outside half of its hit target.
+        // The strict interior belongs to move whatever the DOM was hit. Corner
+        // targets no longer reach into it (`handleTargetRect`), so this is the
+        // backstop rather than the only thing keeping a small box movable: it
+        // still holds if a future target, or a browser's rounding, spills a
+        // pixel inwards.
         const corner =
           targetCorner !== null && pointIsInsideShape(point, shape) ? null : targetCorner;
         const originRect: SourceRect = {
@@ -564,7 +567,10 @@ function ShapeOption({
                 key={corner}
               >
                 <rect className="df-region-overlay__shape-handle-visual" {...marker} />
-                <rect className="df-region-overlay__shape-handle-hit" {...marker} />
+                <rect
+                  className="df-region-overlay__shape-handle-hit"
+                  {...handleTargetRect(shape, corner)}
+                />
               </g>
             );
           })

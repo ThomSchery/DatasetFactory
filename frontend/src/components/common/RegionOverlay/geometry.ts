@@ -137,6 +137,53 @@ export function moveRectWithinSource(
   };
 }
 
+/*
+ * Corner targets, in source pixels.
+ *
+ * A fixed 32 CSS-pixel target is bigger than the boxes it exists to resize: on
+ * a 19×40 source-pixel OCR reading the four of them cover the whole interior,
+ * which left the interior gesture and the cursor over it disagreeing. The
+ * target is therefore derived from the shape and anchored outside it.
+ *
+ * `HANDLE_TARGET_MIN` is the width of the edge band the component already uses
+ * to catch thin regions (`--size-xs`); `HANDLE_TARGET_MAX` is GRID-05's 32 px
+ * desktop hit area, expressed in the unit the geometry lives in so it scales
+ * with the picture rather than with the window.
+ */
+const HANDLE_TARGET_MIN = 8;
+const HANDLE_TARGET_MAX = 32;
+
+/**
+ * Half the shorter side, bounded: a corner target never reaches past the middle
+ * of the box, so it cannot swallow the far half of a neighbour in a dense row
+ * of OCR readings.
+ */
+export function handleTargetSize(rect: SourceRect): number {
+  const shorter = Math.min(rect.width, rect.height);
+  return Math.min(HANDLE_TARGET_MAX, Math.max(HANDLE_TARGET_MIN, Math.round(shorter / 2)));
+}
+
+/**
+ * The square a corner grab has to land in: anchored on the outermost pixel of
+ * the rectangle and extending away from it.
+ *
+ * No point strictly inside the shape belongs to it, and that is the property
+ * that matters. The strict interior is what the overlay hands to the move
+ * gesture, so a target reaching into it would be a cursor promising a resize
+ * that never happens.
+ */
+export function handleTargetRect(rect: SourceRect, corner: ResizeCorner): SourceRect {
+  const size = handleTargetSize(rect);
+  const east = rect.x + Math.max(0, rect.width - 1);
+  const south = rect.y + Math.max(0, rect.height - 1);
+  return {
+    x: corner.endsWith("east") ? east : rect.x - size,
+    y: corner.startsWith("south") ? south : rect.y - size,
+    width: size,
+    height: size,
+  };
+}
+
 /**
  * The corner a resize gesture drags, in source pixels.
  *
