@@ -1,8 +1,8 @@
-import { Outlet, useMatch, useMatches } from "react-router";
+import { Outlet, useMatches } from "react-router";
 
 import { NavItem } from "../components/common/NavItem";
 import { StatusBadge } from "../components/common/StatusBadge";
-import { NAV_DESTINATIONS, PIPELINE_STAGES, annotationsPath } from "./navigation";
+import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
 import "./AppShell.css";
 
 const MAIN_CONTENT_ID = "df-main";
@@ -29,10 +29,6 @@ function useRouteHeading(): string {
  */
 export function AppShell() {
   const heading = useRouteHeading();
-  // The only source of the current run: the URL itself (FE-04).
-  const annotationsMatch = useMatch("/annotations/:runId");
-  const runId = annotationsMatch?.params.runId;
-
   return (
     <div className="df-shell">
       <a className="df-shell__skip" href={`#${MAIN_CONTENT_ID}`}>
@@ -44,29 +40,15 @@ export function AppShell() {
 
         <ul className="df-shell__destinations">
           {NAV_DESTINATIONS.map((destination) => {
-            const path =
-              destination.path ?? (runId === undefined ? null : annotationsPath(runId));
             return (
               <li key={destination.label}>
-                {path === null ? (
-                  <span className="df-shell__destination-disabled">
-                    <span className="df-shell__destination-label">{destination.label}</span>
-                    <span className="df-shell__destination-description">
-                      {destination.description}
-                    </span>
-                    <StatusBadge srLabel="Stan destynacji:" tone="muted">
-                      Wymaga runu
-                    </StatusBadge>
-                  </span>
-                ) : (
-                  <NavItem
-                    description={destination.description}
-                    end={destination.end}
-                    to={path}
-                  >
-                    {destination.label}
-                  </NavItem>
-                )}
+                <NavItem
+                  description={destination.description}
+                  end={destination.end}
+                  to={destination.path}
+                >
+                  {destination.label}
+                </NavItem>
               </li>
             );
           })}

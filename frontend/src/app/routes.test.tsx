@@ -8,6 +8,7 @@ import {
   profileFixture,
   profileSummaryFixture,
   runFixture,
+  runSummaryFixture,
 } from "../test/fixtures";
 import { renderApp, stubFetch } from "../test/harness";
 import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
@@ -41,6 +42,12 @@ beforeEach(() => {
     }
     if (url.includes("/frames?")) {
       return { status: 200, body: framePageFixture({ items: [], total: 0 }) };
+    }
+    if (url.includes("/runs?")) {
+      return {
+        status: 200,
+        body: { items: [runSummaryFixture()], page: 1, page_size: 20, total: 1 },
+      };
     }
     const runMatch = url.match(/\/api\/v1\/runs\/([^/?]+)$/);
     if (runMatch) {
@@ -81,6 +88,13 @@ describe("the five FE-04 routes", () => {
     expect(await screen.findByRole("region", { name: "Filtr klatek" })).toBeInTheDocument();
     expect(screen.getByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+  });
+
+  it("renders the global run list as the annotation entry point", async () => {
+    renderApp(["/annotations"]);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
+    expect(await screen.findByText("Quake Champions")).toBeInTheDocument();
   });
 
   it("renders the export screen built in FE-001-F5", async () => {
@@ -141,16 +155,11 @@ describe("navigation shell", () => {
     expect(screen.getByRole("link", { name: /Dashboard/ })).not.toHaveAttribute("aria-current");
   });
 
-  it("links Anotacje to the run in the URL, and marks it as needing one otherwise", () => {
-    const withoutRun = renderApp(["/"]);
-    expect(screen.queryByRole("link", { name: /Anotacje/ })).toBeNull();
-    expect(screen.getByText("Wymaga runu")).toBeInTheDocument();
-    withoutRun.unmount();
-
+  it("links Anotacje to the global run list from every route", () => {
     renderApp(["/annotations/run-7"]);
     expect(screen.getByRole("link", { name: /Anotacje/ })).toHaveAttribute(
       "href",
-      "/annotations/run-7",
+      "/annotations",
     );
   });
 

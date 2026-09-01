@@ -30,6 +30,7 @@ const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["POST /materials", "createMaterial"],
   ["GET /materials", "listMaterials"],
   ["POST /runs", "createRun"],
+  ["GET /runs", "listRuns"],
   ["POST /runs/{id}/start", "startRun"],
   ["POST /runs/{id}/pause", "pauseRun"],
   ["POST /runs/{id}/resume", "resumeRun"],

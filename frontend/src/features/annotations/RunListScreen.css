@@ -1,0 +1,77 @@
+.df-run-list,
+.df-run-list__items {
+  display: grid;
+  gap: var(--size-lg);
+}
+
+.df-run-list__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.df-run-list__row {
+  display: grid;
+  gap: var(--size-md);
+  padding: var(--size-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-run-list__heading,
+.df-run-list__badges,
+.df-run-list__review-counts,
+.df-run-list__actions,
+.df-run-list__pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.df-run-list__heading {
+  justify-content: space-between;
+}
+
+.df-run-list__identity {
+  display: grid;
+  gap: var(--size-none);
+}
+
+.df-run-list__identity strong {
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-tight);
+}
+
+.df-run-list__identity span,
+.df-run-list__review-counts,
+.df-run-list__pagination span {
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-loose);
+}
+
+.df-run-list__badges,
+.df-run-list__review-counts {
+  flex-wrap: wrap;
+}
+
+.df-run-list__actions {
+  justify-content: flex-end;
+}
+
+.df-run-list__pagination {
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .df-run-list__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .df-run-list__actions {
+    justify-content: flex-start;
+  }
+}

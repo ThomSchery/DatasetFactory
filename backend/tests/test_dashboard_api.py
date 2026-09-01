@@ -14,6 +14,7 @@ from sqlalchemy import event, func, select
 from backend.app.access.store.models import (
     Annotation,
     Category,
+    Export,
     Frame,
     GameProfile,
     HudRegion,
@@ -385,3 +386,52 @@ def test_dashboard_query_count_does_not_grow_with_the_number_of_frames(
         event.remove(composition.database.engine, "before_cursor_execute", record)
 
     assert large == small
+
+
+def test_run_list_preserves_review_progress_profile_and_completed_export(
+    settings: Settings,
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed(composition, tmp_path, frames=4, status="review_ready")
+    with TestClient(create_app(settings, composition=composition)) as client:
+        _decide(client, seed.frame_ids[0], "accept")
+        _decide(client, seed.frame_ids[1], "reject")
+        with composition.database.session() as session:
+            session.add(
+                Export(
+                    id=str(uuid4()),
+                    run_id=seed.run_id,
+                    status="completed",
+                    output_relpath=f"exports/{seed.run_id}",
+                    input_revision=2,
+                    error_code=None,
+                    manifest_json="{}",
+                )
+            )
+
+        response = client.get("/api/v1/runs?page=1&page_size=1")
+        invalid_page = client.get("/api/v1/runs?page=0")
+
+    assert response.status_code == 200
+    assert invalid_page.status_code == 400
+    body = response.json()
+    assert body["page"] == 1
+    assert body["page_size"] == 1
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    item = body["items"][0]
+    assert item["id"] == seed.run_id
+    assert item["profile_id"] == seed.profile_id
+    assert item["profile_name"] == f"Profile-{seed.profile_id}"
+    assert item["status"] == "review_ready"
+    assert item["interval_ms"] == 1000
+    assert item["total_frames"] == 4
+    assert item["review_counts"] == {
+        "pending": 2,
+        "accepted": 1,
+        "rejected": 1,
+        "total": 4,
+    }
+    assert item["annotation_counts"] == {"proposed": 3, "accepted": 1, "deleted": 0}
+    assert item["exported"] is True

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.access.store.database import Database
 from backend.app.access.store.models import (
+    Annotation,
     Category,
     Export,
     Frame,
@@ -105,6 +106,43 @@ class RunRecord:
     experimental: bool
     quality_gate: str
     warning: str
+
+
+@dataclass(frozen=True)
+class ReviewCounts:
+    pending: int
+    accepted: int
+    rejected: int
+    total: int
+
+
+@dataclass(frozen=True)
+class AnnotationCounts:
+    proposed: int
+    accepted: int
+    deleted: int
+
+
+@dataclass(frozen=True)
+class RunSummaryRecord:
+    id: str
+    profile_id: str
+    profile_name: str
+    interval_ms: int
+    status: str
+    total_frames: int
+    review_counts: ReviewCounts
+    annotation_counts: AnnotationCounts
+    exported: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class RunPage:
+    items: tuple[RunSummaryRecord, ...]
+    page: int
+    page_size: int
+    total: int
 
 
 @dataclass(frozen=True)
@@ -208,6 +246,42 @@ class RunRepository:
             if run is None:
                 raise RunNotFoundError
             return self._record(session, run)
+
+    def list(self, *, page: int, page_size: int) -> RunPage:
+        with self._database.session() as session:
+            project_id = session.scalar(
+                select(GameProfile.project_id)
+                .join(PipelineRun, PipelineRun.profile_id == GameProfile.id)
+                .order_by(PipelineRun.created_at, PipelineRun.id)
+                .limit(1)
+            )
+            if project_id is None:
+                return RunPage((), page, page_size, 0)
+            total = int(
+                session.scalar(
+                    select(func.count())
+                    .select_from(PipelineRun)
+                    .join(GameProfile, GameProfile.id == PipelineRun.profile_id)
+                    .where(GameProfile.project_id == project_id)
+                )
+                or 0
+            )
+            rows = session.execute(
+                select(PipelineRun, GameProfile.name)
+                .join(GameProfile, GameProfile.id == PipelineRun.profile_id)
+                .where(GameProfile.project_id == project_id)
+                .order_by(PipelineRun.created_at.desc(), PipelineRun.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+            return RunPage(
+                items=tuple(
+                    self._summary_record(session, run, profile_name) for run, profile_name in rows
+                ),
+                page=page,
+                page_size=page_size,
+                total=total,
+            )
 
     def active(self) -> RunRecord | None:
         """Read the one unfinished run a dashboard should show, or nothing.
@@ -736,4 +810,53 @@ class RunRepository:
             experimental=run.experimental,
             quality_gate=run.quality_gate,
             warning=run.warning,
+        )
+
+    @staticmethod
+    def _summary_record(
+        session: Session,
+        run: PipelineRun,
+        profile_name: str,
+    ) -> RunSummaryRecord:
+        review = dict(
+            session.execute(
+                select(Frame.review_status, func.count())
+                .where(Frame.run_id == run.id)
+                .group_by(Frame.review_status)
+            ).all()
+        )
+        annotation = dict(
+            session.execute(
+                select(Annotation.status, func.count())
+                .join(Frame, Frame.id == Annotation.frame_id)
+                .where(Frame.run_id == run.id)
+                .group_by(Annotation.status)
+            ).all()
+        )
+        exported = (
+            session.scalar(
+                select(Export.id)
+                .where(Export.run_id == run.id, Export.status == "completed")
+                .limit(1)
+            )
+            is not None
+        )
+        pending = int(review.get("pending", 0))
+        accepted = int(review.get("accepted", 0))
+        rejected = int(review.get("rejected", 0))
+        return RunSummaryRecord(
+            id=run.id,
+            profile_id=run.profile_id,
+            profile_name=profile_name,
+            interval_ms=run.interval_ms,
+            status=run.status,
+            total_frames=run.total_frames,
+            review_counts=ReviewCounts(pending, accepted, rejected, pending + accepted + rejected),
+            annotation_counts=AnnotationCounts(
+                proposed=int(annotation.get("proposed", 0)),
+                accepted=int(annotation.get("accepted", 0)),
+                deleted=int(annotation.get("deleted", 0)),
+            ),
+            exported=exported,
+            created_at=run.created_at,
         )

@@ -4,8 +4,7 @@
  */
 
 export interface NavDestination {
-  /** Static path, or `null` when the destination needs a `runId` from the URL. */
-  path: string | null;
+  path: string;
   label: string;
   description: string;
   /** Match the path exactly rather than by prefix. */
@@ -30,11 +29,7 @@ export const NAV_DESTINATIONS: readonly NavDestination[] = [
     description: "Import wideo i uruchomienie runu",
   },
   {
-    // `/annotations/:runId` needs a run. FE-04 fixes the route set at five, so
-    // there is no bare `/annotations` landing page to link to; the shell links
-    // to the run currently in the URL and otherwise marks the destination as
-    // requiring one.
-    path: null,
+    path: "/annotations",
     label: "Anotacje",
     description: "Weryfikacja klatek wybranego runu",
   },

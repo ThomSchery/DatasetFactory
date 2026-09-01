@@ -14,12 +14,14 @@ import type {
   Health,
   ListFramesQuery,
   ListMaterialsQuery,
+  ListRunsQuery,
   Material,
   Page,
   PipelineRun,
   ProfileSummary,
   ReferencePreview,
   ReferencePreviewRequest,
+  RunSummary,
   ReviewFrameRequest,
   UpdateAnnotationRequest,
   VersionedMutationRequest,
@@ -109,6 +111,14 @@ export function listMaterials(
 /** `POST /runs` → `201 PipelineRun(queued)` */
 export function createRun(body: CreateRunRequest): Promise<PipelineRun> {
   return apiRequest<PipelineRun>("/runs", { method: "POST", body });
+}
+
+/** `GET /runs` — global, paged history for the one local project. */
+export function listRuns(
+  query: ListRunsQuery = {},
+  signal?: AbortSignal,
+): Promise<Page<RunSummary>> {
+  return apiRequest<Page<RunSummary>>("/runs", { query: { ...query }, signal });
 }
 
 /** `POST /runs/{id}/start` → `202` */

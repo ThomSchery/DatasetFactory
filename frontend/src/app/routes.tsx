@@ -2,7 +2,7 @@ import { createBrowserRouter, type RouteObject } from "react-router";
 import { lazy, Suspense } from "react";
 
 import { Empty, Loading } from "../components/common/UiStates";
-import { AnnotationReviewScreen } from "../features/annotations";
+import { AnnotationReviewScreen, RunListScreen } from "../features/annotations";
 import { DashboardScreen } from "../features/dashboard";
 import { MaterialsScreen } from "../features/materials";
 import { ProfilesScreen } from "../features/profiles";
@@ -54,6 +54,7 @@ export const appRoutes: RouteObject[] = [
         handle: { heading: "Nowy profil gry" },
       },
       { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },
+      { path: "annotations", element: <RunListScreen />, handle: { heading: "Anotacje" } },
       {
         path: "annotations/:runId",
         element: <AnnotationReviewScreen />,

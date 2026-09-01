@@ -183,6 +183,34 @@ export interface PipelineRun {
   warning: string;
 }
 
+export interface RunSummary {
+  id: string;
+  profile_id: string;
+  profile_name: string;
+  interval_ms: number;
+  status: RunStatus;
+  total_frames: number;
+  review_counts: {
+    pending: number;
+    accepted: number;
+    rejected: number;
+    total: number;
+  };
+  annotation_counts: {
+    proposed: number;
+    accepted: number;
+    deleted: number;
+  };
+  exported: boolean;
+  created_at: string;
+}
+
+export interface ListRunsQuery {
+  page?: number;
+  /** Backend caps this at 100. */
+  page_size?: number;
+}
+
 export interface FrameSummary {
   id: string;
   frame_index: number;

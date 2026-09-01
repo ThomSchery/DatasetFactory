@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import Field
 
 from backend.app.access.store.repositories.frames import FramePage, FrameSummary
-from backend.app.access.store.repositories.runs import RunRecord
+from backend.app.access.store.repositories.runs import RunPage, RunRecord, RunSummaryRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
 from backend.app.managers.workflow.manager import DatasetWorkflow, WorkflowError
 
@@ -71,6 +71,39 @@ class FramePageResponse(StrictModel):
     total: int
 
 
+class ReviewCountsResponse(StrictModel):
+    pending: int
+    accepted: int
+    rejected: int
+    total: int
+
+
+class AnnotationCountsResponse(StrictModel):
+    proposed: int
+    accepted: int
+    deleted: int
+
+
+class RunSummaryResponse(StrictModel):
+    id: str
+    profile_id: str
+    profile_name: str
+    interval_ms: int
+    status: str
+    total_frames: int
+    review_counts: ReviewCountsResponse
+    annotation_counts: AnnotationCountsResponse
+    exported: bool
+    created_at: datetime
+
+
+class RunPageResponse(StrictModel):
+    items: tuple[RunSummaryResponse, ...]
+    page: int
+    page_size: int
+    total: int
+
+
 WorkflowProvider = Callable[[], DatasetWorkflow]
 
 
@@ -94,6 +127,30 @@ def _frame_response(record: FrameSummary) -> FrameSummaryResponse:
 def _page_response(page: FramePage) -> FramePageResponse:
     return FramePageResponse(
         items=tuple(_frame_response(item) for item in page.items),
+        page=page.page,
+        page_size=page.page_size,
+        total=page.total,
+    )
+
+
+def _run_summary_response(record: RunSummaryRecord) -> RunSummaryResponse:
+    return RunSummaryResponse(
+        id=record.id,
+        profile_id=record.profile_id,
+        profile_name=record.profile_name,
+        interval_ms=record.interval_ms,
+        status=record.status,
+        total_frames=record.total_frames,
+        review_counts=ReviewCountsResponse(**vars(record.review_counts)),
+        annotation_counts=AnnotationCountsResponse(**vars(record.annotation_counts)),
+        exported=record.exported,
+        created_at=record.created_at,
+    )
+
+
+def _run_page_response(page: RunPage) -> RunPageResponse:
+    return RunPageResponse(
+        items=tuple(_run_summary_response(item) for item in page.items),
         page=page.page,
         page_size=page.page_size,
         total=page.total,
@@ -148,6 +205,14 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
         except WorkflowError as error:
             return _workflow_error(request, error)
         return run_response(record)
+
+    @router.get("", response_model=RunPageResponse)
+    def list_runs(
+        workflow: Annotated[DatasetWorkflow, Depends(workflow_provider)],
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    ) -> RunPageResponse:
+        return _run_page_response(workflow.list_runs(page=page, page_size=page_size))
 
     def mutate(
         action: Literal["start", "pause", "resume", "cancel", "complete"],

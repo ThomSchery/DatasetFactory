@@ -116,6 +116,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404`, `503 ffprobe_unavailable`, `504 ffprobe_timeout` |
 | `GET /materials` | `page,page_size<=100` | paged list | `400` |
 | `POST /runs` | `{profile_id,video_id,interval_ms=1000}` | `201 PipelineRun(queued)` | `400 resolution/interval`, `404` |
+| `GET /runs` | `page,page_size<=100` | paged global list with profile, review/annotation counts, export flag | `400` |
 | `POST /runs/{id}/start` | `{expected_version}` | `202 running` | `409 active_run/version/invalid_transition/source_missing/source_changed` |
 | `POST /runs/{id}/pause` | `{expected_version}` | `202` | `409 invalid_transition` |
 | `POST /runs/{id}/resume` | `{expected_version}` | `202` | `409 active_run/invalid_transition/version/source_missing/source_changed` |

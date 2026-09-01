@@ -17,6 +17,7 @@ from backend.app.access.store.repositories.runs import (
     ActiveRunError,
     RunCompletionPreconditionError,
     RunNotFoundError,
+    RunPage,
     RunProfileNotFoundError,
     RunRecord,
     RunRepository,
@@ -200,6 +201,11 @@ class DatasetWorkflow:
             return self._runs.get(run_id)
         except RunNotFoundError as exc:
             raise WorkflowError("run_not_found") from exc
+
+    def list_runs(self, *, page: int, page_size: int) -> RunPage:
+        if page < 1 or not 1 <= page_size <= 100:
+            raise WorkflowError("invalid_pagination")
+        return self._runs.list(page=page, page_size=page_size)
 
     def list_frames(
         self,

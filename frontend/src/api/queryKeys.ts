@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { ListFramesQuery, ListMaterialsQuery } from "./types";
+import type { ListFramesQuery, ListMaterialsQuery, ListRunsQuery } from "./types";
 
 /*
  * Every query key and every post-mutation invalidation in one module (FE-001-F1
@@ -25,6 +25,7 @@ export const queryKeys = {
   materialList: (query: ListMaterialsQuery = {}) => ["materials", "list", query] as const,
 
   runs: () => ["runs"] as const,
+  runList: (query: ListRunsQuery = {}) => ["runs", "list", query] as const,
   run: (runId: string) => ["runs", runId] as const,
   runFrames: (runId: string, query: ListFramesQuery = {}) =>
     ["runs", runId, "frames", query] as const,

@@ -10,6 +10,7 @@ import type {
   Page,
   PipelineRun,
   ProfileSummary,
+  RunSummary,
 } from "../api";
 
 /*
@@ -86,6 +87,22 @@ export function profileFixture(overrides: Partial<GameProfile> = {}): GameProfil
     version: 1,
     regions: [{ id: "region-1", name: "Pasek zdrowia", x: 10, y: 20, width: 100, height: 40 }],
     categories: [{ id: "category-1", name: "7", kind: "character" }],
+    ...overrides,
+  };
+}
+
+export function runSummaryFixture(overrides: Partial<RunSummary> = {}): RunSummary {
+  return {
+    id: "run-1",
+    profile_id: "profile-1",
+    profile_name: "Quake Champions",
+    interval_ms: 1000,
+    status: "review_ready",
+    total_frames: 25,
+    review_counts: { pending: 22, accepted: 0, rejected: 3, total: 25 },
+    annotation_counts: { proposed: 120, accepted: 0, deleted: 0 },
+    exported: false,
+    created_at: "2026-09-01T10:00:00+00:00",
     ...overrides,
   };
 }
