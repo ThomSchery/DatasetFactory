@@ -818,21 +818,23 @@ class RunRepository:
         run: PipelineRun,
         profile_name: str,
     ) -> RunSummaryRecord:
-        review = dict(
-            session.execute(
+        review: dict[str, int] = {
+            status: count
+            for status, count in session.execute(
                 select(Frame.review_status, func.count())
                 .where(Frame.run_id == run.id)
                 .group_by(Frame.review_status)
             ).all()
-        )
-        annotation = dict(
-            session.execute(
+        }
+        annotation: dict[str, int] = {
+            status: count
+            for status, count in session.execute(
                 select(Annotation.status, func.count())
                 .join(Frame, Frame.id == Annotation.frame_id)
                 .where(Frame.run_id == run.id)
                 .group_by(Annotation.status)
             ).all()
-        )
+        }
         exported = (
             session.scalar(
                 select(Export.id)

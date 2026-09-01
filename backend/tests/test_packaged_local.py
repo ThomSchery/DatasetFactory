@@ -106,7 +106,9 @@ def test_packaged_local_preserves_dev_unknown_api_route_contract_for_every_metho
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("GET", "/api/v1/runs"),
+        # `/api/v1/runs` answers GET and POST since the run history landed, so
+        # the wrong-method contract is exercised through a verb it never takes.
+        ("PATCH", "/api/v1/runs"),
         ("POST", "/api/v1/health"),
         ("PATCH", "/api/v1/health"),
     ],
