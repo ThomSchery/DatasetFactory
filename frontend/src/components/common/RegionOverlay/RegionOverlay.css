@@ -113,13 +113,17 @@
   pointer-events: fill;
 }
 
-.df-region-overlay__shape-handle[data-overlay-handle="north-west"],
-.df-region-overlay__shape-handle[data-overlay-handle="south-east"] {
+/* The resize cursor is declared on the target itself, not on the group: the
+   group also holds the marker, which sits over the interior the move gesture
+   owns. Bound here, the affordance covers exactly the area that performs the
+   resize, and the interior keeps the `move` cursor of the selected shape. */
+.df-region-overlay__shape-handle[data-overlay-handle="north-west"] .df-region-overlay__shape-handle-hit,
+.df-region-overlay__shape-handle[data-overlay-handle="south-east"] .df-region-overlay__shape-handle-hit {
   cursor: nwse-resize;
 }
 
-.df-region-overlay__shape-handle[data-overlay-handle="north-east"],
-.df-region-overlay__shape-handle[data-overlay-handle="south-west"] {
+.df-region-overlay__shape-handle[data-overlay-handle="north-east"] .df-region-overlay__shape-handle-hit,
+.df-region-overlay__shape-handle[data-overlay-handle="south-west"] .df-region-overlay__shape-handle-hit {
   cursor: nesw-resize;
 }
 

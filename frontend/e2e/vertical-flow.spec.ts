@@ -419,12 +419,16 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   const browserMoveTarget = await page.evaluate(({ x, y }) => {
     const target = document.elementFromPoint(x, y);
     return {
-      corner: target?.closest("[data-overlay-handle]")?.getAttribute("data-overlay-handle"),
-      shapeId: target?.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id"),
+      corner:
+        target?.closest("[data-overlay-handle]")?.getAttribute("data-overlay-handle") ?? null,
+      cursor: target === null ? null : getComputedStyle(target).cursor,
+      shapeId:
+        target?.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ?? null,
     };
   }, moveFrom);
   expect(browserMoveTarget).toEqual({
-    corner: "south-east",
+    corner: null,
+    cursor: "move",
     shapeId: initialAnnotation.id,
   });
   const moveFromSource = {
@@ -484,20 +488,48 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   if (handleBounds === null) {
     throw new Error("South-east resize handle has no browser geometry");
   }
+  const resizeFrom = {
+    x: handleBounds.x + handleBounds.width / 2,
+    y: handleBounds.y + handleBounds.height / 2,
+  };
+  const browserResizeTarget = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return {
+      corner:
+        target?.closest("[data-overlay-handle]")?.getAttribute("data-overlay-handle") ?? null,
+      cursor: target === null ? null : getComputedStyle(target).cursor,
+      shapeId:
+        target?.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ?? null,
+    };
+  }, resizeFrom);
+  expect(browserResizeTarget).toEqual({
+    corner: "south-east",
+    cursor: "nwse-resize",
+    shapeId: initialAnnotation.id,
+  });
+  const resizeFromSource = {
+    x: Math.round(
+      ((resizeFrom.x - frameBounds.x) / frameBounds.width) * frameAfterResume.width,
+    ),
+    y: Math.round(
+      ((resizeFrom.y - frameBounds.y) / frameBounds.height) * frameAfterResume.height,
+    ),
+  };
+  expect(resizeFromSource).not.toEqual({
+    x: movedBbox.x + movedBbox.width,
+    y: movedBbox.y + movedBbox.height,
+  });
   const resizedBbox = {
     ...movedBbox,
     width: movedBbox.width + 16,
     height: movedBbox.height + 8,
   };
   const resizeTo = clientPointForSource(
-    resizedBbox.x + resizedBbox.width,
-    resizedBbox.y + resizedBbox.height,
+    resizeFromSource.x + 16,
+    resizeFromSource.y + 8,
   );
 
-  await page.mouse.move(
-    handleBounds.x + handleBounds.width / 2,
-    handleBounds.y + handleBounds.height / 2,
-  );
+  await page.mouse.move(resizeFrom.x, resizeFrom.y);
   await page.mouse.down();
   await page.mouse.move(resizeTo.x, resizeTo.y, { steps: 3 });
   await expect(annotationRow.getByLabel("x", { exact: true })).toHaveValue(String(resizedBbox.x));
