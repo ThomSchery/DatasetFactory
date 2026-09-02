@@ -103,16 +103,84 @@
   gap: var(--size-xs);
 }
 
-.df-review-legacy-inspector {
-  margin-top: var(--size-md);
+.df-annotation-popover {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: var(--size-xs);
+  width: calc(var(--size-xxl) * 5);
+  max-width: calc(100vw - (var(--size-md) * 2));
+  padding: var(--size-sm);
+  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  box-shadow: var(--shadow-elevation-high);
 }
 
-.df-review-legacy-inspector > summary {
-  margin-bottom: var(--size-sm);
+.df-annotation-popover__header,
+.df-annotation-popover__badges,
+.df-annotation-popover__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  flex-wrap: wrap;
+}
+
+.df-annotation-popover__header {
+  justify-content: space-between;
+}
+
+.df-annotation-popover__options {
+  display: grid;
+  gap: calc(var(--size-xs) / 2);
+  max-height: calc(var(--size-xxl) * 2);
+  padding: var(--size-none);
+  margin: var(--size-none);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.df-annotation-popover__options .df-button {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.df-annotation-popover__actions {
+  justify-content: flex-end;
+}
+
+.df-annotation-popover__actions kbd,
+.df-annotation-popover__hint kbd {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+.df-annotation-popover__geometry {
+  border-top: var(--border-width-default) solid var(--color-stroke-weak-default);
+}
+
+.df-annotation-popover__geometry > summary {
+  min-height: var(--control-height-sm);
+  padding-block: var(--size-xs);
   color: var(--color-text-weak-default);
   cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-annotation-popover__geometry-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--size-xs);
+}
+
+.df-annotation-popover__hint {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+  text-align: right;
 }
 
 .df-review-frames__item,

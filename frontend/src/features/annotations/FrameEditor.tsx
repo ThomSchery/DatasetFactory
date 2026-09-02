@@ -27,7 +27,7 @@ import { SelectField } from "../../components/common/SelectField";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
-import { AnnotationList } from "./AnnotationList";
+import { AnnotationPopover } from "./AnnotationPopover";
 import { ClassList } from "./ClassList";
 import {
   EMPTY_GEOMETRY_DRAFT,
@@ -175,6 +175,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
       if (intent.kind === "delete") {
         setSelectedId((current) => (current === intent.annotationId ? null : current));
       }
+      if (intent.kind === "category") {
+        setSelectedId((current) => (current === intent.annotationId ? null : current));
+      }
       if (intent.kind === "create") {
         setNewGeometry({ ...EMPTY_GEOMETRY_DRAFT });
         setNewGeometryError(null);
@@ -192,6 +195,10 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
 
   const currentBusyKey = mutation.isPending ? busyKey(mutation.variables) : null;
   const invalidSet = useMemo(() => new Set(invalidIds), [invalidIds]);
+  const selectedAnnotation =
+    selectedId === null
+      ? undefined
+      : activeAnnotations.find((annotation) => annotation.id === selectedId);
   const shapes: OverlayShape[] = activeAnnotations.map((annotation) => {
     const categoryName = categoryById.get(annotation.category_id) ?? annotation.category_id;
     const confidenceLabel =
@@ -436,6 +443,54 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           interactionMode="draw"
           key={`frame-image-${String(imageAttempt)}`}
           label="Bbox anotacji na klatce"
+          floatingLayer={
+            selectedAnnotation === undefined ? null : (
+              <AnnotationPopover
+                annotation={selectedAnnotation}
+                busyKey={currentBusyKey}
+                categories={profile.categories}
+                disabled={editorDisabled}
+                drawing={redrawMode?.annotationId === selectedAnnotation.id}
+                frameSize={{ height: frame.height, width: frame.width }}
+                geometryPreview={
+                  geometryPreview?.annotationId === selectedAnnotation.id
+                    ? geometryPreview.bbox
+                    : null
+                }
+                invalid={invalidSet.has(selectedAnnotation.id)}
+                onCategoryChange={(categoryId) => {
+                  submit({
+                    annotationId: selectedAnnotation.id,
+                    categoryId,
+                    expectedVersion: selectedAnnotation.version,
+                    kind: "category",
+                  });
+                }}
+                onClose={() => {
+                  setSelectedId(null);
+                  setGeometryPreview(null);
+                  setRedrawMode(null);
+                }}
+                onDelete={() => {
+                  submit({
+                    annotationId: selectedAnnotation.id,
+                    expectedVersion: selectedAnnotation.version,
+                    kind: "delete",
+                  });
+                }}
+                onGeometryChange={(bbox) => {
+                  changeAnnotationGeometry(selectedAnnotation, bbox);
+                }}
+                onToggleDrawTarget={() => {
+                  setRedrawMode((current) =>
+                    current?.annotationId === selectedAnnotation.id
+                      ? null
+                      : { annotationId: selectedAnnotation.id, kind: "redraw" },
+                  );
+                }}
+              />
+            )
+          }
           onDraw={capabilities.canEdit ? handleDraw : undefined}
           onImageError={() => {
             setImageError(true);
@@ -512,9 +567,9 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           </StatusBadge>
         }
         className="df-review-workspace__inspector"
-        description="Każdą operację v1 wykonasz z klawiatury bez trafiania w bbox na obrazie."
-        eyebrow="Inspektor"
-        title="Anotacje"
+        description="Kliknij klasę, aby zaznaczyć jej bbox; kolejne kliknięcia przechodzą między wystąpieniami."
+        eyebrow="Bieżąca klatka"
+        title="Anotacje na klatce"
       >
         <ClassList
           annotations={activeAnnotations}
@@ -523,47 +578,6 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           onSelect={selectAnnotation}
           selectedId={selectedId}
         />
-        <details className="df-review-legacy-inspector" open>
-          <summary>Pełny inspektor anotacji</summary>
-        <AnnotationList
-          annotations={activeAnnotations}
-          busyKey={currentBusyKey}
-          categories={profile.categories}
-          disabled={editorDisabled}
-          drawTargetId={redrawMode?.annotationId ?? null}
-          frameSize={{ width: frame.width, height: frame.height }}
-          geometryPreview={geometryPreview}
-          invalidIds={invalidSet}
-          onCategoryChange={(annotation, categoryId) => {
-            submit({
-              annotationId: annotation.id,
-              categoryId,
-              expectedVersion: annotation.version,
-              kind: "category",
-            });
-          }}
-          onDelete={(annotation) => {
-            submit({
-              annotationId: annotation.id,
-              expectedVersion: annotation.version,
-              kind: "delete",
-            });
-          }}
-          onGeometryChange={(annotation, bbox) => {
-            changeAnnotationGeometry(annotation, bbox);
-          }}
-          onSelect={selectAnnotation}
-          onToggleDrawTarget={(annotationId) => {
-            setSelectedId(annotationId);
-            setRedrawMode((current) =>
-              current?.annotationId === annotationId
-                ? null
-                : { annotationId, kind: "redraw" },
-            );
-          }}
-          selectedId={selectedId}
-        />
-        </details>
       </Panel>
     </>
   );

@@ -75,16 +75,14 @@ describe("terminal annotation refresh", () => {
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
     await screen.findByRole("heading", { name: "Obraz i bbox" });
-    const originalRow = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getAllByRole(
-      "listitem",
-    )[0]!;
-    const existingX = within(originalRow).getByLabelText("x");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(editor).getByText(/^x 100/));
+    const existingX = within(editor).getByLabelText("x");
     await user.clear(existingX);
     await user.type(existingX, "321");
     await user.type(screen.getByLabelText("Nowy x"), "55");
-    await user.click(
-      within(originalRow).getByRole("button", { name: "Narysuj nową geometrię" }),
-    );
+    await user.click(within(editor).getByRole("button", { name: "Przerysuj bbox" }));
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
@@ -94,17 +92,13 @@ describe("terminal annotation refresh", () => {
       expect(listReads).toBe(2);
       expect(frameReads).toBe(2);
       expect(
-        within(screen.getByRole("list", { name: "Aktywne anotacje" })).getAllByRole("listitem"),
+        within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getAllByRole("option"),
       ).toHaveLength(2);
     });
-    const refreshedFirstRow = within(
-      screen.getByRole("list", { name: "Aktywne anotacje" }),
-    ).getAllByRole("listitem")[0]!;
-    expect(within(refreshedFirstRow).getByLabelText("x")).toHaveValue(321);
+    expect(within(editor).getByLabelText("x")).toHaveValue(321);
     expect(screen.getByLabelText("Nowy x")).toHaveValue(55);
-    expect(within(refreshedFirstRow).getByRole("button", { name: "Zaznaczona" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
     expect(screen.getByText(/Tryb zmiany geometrii: 7 \(ann-1\)/)).toBeVisible();
-    expect(screen.getByText("x 144, y 120, w 40, h 32")).toBeVisible();
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
@@ -176,31 +170,31 @@ describe("terminal annotation refresh", () => {
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
     await screen.findByRole("heading", { name: "Obraz i bbox" });
-    const row = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getByRole(
-      "listitem",
-    );
-    const xField = within(row).getByLabelText("x");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(editor).getByText(/^x 100/));
+    const xField = within(editor).getByLabelText("x");
     await user.clear(xField);
     await user.type(xField, "1910");
-    await user.click(within(row).getByRole("button", { name: "Zapisz geometrię" }));
-    expect(await within(row).findByText("Bbox musi mieścić się w granicach całej klatki.")).toBeVisible();
+    await user.click(within(editor).getByRole("button", { name: "Zapisz geometrię" }));
+    expect(await within(editor).findByText("Bbox musi mieścić się w granicach całej klatki.")).toBeVisible();
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
     });
 
     await waitFor(() => {
-      expect(within(row).getByLabelText("x")).toHaveValue(1910);
-      expect(within(row).getByLabelText("y")).toHaveValue(222);
-      expect(within(row).getByLabelText("width")).toHaveValue(10);
-      expect(within(row).getByLabelText("height")).toHaveValue(32);
-      expect(within(row).getByLabelText("Klasa")).toHaveValue("category-2");
+      expect(within(editor).getByLabelText("x")).toHaveValue(1910);
+      expect(within(editor).getByLabelText("y")).toHaveValue(222);
+      expect(within(editor).getByLabelText("width")).toHaveValue(10);
+      expect(within(editor).getByLabelText("height")).toHaveValue(32);
+      expect(within(editor).getByLabelText("Klasa")).toHaveValue("health");
       expect(
-        within(row).queryByText("Bbox musi mieścić się w granicach całej klatki."),
+        within(editor).queryByText("Bbox musi mieścić się w granicach całej klatki."),
       ).not.toBeInTheDocument();
     });
 
-    await user.click(within(row).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.click(within(editor).getByRole("button", { name: "Zapisz geometrię" }));
     await waitFor(() => {
       expect(patchBody).toEqual({
         bbox: { x: 1910, y: 222, width: 10, height: 32 },
@@ -255,14 +249,14 @@ describe("terminal annotation refresh", () => {
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
     await screen.findByRole("heading", { name: "Obraz i bbox" });
-    const row = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getByRole(
-      "listitem",
-    );
-    const widthField = within(row).getByLabelText("width");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(editor).getByText(/^x 100/));
+    const widthField = within(editor).getByLabelText("width");
     await user.clear(widthField);
-    await user.click(within(row).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.click(within(editor).getByRole("button", { name: "Zapisz geometrię" }));
     expect(
-      await within(row).findByText("Początek nie może być ujemny, a rozmiar musi być dodatni."),
+      await within(editor).findByText("Początek nie może być ujemny, a rozmiar musi być dodatni."),
     ).toBeVisible();
 
     await act(async () => {
@@ -270,10 +264,10 @@ describe("terminal annotation refresh", () => {
     });
 
     await waitFor(() => {
-      expect(within(row).getByLabelText("y")).toHaveValue(222);
+      expect(within(editor).getByLabelText("y")).toHaveValue(222);
       expect(widthField).toHaveValue(null);
       expect(
-        within(row).getByText("Początek nie może być ujemny, a rozmiar musi być dodatni."),
+        within(editor).getByText("Początek nie może być ujemny, a rozmiar musi być dodatni."),
       ).toBeVisible();
       expect(frameReads).toBe(2);
     });
@@ -281,6 +275,7 @@ describe("terminal annotation refresh", () => {
   });
 
   it("syncs every clean geometry field and category to the new server baseline", async () => {
+    const user = userEvent.setup();
     const profile = profileFixture({
       categories: [
         { id: "category-1", kind: "character", name: "7" },
@@ -331,20 +326,20 @@ describe("terminal annotation refresh", () => {
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
     await screen.findByRole("heading", { name: "Obraz i bbox" });
-    const row = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getByRole(
-      "listitem",
-    );
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(editor).getByText(/^x 100/));
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
     });
 
     await waitFor(() => {
-      expect(within(row).getByLabelText("x")).toHaveValue(144);
-      expect(within(row).getByLabelText("y")).toHaveValue(222);
-      expect(within(row).getByLabelText("width")).toHaveValue(50);
-      expect(within(row).getByLabelText("height")).toHaveValue(36);
-      expect(within(row).getByLabelText("Klasa")).toHaveValue("category-2");
+      expect(within(editor).getByLabelText("x")).toHaveValue(144);
+      expect(within(editor).getByLabelText("y")).toHaveValue(222);
+      expect(within(editor).getByLabelText("width")).toHaveValue(50);
+      expect(within(editor).getByLabelText("height")).toHaveValue(36);
+      expect(within(editor).getByLabelText("Klasa")).toHaveValue("health");
     });
   });
 
@@ -379,10 +374,10 @@ describe("terminal annotation refresh", () => {
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
     await screen.findByRole("heading", { name: "Obraz i bbox" });
-    const row = within(screen.getByRole("list", { name: "Aktywne anotacje" })).getByRole(
-      "listitem",
-    );
-    const xField = within(row).getByLabelText("x");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(editor).getByText(/^x 100/));
+    const xField = within(editor).getByLabelText("x");
     await user.clear(xField);
     await user.type(xField, "321");
 
@@ -391,7 +386,6 @@ describe("terminal annotation refresh", () => {
     });
     await waitFor(() => {
       expect(xField).toHaveValue(321);
-      expect(screen.getByText("x 144, y 120, w 40, h 32")).toBeVisible();
     });
 
     await user.clear(xField);

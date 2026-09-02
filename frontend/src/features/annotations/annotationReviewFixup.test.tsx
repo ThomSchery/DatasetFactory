@@ -69,9 +69,9 @@ function requireResponse(response: StubbedResponse | undefined, url: string): St
   return response;
 }
 
-function annotationRows(): HTMLElement[] {
-  return within(screen.getByRole("list", { name: "Aktywne anotacje" })).getAllByRole(
-    "listitem",
+function overlayOptions(): HTMLElement[] {
+  return within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getAllByRole(
+    "option",
   );
 }
 
@@ -109,11 +109,12 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     renderApp(["/annotations/run-1"]);
 
     await screen.findByText("Obraz i bbox");
-    const [rowA, rowB] = annotationRows();
-    await user.click(within(rowA!).getByRole("button", { name: "Narysuj nową geometrię" }));
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(screen.getByText(/^x 100 · y 120/));
+    await user.click(screen.getByRole("button", { name: "Przerysuj bbox" }));
     expect(screen.getByText(/Tryb zmiany geometrii: 7 \(ann-1\)/)).toBeInTheDocument();
 
-    await user.click(within(rowB!).getByRole("button", { name: "Zaznacz" }));
+    await user.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
     expect(screen.queryByText(/Tryb zmiany geometrii:/)).not.toBeInTheDocument();
     expect(screen.getByText("Przeciągnij na obrazie, aby dodać ręczny bbox.")).toBeInTheDocument();
 
@@ -166,19 +167,20 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
 
     await user.click(await screen.findByRole("button", { name: "Zaakceptuj klatkę" }));
     await waitFor(() => {
-      expect(annotationRows()[0]).toHaveAttribute("aria-invalid", "true");
-      expect(annotationRows()[1]).toHaveAttribute("aria-invalid", "true");
+      expect(overlayOptions()[0]).toHaveClass("df-region-overlay__shape--error");
+      expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
     });
 
-    await user.click(within(annotationRows()[0]!).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
     await waitFor(() => {
-      expect(annotationRows()[0]).not.toHaveAttribute("aria-invalid");
-      expect(annotationRows()[1]).toHaveAttribute("aria-invalid", "true");
+      expect(overlayOptions()[0]).not.toHaveClass("df-region-overlay__shape--error");
+      expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
     });
 
-    await user.click(within(annotationRows()[0]!).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
     expect(await screen.findByText(/Kod: version_conflict/)).toBeInTheDocument();
-    expect(annotationRows()[1]).toHaveAttribute("aria-invalid", "true");
+    expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
   });
 
   it("loads the exact historical profile after the run resolves", async () => {
@@ -191,7 +193,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
       fetchSpy.mock.calls.some(([url]) => url === `/api/v1/profiles/${PROFILE.id}`),
     ).toBe(true);
     expect(fetchSpy.mock.calls.some(([url]) => url === "/api/v1/profiles/current")).toBe(false);
-    expect(screen.getAllByRole("option", { name: "health" })).toHaveLength(2);
+    expect(screen.getAllByRole("option", { name: "health" })).toHaveLength(1);
   });
 
   it("shows central profile_not_found copy for a missing run profile", async () => {
@@ -273,7 +275,10 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     renderApp(["/annotations/run-1"]);
 
     await screen.findByText("Obraz i bbox");
-    await user.selectOptions(screen.getByLabelText("Klasa"), "category-2");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const classField = screen.getByLabelText("Klasa");
+    await user.clear(classField);
+    await user.type(classField, "health");
     const save = screen.getByRole("button", { name: "Zapisz klasę" });
     await user.click(save);
 
@@ -292,7 +297,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
         status: 200,
       }),
     );
-    await waitFor(() => expect(save).not.toHaveAttribute("aria-busy"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("retries the opaque image request and clears the error after load", async () => {
@@ -350,7 +355,10 @@ describe("success refetches authoritative versions", () => {
     renderApp(["/annotations/run-1"]);
 
     await screen.findByText("Obraz i bbox");
-    await user.selectOptions(screen.getByLabelText("Klasa"), "category-2");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const classField = screen.getByLabelText("Klasa");
+    await user.clear(classField);
+    await user.type(classField, "health");
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
     const conflict = await screen.findByRole("alert");
@@ -360,7 +368,8 @@ describe("success refetches authoritative versions", () => {
       expect(screen.getByLabelText("Klasa")).toBeEnabled();
     });
 
-    await user.selectOptions(screen.getByLabelText("Klasa"), "category-2");
+    await user.clear(screen.getByLabelText("Klasa"));
+    await user.type(screen.getByLabelText("Klasa"), "health");
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
     await waitFor(() => {
@@ -401,7 +410,10 @@ describe("success refetches authoritative versions", () => {
     renderApp(["/annotations/run-1"]);
 
     await screen.findByText("Obraz i bbox");
-    await user.selectOptions(screen.getByLabelText("Klasa"), "category-2");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const classField = screen.getByLabelText("Klasa");
+    await user.clear(classField);
+    await user.type(classField, "health");
     const save = screen.getByRole("button", { name: "Zapisz klasę" });
     await user.click(save);
     await waitFor(() => {
@@ -409,6 +421,7 @@ describe("success refetches authoritative versions", () => {
       expect(save).not.toHaveAttribute("aria-busy");
     });
 
+    await user.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
     await user.click(screen.getByRole("button", { name: "Usuń" }));
     await waitFor(() => {
       expect(
