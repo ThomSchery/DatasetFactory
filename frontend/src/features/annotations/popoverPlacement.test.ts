@@ -32,4 +32,19 @@ describe("popover placement", () => {
     expect(placement.side).toBe("right");
     expect(placement.left).toBeGreaterThanOrEqual(anchor.left + anchor.width);
   });
+
+  it("clamps both axes when no side can fit the popover", () => {
+    const placement = resolvePopoverPlacement(
+      { height: 20, left: 50, top: 25, width: 20 },
+      { height: 90, width: 120 },
+      { height: 70, width: 100 },
+      8,
+    );
+
+    expect(placement).toEqual({ left: 20, side: "right", top: 20 });
+    expect(placement.left).toBeGreaterThanOrEqual(0);
+    expect(placement.left + 100).toBeLessThanOrEqual(120);
+    expect(placement.top).toBeGreaterThanOrEqual(0);
+    expect(placement.top + 70).toBeLessThanOrEqual(90);
+  });
 });

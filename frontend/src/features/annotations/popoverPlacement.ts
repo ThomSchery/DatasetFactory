@@ -105,7 +105,11 @@ export function resolvePopoverPlacement(
   available.sort((first, second) => second.space - first.space);
   const preferred = available[0]?.side ?? "right";
   const fallback = candidates.find((candidate) => candidate.side === preferred) ?? candidates[0];
-  return { left: fallback.left, side: fallback.side, top: fallback.top };
+  return {
+    left: clamp(fallback.left, 0, container.width - popover.width),
+    side: fallback.side,
+    top: clamp(fallback.top, 0, container.height - popover.height),
+  };
 }
 
 export function sourceBoxToRendered(
