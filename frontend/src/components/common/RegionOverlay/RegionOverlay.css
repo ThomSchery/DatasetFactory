@@ -164,6 +164,9 @@
 }
 
 .df-region-overlay__label {
+  --df-overlay-label-top: 0%;
+  --df-overlay-label-left: 0%;
+
   position: absolute;
   top: var(--df-overlay-label-top);
   left: var(--df-overlay-label-left);
