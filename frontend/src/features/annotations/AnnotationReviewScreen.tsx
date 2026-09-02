@@ -51,6 +51,7 @@ function ReviewForRun({ runId }: { runId: string }) {
   const [filter, setFilter] = useState<ReviewStatusFilter>(DEFAULT_REVIEW_STATUS_FILTER);
   const [page, setPage] = useState(1);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const [navigationPending, setNavigationPending] = useState(false);
   const previousRunStatus = useRef<{ runId: string; status: RunStatus } | undefined>(undefined);
   const isWriting = useIsMutating({ mutationKey: reviewMutationKey(runId) }) > 0;
   const frameQuery = { review_status: reviewStatusQuery(filter), page, page_size: PAGE_SIZE };
@@ -59,6 +60,7 @@ function ReviewForRun({ runId }: { runId: string }) {
     queryFn: ({ signal }) => getRun(runId, signal),
     refetchInterval: (query) => runPollInterval(query.state.data?.status),
   });
+  const totalFrames = runQuery.data?.total_frames ?? 0;
   const profileId = runQuery.data?.profile_id;
   const profileQuery = useQuery({
     enabled: profileId !== undefined,
@@ -75,12 +77,28 @@ function ReviewForRun({ runId }: { runId: string }) {
     queryFn: ({ signal }) => listRunFrames(runId, frameQuery, signal),
   });
 
-  const activeFrameId =
-    framesQuery.data === undefined
-      ? null
-      : framesQuery.data.items.some((frame) => frame.id === selectedFrameId)
-        ? selectedFrameId
-        : (framesQuery.data.items[0]?.id ?? null);
+  const activeFrameId = selectedFrameId ?? framesQuery.data?.items[0]?.id ?? null;
+
+  async function navigateFrame(frameIndex: number, direction: -1 | 1): Promise<void> {
+    const targetPosition = frameIndex + 1 + direction;
+    if (targetPosition < 1 || targetPosition > totalFrames) {
+      return;
+    }
+    setNavigationPending(true);
+    try {
+      const targetQuery = { page: targetPosition, page_size: 1 };
+      const targetPage = await queryClient.fetchQuery({
+        queryKey: queryKeys.runFrames(runId, targetQuery),
+        queryFn: ({ signal }) => listRunFrames(runId, targetQuery, signal),
+      });
+      const target = targetPage.items[0];
+      if (target !== undefined) {
+        setSelectedFrameId(target.id);
+      }
+    } finally {
+      setNavigationPending(false);
+    }
+  }
 
   useEffect(() => {
     const status = runQuery.data?.status;
@@ -204,8 +222,13 @@ function ReviewForRun({ runId }: { runId: string }) {
         <FrameEditor
           frameId={selectedId}
           key={selectedId}
+          navigationDisabled={navigationPending || isWriting}
+          onNavigate={(frameIndex, direction) => {
+            void navigateFrame(frameIndex, direction);
+          }}
           profile={profileQuery.data}
           runId={runId}
+          totalFrames={totalFrames}
         />
       </>
     );

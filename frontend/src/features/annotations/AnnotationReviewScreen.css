@@ -53,6 +53,37 @@
   min-width: 0;
 }
 
+.df-review-toolbar,
+.df-review-toolbar__navigation,
+.df-review-toolbar__decisions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  flex-wrap: wrap;
+}
+
+.df-review-toolbar {
+  justify-content: space-between;
+  padding-bottom: var(--size-sm);
+  border-bottom: var(--border-width-default) solid var(--color-stroke-weak-default);
+}
+
+.df-review-toolbar__navigation strong {
+  min-width: calc(var(--size-xxl) * 2);
+  text-align: center;
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.df-review-toolbar__decisions {
+  justify-content: flex-end;
+}
+
+.df-review-toolbar kbd {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
 .df-review-frames,
 .df-review-annotations,
 .df-review-classes {
@@ -209,7 +240,6 @@
 .df-review-frames__summary,
 .df-review-annotations__header,
 .df-review-pagination,
-.df-review-decisions,
 .df-review-annotations__actions,
 .df-review-frames__badges,
 .df-review-annotations__badges {
@@ -241,7 +271,6 @@
 }
 
 .df-review-pagination,
-.df-review-decisions,
 .df-review-create {
   margin-top: var(--size-md);
 }
@@ -275,7 +304,6 @@
   line-height: var(--line-height-loose);
 }
 
-.df-review-decisions,
 .df-review-annotations__actions {
   justify-content: flex-end;
 }

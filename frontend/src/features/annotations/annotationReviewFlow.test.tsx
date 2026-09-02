@@ -209,6 +209,105 @@ describe("annotation review query states", () => {
   });
 });
 
+describe("temporal frame navigation", () => {
+  it("moves in run order, reports position and clears the selected annotation", async () => {
+    const user = userEvent.setup();
+    const firstSummary = frameSummaryFixture({ frame_index: 0, id: "frame-1", timestamp_ms: 0 });
+    const secondSummary = frameSummaryFixture({ frame_index: 1, id: "frame-2", timestamp_ms: 1_000 });
+    const first = frameDetailFixture({ frame_index: 0, id: "frame-1", timestamp_ms: 0 });
+    const second = frameDetailFixture({ frame_index: 1, id: "frame-2", timestamp_ms: 1_000 });
+
+    stubFetch((url) => {
+      if (url === "/api/v1/runs/run-1") {
+        return {
+          status: 200,
+          body: runFixture({ id: "run-1", profile_id: PROFILE.id, total_frames: 2 }),
+        };
+      }
+      if (url === `/api/v1/profiles/${PROFILE.id}`) {
+        return { status: 200, body: PROFILE };
+      }
+      if (url.startsWith("/api/v1/runs/run-1/frames?")) {
+        const query = new URL(url, "http://datasetfactory.test").searchParams;
+        if (query.get("page_size") === "1") {
+          return {
+            status: 200,
+            body: framePageFixture({
+              items: query.get("page") === "2" ? [secondSummary] : [firstSummary],
+              page: Number(query.get("page")),
+              page_size: 1,
+              total: 2,
+            }),
+          };
+        }
+        return {
+          status: 200,
+          body: framePageFixture({ items: [firstSummary, secondSummary], total: 2 }),
+        };
+      }
+      if (url === "/api/v1/frames/frame-1") return { status: 200, body: first };
+      if (url === "/api/v1/frames/frame-2") return { status: 200, body: second };
+      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+    });
+    renderApp(["/annotations/run-1"]);
+
+    expect(await screen.findByLabelText("Pozycja 1 z 2")).toHaveTextContent("1 / 2");
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Następna klatka" }));
+
+    expect(await screen.findByLabelText("Pozycja 2 z 2")).toHaveTextContent("2 / 2");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Poprzednia klatka" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Następna klatka" })).toBeDisabled();
+  });
+
+  it.each([
+    ["a", "accept"],
+    ["x", "reject"],
+  ])("maps %s to the %s review action outside form controls", async (shortcut, decision) => {
+    const user = userEvent.setup();
+    const decisions: unknown[] = [];
+    reviewApi({
+      mutation: (url, init) => {
+        if (url.endsWith("/review")) {
+          decisions.push(JSON.parse(String(init?.body)));
+        }
+        return { status: 200, body: frameDetailFixture() };
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await user.keyboard(shortcut);
+
+    await waitFor(() => {
+      expect(decisions).toContainEqual({ decision, expected_version: 7 });
+    });
+  });
+
+  it("does not trigger review shortcuts while the class field owns the keystroke", async () => {
+    const user = userEvent.setup();
+    const decisions: unknown[] = [];
+    reviewApi({
+      mutation: (url, init) => {
+        if (url.endsWith("/review")) decisions.push(JSON.parse(String(init?.body)));
+        return { status: 200, body: frameDetailFixture() };
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const classField = screen.getByLabelText("Klasa");
+    await user.clear(classField);
+    await user.type(classField, "ax");
+
+    expect(classField).toHaveValue("ax");
+    expect(decisions).toHaveLength(0);
+  });
+});
+
 describe("review filters and mutations", () => {
   it("uses the rejected filter as the route to reopen and sends the current frame version", async () => {
     const user = userEvent.setup();

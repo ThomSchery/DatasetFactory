@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   describeApiError,
@@ -43,8 +43,11 @@ import {
 
 interface FrameEditorProps {
   frameId: string;
+  navigationDisabled: boolean;
+  onNavigate: (frameIndex: number, direction: -1 | 1) => void;
   profile: GameProfile;
   runId: string;
+  totalFrames: number;
 }
 
 function busyKey(intent: ReviewMutationIntent | undefined): string | null {
@@ -69,7 +72,14 @@ function errorMessage(error: ErrorPresentation): string {
   return `${error.message} ${error.action} Kod: ${error.code}.`;
 }
 
-export function FrameEditor({ frameId, profile, runId }: FrameEditorProps) {
+export function FrameEditor({
+  frameId,
+  navigationDisabled,
+  onNavigate,
+  profile,
+  runId,
+  totalFrames,
+}: FrameEditorProps) {
   const frameQuery = useQuery({
     queryKey: queryKeys.frame(frameId),
     queryFn: ({ signal }) => getFrame(frameId, signal),
@@ -97,13 +107,25 @@ export function FrameEditor({ frameId, profile, runId }: FrameEditorProps) {
     );
   }
 
-  return <LoadedFrameEditor frame={frameQuery.data} profile={profile} runId={runId} />;
+  return (
+    <LoadedFrameEditor
+      frame={frameQuery.data}
+      navigationDisabled={navigationDisabled}
+      onNavigate={onNavigate}
+      profile={profile}
+      runId={runId}
+      totalFrames={totalFrames}
+    />
+  );
 }
 
 interface LoadedFrameEditorProps {
   frame: Awaited<ReturnType<typeof getFrame>>;
+  navigationDisabled: boolean;
+  onNavigate: (frameIndex: number, direction: -1 | 1) => void;
   profile: GameProfile;
   runId: string;
+  totalFrames: number;
 }
 
 interface RedrawMode {
@@ -116,7 +138,14 @@ interface GeometryPreview {
   bbox: BBox;
 }
 
-function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
+function LoadedFrameEditor({
+  frame,
+  navigationDisabled,
+  onNavigate,
+  profile,
+  runId,
+  totalFrames,
+}: LoadedFrameEditorProps) {
   const queryClient = useQueryClient();
   const imageErrorCopy = describeErrorCode("frame_image_not_found");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -235,6 +264,49 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
       : `${categoryById.get(redrawTarget.category_id) ?? redrawTarget.category_id} (${redrawTarget.id})`;
   const canDirectEdit = capabilities.canEdit && redrawMode === null;
 
+  useEffect(() => {
+    function handleReviewShortcut(event: globalThis.KeyboardEvent): void {
+      const target = event.target;
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        (target instanceof HTMLElement &&
+          (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)))
+      ) {
+        return;
+      }
+      const key = event.key.toLocaleLowerCase("pl");
+      if (
+        key === "a" &&
+        capabilities.canAccept &&
+        activeAnnotations.length > 0 &&
+        !mutation.isPending
+      ) {
+        event.preventDefault();
+        setActionError(null);
+        mutation.mutate({ decision: "accept", expectedVersion: frame.version, kind: "review" });
+      } else if (key === "x" && capabilities.canReject && !mutation.isPending) {
+        event.preventDefault();
+        setActionError(null);
+        mutation.mutate({ decision: "reject", expectedVersion: frame.version, kind: "review" });
+      }
+    }
+
+    window.addEventListener("keydown", handleReviewShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleReviewShortcut);
+    };
+  }, [
+    activeAnnotations.length,
+    capabilities.canAccept,
+    capabilities.canReject,
+    frame.version,
+    mutation,
+  ]);
+
   function submit(intent: ReviewMutationIntent): void {
     setActionError(null);
     mutation.mutate(intent);
@@ -315,6 +387,79 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
         eyebrow={`Klatka ${frame.frame_index}`}
         title="Obraz i bbox"
       >
+        <div className="df-review-toolbar">
+          <div aria-label="Nawigacja po klatkach" className="df-review-toolbar__navigation" role="group">
+            <Button
+              aria-label="Poprzednia klatka"
+              disabled={navigationDisabled || frame.frame_index <= 0}
+              onClick={() => {
+                onNavigate(frame.frame_index, -1);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              ←
+            </Button>
+            <strong aria-label={`Pozycja ${frame.frame_index + 1} z ${totalFrames}`}>
+              {frame.frame_index + 1} / {totalFrames}
+            </strong>
+            <Button
+              aria-label="Następna klatka"
+              disabled={navigationDisabled || frame.frame_index + 1 >= totalFrames}
+              onClick={() => {
+                onNavigate(frame.frame_index, 1);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              →
+            </Button>
+          </div>
+          <div className="df-review-toolbar__decisions">
+            {capabilities.canAccept ? (
+              <Button
+                aria-label="Zaakceptuj klatkę"
+                disabled={mutation.isPending || activeAnnotations.length === 0}
+                loading={currentBusyKey === "review:accept"}
+                onClick={() => {
+                  submit({ decision: "accept", expectedVersion: frame.version, kind: "review" });
+                }}
+                size="sm"
+                title={activeAnnotations.length === 0 ? "Akceptacja wymaga aktywnej anotacji" : "Skrót: A"}
+              >
+                Zaakceptuj <kbd>A</kbd>
+              </Button>
+            ) : null}
+            {capabilities.canReject ? (
+              <Button
+                aria-label="Odrzuć klatkę"
+                disabled={mutation.isPending}
+                loading={currentBusyKey === "review:reject"}
+                onClick={() => {
+                  submit({ decision: "reject", expectedVersion: frame.version, kind: "review" });
+                }}
+                size="sm"
+                title="Skrót: X"
+                variant="secondary"
+              >
+                Odrzuć <kbd>X</kbd>
+              </Button>
+            ) : null}
+            {capabilities.canReopen ? (
+              <Button
+                disabled={mutation.isPending}
+                loading={currentBusyKey === "review:reopen"}
+                onClick={() => {
+                  submit({ decision: "reopen", expectedVersion: frame.version, kind: "review" });
+                }}
+                size="sm"
+              >
+                Otwórz ponownie
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
         <DataList
           items={[
             { label: "Timestamp", value: `${(frame.timestamp_ms / 1000).toFixed(3)} s` },
@@ -521,43 +666,6 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           source={{ width: frame.width, height: frame.height }}
         />
 
-        <div className="df-review-decisions">
-          {capabilities.canAccept ? (
-            <Button
-              disabled={mutation.isPending || activeAnnotations.length === 0}
-              loading={currentBusyKey === "review:accept"}
-              onClick={() => {
-                submit({ decision: "accept", expectedVersion: frame.version, kind: "review" });
-              }}
-              title={activeAnnotations.length === 0 ? "Akceptacja wymaga aktywnej anotacji" : undefined}
-            >
-              Zaakceptuj klatkę
-            </Button>
-          ) : null}
-          {capabilities.canReject ? (
-            <Button
-              disabled={mutation.isPending}
-              loading={currentBusyKey === "review:reject"}
-              onClick={() => {
-                submit({ decision: "reject", expectedVersion: frame.version, kind: "review" });
-              }}
-              variant="secondary"
-            >
-              Odrzuć klatkę
-            </Button>
-          ) : null}
-          {capabilities.canReopen ? (
-            <Button
-              disabled={mutation.isPending}
-              loading={currentBusyKey === "review:reopen"}
-              onClick={() => {
-                submit({ decision: "reopen", expectedVersion: frame.version, kind: "review" });
-              }}
-            >
-              Otwórz ponownie
-            </Button>
-          ) : null}
-        </div>
       </Panel>
 
       <Panel
