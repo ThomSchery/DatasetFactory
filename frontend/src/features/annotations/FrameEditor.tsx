@@ -550,75 +550,6 @@ function LoadedFrameEditor({
           </Notice>
         ) : null}
 
-        {capabilities.canEdit ? (
-          <div className="df-review-create">
-            <SelectField
-              disabled={mutation.isPending}
-              label="Klasa nowego bbox"
-              onChange={(event) => {
-                setNewCategoryId(event.target.value);
-              }}
-              options={profile.categories.map((category) => ({
-                label: category.name,
-                value: category.id,
-              }))}
-              value={newCategoryId}
-            />
-            <p>
-              {redrawTargetLabel === null
-                ? "Przeciągnij na obrazie, aby dodać ręczny bbox."
-                : `Tryb zmiany geometrii: ${redrawTargetLabel}. Przeciągnij na obrazie, aby zastąpić bbox tej anotacji.`}
-            </p>
-            <div className="df-review-annotations__geometry">
-              {(["x", "y", "width", "height"] as const).map((field) => (
-                <TextField
-                  disabled={mutation.isPending}
-                  inputMode="numeric"
-                  key={field}
-                  label={`Nowy ${field}`}
-                  onChange={(event) => {
-                    setNewGeometry((current) => ({
-                      ...current,
-                      [field]: event.target.value,
-                    }));
-                    setNewGeometryError(null);
-                  }}
-                  type="number"
-                  value={newGeometry[field]}
-                  width="short"
-                />
-              ))}
-            </div>
-            {newGeometryError === null ? null : (
-              <p className="df-review-annotations__invalid" role="alert">
-                {newGeometryError}
-              </p>
-            )}
-            <Button
-              disabled={mutation.isPending}
-              loading={currentBusyKey === "create"}
-              onClick={() => {
-                const parsed = parseGeometryDraft(newGeometry, {
-                  width: frame.width,
-                  height: frame.height,
-                });
-                setNewGeometryError(parsed.error);
-                if (parsed.bbox !== null && newCategoryId !== "") {
-                  submit({
-                    bbox: parsed.bbox,
-                    categoryId: newCategoryId,
-                    expectedVersion: frame.version,
-                    kind: "create",
-                  });
-                }
-              }}
-              variant="secondary"
-            >
-              Dodaj bbox z pól
-            </Button>
-          </div>
-        ) : null}
-
         {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
         {imageError ? (
           <div className="df-review-image-error">
@@ -722,6 +653,75 @@ function LoadedFrameEditor({
           shapes={shapes}
           source={{ width: frame.width, height: frame.height }}
         />
+
+        {capabilities.canEdit ? (
+          <div className="df-review-create">
+            <SelectField
+              disabled={mutation.isPending}
+              label="Klasa nowego bbox"
+              onChange={(event) => {
+                setNewCategoryId(event.target.value);
+              }}
+              options={profile.categories.map((category) => ({
+                label: category.name,
+                value: category.id,
+              }))}
+              value={newCategoryId}
+            />
+            <p>
+              {redrawTargetLabel === null
+                ? "Przeciągnij na obrazie, aby dodać ręczny bbox."
+                : `Tryb zmiany geometrii: ${redrawTargetLabel}. Przeciągnij na obrazie, aby zastąpić bbox tej anotacji.`}
+            </p>
+            <div className="df-review-annotations__geometry">
+              {(["x", "y", "width", "height"] as const).map((field) => (
+                <TextField
+                  disabled={mutation.isPending}
+                  inputMode="numeric"
+                  key={field}
+                  label={`Nowy ${field}`}
+                  onChange={(event) => {
+                    setNewGeometry((current) => ({
+                      ...current,
+                      [field]: event.target.value,
+                    }));
+                    setNewGeometryError(null);
+                  }}
+                  type="number"
+                  value={newGeometry[field]}
+                  width="short"
+                />
+              ))}
+            </div>
+            {newGeometryError === null ? null : (
+              <p className="df-review-annotations__invalid" role="alert">
+                {newGeometryError}
+              </p>
+            )}
+            <Button
+              disabled={mutation.isPending}
+              loading={currentBusyKey === "create"}
+              onClick={() => {
+                const parsed = parseGeometryDraft(newGeometry, {
+                  width: frame.width,
+                  height: frame.height,
+                });
+                setNewGeometryError(parsed.error);
+                if (parsed.bbox !== null && newCategoryId !== "") {
+                  submit({
+                    bbox: parsed.bbox,
+                    categoryId: newCategoryId,
+                    expectedVersion: frame.version,
+                    kind: "create",
+                  });
+                }
+              }}
+              variant="secondary"
+            >
+              Dodaj bbox z pól
+            </Button>
+          </div>
+        ) : null}
 
       </Panel>
 

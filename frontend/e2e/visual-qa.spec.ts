@@ -80,6 +80,23 @@ async function assertFrameFilterCountsFit(page: Page): Promise<void> {
   }
 }
 
+async function assertImagePrecedesNumericCreateTools(page: Page): Promise<void> {
+  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const createTools = page.locator(".df-review-create");
+  const overlayBounds = await overlay.boundingBox();
+  const createBounds = await createTools.boundingBox();
+  expect(overlayBounds).not.toBeNull();
+  expect(createBounds).not.toBeNull();
+  if (overlayBounds === null || createBounds === null) {
+    throw new Error("Review image or numeric create tools have no browser geometry");
+  }
+  expect(overlayBounds.y, "review image should remain above the fold at 1000 px").toBeLessThan(600);
+  expect(
+    createBounds.y,
+    "numeric bbox tools should follow the review image instead of pushing it below the fold",
+  ).toBeGreaterThanOrEqual(overlayBounds.y + overlayBounds.height);
+}
+
 async function assertResolvedCssVariables(page: Page): Promise<void> {
   const unresolved = await page.evaluate(() => {
     const css = Array.from(document.styleSheets)
@@ -265,6 +282,7 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     async (current) => {
       await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
       await assertFrameFilterCountsFit(current);
+      await assertImagePrecedesNumericCreateTools(current);
       await assertAnnotationPopoverDoesNotCoverBox(current);
     },
   );
