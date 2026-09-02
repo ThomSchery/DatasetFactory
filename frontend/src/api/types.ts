@@ -289,6 +289,20 @@ export interface CreateAnnotationRequest {
   expected_version: number;
 }
 
+export type CopyPreviousScope = "game" | "character" | "category";
+
+export interface CopyPreviousAnnotationsRequest {
+  scope: CopyPreviousScope;
+  category_id?: string;
+  expected_version: number;
+}
+
+export interface CopyPreviousAnnotationsResult {
+  copied: number;
+  replaced: number;
+  frame_version: number;
+}
+
 /**
  * At least one of `category_id` or `bbox` must be present; an empty patch is
  * rejected with `400 empty_patch`.

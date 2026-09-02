@@ -38,6 +38,7 @@ class ReviewSeed:
     category_id: str
     alternate_category_id: str
     foreign_category_id: str
+    game_category_id: str
     observation_id: str
     run_id: str
 
@@ -53,6 +54,7 @@ def _seed_review(composition: CompositionRoot, tmp_path: Path) -> ReviewSeed:
     category_id = str(uuid4())
     alternate_category_id = str(uuid4())
     foreign_category_id = str(uuid4())
+    game_category_id = str(uuid4())
     annotation_ids = (str(uuid4()), str(uuid4()))
     image_relpath = Path("runs") / run_id / "frames" / "00000000.jpg"
     image = composition.workspace.resolve_relpath(image_relpath)
@@ -105,6 +107,13 @@ def _seed_review(composition: CompositionRoot, tmp_path: Path) -> ReviewSeed:
                     name="1",
                     kind="character",
                     ordinal=1,
+                ),
+                Category(
+                    id=game_category_id,
+                    profile_id=ids["profile"],
+                    name="Score",
+                    kind="game",
+                    ordinal=2,
                 ),
                 Category(
                     id=foreign_category_id,
@@ -236,6 +245,7 @@ def _seed_review(composition: CompositionRoot, tmp_path: Path) -> ReviewSeed:
         category_id,
         alternate_category_id,
         foreign_category_id,
+        game_category_id,
         observation_id,
         run_id,
     )
@@ -437,6 +447,155 @@ def test_manual_annotations_geometry_and_validation_contract(
 
     with composition.database.session() as session:
         assert session.get(OcrObservation, seed.observation_id) is not None
+
+
+def test_copy_previous_replaces_only_the_selected_group_and_keeps_provenance_manual(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    target_frame_id = str(uuid4())
+    target_game_id = str(uuid4())
+    target_character_id = str(uuid4())
+    source_game_id = str(uuid4())
+    with composition.database.session() as session:
+        source = session.get(Frame, seed.frame_id)
+        assert source is not None
+        source.review_status = "rejected"
+        session.add(
+            Frame(
+                id=target_frame_id,
+                run_id=seed.run_id,
+                frame_index=2,
+                timestamp_ms=2000,
+                image_relpath=f"runs/{seed.run_id}/frames/00000002.jpg",
+                stage_status="review_pending",
+                review_status="pending",
+                width=100,
+                height=50,
+                version=1,
+            )
+        )
+        session.flush()
+        session.add_all(
+            [
+                Annotation(
+                    id=source_game_id,
+                    frame_id=seed.frame_id,
+                    category_id=seed.game_category_id,
+                    x=10,
+                    y=11,
+                    width=20,
+                    height=12,
+                    confidence=0.99,
+                    source="ocr",
+                    observation_id=seed.observation_id,
+                    status="accepted",
+                    version=1,
+                ),
+                Annotation(
+                    id=target_game_id,
+                    frame_id=target_frame_id,
+                    category_id=seed.game_category_id,
+                    x=60,
+                    y=5,
+                    width=10,
+                    height=10,
+                    confidence=None,
+                    source="manual",
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                ),
+                Annotation(
+                    id=target_character_id,
+                    frame_id=target_frame_id,
+                    category_id=seed.alternate_category_id,
+                    x=70,
+                    y=20,
+                    width=8,
+                    height=8,
+                    confidence=None,
+                    source="manual",
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                ),
+            ]
+        )
+
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        copied = client.post(
+            f"/api/v1/frames/{target_frame_id}/annotations/copy-previous",
+            json={"scope": "game", "expected_version": 1},
+        )
+        assert copied.status_code == 200, copied.text
+        assert copied.json() == {"copied": 1, "replaced": 1, "frame_version": 2}
+
+        empty = client.post(
+            f"/api/v1/frames/{target_frame_id}/annotations/copy-previous",
+            json={
+                "scope": "category",
+                "category_id": seed.alternate_category_id,
+                "expected_version": 2,
+            },
+        )
+        assert empty.status_code == 200, empty.text
+        assert empty.json() == {"copied": 0, "replaced": 0, "frame_version": 2}
+
+    with composition.database.session() as session:
+        target = session.get(Frame, target_frame_id)
+        run = session.get(PipelineRun, seed.run_id)
+        replaced = session.get(Annotation, target_game_id)
+        untouched = session.get(Annotation, target_character_id)
+        assert target is not None and target.version == 2
+        assert run is not None and run.review_revision == 1
+        assert replaced is not None and replaced.status == "deleted" and replaced.version == 2
+        assert untouched is not None and untouched.status == "proposed" and untouched.version == 1
+        active_game = tuple(
+            session.scalars(
+                select(Annotation)
+                .join(Category, Annotation.category_id == Category.id)
+                .where(
+                    Annotation.frame_id == target_frame_id,
+                    Annotation.status != "deleted",
+                    Category.kind == "game",
+                )
+            )
+        )
+        assert len(active_game) == 1
+        assert (
+            active_game[0].category_id,
+            active_game[0].x,
+            active_game[0].y,
+            active_game[0].width,
+            active_game[0].height,
+            active_game[0].source,
+            active_game[0].confidence,
+            active_game[0].observation_id,
+        ) == (seed.game_category_id, 10, 11, 20, 12, "manual", None, None)
+
+
+def test_copy_previous_reports_first_frame_and_does_not_mutate_it(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations/copy-previous",
+            json={"scope": "character", "expected_version": 1},
+        )
+        assert response.status_code == 400, response.text
+        assert response.json()["error"]["code"] == "previous_frame_not_found"
+
+    with composition.database.session() as session:
+        frame = session.get(Frame, seed.frame_id)
+        run = session.get(PipelineRun, seed.run_id)
+        assert frame is not None and frame.version == 1
+        assert run is not None and run.review_revision == 0
 
 
 def test_rejected_frame_is_frozen_until_reopen(

@@ -1,6 +1,8 @@
 import { apiRequest, buildUrl } from "./client";
 import type {
   Annotation,
+  CopyPreviousAnnotationsRequest,
+  CopyPreviousAnnotationsResult,
   CreateAnnotationRequest,
   CreateExportRequest,
   CreateMaterialRequest,
@@ -208,6 +210,17 @@ export function createAnnotation(
     method: "POST",
     body,
   });
+}
+
+/** Replace one annotation group with its value from the previous temporal frame. */
+export function copyPreviousAnnotations(
+  frameId: string,
+  body: CopyPreviousAnnotationsRequest,
+): Promise<CopyPreviousAnnotationsResult> {
+  return apiRequest<CopyPreviousAnnotationsResult>(
+    `/frames/${encodeURIComponent(frameId)}/annotations/copy-previous`,
+    { method: "POST", body },
+  );
 }
 
 /**

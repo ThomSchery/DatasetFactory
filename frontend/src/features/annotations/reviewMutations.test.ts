@@ -43,6 +43,13 @@ const cases: Case[] = [
     expectedUrl: "/api/v1/annotations/ann-1",
     expectedBody: { bbox: BBOX, expected_version: 3 },
   },
+  {
+    label: "kopiowanie grupy z poprzedniej klatki",
+    intent: { kind: "copy-previous", scope: "category", categoryId: "cat-1", expectedVersion: 7 },
+    expectedMethod: "POST",
+    expectedUrl: "/api/v1/frames/frame-1/annotations/copy-previous",
+    expectedBody: { scope: "category", category_id: "cat-1", expected_version: 7 },
+  },
   ...(["accept", "reject", "reopen"] as const).map((decision) => ({
     label: decision,
     intent: { kind: "review" as const, decision, expectedVersion: 7 },
@@ -56,7 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("seven review mutations", () => {
+describe("review mutations", () => {
   it.each(cases)("$label sends expected_version and surfaces 409", async (testCase) => {
     const fetchSpy = stubFetch(() => ({
       status: 409,

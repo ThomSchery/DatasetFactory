@@ -152,6 +152,40 @@
   gap: var(--size-xs);
 }
 
+.df-review-copy {
+  display: grid;
+  gap: var(--size-sm);
+  margin-top: var(--size-md);
+  padding-top: var(--size-md);
+  border-top: var(--border-width-default) solid var(--color-stroke-weak-default);
+}
+
+.df-review-copy h3,
+.df-review-copy p {
+  margin: var(--size-none);
+}
+
+.df-review-copy h3 {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+}
+
+.df-review-copy p,
+.df-review-copy__status {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-review-copy .df-button {
+  justify-self: start;
+}
+
+.df-review-copy kbd {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
 .df-annotation-popover {
   position: absolute;
   z-index: 2;

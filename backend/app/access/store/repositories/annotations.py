@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -46,6 +47,16 @@ class ReviewTransitionError(RuntimeError):
     pass
 
 
+class ReviewPreviousFrameError(RuntimeError):
+    pass
+
+
+class ReviewCopyBBoxError(ValueError):
+    def __init__(self, annotation_ids: tuple[str, ...]) -> None:
+        super().__init__("bbox_invalid")
+        self.annotation_ids = annotation_ids
+
+
 @dataclass(frozen=True)
 class StoredAnnotation:
     id: str
@@ -76,6 +87,13 @@ class StoredFrameReview:
     review_revision: int
     allowed_category_ids: frozenset[str]
     annotations: tuple[StoredAnnotation, ...]
+
+
+@dataclass(frozen=True)
+class CopyPreviousResult:
+    copied: int
+    replaced: int
+    frame_version: int
 
 
 class AnnotationRepository:
@@ -251,6 +269,116 @@ class AnnotationRepository:
             run.review_revision += 1
             session.flush()
             return self._frame_record(session, frame, run)
+
+    def copy_previous(
+        self,
+        frame_id: str,
+        *,
+        scope: str,
+        category_id: str | None,
+        expected_version: int,
+    ) -> CopyPreviousResult:
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            frame = session.get(Frame, frame_id)
+            if frame is None:
+                raise ReviewFrameNotFoundError
+            run = session.get(PipelineRun, frame.run_id)
+            if run is None:
+                raise ReviewFrameNotFoundError
+            if frame.version != expected_version:
+                raise ReviewVersionConflictError
+            if frame.review_status != "pending":
+                raise ReviewLockedError
+            if frame.stage_status != "review_pending":
+                raise ReviewStageError
+
+            previous = session.scalar(
+                select(Frame)
+                .where(Frame.run_id == frame.run_id, Frame.frame_index < frame.frame_index)
+                .order_by(Frame.frame_index.desc())
+                .limit(1)
+            )
+            if previous is None:
+                raise ReviewPreviousFrameError
+
+            if scope == "category":
+                if category_id is None:
+                    raise ReviewCategoryError
+                self._require_allowed_category(session, category_id, run.profile_id)
+                category_filter = Category.id == category_id
+            else:
+                category_filter = Category.kind == scope
+
+            source_annotations = tuple(
+                session.scalars(
+                    select(Annotation)
+                    .join(Category, Annotation.category_id == Category.id)
+                    .where(
+                        Annotation.frame_id == previous.id,
+                        Annotation.status != "deleted",
+                        Category.profile_id == run.profile_id,
+                        category_filter,
+                    )
+                    .order_by(Annotation.created_at, Annotation.id)
+                )
+            )
+            if not source_annotations:
+                return CopyPreviousResult(copied=0, replaced=0, frame_version=frame.version)
+
+            invalid_ids = tuple(
+                annotation.id
+                for annotation in source_annotations
+                if annotation.x < 0
+                or annotation.y < 0
+                or annotation.width <= 0
+                or annotation.height <= 0
+                or annotation.x + annotation.width > frame.width
+                or annotation.y + annotation.height > frame.height
+            )
+            if invalid_ids:
+                raise ReviewCopyBBoxError(invalid_ids)
+
+            target_annotations = tuple(
+                session.scalars(
+                    select(Annotation)
+                    .join(Category, Annotation.category_id == Category.id)
+                    .where(
+                        Annotation.frame_id == frame.id,
+                        Annotation.status != "deleted",
+                        Category.profile_id == run.profile_id,
+                        category_filter,
+                    )
+                )
+            )
+            for annotation in target_annotations:
+                annotation.status = "deleted"
+                annotation.version += 1
+            for source in source_annotations:
+                session.add(
+                    Annotation(
+                        id=str(uuid4()),
+                        frame_id=frame.id,
+                        category_id=source.category_id,
+                        x=source.x,
+                        y=source.y,
+                        width=source.width,
+                        height=source.height,
+                        confidence=None,
+                        source="manual",
+                        observation_id=None,
+                        status="proposed",
+                        version=1,
+                    )
+                )
+            frame.version += 1
+            run.review_revision += 1
+            session.flush()
+            return CopyPreviousResult(
+                copied=len(source_annotations),
+                replaced=len(target_annotations),
+                frame_version=frame.version,
+            )
 
     @staticmethod
     def _mutation_rows(

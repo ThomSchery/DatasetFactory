@@ -290,9 +290,11 @@ describe("temporal frame navigation", () => {
   it("does not trigger review shortcuts while the class field owns the keystroke", async () => {
     const user = userEvent.setup();
     const decisions: unknown[] = [];
+    const copies: unknown[] = [];
     reviewApi({
       mutation: (url, init) => {
         if (url.endsWith("/review")) decisions.push(JSON.parse(String(init?.body)));
+        if (url.endsWith("/copy-previous")) copies.push(JSON.parse(String(init?.body)));
         return { status: 200, body: frameDetailFixture() };
       },
     });
@@ -301,10 +303,68 @@ describe("temporal frame navigation", () => {
     await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
-    await user.type(classField, "ax");
+    await user.type(classField, "axr");
 
-    expect(classField).toHaveValue("ax");
+    expect(classField).toHaveValue("axr");
     expect(decisions).toHaveLength(0);
+    expect(copies).toHaveLength(0);
+  });
+
+  it("copies the selected group with R and reports replaced annotations", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    reviewApi({
+      frame: frameDetailFixture({ frame_index: 1 }),
+      mutation: (url, init) => {
+        if (url.endsWith("/copy-previous")) {
+          requests.push(JSON.parse(String(init?.body)));
+          return { status: 200, body: { copied: 2, replaced: 1, frame_version: 8 } };
+        }
+        return { status: 200, body: frameDetailFixture({ frame_index: 1 }) };
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const group = await screen.findByLabelText("Grupa anotacji");
+    await user.selectOptions(group, "category:category-2");
+    screen.getByRole("button", { name: /Powtórz R/ }).focus();
+    await user.keyboard("r");
+
+    await waitFor(() => {
+      expect(requests).toContainEqual({
+        scope: "category",
+        category_id: "category-2",
+        expected_version: 7,
+      });
+    });
+    expect(await screen.findByText("Skopiowano: 2. Zastąpiono: 1.")).toBeInTheDocument();
+  });
+
+  it("disables copy on the first frame and explains why", async () => {
+    reviewApi({ frame: frameDetailFixture({ frame_index: 0 }) });
+    renderApp(["/annotations/run-1"]);
+
+    expect(await screen.findByRole("button", { name: /Powtórz R/ })).toBeDisabled();
+    expect(
+      screen.getByText("To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the target unchanged when the previous group is empty", async () => {
+    const user = userEvent.setup();
+    reviewApi({
+      frame: frameDetailFixture({ frame_index: 1 }),
+      mutation: (url) =>
+        url.endsWith("/copy-previous")
+          ? { status: 200, body: { copied: 0, replaced: 0, frame_version: 7 } }
+          : { status: 200, body: frameDetailFixture({ frame_index: 1 }) },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: /Powtórz R/ }));
+    expect(
+      await screen.findByText("Poprzednia klatka nie ma anotacji w tej grupie. Nic nie zmieniono."),
+    ).toBeInTheDocument();
   });
 });
 

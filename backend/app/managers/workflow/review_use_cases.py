@@ -9,11 +9,14 @@ from uuid import uuid4
 from backend.app.access.store.repositories.annotations import (
     AnnotationNotFoundError,
     AnnotationRepository,
+    CopyPreviousResult,
     ReviewCategoryError,
+    ReviewCopyBBoxError,
     ReviewEmptyPatchError,
     ReviewFrameNotFoundError,
     ReviewLockedError,
     ReviewNoAnnotationsError,
+    ReviewPreviousFrameError,
     ReviewStageError,
     ReviewTransitionError,
     ReviewVersionConflictError,
@@ -164,6 +167,24 @@ class ReviewUseCases:
         except Exception as exc:
             raise self._translate(exc) from exc
 
+    def copy_previous_annotations(
+        self,
+        frame_id: str,
+        *,
+        scope: Literal["game", "character", "category"],
+        category_id: str | None,
+        expected_version: int,
+    ) -> CopyPreviousResult:
+        try:
+            return self._annotations.copy_previous(
+                frame_id,
+                scope=scope,
+                category_id=category_id,
+                expected_version=expected_version,
+            )
+        except Exception as exc:
+            raise self._translate(exc) from exc
+
     @staticmethod
     def _snapshot(record: StoredFrameReview) -> FrameReviewSnapshot:
         return FrameReviewSnapshot(
@@ -209,6 +230,13 @@ class ReviewUseCases:
             return ReviewUseCaseError("no_annotations")
         if isinstance(error, ReviewTransitionError):
             return ReviewUseCaseError("invalid_review_transition")
+        if isinstance(error, ReviewPreviousFrameError):
+            return ReviewUseCaseError("previous_frame_not_found")
+        if isinstance(error, ReviewCopyBBoxError):
+            return ReviewUseCaseError(
+                "bbox_invalid",
+                details={"annotation_ids": list(error.annotation_ids)},
+            )
         if isinstance(error, ReviewValidationError):
             return ReviewUseCaseError(error.code, details=error.details)
         if isinstance(error, ReviewUseCaseError):

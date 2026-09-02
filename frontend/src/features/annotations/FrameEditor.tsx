@@ -15,6 +15,8 @@ import {
   queryKeys,
   type Annotation,
   type BBox,
+  type CopyPreviousAnnotationsResult,
+  type CopyPreviousScope,
   type ErrorPresentation,
   type GameProfile,
 } from "../../api";
@@ -63,6 +65,8 @@ function busyKey(intent: ReviewMutationIntent | undefined): string | null {
       return `delete:${intent.annotationId}`;
     case "create":
       return "create";
+    case "copy-previous":
+      return "copy-previous";
     case "review":
       return `review:${intent.decision}`;
   }
@@ -160,6 +164,8 @@ function LoadedFrameEditor({
   const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
+  const [copySelection, setCopySelection] = useState("game");
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const capabilities = frameReviewCapabilities(frame.stage_status, frame.review_status);
   const activeAnnotations = useMemo(
     () => frame.annotations.filter(isActiveAnnotation),
@@ -170,10 +176,13 @@ function LoadedFrameEditor({
     [profile.categories],
   );
 
-  const mutation = useMutation<void, unknown, ReviewMutationIntent>({
+  const mutation = useMutation<void | CopyPreviousAnnotationsResult, unknown, ReviewMutationIntent>({
     mutationKey: reviewMutationKey(runId),
     mutationFn: (intent) => executeReviewMutation(frame.id, intent),
     onError: async (error, intent) => {
+      if (intent.kind === "copy-previous") {
+        setCopyFeedback(null);
+      }
       if (intent.kind === "geometry") {
         setGeometryPreview(null);
       }
@@ -193,7 +202,7 @@ function LoadedFrameEditor({
         });
       }
     },
-    onSuccess: async (_data, intent) => {
+    onSuccess: async (data, intent) => {
       setActionError(null);
       if (intent.kind === "review") {
         setInvalidIds([]);
@@ -210,6 +219,13 @@ function LoadedFrameEditor({
       if (intent.kind === "create") {
         setNewGeometry({ ...EMPTY_GEOMETRY_DRAFT });
         setNewGeometryError(null);
+      }
+      if (intent.kind === "copy-previous" && data !== undefined) {
+        setCopyFeedback(
+          data.copied === 0
+            ? "Poprzednia klatka nie ma anotacji w tej grupie. Nic nie zmieniono."
+            : `Skopiowano: ${data.copied}. Zastąpiono: ${data.replaced}.`,
+        );
       }
       await invalidateFor(queryClient, {
         type: intent.kind === "review" ? "frame-reviewed" : "annotation-changed",
@@ -263,6 +279,28 @@ function LoadedFrameEditor({
       ? null
       : `${categoryById.get(redrawTarget.category_id) ?? redrawTarget.category_id} (${redrawTarget.id})`;
   const canDirectEdit = capabilities.canEdit && redrawMode === null;
+  const copyDisabled = frame.frame_index === 0 || !capabilities.canEdit || mutation.isPending;
+
+  function copyPrevious(): void {
+    if (copyDisabled) {
+      return;
+    }
+    const [scopeValue, categoryId] = copySelection.split(":", 2);
+    const scope: CopyPreviousScope =
+      scopeValue === "category"
+        ? "category"
+        : scopeValue === "character"
+          ? "character"
+          : "game";
+    setActionError(null);
+    setCopyFeedback(null);
+    mutation.mutate({
+      ...(scope === "category" && categoryId !== undefined ? { categoryId } : {}),
+      expectedVersion: frame.version,
+      kind: "copy-previous",
+      scope,
+    });
+  }
 
   useEffect(() => {
     function handleReviewShortcut(event: globalThis.KeyboardEvent): void {
@@ -292,6 +330,23 @@ function LoadedFrameEditor({
         event.preventDefault();
         setActionError(null);
         mutation.mutate({ decision: "reject", expectedVersion: frame.version, kind: "review" });
+      } else if (key === "r" && !copyDisabled) {
+        event.preventDefault();
+        const [scopeValue, categoryId] = copySelection.split(":", 2);
+        const scope: CopyPreviousScope =
+          scopeValue === "category"
+            ? "category"
+            : scopeValue === "character"
+              ? "character"
+              : "game";
+        setActionError(null);
+        setCopyFeedback(null);
+        mutation.mutate({
+          ...(scope === "category" && categoryId !== undefined ? { categoryId } : {}),
+          expectedVersion: frame.version,
+          kind: "copy-previous",
+          scope,
+        });
       }
     }
 
@@ -303,6 +358,8 @@ function LoadedFrameEditor({
     activeAnnotations.length,
     capabilities.canAccept,
     capabilities.canReject,
+    copyDisabled,
+    copySelection,
     frame.version,
     mutation,
   ]);
@@ -686,6 +743,46 @@ function LoadedFrameEditor({
           onSelect={selectAnnotation}
           selectedId={selectedId}
         />
+        <section aria-labelledby="copy-previous-heading" className="df-review-copy">
+          <div>
+            <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
+            <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
+          </div>
+          <SelectField
+            disabled={copyDisabled}
+            label="Grupa anotacji"
+            onChange={(event) => {
+              setCopySelection(event.target.value);
+              setCopyFeedback(null);
+            }}
+            options={[
+              { label: "Pola HUD (gra)", value: "game" },
+              { label: "Znaki", value: "character" },
+              ...profile.categories.map((category) => ({
+                label: `Klasa: ${category.name}`,
+                value: `category:${category.id}`,
+              })),
+            ]}
+            value={copySelection}
+          />
+          <Button
+            disabled={copyDisabled}
+            loading={currentBusyKey === "copy-previous"}
+            onClick={copyPrevious}
+            size="sm"
+            title="Skrót: R"
+            variant="secondary"
+          >
+            Powtórz <kbd>R</kbd>
+          </Button>
+          <p aria-live="polite" className="df-review-copy__status">
+            {frame.frame_index === 0
+              ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
+              : !capabilities.canEdit
+                ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
+                : copyFeedback}
+          </p>
+        </section>
       </Panel>
     </>
   );

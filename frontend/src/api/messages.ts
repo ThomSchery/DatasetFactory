@@ -56,6 +56,10 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Wybrana klasa nie należy do profilu tego runu.",
     action: "Wybierz klasę zdefiniowaną w profilu gry.",
   },
+  previous_frame_not_found: {
+    message: "Ta klatka nie ma wcześniejszej klatki w kolejności runu.",
+    action: "Wybierz późniejszą klatkę albo edytuj tę grupę ręcznie.",
+  },
 
   // --- run lifecycle ---
   active_run: {

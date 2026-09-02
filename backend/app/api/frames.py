@@ -1,9 +1,9 @@
 from collections.abc import Callable
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from backend.app.access.store.repositories.annotations import StoredFrameReview
 from backend.app.api.annotations import (
@@ -25,6 +25,26 @@ class CreateAnnotationRequest(StrictModel):
     category_id: str = Field(min_length=1)
     bbox: BBoxRequest
     expected_version: int = Field(ge=1)
+
+
+class CopyPreviousAnnotationsRequest(StrictModel):
+    scope: Literal["game", "character", "category"]
+    category_id: str | None = None
+    expected_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_category_scope(self) -> Self:
+        if self.scope == "category" and not self.category_id:
+            raise ValueError("category_id is required for category scope")
+        if self.scope != "category" and self.category_id is not None:
+            raise ValueError("category_id is only allowed for category scope")
+        return self
+
+
+class CopyPreviousAnnotationsResponse(StrictModel):
+    copied: int
+    replaced: int
+    frame_version: int
 
 
 class FrameDetailResponse(StrictModel):
@@ -117,6 +137,27 @@ def create_frames_router(review_provider: ReviewProvider) -> APIRouter:
         except ReviewUseCaseError as error:
             return review_error(request, error)
         return annotation_response(record)
+
+    @router.post(
+        "/{frame_id}/annotations/copy-previous",
+        response_model=CopyPreviousAnnotationsResponse,
+    )
+    def copy_previous_annotations(
+        frame_id: str,
+        payload: CopyPreviousAnnotationsRequest,
+        request: Request,
+        review: Annotated[ReviewUseCases, Depends(review_provider)],
+    ) -> CopyPreviousAnnotationsResponse | JSONResponse:
+        try:
+            result = review.copy_previous_annotations(
+                frame_id,
+                scope=payload.scope,
+                category_id=payload.category_id,
+                expected_version=payload.expected_version,
+            )
+        except ReviewUseCaseError as error:
+            return review_error(request, error)
+        return CopyPreviousAnnotationsResponse(**vars(result))
 
     @router.post("/{frame_id}/review", response_model=FrameDetailResponse)
     def review_frame(
