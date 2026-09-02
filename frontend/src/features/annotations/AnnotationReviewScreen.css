@@ -97,6 +97,10 @@
   width: 100%;
 }
 
+.df-review-frame-filters .df-button__content {
+  gap: var(--size-xs);
+}
+
 .df-review-frame-filters strong {
   font-family: var(--font-family-mono);
   font-variant-numeric: tabular-nums;

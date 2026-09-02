@@ -52,6 +52,34 @@ async function assertAnnotationPopoverDoesNotCoverBox(page: Page): Promise<void>
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
+async function assertFrameFilterCountsFit(page: Page): Promise<void> {
+  const filters = page.getByRole("group", { name: "Filtr statusu klatek" });
+  const buttons = filters.getByRole("button");
+  await expect(buttons).toHaveCount(4);
+
+  for (const button of await buttons.all()) {
+    const metrics = await button.locator(".df-button__content").evaluate((content) => {
+      const label = content.querySelector("span");
+      const count = content.querySelector("strong");
+      if (!(label instanceof HTMLElement) || !(count instanceof HTMLElement)) {
+        throw new Error("Filter button is missing its label or count");
+      }
+      const contentBox = content.getBoundingClientRect();
+      const labelBox = label.getBoundingClientRect();
+      const countBox = count.getBoundingClientRect();
+      return {
+        contentRight: contentBox.right,
+        countRight: countBox.right,
+        gap: countBox.left - labelBox.right,
+      };
+    });
+    expect(metrics.gap, "frame filter label and count must have visible spacing").toBeGreaterThanOrEqual(4);
+    expect(metrics.countRight, "frame filter count must stay inside its content box").toBeLessThanOrEqual(
+      metrics.contentRight + 0.5,
+    );
+  }
+}
+
 async function assertResolvedCssVariables(page: Page): Promise<void> {
   const unresolved = await page.evaluate(() => {
     const css = Array.from(document.styleSheets)
@@ -236,6 +264,7 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     (current) => current.getByRole("button", { name: /Oczekujące/ }),
     async (current) => {
       await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
+      await assertFrameFilterCountsFit(current);
       await assertAnnotationPopoverDoesNotCoverBox(current);
     },
   );

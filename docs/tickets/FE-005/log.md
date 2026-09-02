@@ -120,3 +120,56 @@ skala hit-targetu uchwytów i kursory pozostają bez zmian. Rozszerzenie
 `RegionOverlay` będzie wyłącznie prezentacyjne (etykiety i slot popovera) i nie
 zmieni obsługi zdarzeń ani geometrii gestów.
 
+## Runda poprawkowa po zimnym review — Design Plan
+
+### Ocena układu i teza przestrzenna
+
+- Pomiar Chromium przy 1440 px wykazał odstępy etykieta–licznik od `-8,3` do
+  `0,6 px`; licznik „Zaakceptowane” wychodził `19,4 px` poza przycisk. Źródłem
+  jest brak `gap` w istniejącym flexie zawartości przycisku.
+- Przy wysokości okna 1000 px formularz liczbowy nowego bboxa przesuwał początek
+  obrazu do około `y = 775 px`. Obraz jest głównym miejscem decyzji, a pola
+  geometrii są ścieżką pomocniczą.
+- Docelowy rytm panelu: pasek nawigacji i kontekst klatki → obraz z bboxami oraz
+  popoverem → pomocniczy formularz liczbowy → listy klatek i klas. Kolejność DOM
+  pozostaje zgodna z kolejnością wizualną i klawiaturową.
+
+### Elementy interfejsu objęte poprawką
+
+- przyciski filtrów `Wszystkie`, `Oczekujące`, `Zaakceptowane`, `Odrzucone`:
+  etykieta i licznik otrzymują tokenowy odstęp i pozostają wewnątrz obrysu;
+- `RegionOverlay` z obrazem i bboxami przesuwa się przed formularz tworzenia;
+- `SelectField` klasy nowego bboxa, instrukcja rysowania, pola `x/y/width/height`
+  i przycisk `Dodaj bbox z pól` pozostają dostępne bez zmiany funkcji, ale pod
+  obrazem;
+- pola geometrii w `AnnotationPopover`: `Escape` zamyka cały popover bez zapisu,
+  także gdy fokus jest w polu liczbowym;
+- awaryjne pozycjonowanie `AnnotationPopover`: obie osie są dociskane do granic
+  obrazu również wtedy, gdy żaden kierunek nie mieści panelu w całości.
+
+### Komponenty i wytyczne
+
+- Reużywane komponenty: `Button`, `TextField`, `SelectField`, `RegionOverlay`,
+  `AnnotationPopover`; nie powstaje nowy komponent ani nowe źródło zaznaczenia.
+- Layout i spacing: `GRID-01`, `GRID-02`, `GRID-05`, `GRID-08`, `GRID-09`,
+  `GRID-10`, `GRID-12`; `SPACING-01`, `SPACING-02`, `SPACING-03`, `SPACING-06`,
+  `SPACING-07`, `SPACING-08`, `SPACING-10`, `SPACING-11`, `SPACING-13`.
+- Typografia i etykiety: `TYPO-06`, `TYPO-07`, `FONTSIZE-02`, `FONTSIZE-08`,
+  `FONTSIZE-09`, `LHEIGHT-09`, `LHEIGHT-10`, `LHEIGHT-11`, `CASING-02`.
+- Kolor, obrys i warstwy: `COLOR-07`, `COLOR-08`, `BORDER-02`, `BORDER-03`,
+  `BORDER-05`, `BORDER-06`, `BWIDTH-06`, `BWIDTH-10`, `BWIDTH-11`,
+  `BWIDTH-13`, `RADIUS-02`, `RADIUS-03`, `RADIUS-05`, `OVERLAY-04`,
+  `OVERLAY-06`, `SHADOW-03`, `SHADOW-05`, `OPACITY-02`.
+
+### Zakres weryfikacji
+
+- jsdom: obsługa `Escape` z pola geometrii bez mutacji oraz istniejące zachowanie
+  popovera;
+- test jednostkowy geometrii: awaryjna gałąź placementu na małym obrazie dociska
+  `left` i `top` do granic;
+- Chromium: licznik każdego filtra mieści się w przycisku z dodatnim odstępem,
+  obraz występuje przed formularzem liczbowym, popover nie pokrywa bboxa;
+- visual QA: odświeżone PNG zostają obejrzane i zacommitowane świadomie.
+
+jsdom nie mierzy wiarygodnie rzeczywistego `gap`, overflow ani pozycji elementów
+w layoucie; te własności są asertowane w Chromium i oceniane na PNG.
