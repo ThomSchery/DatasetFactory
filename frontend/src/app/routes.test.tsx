@@ -85,7 +85,7 @@ describe("the five FE-04 routes", () => {
     renderApp(["/annotations/run-42"]);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
-    expect(await screen.findByRole("region", { name: "Filtr klatek" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Klatki runu" })).toBeInTheDocument();
     expect(screen.getByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
   });
@@ -107,7 +107,7 @@ describe("the five FE-04 routes", () => {
 
   it("keeps runId in the URL rather than in component state", async () => {
     renderApp(["/annotations/run-42"]);
-    expect(await screen.findByRole("region", { name: "Filtr klatek" })).toHaveTextContent(
+    expect(await screen.findByRole("region", { name: "Klatki runu" })).toHaveTextContent(
       "run-42",
     );
   });

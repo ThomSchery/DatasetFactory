@@ -283,7 +283,11 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     await user.click(save);
 
     expect(save).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByLabelText("Status weryfikacji")).toBeDisabled();
+    for (const filterButton of within(
+      screen.getByRole("group", { name: "Filtr statusu klatek" }),
+    ).getAllByRole("button")) {
+      expect(filterButton).toBeDisabled();
+    }
     expect(screen.getByRole("button", { name: "Następna" })).toBeDisabled();
     const openSecond = screen.getByRole("button", { name: "Otwórz" });
     expect(openSecond).toBeDisabled();
@@ -516,12 +520,18 @@ describe("success refetches authoritative versions", () => {
       frame: () => frameDtos[Math.min(frameRead++, frameDtos.length - 1)]!,
       frames: (url) => {
         if (url.includes("review_status=rejected")) {
+          if (new URL(url, "http://datasetfactory.test").searchParams.get("page_size") === "1") {
+            return framePageFixture({ items: [], page_size: 1, total: 1 });
+          }
           rejectedListRead += 1;
           return rejectedListRead === 1
             ? framePageFixture({
                 items: [frameSummaryFixture({ review_status: "rejected", version: 8 })],
               })
             : framePageFixture({ items: [], total: 0 });
+        }
+        if (new URL(url, "http://datasetfactory.test").searchParams.get("page_size") === "1") {
+          return framePageFixture({ items: [], page_size: 1, total: 1 });
         }
         pendingListRead += 1;
         return pendingListRead === 1
@@ -543,7 +553,7 @@ describe("success refetches authoritative versions", () => {
 
     await user.click(await screen.findByRole("button", { name: "Odrzuć klatkę" }));
     expect(await screen.findByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Status weryfikacji"), "rejected");
+    await user.click(screen.getByRole("button", { name: /Odrzucone/ }));
     await user.click(await screen.findByRole("button", { name: "Otwórz ponownie" }));
 
     await waitFor(() => {

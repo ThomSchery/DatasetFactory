@@ -1,14 +1,19 @@
-import type { FrameSummary, Page } from "../../api";
+import type { FrameCounts, FrameSummary, Page, ReviewStatusFilter } from "../../api";
 import { describeFrameStage, describeReviewStatus } from "../../api";
+import { REVIEW_STATUS_FILTER_OPTIONS } from "../../api";
 import { Button } from "../../components/common/Button";
 import { Panel } from "../../components/common/Panel";
 import { StatusBadge } from "../../components/common/StatusBadge";
 
 interface FrameListProps {
+  counts: FrameCounts;
   disabled: boolean;
+  filter: ReviewStatusFilter;
   frames: Page<FrameSummary>;
+  onFilterChange: (filter: ReviewStatusFilter) => void;
   onPageChange: (page: number) => void;
   onSelect: (frameId: string) => void;
+  runId: string;
   selectedId: string;
 }
 
@@ -16,7 +21,17 @@ function timestampLabel(timestampMs: number): string {
   return `${(timestampMs / 1000).toFixed(3)} s`;
 }
 
-export function FrameList({ disabled, frames, onPageChange, onSelect, selectedId }: FrameListProps) {
+export function FrameList({
+  counts,
+  disabled,
+  filter,
+  frames,
+  onFilterChange,
+  onPageChange,
+  onSelect,
+  runId,
+  selectedId,
+}: FrameListProps) {
   const pageCount = Math.max(1, Math.ceil(frames.total / frames.page_size));
 
   return (
@@ -27,10 +42,29 @@ export function FrameList({ disabled, frames, onPageChange, onSelect, selectedId
         </StatusBadge>
       }
       className="df-review-workspace__frames-column"
-      description="Lista nie pobiera obrazów. Otwiera jedną klatkę naraz."
-      eyebrow="Run"
-      title="Klatki"
+      description="Filtr zmienia tylko listę; strzałki nad obrazem zachowują czasowy porządek runu."
+      eyebrow={`Run ${runId}`}
+      title="Klatki runu"
     >
+      <div aria-label="Filtr statusu klatek" className="df-review-frame-filters" role="group">
+        {REVIEW_STATUS_FILTER_OPTIONS.map((option) => (
+          <Button
+            aria-pressed={filter === option.value}
+            disabled={disabled}
+            key={option.value}
+            onClick={() => {
+              onFilterChange(option.value);
+            }}
+            size="sm"
+            variant={filter === option.value ? "primary" : "secondary"}
+          >
+            <span>{option.label}</span>
+            <strong>
+              {option.value === "all" ? counts.total : counts[option.value]}
+            </strong>
+          </Button>
+        ))}
+      </div>
       <ol className="df-review-frames">
         {frames.items.map((frame) => {
           const stage = describeFrameStage(frame.stage_status);

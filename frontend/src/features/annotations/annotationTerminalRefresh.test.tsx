@@ -54,7 +54,7 @@ describe("terminal annotation refresh", () => {
         return { body: profile, status: 200 };
       }
       if (url.startsWith("/api/v1/runs/run-1/frames?")) {
-        listReads += 1;
+        if (url.includes("page_size=12")) listReads += 1;
         return { body: framePageFixture(), status: 200 };
       }
       if (url === "/api/v1/frames/frame-1") {
@@ -428,14 +428,14 @@ describe("terminal annotation refresh", () => {
         return { body: profile, status: 200 };
       }
       if (url.startsWith("/api/v1/runs/run-a/frames?")) {
-        reads.listA += 1;
+        if (url.includes("page_size=12")) reads.listA += 1;
         return {
           body: framePageFixture({ items: [frameSummaryFixture({ id: "frame-a" })] }),
           status: 200,
         };
       }
       if (url.startsWith("/api/v1/runs/run-b/frames?")) {
-        reads.listB += 1;
+        if (url.includes("page_size=12")) reads.listB += 1;
         return {
           body: framePageFixture({ items: [frameSummaryFixture({ id: "frame-b" })] }),
           status: 200,

@@ -57,7 +57,7 @@ const reviewRun = runFixture({
   current_stage: "review",
   review_revision: 4,
   status: "review_ready",
-  total_frames: 1,
+  total_frames: 18,
   version: 4,
 });
 const acceptedRun = runFixture({ ...reviewRun, review_revision: 5 });
@@ -231,9 +231,12 @@ export class ApiHarness {
     }
     if (pathname === "/runs/run-1/frames" && method === "GET") {
       const accepted = ["accepted", "exporting", "exported", "completed"].includes(this.phase);
+      const requestedStatus = url.searchParams.get("review_status");
+      const currentStatus = accepted ? "accepted" : "pending";
+      const matches = requestedStatus === null || requestedStatus === currentStatus;
       await json(route, framePageFixture({
-        items: accepted ? [] : [framePageFixture().items[0]!],
-        total: accepted ? 0 : 1,
+        items: matches ? [framePageFixture().items[0]!] : [],
+        total: matches ? 1 : 0,
       }));
       return;
     }

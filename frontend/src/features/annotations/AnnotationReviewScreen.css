@@ -84,6 +84,24 @@
   font-size: var(--font-size-xs);
 }
 
+.df-review-frame-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--size-xs);
+}
+
+.df-review-frame-filters .df-button,
+.df-review-frame-filters .df-button__content {
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+}
+
+.df-review-frame-filters strong {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .df-review-frames,
 .df-review-annotations,
 .df-review-classes {

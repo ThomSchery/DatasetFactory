@@ -1,24 +1,20 @@
-import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import {
   DEFAULT_REVIEW_STATUS_FILTER,
-  REVIEW_STATUS_FILTER_OPTIONS,
   describeApiError,
   getProfile,
   getRun,
   isTerminalRunStatus,
   listRunFrames,
-  parseReviewStatusFilter,
   queryKeys,
   reviewStatusQuery,
   runPollInterval,
   type ReviewStatusFilter,
   type RunStatus,
 } from "../../api";
-import { Panel } from "../../components/common/Panel";
-import { SelectField } from "../../components/common/SelectField";
 import { Empty, FatalError, Loading } from "../../components/common/UiStates";
 import { FrameEditor } from "./FrameEditor";
 import { FrameList } from "./FrameList";
@@ -76,6 +72,23 @@ function ReviewForRun({ runId }: { runId: string }) {
     queryKey: queryKeys.runFrames(runId, frameQuery),
     queryFn: ({ signal }) => listRunFrames(runId, frameQuery, signal),
   });
+  const countStatuses = ["pending", "accepted", "rejected"] as const;
+  const countQueries = useQueries({
+    queries: countStatuses.map((reviewStatus) => {
+      const countQuery = { page: 1, page_size: 1, review_status: reviewStatus };
+      return {
+        queryKey: queryKeys.runFrames(runId, countQuery),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          listRunFrames(runId, countQuery, signal),
+      };
+    }),
+  });
+  const counts = {
+    accepted: countQueries[1].data?.total ?? 0,
+    pending: countQueries[0].data?.total ?? 0,
+    rejected: countQueries[2].data?.total ?? 0,
+    total: countQueries.reduce((sum, query) => sum + (query.data?.total ?? 0), 0),
+  };
 
   const activeFrameId = selectedFrameId ?? framesQuery.data?.items[0]?.id ?? null;
 
@@ -198,25 +211,50 @@ function ReviewForRun({ runId }: { runId: string }) {
     );
   } else if (framesQuery.data.items.length === 0) {
     framesContent = (
-      <div className="df-review-workspace__all-state">
-        <Empty
-          description="Zmień jawny filtr statusu albo poczekaj, aż run utworzy klatki. Odrzucone są dostępne w opcji „Odrzucone”."
-          title="Brak klatek dla wybranego filtra"
+      <>
+        <FrameList
+          counts={counts}
+          disabled={isWriting}
+          filter={filter}
+          frames={framesQuery.data}
+          onFilterChange={(nextFilter) => {
+            setFilter(nextFilter);
+            setPage(1);
+            setSelectedFrameId(null);
+          }}
+          onPageChange={setPage}
+          onSelect={setSelectedFrameId}
+          runId={runId}
+          selectedId=""
         />
-      </div>
+        <div className="df-review-workspace__inspector">
+          <Empty
+            description="Zmień jawny filtr statusu albo poczekaj, aż run utworzy klatki. Odrzucone są dostępne w opcji „Odrzucone”."
+            title="Brak klatek dla wybranego filtra"
+          />
+        </div>
+      </>
     );
   } else {
     const selectedId = activeFrameId as string;
     framesContent = (
       <>
         <FrameList
+          counts={counts}
           disabled={isWriting}
+          filter={filter}
           frames={framesQuery.data}
+          onFilterChange={(nextFilter) => {
+            setFilter(nextFilter);
+            setPage(1);
+            setSelectedFrameId(null);
+          }}
           onPageChange={(nextPage) => {
             setPage(nextPage);
             setSelectedFrameId(null);
           }}
           onSelect={setSelectedFrameId}
+          runId={runId}
           selectedId={selectedId}
         />
         <FrameEditor
@@ -236,23 +274,6 @@ function ReviewForRun({ runId }: { runId: string }) {
 
   return (
     <div className="df-review-screen">
-      <Panel
-        description="Filtr review_status jest jawny; „Odrzucone” to jedyna droga do ponownego otwarcia klatki."
-        eyebrow={`Run ${runId}`}
-        title="Filtr klatek"
-      >
-        <SelectField
-          disabled={isWriting}
-          label="Status weryfikacji"
-          onChange={(event) => {
-            setFilter(parseReviewStatusFilter(event.target.value));
-            setPage(1);
-            setSelectedFrameId(null);
-          }}
-          options={REVIEW_STATUS_FILTER_OPTIONS}
-          value={filter}
-        />
-      </Panel>
       <div className="df-review-workspace">{framesContent}</div>
     </div>
   );

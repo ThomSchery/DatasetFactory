@@ -388,15 +388,15 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   expect(fs.readdirSync(path.join(runtimeRoot, "workspace", "exports"))).toHaveLength(0);
 
   await page.goto(`/annotations/${runId}`);
-  const annotationList = page.getByRole("list", { name: "Aktywne anotacje" });
-  const annotationRow = annotationList.getByRole("listitem").first();
-  await expect(annotationRow).toBeVisible();
   const initialAnnotation = frameAfterResume.annotations[0];
   if (initialAnnotation === undefined) {
     throw new Error("OCR annotation missing after resume");
   }
 
-  await annotationRow.getByRole("button", { name: "Zaznacz" }).click();
+  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+  const annotationEditor = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  await expect(annotationEditor).toBeVisible();
+  await annotationEditor.locator("summary").click();
   const frameSurface = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   const selectedOption = frameSurface.getByRole("option").first();
   await expect(selectedOption).toHaveAttribute("aria-selected", "true");
@@ -451,12 +451,12 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.move(moveFrom.x, moveFrom.y);
   await page.mouse.down();
   await page.mouse.move(moveTo.x, moveTo.y, { steps: 3 });
-  await expect(annotationRow.getByLabel("x", { exact: true })).toHaveValue(String(movedBbox.x));
-  await expect(annotationRow.getByLabel("y", { exact: true })).toHaveValue(String(movedBbox.y));
-  await expect(annotationRow.getByLabel("width", { exact: true })).toHaveValue(
+  await expect(annotationEditor.getByLabel("x", { exact: true })).toHaveValue(String(movedBbox.x));
+  await expect(annotationEditor.getByLabel("y", { exact: true })).toHaveValue(String(movedBbox.y));
+  await expect(annotationEditor.getByLabel("width", { exact: true })).toHaveValue(
     String(movedBbox.width),
   );
-  await expect(annotationRow.getByLabel("height", { exact: true })).toHaveValue(
+  await expect(annotationEditor.getByLabel("height", { exact: true })).toHaveValue(
     String(movedBbox.height),
   );
   await page.mouse.up();
@@ -533,12 +533,12 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.move(resizeFrom.x, resizeFrom.y);
   await page.mouse.down();
   await page.mouse.move(resizeTo.x, resizeTo.y, { steps: 3 });
-  await expect(annotationRow.getByLabel("x", { exact: true })).toHaveValue(String(resizedBbox.x));
-  await expect(annotationRow.getByLabel("y", { exact: true })).toHaveValue(String(resizedBbox.y));
-  await expect(annotationRow.getByLabel("width", { exact: true })).toHaveValue(
+  await expect(annotationEditor.getByLabel("x", { exact: true })).toHaveValue(String(resizedBbox.x));
+  await expect(annotationEditor.getByLabel("y", { exact: true })).toHaveValue(String(resizedBbox.y));
+  await expect(annotationEditor.getByLabel("width", { exact: true })).toHaveValue(
     String(resizedBbox.width),
   );
-  await expect(annotationRow.getByLabel("height", { exact: true })).toHaveValue(
+  await expect(annotationEditor.getByLabel("height", { exact: true })).toHaveValue(
     String(resizedBbox.height),
   );
   await page.mouse.up();
@@ -558,8 +558,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     })
     .toEqual(resizedBbox);
 
-  await annotationRow.getByLabel("x", { exact: true }).fill(String(resizedBbox.x + 1));
-  await annotationRow.getByRole("button", { name: "Zapisz geometrię" }).click();
+  await annotationEditor.getByLabel("x", { exact: true }).fill(String(resizedBbox.x + 1));
+  await annotationEditor.getByRole("button", { name: "Zapisz geometrię" }).click();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
@@ -567,7 +567,22 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     })
     .toBe(resizedBbox.x + 1);
 
-  await annotationRow.getByRole("button", { name: "Usuń" }).click();
+  const edgeX = frameAfterResume.width - resizedBbox.width;
+  await annotationEditor.getByLabel("x", { exact: true }).fill(String(edgeX));
+  await annotationEditor.getByRole("button", { name: "Zapisz geometrię" }).click();
+  await expect
+    .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).annotations[0]?.x)
+    .toBe(edgeX);
+  const edgeFillBounds = await selectedOption.locator(".df-region-overlay__shape-fill").boundingBox();
+  const edgePopoverBounds = await annotationEditor.boundingBox();
+  expect(edgeFillBounds).not.toBeNull();
+  expect(edgePopoverBounds).not.toBeNull();
+  if (edgeFillBounds === null || edgePopoverBounds === null) {
+    throw new Error("Edge-positioned bbox or popover has no browser geometry");
+  }
+  expect(edgePopoverBounds.x + edgePopoverBounds.width).toBeLessThanOrEqual(edgeFillBounds.x);
+
+  await annotationEditor.getByRole("button", { name: "Usuń" }).click();
   await expect(page.getByText("Ta klatka nie ma aktywnych anotacji.")).toBeVisible();
   const afterDelete = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
   expect(afterDelete.annotations).toHaveLength(1);
@@ -603,15 +618,14 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("rejected");
-  const reviewFilter = page.getByRole("combobox", { name: "Status weryfikacji" });
-  await reviewFilter.selectOption("rejected");
+  await page.getByRole("button", { name: /Odrzucone/ }).click();
   const reopenFrame = page.getByRole("button", { name: "Otwórz ponownie" });
   await expect(reopenFrame).toBeVisible();
   await reopenFrame.click();
   await expect
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("pending");
-  await reviewFilter.selectOption("pending");
+  await page.getByRole("button", { name: /Oczekujące/ }).click();
   const acceptFrame = page.getByRole("button", { name: "Zaakceptuj klatkę" });
   await expect(acceptFrame).toBeVisible();
   await acceptFrame.click();
@@ -619,7 +633,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("accepted");
 
-  const frameListPanel = page.getByRole("region", { name: "Klatki" });
+  const frameListPanel = page.getByRole("region", { name: "Klatki runu" });
   const secondFrameRow = frameListPanel.getByRole("listitem").filter({ hasText: "Klatka 1" });
   await expect(secondFrameRow).toBeVisible();
   await secondFrameRow.getByRole("button").click();

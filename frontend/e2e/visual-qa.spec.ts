@@ -25,33 +25,29 @@ async function assertNoOverflow(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
-async function assertInspectorGeometrySingleRow(page: Page): Promise<void> {
+async function assertAnnotationPopoverDoesNotCoverBox(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1280, height: 1000 });
-  const inspector = page.getByRole("region", { name: "Anotacje" });
-  const annotation = inspector.getByRole("listitem").first();
-  await expect(annotation).toBeVisible();
-
-  const fieldBounds = await Promise.all(
-    ["x", "y", "width", "height"].map(async (label) => {
-      const bounds = await annotation.getByLabel(label, { exact: true }).boundingBox();
-      expect(bounds, `${label} field has no browser geometry at 1280 px`).not.toBeNull();
-      if (bounds === null) {
-        throw new Error(`${label} field has no browser geometry at 1280 px`);
-      }
-      return bounds;
-    }),
-  );
-  const inspectorBounds = await inspector.boundingBox();
-  expect(inspectorBounds).not.toBeNull();
-  if (inspectorBounds === null) {
-    throw new Error("Annotation inspector has no browser geometry at 1280 px");
+  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+  const popover = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  await expect(popover).toBeVisible();
+  const fill = page
+    .getByRole("listbox", { name: "Bbox anotacji na klatce" })
+    .getByRole("option")
+    .first()
+    .locator(".df-region-overlay__shape-fill");
+  const popoverBounds = await popover.boundingBox();
+  const fillBounds = await fill.boundingBox();
+  expect(popoverBounds).not.toBeNull();
+  expect(fillBounds).not.toBeNull();
+  if (popoverBounds === null || fillBounds === null) {
+    throw new Error("Annotation popover or selected bbox has no browser geometry at 1280 px");
   }
-
-  expect(new Set(fieldBounds.map((bounds) => Math.round(bounds.y))).size).toBe(1);
-  for (const bounds of fieldBounds) {
-    expect(bounds.x).toBeGreaterThanOrEqual(inspectorBounds.x);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(inspectorBounds.x + inspectorBounds.width);
-  }
+  const overlaps =
+    popoverBounds.x < fillBounds.x + fillBounds.width &&
+    popoverBounds.x + popoverBounds.width > fillBounds.x &&
+    popoverBounds.y < fillBounds.y + fillBounds.height &&
+    popoverBounds.y + popoverBounds.height > fillBounds.y;
+  expect(overlaps, "annotation popover covers its edited bbox at 1280 px").toBe(false);
 
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
@@ -237,10 +233,10 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     "annotations",
     "/annotations/run-1",
     { phase: "review" },
-    (current) => current.getByRole("combobox", { name: "Status weryfikacji" }),
+    (current) => current.getByRole("button", { name: /Oczekujące/ }),
     async (current) => {
       await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
-      await assertInspectorGeometrySingleRow(current);
+      await assertAnnotationPopoverDoesNotCoverBox(current);
     },
   );
   await capture(

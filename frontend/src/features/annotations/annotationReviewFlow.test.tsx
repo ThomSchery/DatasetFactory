@@ -70,7 +70,7 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
 
     expect(await screen.findByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Odrzucone" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Odrzucone/ })).toBeInTheDocument();
   });
 
   it("renders a central Polish error with its code", async () => {
@@ -309,6 +309,77 @@ describe("temporal frame navigation", () => {
 });
 
 describe("review filters and mutations", () => {
+  it("shows status counts while temporal navigation remains independent of the pending list", async () => {
+    const user = userEvent.setup();
+    const pendingSummary = frameSummaryFixture({ frame_index: 0, id: "frame-1", timestamp_ms: 0 });
+    const acceptedSummary = frameSummaryFixture({
+      frame_index: 1,
+      id: "frame-2",
+      review_status: "accepted",
+      timestamp_ms: 1_000,
+    });
+    const pendingFrame = frameDetailFixture({ frame_index: 0, id: "frame-1", timestamp_ms: 0 });
+    const acceptedFrame = frameDetailFixture({
+      frame_index: 1,
+      id: "frame-2",
+      review_status: "accepted",
+      timestamp_ms: 1_000,
+    });
+
+    stubFetch((url) => {
+      if (url === "/api/v1/runs/run-1") {
+        return { status: 200, body: runFixture({ profile_id: PROFILE.id, total_frames: 2 }) };
+      }
+      if (url === `/api/v1/profiles/${PROFILE.id}`) return { status: 200, body: PROFILE };
+      if (url.startsWith("/api/v1/runs/run-1/frames?")) {
+        const query = new URL(url, "http://datasetfactory.test").searchParams;
+        const status = query.get("review_status");
+        const pageSize = query.get("page_size");
+        if (pageSize === "1" && status !== null) {
+          return {
+            status: 200,
+            body: framePageFixture({
+              items: [],
+              page_size: 1,
+              total: status === "rejected" ? 0 : 1,
+            }),
+          };
+        }
+        if (pageSize === "1") {
+          return {
+            status: 200,
+            body: framePageFixture({ items: [acceptedSummary], page: 2, page_size: 1, total: 2 }),
+          };
+        }
+        const items = status === "accepted" ? [acceptedSummary] : [pendingSummary];
+        return { status: 200, body: framePageFixture({ items, total: 1 }) };
+      }
+      if (url === "/api/v1/frames/frame-1") return { status: 200, body: pendingFrame };
+      if (url === "/api/v1/frames/frame-2") return { status: 200, body: acceptedFrame };
+      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const filters = await screen.findByRole("group", { name: "Filtr statusu klatek" });
+    expect(within(filters).getByRole("button", { name: /Wszystkie\s*2/ })).toBeVisible();
+    expect(within(filters).getByRole("button", { name: /Oczekujące\s*1/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(filters).getByRole("button", { name: /Zaakceptowane\s*1/ })).toBeVisible();
+    expect(within(filters).getByRole("button", { name: /Odrzucone\s*0/ })).toBeVisible();
+
+    expect(await screen.findByLabelText("Pozycja 1 z 2")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Następna klatka" }));
+
+    expect(await screen.findByLabelText("Pozycja 2 z 2")).toBeVisible();
+    expect(screen.getByRole("img", { name: "Klatka 1 runu run-1" })).toBeVisible();
+    expect(within(filters).getByRole("button", { name: /Oczekujące\s*1/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("uses the rejected filter as the route to reopen and sends the current frame version", async () => {
     const user = userEvent.setup();
     const rejectedSummary = frameSummaryFixture({
@@ -353,7 +424,7 @@ describe("review filters and mutations", () => {
     renderApp(["/annotations/run-1"]);
 
     await screen.findByText("Obraz i bbox");
-    await user.selectOptions(screen.getByLabelText("Status weryfikacji"), "rejected");
+    await user.click(screen.getByRole("button", { name: /Odrzucone/ }));
     expect(await screen.findByRole("button", { name: "Otwórz ponownie" })).toBeEnabled();
     expect(rejectedRequested).toBe(true);
 

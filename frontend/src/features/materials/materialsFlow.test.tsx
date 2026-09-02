@@ -145,7 +145,7 @@ describe("materials: from a file to a started run", () => {
 
     // §Logika.2: starting the run is what puts `runId` in the URL.
     expect(await screen.findByRole("heading", { level: 1, name: "Anotacje" })).toBeInTheDocument();
-    expect(await screen.findByRole("region", { name: "Filtr klatek" })).toHaveTextContent(
+    expect(await screen.findByRole("region", { name: "Klatki runu" })).toHaveTextContent(
       "run-1",
     );
 
