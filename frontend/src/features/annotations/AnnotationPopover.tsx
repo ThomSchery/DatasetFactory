@@ -80,10 +80,6 @@ function syncFormState(
   };
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
-}
-
 export function AnnotationPopover({
   annotation,
   busyKey,
@@ -179,6 +175,7 @@ export function AnnotationPopover({
   function handleClassKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       onClose();
       return;
     }
@@ -202,7 +199,7 @@ export function AnnotationPopover({
       className="df-annotation-popover"
       data-side={placement?.side}
       onKeyDown={(event) => {
-        if (event.key === "Escape" && !isTypingTarget(event.target)) {
+        if (event.key === "Escape") {
           event.preventDefault();
           onClose();
         }

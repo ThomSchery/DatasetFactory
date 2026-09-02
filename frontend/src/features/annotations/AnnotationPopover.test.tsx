@@ -24,9 +24,15 @@ const categories: Category[] = [
   { id: "health", kind: "game", name: "Health" },
 ];
 
-function renderPopover(overrides: { onCategoryChange?: (categoryId: string) => void; onClose?: () => void } = {}) {
+function renderPopover(overrides: {
+  invalid?: boolean;
+  onCategoryChange?: (categoryId: string) => void;
+  onClose?: () => void;
+  onGeometryChange?: (bbox: { height: number; width: number; x: number; y: number }) => void;
+} = {}) {
   const onCategoryChange = overrides.onCategoryChange ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
+  const onGeometryChange = overrides.onGeometryChange ?? vi.fn();
   render(
     <div>
       <AnnotationPopover
@@ -37,16 +43,16 @@ function renderPopover(overrides: { onCategoryChange?: (categoryId: string) => v
         drawing={false}
         frameSize={{ height: 1080, width: 1920 }}
         geometryPreview={null}
-        invalid={false}
+        invalid={overrides.invalid ?? false}
         onCategoryChange={onCategoryChange}
         onClose={onClose}
         onDelete={vi.fn()}
-        onGeometryChange={vi.fn()}
+        onGeometryChange={onGeometryChange}
         onToggleDrawTarget={vi.fn()}
       />
     </div>,
   );
-  return { onCategoryChange, onClose };
+  return { onCategoryChange, onClose, onGeometryChange };
 }
 
 describe("AnnotationPopover", () => {
@@ -69,5 +75,17 @@ describe("AnnotationPopover", () => {
 
     expect(onClose).toHaveBeenCalledOnce();
     expect(onCategoryChange).not.toHaveBeenCalled();
+  });
+
+  it("closes with Escape from a geometry field without persisting its draft", async () => {
+    const user = userEvent.setup();
+    const { onClose, onGeometryChange } = renderPopover({ invalid: true });
+    const xField = screen.getByRole("spinbutton", { name: "x" });
+
+    await user.clear(xField);
+    await user.type(xField, "11{Escape}");
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onGeometryChange).not.toHaveBeenCalled();
   });
 });
