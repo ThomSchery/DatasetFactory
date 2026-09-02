@@ -598,6 +598,68 @@ def test_copy_previous_reports_first_frame_and_does_not_mutate_it(
         assert run is not None and run.review_revision == 0
 
 
+@pytest.mark.parametrize("review_status", ["accepted", "rejected"])
+def test_copy_previous_does_not_mutate_a_frozen_target(
+    composition: CompositionRoot,
+    tmp_path: Path,
+    review_status: str,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    target_frame_id = str(uuid4())
+    target_annotation_id = str(uuid4())
+    with composition.database.session() as session:
+        session.add(
+            Frame(
+                id=target_frame_id,
+                run_id=seed.run_id,
+                frame_index=1,
+                timestamp_ms=1000,
+                image_relpath=f"runs/{seed.run_id}/frames/00000001.jpg",
+                stage_status="review_pending",
+                review_status=review_status,
+                width=100,
+                height=50,
+                version=1,
+            )
+        )
+        session.flush()
+        session.add(
+            Annotation(
+                id=target_annotation_id,
+                frame_id=target_frame_id,
+                category_id=seed.category_id,
+                x=20,
+                y=10,
+                width=5,
+                height=8,
+                confidence=None,
+                source="manual",
+                observation_id=None,
+                status="proposed",
+                version=1,
+            )
+        )
+
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/frames/{target_frame_id}/annotations/copy-previous",
+            json={"scope": "character", "expected_version": 1},
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"] == "review_locked"
+
+    with composition.database.session() as session:
+        target = session.get(Frame, target_frame_id)
+        annotation = session.get(Annotation, target_annotation_id)
+        run = session.get(PipelineRun, seed.run_id)
+        assert target is not None and target.version == 1
+        assert target.review_status == review_status
+        assert annotation is not None and annotation.status == "proposed"
+        assert annotation.version == 1
+        assert run is not None and run.review_revision == 0
+
+
 def test_rejected_frame_is_frozen_until_reopen(
     composition: CompositionRoot,
     tmp_path: Path,
