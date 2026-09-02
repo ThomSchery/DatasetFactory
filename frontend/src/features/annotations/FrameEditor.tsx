@@ -28,6 +28,7 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { AnnotationList } from "./AnnotationList";
+import { ClassList } from "./ClassList";
 import {
   EMPTY_GEOMETRY_DRAFT,
   geometryDraft,
@@ -193,12 +194,22 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
   const invalidSet = useMemo(() => new Set(invalidIds), [invalidIds]);
   const shapes: OverlayShape[] = activeAnnotations.map((annotation) => {
     const categoryName = categoryById.get(annotation.category_id) ?? annotation.category_id;
-    const sourceLabel = annotation.source === "ocr" ? "OCR" : "manual";
+    const confidenceLabel =
+      annotation.source === "ocr" && annotation.confidence !== null
+        ? ` · ${Math.round(annotation.confidence * 100)}%`
+        : "";
+    const sourceLabel = annotation.source === "ocr" ? "OCR" : "ręczna";
     const geometry =
       geometryPreview?.annotationId === annotation.id ? geometryPreview.bbox : annotation;
     return {
       id: annotation.id,
+      detailLabel:
+        annotation.source === "ocr" && annotation.confidence !== null
+          ? `Confidence OCR ${Math.round(annotation.confidence * 100)}%`
+          : undefined,
+      displayLabel: `${categoryName}${confidenceLabel}`,
       label: `${categoryName}, źródło ${sourceLabel}`,
+      sourceKind: annotation.source,
       tone: invalidSet.has(annotation.id) ? "error" : "brand",
       x: geometry.x,
       y: geometry.y,
@@ -505,6 +516,15 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
         eyebrow="Inspektor"
         title="Anotacje"
       >
+        <ClassList
+          annotations={activeAnnotations}
+          categories={profile.categories}
+          disabled={editorDisabled}
+          onSelect={selectAnnotation}
+          selectedId={selectedId}
+        />
+        <details className="df-review-legacy-inspector" open>
+          <summary>Pełny inspektor anotacji</summary>
         <AnnotationList
           annotations={activeAnnotations}
           busyKey={currentBusyKey}
@@ -543,6 +563,7 @@ function LoadedFrameEditor({ frame, profile, runId }: LoadedFrameEditorProps) {
           }}
           selectedId={selectedId}
         />
+        </details>
       </Panel>
     </>
   );

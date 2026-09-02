@@ -54,12 +54,65 @@
 }
 
 .df-review-frames,
-.df-review-annotations {
+.df-review-annotations,
+.df-review-classes {
   display: grid;
   gap: var(--size-sm);
   padding: var(--size-none);
   margin: var(--size-none);
   list-style: none;
+}
+
+.df-review-classes {
+  gap: var(--size-xs);
+}
+
+.df-review-classes__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.df-review-classes__item .df-button {
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+}
+
+.df-review-classes__item .df-button__content {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-xs);
+  min-width: 0;
+  width: 100%;
+}
+
+.df-review-classes__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.df-review-classes__count {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.df-review-classes__sources {
+  display: flex;
+  gap: var(--size-xs);
+}
+
+.df-review-legacy-inspector {
+  margin-top: var(--size-md);
+}
+
+.df-review-legacy-inspector > summary {
+  margin-bottom: var(--size-sm);
+  color: var(--color-text-weak-default);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .df-review-frames__item,

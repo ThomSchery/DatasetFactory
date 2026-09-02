@@ -64,6 +64,13 @@
   stroke: var(--color-stroke-strong-default);
 }
 
+/* Provenance is encoded by colour, line shape and adjacent text. Gesture
+   handling remains entirely on the SVG shapes from FE-002. */
+.df-region-overlay__shape--source-manual .df-region-overlay__shape-fill {
+  stroke: var(--color-status-success-default);
+  stroke-dasharray: 6 4;
+}
+
 /* A domain validation error must survive both resize and colour-blind reading:
    it uses the status token and a dashed line, while the accessible list names
    the error in text. */
@@ -147,4 +154,31 @@
   stroke-dasharray: 6 4;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
+}
+
+.df-region-overlay__labels {
+  position: absolute;
+  inset: var(--size-none);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.df-region-overlay__label {
+  position: absolute;
+  top: var(--df-overlay-label-top);
+  left: var(--df-overlay-label-left);
+  max-width: calc(100% - var(--size-xs));
+  padding: calc(var(--size-xs) / 4) calc(var(--size-xs) / 2);
+  border-radius: var(--radius-sm);
+  background: var(--color-fill-brand-impeccable);
+  color: var(--color-text-on-brand);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  transform: translateY(-100%);
+}
+
+.df-region-overlay__label--manual {
+  background: var(--color-status-success-default);
 }

@@ -1,4 +1,11 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import {
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 
 import {
   clampRectToSource,
@@ -22,9 +29,15 @@ import "./RegionOverlay.css";
 export type { SourceRect, SourceSize } from "./geometry";
 
 export interface OverlayShape extends SourceRect {
+  /** Extra accessible detail appended after geometry. */
+  detailLabel?: string;
+  /** Short visible label rendered beside the rectangle. */
+  displayLabel?: string;
   id: string;
   /** Human name; the overlay appends the geometry to build the accessible name. */
   label: string;
+  /** Presentation-only provenance; gesture geometry never branches on it. */
+  sourceKind?: "manual" | "ocr";
   /** `brand` is editable, `muted` read-only, `error` invalid geometry. */
   tone?: "brand" | "muted" | "error";
 }
@@ -423,6 +436,7 @@ export function RegionOverlay({
         src={imageUrl}
       />
       {source === null ? null : (
+        <>
         <svg
           aria-label={label}
           className={surfaceClasses}
@@ -490,6 +504,26 @@ export function RegionOverlay({
             />
           )}
         </svg>
+        <div aria-hidden="true" className="df-region-overlay__labels">
+          {renderedShapes.map((shape) =>
+            shape.displayLabel === undefined ? null : (
+              <span
+                className={`df-region-overlay__label df-region-overlay__label--${shape.sourceKind ?? "ocr"}`}
+                data-overlay-label-for={shape.id}
+                key={shape.id}
+                style={
+                  {
+                    "--df-overlay-label-left": `${(shape.x / source.width) * 100}%`,
+                    "--df-overlay-label-top": `${(shape.y / source.height) * 100}%`,
+                  } as CSSProperties
+                }
+              >
+                {shape.displayLabel}
+              </span>
+            ),
+          )}
+        </div>
+        </>
       )}
     </div>
   );
@@ -507,7 +541,8 @@ interface ShapeOptionProps {
 
 /** Geometry belongs in the name: a rectangle is not describable by its label alone. */
 function shapeName(shape: OverlayShape): string {
-  return `${shape.label}: x ${shape.x}, y ${shape.y}, szerokość ${shape.width}, wysokość ${shape.height}`;
+  const detail = shape.detailLabel === undefined ? "" : `. ${shape.detailLabel}`;
+  return `${shape.label}: x ${shape.x}, y ${shape.y}, szerokość ${shape.width}, wysokość ${shape.height}${detail}`;
 }
 
 function ShapeOption({
@@ -522,7 +557,8 @@ function ShapeOption({
   const classes = [
     "df-region-overlay__shape",
     `df-region-overlay__shape--${shape.tone ?? "brand"}`,
-  ].join(" ");
+    shape.sourceKind === undefined ? null : `df-region-overlay__shape--source-${shape.sourceKind}`,
+  ].filter(Boolean).join(" ");
 
   return (
     <g
