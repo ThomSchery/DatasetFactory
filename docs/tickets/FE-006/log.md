@@ -125,3 +125,25 @@ jsdom pilnuje semantyki i wywołań API, ale nie daje wiarygodnych pomiarów
 rzeczywistej szerokości natywnego selecta, położenia kolumn, przepełnienia paska
 ani kolizji popovera z bboxem. Te własności pozostają do sprawdzenia w Chromium
 w pełnej bramce i przez świadomą inspekcję odświeżonego PNG.
+
+## Pełna bramka i visual QA
+
+Jedno nieprzerwane uruchomienie dokładnej komendy
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`
+zakończyło się kodem 0. Wyniki dziewięciu etapów:
+
+1. backend format: 252 pliki zgodne;
+2. backend lint: 0 findingów;
+3. backend typy: 99 plików, 0 błędów;
+4. backend testy: 339/339;
+5. frontend typy: 0 błędów;
+6. frontend testy: 510/510 w 38/38 plikach;
+7. frontend build: 301 modułów;
+8. E2E Chromium: 4/4;
+9. E2E root safety: 2/2.
+
+Świadomie obejrzano odświeżony `annotations-1440.png`: pasek mieści cztery
+filtry, select, licznik i akcje; panel klas stoi po lewej od obrazu; usunięte
+narzędzia liczbowe ani panel klatek nie wracają; popover pozostaje czytelny.
+Chromium dodatkowo zmierzył brak overflow, dodatni odstęp etykieta–licznik oraz
+brak przecięcia popovera z edytowanym bboxem przy szerokości 1280 px.
