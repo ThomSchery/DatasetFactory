@@ -266,9 +266,12 @@ export function GroupedOptionList({
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      const active = rows.find((row) => row.id === activeId);
-      if (active !== undefined) {
-        activate(active, true);
+      // The filter owns focus, so an internal default active row is not a
+      // visible user choice. Only a non-empty query with one visible result is
+      // unambiguous enough to confirm from here. Keyboard users can always
+      // enter the list with an arrow and confirm the visibly focused row.
+      if (normalize(query) !== "" && rows.length === 1) {
+        activate(rows[0], true);
       }
     }
   }

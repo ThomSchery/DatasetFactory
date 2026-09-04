@@ -28,10 +28,12 @@ const GROUPS: readonly GroupedOptionGroup[] = [
 function Harness({
   mode,
   initial = [],
+  onChange,
   onConfirm,
 }: {
   initial?: readonly string[];
   mode: "single" | "multiple";
+  onChange?: (selection: readonly string[]) => void;
   onConfirm?: (selection: readonly string[]) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(initial);
@@ -42,7 +44,10 @@ function Harness({
       groups={GROUPS}
       label="Klasy profilu"
       mode={mode}
-      onChange={setSelectedIds}
+      onChange={(selection) => {
+        setSelectedIds(selection);
+        onChange?.(selection);
+      }}
       onConfirm={onConfirm}
       selectedIds={selectedIds}
     />
@@ -159,6 +164,27 @@ describe("GroupedOptionList in multiple mode", () => {
 });
 
 describe("GroupedOptionList in single mode", () => {
+  it("ignores Enter in an empty filter until a row is explicitly focused", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onConfirm = vi.fn();
+    render(<Harness mode="single" onChange={onChange} onConfirm={onConfirm} />);
+    const filter = screen.getByLabelText("Filtruj klasy");
+
+    filter.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+    for (const option of screen.getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-selected", "false");
+    }
+
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(onChange).toHaveBeenCalledWith(["score"]);
+    expect(onConfirm).toHaveBeenCalledWith(["score"]);
+  });
+
   it("keeps groups as labels and replaces the selection", async () => {
     const user = userEvent.setup();
     render(<Harness initial={["zero"]} mode="single" />);

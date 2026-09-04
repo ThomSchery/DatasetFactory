@@ -222,6 +222,18 @@ describe("annotation review query states", () => {
     }
     expect(within(popover).getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
 
+    await user.keyboard("{Enter}");
+
+    for (const option of within(popover).getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-selected", "false");
+    }
+    expect(
+      fetchSpy.mock.calls.some(
+        ([url, init]) =>
+          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+      ),
+    ).toBe(false);
+
     await user.click(within(popover).getByRole("option", { name: "Timer" }));
     await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
 
@@ -445,6 +457,71 @@ describe("annotation review query states", () => {
       );
       expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
         bbox: { x: 300, y: 220, width: 40, height: 32 },
+        expected_version: 3,
+      });
+    });
+  });
+
+  it("resets dirty class and geometry when keyboard selection moves from annotation A to B", async () => {
+    const user = userEvent.setup();
+    const first = annotationFixture();
+    const second = annotationFixture({
+      category_id: "category-2",
+      height: 48,
+      id: "ann-2",
+      observation_id: "observation-2",
+      width: 60,
+      x: 500,
+      y: 320,
+    });
+    const fetchSpy = reviewApi({
+      frame: frameDetailFixture({ annotations: [first, second] }),
+      mutation: (url, init) => {
+        if (url === "/api/v1/annotations/ann-2" && init?.method === "PATCH") {
+          return { status: 200, body: { ...second, version: second.version + 1 } };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+      profile: RICH_PROFILE,
+    });
+    renderApp(["/annotations/run-1"]);
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const firstDialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.type(within(firstDialog).getByLabelText("Klasa"), "sco");
+    await user.click(within(firstDialog).getByRole("option", { name: "Score" }));
+    await user.click(within(firstDialog).getByText(/^x 100 · y 120/));
+    const dirtyX = within(firstDialog).getByLabelText("x");
+    await user.clear(dirtyX);
+    await user.type(dirtyX, "999");
+
+    const overlayOptions = within(overlay).getAllByRole("option");
+    overlayOptions[0]?.focus();
+    await user.keyboard("{ArrowDown}");
+
+    const secondDialog = screen.getByRole("dialog", { name: "Edytuj anotację health" });
+    expect(within(secondDialog).getByLabelText("Klasa")).toHaveValue("");
+    expect(within(secondDialog).getByRole("option", { name: "health" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(within(secondDialog).getByRole("option", { name: "Score" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(within(secondDialog).getByLabelText("x")).toHaveValue(500);
+    expect(within(secondDialog).getByLabelText("y")).toHaveValue(320);
+
+    await user.click(within(secondDialog).getByText(/^x 500 · y 320/));
+    await user.click(within(secondDialog).getByRole("button", { name: "Zapisz geometrię" }));
+
+    await waitFor(() => {
+      const patches = fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH");
+      expect(patches).toHaveLength(1);
+      expect(patches[0]?.[0]).toBe("/api/v1/annotations/ann-2");
+      expect(JSON.parse(String(patches[0]?.[1]?.body))).toEqual({
+        bbox: { height: 48, width: 60, x: 500, y: 320 },
         expected_version: 3,
       });
     });

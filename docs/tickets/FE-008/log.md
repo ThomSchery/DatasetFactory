@@ -165,3 +165,52 @@ a niepoprawna pozycja listy przerywa całość przed pierwszym zapisem.
 - Świadomie obejrzano odświeżony `annotations-1440.png` w pełnej rozdzielczości:
   hierarchia grupy i klasy, fokus, licznik, akcja oraz brak przepełnienia są
   czytelne. Pozostałe deterministyczne zrzuty nie zmieniły się.
+
+## FE-008-FIX1 — Design Plan
+
+Zakres UI jest wyłącznie behawioralny; fix nie zmienia CSS, geometrii overlayu,
+układu ani copy. Elementy interfejsu objęte zmianą:
+
+- filtr `GroupedOptionList`: pusty `Enter` bez jawnego wejścia do listy niczego
+  nie wybiera i niczego nie potwierdza; niepuste, jednoznaczne wyszukanie może
+  nadal zostać potwierdzone;
+- wiersze opcji `GroupedOptionList`: `ArrowDown`/`ArrowUp`, `Home`/`End`,
+  `Enter`/`Space` i roving tabindex pozostają bez zmian; aktywacja następuje
+  dopiero na widocznie fokusowanym wierszu;
+- cały `AnnotationPopover`: zmiana `annotation.id` tworzy nowy formularz, więc
+  filtr, klasa, geometria i dirty state pochodzą z nowej anotacji; refetch tej
+  samej anotacji nadal korzysta z obecnej polityki dirty/clean;
+- przyciski `Zapisz klasę`/`Zapisz geometrię` oraz pola geometrii: bez zmian
+  wizualnych i kontraktowych, ale testowane jako część granicy A → B;
+- powierzchnia `RegionOverlay`, outside-dismiss, drag/resize własnego boxa oraz
+  zachowanie draftu po błędzie POST: bez zmian, wyłącznie retest regresyjny.
+
+Wytyczne UI/UX: zachowany zostaje istniejący kontrakt komponentu
+`GroupedOptionList` z katalogu `new-component.md`, w szczególności klawiatura,
+roving tabindex, brak wyboru od samego fokusu i `data-shortcut-scope`.
+Nie powstaje nowa wartość wizualna; nadal obowiązują i pozostają nietknięte:
+`GRID-01/02/05/10`, `SPACING-01/02`, `TYPO-07`, `FONTSIZE-*`, `LHEIGHT-*`,
+`COLOR-02/07/08/09`, `BORDER-02/06`, `BWIDTH-03/13`, `RADIUS-02/04`,
+`SHADOW-05`, `OPACITY-02`. Brak nowych komponentów common i tokenów.
+
+Plan implementacji:
+
+- [x] Ograniczyć `Enter` w filtrze do niepustego, jednoznacznego wyniku.
+- [x] Dodać `key={popoverAnnotation.id}` na całym `AnnotationPopover`.
+- [x] Dodać regresję pusty Enter → zero `onChange`/`onConfirm` i zero POST.
+- [x] Dodać regresję dirty klasa + geometria A → klawiaturowo B → stan B.
+- [x] Potwierdzić zachowanie refetchu tej samej anotacji oraz zaakceptowane
+      outside-dismiss, wspólny pointerdown, własny drag/resize i retry po POST.
+
+### Wynik implementacji i regresji
+
+- Pusty `Enter` w filtrze nie korzysta już z domyślnego pierwszego `activeId`.
+  Potwierdzenie z filtra jest dozwolone tylko dla niepustego zapytania z jednym
+  widocznym wynikiem. `ArrowDown` nadal jawnie przenosi fokus do listy, gdzie
+  `Enter`/`Space` zachowują dotychczasowe działanie.
+- `AnnotationPopover` ma w `FrameEditor` klucz `popoverAnnotation.id`. Zmiana
+  A → B remountuje cały formularz; ta sama anotacja po refetchu zachowuje
+  dotychczasowy merge czystych i brudnych pól w `syncFormState`.
+- Ukierunkowany Vitest: 75/75 testów w 5 plikach (`GroupedOptionList`,
+  `AnnotationPopover`, pełny flow, wcześniejsze fixupy i terminal refetch).
+- Frontend typecheck: 0 błędów.

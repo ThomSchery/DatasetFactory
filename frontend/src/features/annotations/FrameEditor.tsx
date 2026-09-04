@@ -688,6 +688,7 @@ function LoadedFrameEditor({
                     ? false
                     : invalidSet.has(popoverAnnotation.id)
                 }
+                key={popoverAnnotation.id}
                 onCategoryChange={(categoryId) => {
                   if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
                     submit({
