@@ -14,6 +14,7 @@ interface AnnotationPopoverProps {
   busyKey: string | null;
   categories: readonly Category[];
   disabled: boolean;
+  draft?: boolean;
   drawing: boolean;
   frameSize: { height: number; width: number };
   geometryPreview: BBox | null;
@@ -85,6 +86,7 @@ export function AnnotationPopover({
   busyKey,
   categories,
   disabled,
+  draft = false,
   drawing,
   frameSize,
   geometryPreview,
@@ -164,8 +166,11 @@ export function AnnotationPopover({
 
   function saveCategory(): void {
     const active = filteredCategories[activeIndex];
-    const categoryId = active?.id ?? form.categoryId;
-    if (categoryId === annotation.category_id) {
+    if (active === undefined) {
+      return;
+    }
+    const categoryId = active.id;
+    if (!draft && categoryId === annotation.category_id) {
       onClose();
       return;
     }
@@ -195,7 +200,7 @@ export function AnnotationPopover({
 
   return (
     <div
-      aria-label={`Edytuj anotację ${categoryName}`}
+      aria-label={draft ? "Wybierz klasę dla nowego bbox" : `Edytuj anotację ${categoryName}`}
       className="df-annotation-popover"
       data-side={placement?.side}
       onKeyDown={(event) => {
@@ -209,7 +214,7 @@ export function AnnotationPopover({
       style={placement === null ? { visibility: "hidden" } : { left: placement.left, top: placement.top }}
     >
       <header className="df-annotation-popover__header">
-        <strong>Anotacja</strong>
+        <strong>{draft ? "Nowa anotacja · szkic" : "Anotacja"}</strong>
         <span className="df-annotation-popover__badges">
           <StatusBadge srLabel="Źródło:" tone={annotation.source === "ocr" ? "brand" : "success"}>
             {annotation.source === "ocr" ? "OCR" : "Ręczna"}
@@ -251,12 +256,24 @@ export function AnnotationPopover({
           </li>
         ))}
       </ul>
+      {filteredCategories.length === 0 ? (
+        <p className="df-annotation-popover__empty" role="status">
+          Brak takiej klasy w profilu. Wybierz istniejącą klasę
+          {draft ? " albo porzuć szkic." : "."}
+        </p>
+      ) : null}
 
       <div className="df-annotation-popover__actions">
         <Button disabled={disabled} loading={busyKey === `delete:${annotation.id}`} onClick={onDelete} size="sm" variant="muted">
-          Usuń
+          {draft ? "Porzuć szkic" : "Usuń"}
         </Button>
-        <Button aria-label="Zapisz klasę" disabled={disabled || filteredCategories.length === 0} loading={busyKey === `category:${annotation.id}`} onClick={saveCategory} size="sm">
+        <Button
+          aria-label="Zapisz klasę"
+          disabled={disabled || filteredCategories.length === 0}
+          loading={draft ? busyKey === "create" : busyKey === `category:${annotation.id}`}
+          onClick={saveCategory}
+          size="sm"
+        >
           Zapisz <kbd>Enter</kbd>
         </Button>
       </div>

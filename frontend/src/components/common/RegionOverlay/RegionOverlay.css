@@ -64,6 +64,13 @@
   stroke: var(--color-stroke-strong-default);
 }
 
+.df-region-overlay__shape--draft .df-region-overlay__shape-fill {
+  fill: var(--color-fill-brand-impeccable-soft);
+  stroke: var(--color-stroke-strong-default);
+  stroke-dasharray: 6 4;
+  opacity: var(--opacity-hover);
+}
+
 /* Provenance is encoded by colour, line shape and adjacent text. Gesture
    handling remains entirely on the SVG shapes from FE-002. */
 .df-region-overlay__shape--source-manual .df-region-overlay__shape-fill {

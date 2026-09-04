@@ -38,8 +38,8 @@ export interface OverlayShape extends SourceRect {
   label: string;
   /** Presentation-only provenance; gesture geometry never branches on it. */
   sourceKind?: "manual" | "ocr";
-  /** `brand` is editable, `muted` read-only, `error` invalid geometry. */
-  tone?: "brand" | "muted" | "error";
+  /** `brand` is editable, `draft` unsaved, `muted` read-only, `error` invalid geometry. */
+  tone?: "brand" | "draft" | "muted" | "error";
 }
 
 export interface RegionOverlayProps {

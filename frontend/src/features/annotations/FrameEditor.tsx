@@ -5,7 +5,6 @@ import {
   describeApiError,
   describeErrorCode,
   describeFrameStage,
-  describeReviewStatus,
   frameImageUrl,
   frameReviewCapabilities,
   getFrame,
@@ -18,7 +17,10 @@ import {
   type CopyPreviousAnnotationsResult,
   type CopyPreviousScope,
   type ErrorPresentation,
+  type FrameCounts,
+  type FrameSummary,
   type GameProfile,
+  type ReviewStatusFilter,
 } from "../../api";
 import { Button } from "../../components/common/Button";
 import { DataList } from "../../components/common/DataList";
@@ -27,16 +29,11 @@ import { Panel } from "../../components/common/Panel";
 import { RegionOverlay, type OverlayShape } from "../../components/common/RegionOverlay";
 import { SelectField } from "../../components/common/SelectField";
 import { StatusBadge } from "../../components/common/StatusBadge";
-import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { AnnotationPopover } from "./AnnotationPopover";
 import { ClassList } from "./ClassList";
-import {
-  EMPTY_GEOMETRY_DRAFT,
-  geometryDraft,
-  parseGeometryDraft,
-  type GeometryDraft,
-} from "./geometryForm";
+import { FrameToolbar } from "./FrameToolbar";
+import { geometryDraft, parseGeometryDraft } from "./geometryForm";
 import {
   executeReviewMutation,
   reviewMutationKey,
@@ -44,12 +41,15 @@ import {
 } from "./reviewMutations";
 
 interface FrameEditorProps {
+  counts: FrameCounts;
+  disabled: boolean;
+  filter: ReviewStatusFilter;
   frameId: string;
-  navigationDisabled: boolean;
-  onNavigate: (frameIndex: number, direction: -1 | 1) => void;
+  frames: readonly FrameSummary[];
+  onFilterChange: (filter: ReviewStatusFilter) => void;
+  onSelect: (frameId: string) => void;
   profile: GameProfile;
   runId: string;
-  totalFrames: number;
 }
 
 function busyKey(intent: ReviewMutationIntent | undefined): string | null {
@@ -77,12 +77,15 @@ function errorMessage(error: ErrorPresentation): string {
 }
 
 export function FrameEditor({
+  counts,
+  disabled,
+  filter,
   frameId,
-  navigationDisabled,
-  onNavigate,
+  frames,
+  onFilterChange,
+  onSelect,
   profile,
   runId,
-  totalFrames,
 }: FrameEditorProps) {
   const frameQuery = useQuery({
     queryKey: queryKeys.frame(frameId),
@@ -91,45 +94,65 @@ export function FrameEditor({
 
   if (frameQuery.isPending) {
     return (
-      <div className="df-review-workspace__query-state">
-        <Loading label="Ładowanie wybranej klatki…" />
-      </div>
+      <>
+        <FrameToolbar
+          counts={counts}
+          disabled={disabled}
+          filter={filter}
+          frames={frames}
+          onFilterChange={onFilterChange}
+          onSelect={onSelect}
+          selectedId={frameId}
+        />
+        <div className="df-review-workspace__query-state">
+          <Loading label="Ładowanie wybranej klatki…" />
+        </div>
+      </>
     );
   }
   if (frameQuery.isError) {
     const error = describeApiError(frameQuery.error);
     return (
-      <div className="df-review-workspace__query-state">
-        <FatalError
-          description={errorMessage(error)}
-          onRetry={() => {
-            void frameQuery.refetch();
-          }}
-          title="Nie udało się pobrać klatki"
+      <>
+        <FrameToolbar
+          counts={counts}
+          disabled={disabled}
+          filter={filter}
+          frames={frames}
+          onFilterChange={onFilterChange}
+          onSelect={onSelect}
+          selectedId={frameId}
         />
-      </div>
+        <div className="df-review-workspace__query-state">
+          <FatalError
+            description={errorMessage(error)}
+            onRetry={() => {
+              void frameQuery.refetch();
+            }}
+            title="Nie udało się pobrać klatki"
+          />
+        </div>
+      </>
     );
   }
 
   return (
     <LoadedFrameEditor
+      counts={counts}
+      disabled={disabled}
+      filter={filter}
       frame={frameQuery.data}
-      navigationDisabled={navigationDisabled}
-      onNavigate={onNavigate}
+      frames={frames}
+      onFilterChange={onFilterChange}
+      onSelect={onSelect}
       profile={profile}
       runId={runId}
-      totalFrames={totalFrames}
     />
   );
 }
 
-interface LoadedFrameEditorProps {
+interface LoadedFrameEditorProps extends Omit<FrameEditorProps, "frameId"> {
   frame: Awaited<ReturnType<typeof getFrame>>;
-  navigationDisabled: boolean;
-  onNavigate: (frameIndex: number, direction: -1 | 1) => void;
-  profile: GameProfile;
-  runId: string;
-  totalFrames: number;
 }
 
 interface RedrawMode {
@@ -142,24 +165,25 @@ interface GeometryPreview {
   bbox: BBox;
 }
 
+const DRAFT_ANNOTATION_ID = "new-annotation-draft";
+
 function LoadedFrameEditor({
+  counts,
+  disabled,
+  filter,
   frame,
-  navigationDisabled,
-  onNavigate,
+  frames,
+  onFilterChange,
+  onSelect,
   profile,
   runId,
-  totalFrames,
 }: LoadedFrameEditorProps) {
   const queryClient = useQueryClient();
   const imageErrorCopy = describeErrorCode("frame_image_not_found");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [redrawMode, setRedrawMode] = useState<RedrawMode | null>(null);
   const [geometryPreview, setGeometryPreview] = useState<GeometryPreview | null>(null);
-  const [newCategoryId, setNewCategoryId] = useState(profile.categories[0]?.id ?? "");
-  const [newGeometry, setNewGeometry] = useState<GeometryDraft>(() => ({
-    ...EMPTY_GEOMETRY_DRAFT,
-  }));
-  const [newGeometryError, setNewGeometryError] = useState<string | null>(null);
+  const [draftBBox, setDraftBBox] = useState<BBox | null>(null);
   const [imageError, setImageError] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
@@ -217,8 +241,8 @@ function LoadedFrameEditor({
         setSelectedId((current) => (current === intent.annotationId ? null : current));
       }
       if (intent.kind === "create") {
-        setNewGeometry({ ...EMPTY_GEOMETRY_DRAFT });
-        setNewGeometryError(null);
+        setDraftBBox(null);
+        setSelectedId(null);
       }
       if (intent.kind === "copy-previous" && data !== undefined) {
         setCopyFeedback(
@@ -269,15 +293,31 @@ function LoadedFrameEditor({
       height: geometry.height,
     };
   });
+  if (draftBBox !== null) {
+    shapes.push({
+      ...draftBBox,
+      displayLabel: "Szkic",
+      id: DRAFT_ANNOTATION_ID,
+      label: "Szkic — wybierz klasę",
+      tone: "draft",
+    });
+  }
+  const draftAnnotation: Annotation | undefined =
+    draftBBox === null
+      ? undefined
+      : {
+          ...draftBBox,
+          category_id: profile.categories[0]?.id ?? "",
+          confidence: null,
+          id: DRAFT_ANNOTATION_ID,
+          observation_id: null,
+          source: "manual",
+          status: "proposed",
+          version: 0,
+        };
+  const popoverAnnotation = selectedId === DRAFT_ANNOTATION_ID ? draftAnnotation : selectedAnnotation;
   const stage = describeFrameStage(frame.stage_status);
-  const review = describeReviewStatus(frame.review_status);
   const editorDisabled = !capabilities.canEdit || mutation.isPending;
-  const redrawTarget =
-    redrawMode === null ? undefined : activeAnnotations.find((item) => item.id === redrawMode.annotationId);
-  const redrawTargetLabel =
-    redrawTarget === undefined
-      ? null
-      : `${categoryById.get(redrawTarget.category_id) ?? redrawTarget.category_id} (${redrawTarget.id})`;
   const canDirectEdit = capabilities.canEdit && redrawMode === null;
   const copyDisabled = frame.frame_index === 0 || !capabilities.canEdit || mutation.isPending;
 
@@ -383,10 +423,18 @@ function LoadedFrameEditor({
   }
 
   function previewAnnotationGeometry(annotationId: string, bbox: BBox): void {
+    if (annotationId === DRAFT_ANNOTATION_ID) {
+      setDraftBBox(bbox);
+      return;
+    }
     setGeometryPreview({ annotationId, bbox });
   }
 
   function commitAnnotationGeometry(annotationId: string, bbox: BBox): void {
+    if (annotationId === DRAFT_ANNOTATION_ID) {
+      setDraftBBox(bbox);
+      return;
+    }
     const annotation = annotationById(annotationId);
     if (annotation === undefined) {
       setGeometryPreview(null);
@@ -411,17 +459,15 @@ function LoadedFrameEditor({
       }
       return;
     }
-    if (newCategoryId !== "") {
-      submit({
-        bbox,
-        categoryId: newCategoryId,
-        expectedVersion: frame.version,
-        kind: "create",
-      });
-    }
+    setActionError(null);
+    setDraftBBox(bbox);
+    setSelectedId(DRAFT_ANNOTATION_ID);
   }
 
   function selectAnnotation(annotationId: string): void {
+    if (annotationId !== DRAFT_ANNOTATION_ID) {
+      setDraftBBox(null);
+    }
     setSelectedId(annotationId);
     setGeometryPreview((current) =>
       current?.annotationId === annotationId ? current : null,
@@ -433,46 +479,9 @@ function LoadedFrameEditor({
 
   return (
     <>
-      <Panel
-        aside={
-          <StatusBadge srLabel="Status weryfikacji:" tone={review.tone}>
-            {review.label}
-          </StatusBadge>
-        }
-        className="df-review-workspace__preview"
-        description="Współrzędne bbox są pikselami naturalnego obrazu klatki. Boksy mogą się nakładać."
-        eyebrow={`Klatka ${frame.frame_index}`}
-        title="Obraz i bbox"
-      >
-        <div className="df-review-toolbar">
-          <div aria-label="Nawigacja po klatkach" className="df-review-toolbar__navigation" role="group">
-            <Button
-              aria-label="Poprzednia klatka"
-              disabled={navigationDisabled || frame.frame_index <= 0}
-              onClick={() => {
-                onNavigate(frame.frame_index, -1);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              ←
-            </Button>
-            <strong aria-label={`Pozycja ${frame.frame_index + 1} z ${totalFrames}`}>
-              {frame.frame_index + 1} / {totalFrames}
-            </strong>
-            <Button
-              aria-label="Następna klatka"
-              disabled={navigationDisabled || frame.frame_index + 1 >= totalFrames}
-              onClick={() => {
-                onNavigate(frame.frame_index, 1);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              →
-            </Button>
-          </div>
-          <div className="df-review-toolbar__decisions">
+      <FrameToolbar
+        actions={
+          <>
             {capabilities.canAccept ? (
               <Button
                 aria-label="Zaakceptuj klatkę"
@@ -514,8 +523,81 @@ function LoadedFrameEditor({
                 Otwórz ponownie
               </Button>
             ) : null}
+          </>
+        }
+        counts={counts}
+        disabled={disabled || mutation.isPending}
+        filter={filter}
+        frames={frames}
+        onFilterChange={onFilterChange}
+        onSelect={onSelect}
+        selectedId={frame.id}
+      />
+
+      <Panel
+        aside={
+          <StatusBadge srLabel="Aktywne anotacje:" tone="neutral">
+            {activeAnnotations.length}
+          </StatusBadge>
+        }
+        className="df-review-workspace__inspector"
+        description="Kliknij klasę, aby zaznaczyć jej bbox; kolejne kliknięcia przechodzą między wystąpieniami."
+        eyebrow="Bieżąca klatka"
+        title="Anotacje na klatce"
+      >
+        <ClassList
+          annotations={activeAnnotations}
+          categories={profile.categories}
+          disabled={editorDisabled}
+          onSelect={selectAnnotation}
+          selectedId={selectedId}
+        />
+        <section aria-labelledby="copy-previous-heading" className="df-review-copy">
+          <div>
+            <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
+            <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
           </div>
-        </div>
+          <SelectField
+            disabled={copyDisabled}
+            label="Grupa anotacji"
+            onChange={(event) => {
+              setCopySelection(event.target.value);
+              setCopyFeedback(null);
+            }}
+            options={[
+              { label: "Pola HUD (gra)", value: "game" },
+              { label: "Znaki", value: "character" },
+              ...profile.categories.map((category) => ({
+                label: `Klasa: ${category.name}`,
+                value: `category:${category.id}`,
+              })),
+            ]}
+            value={copySelection}
+          />
+          <Button
+            disabled={copyDisabled}
+            loading={currentBusyKey === "copy-previous"}
+            onClick={copyPrevious}
+            size="sm"
+            title="Skrót: R"
+            variant="secondary"
+          >
+            Powtórz <kbd>R</kbd>
+          </Button>
+          <p aria-live="polite" className="df-review-copy__status">
+            {frame.frame_index === 0
+              ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
+              : !capabilities.canEdit
+                ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
+                : copyFeedback}
+          </p>
+        </section>
+      </Panel>
+
+      <section
+        aria-label={`Podgląd klatki ${frame.frame_index}`}
+        className="df-review-workspace__preview"
+      >
 
         <DataList
           items={[
@@ -577,48 +659,81 @@ function LoadedFrameEditor({
           key={`frame-image-${String(imageAttempt)}`}
           label="Bbox anotacji na klatce"
           floatingLayer={
-            selectedAnnotation === undefined ? null : (
+            popoverAnnotation === undefined ? null : (
               <AnnotationPopover
-                annotation={selectedAnnotation}
+                annotation={popoverAnnotation}
                 busyKey={currentBusyKey}
                 categories={profile.categories}
                 disabled={editorDisabled}
-                drawing={redrawMode?.annotationId === selectedAnnotation.id}
+                draft={selectedId === DRAFT_ANNOTATION_ID}
+                drawing={
+                  selectedId !== DRAFT_ANNOTATION_ID &&
+                  redrawMode?.annotationId === popoverAnnotation.id
+                }
                 frameSize={{ height: frame.height, width: frame.width }}
                 geometryPreview={
-                  geometryPreview?.annotationId === selectedAnnotation.id
+                  selectedId !== DRAFT_ANNOTATION_ID &&
+                  geometryPreview?.annotationId === popoverAnnotation.id
                     ? geometryPreview.bbox
                     : null
                 }
-                invalid={invalidSet.has(selectedAnnotation.id)}
+                invalid={
+                  selectedId === DRAFT_ANNOTATION_ID
+                    ? false
+                    : invalidSet.has(popoverAnnotation.id)
+                }
                 onCategoryChange={(categoryId) => {
+                  if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
+                    submit({
+                      bbox: draftBBox,
+                      categoryId,
+                      expectedVersion: frame.version,
+                      kind: "create",
+                    });
+                    return;
+                  }
                   submit({
-                    annotationId: selectedAnnotation.id,
+                    annotationId: popoverAnnotation.id,
                     categoryId,
-                    expectedVersion: selectedAnnotation.version,
+                    expectedVersion: popoverAnnotation.version,
                     kind: "category",
                   });
                 }}
                 onClose={() => {
+                  setDraftBBox(null);
                   setSelectedId(null);
                   setGeometryPreview(null);
                   setRedrawMode(null);
                 }}
                 onDelete={() => {
+                  if (selectedId === DRAFT_ANNOTATION_ID) {
+                    setDraftBBox(null);
+                    setSelectedId(null);
+                    return;
+                  }
                   submit({
-                    annotationId: selectedAnnotation.id,
-                    expectedVersion: selectedAnnotation.version,
+                    annotationId: popoverAnnotation.id,
+                    expectedVersion: popoverAnnotation.version,
                     kind: "delete",
                   });
                 }}
                 onGeometryChange={(bbox) => {
-                  changeAnnotationGeometry(selectedAnnotation, bbox);
+                  if (selectedId === DRAFT_ANNOTATION_ID) {
+                    setDraftBBox(bbox);
+                    return;
+                  }
+                  changeAnnotationGeometry(popoverAnnotation, bbox);
                 }}
                 onToggleDrawTarget={() => {
+                  if (selectedId === DRAFT_ANNOTATION_ID) {
+                    setDraftBBox(null);
+                    setSelectedId(null);
+                    return;
+                  }
                   setRedrawMode((current) =>
-                    current?.annotationId === selectedAnnotation.id
+                    current?.annotationId === popoverAnnotation.id
                       ? null
-                      : { annotationId: selectedAnnotation.id, kind: "redraw" },
+                      : { annotationId: popoverAnnotation.id, kind: "redraw" },
                   );
                 }}
               />
@@ -634,6 +749,11 @@ function LoadedFrameEditor({
           onRemove={
             capabilities.canEdit
               ? (annotationId) => {
+                  if (annotationId === DRAFT_ANNOTATION_ID) {
+                    setDraftBBox(null);
+                    setSelectedId(null);
+                    return;
+                  }
                   const annotation = annotationById(annotationId);
                   if (annotation !== undefined) {
                     submit({
@@ -654,136 +774,8 @@ function LoadedFrameEditor({
           source={{ width: frame.width, height: frame.height }}
         />
 
-        {capabilities.canEdit ? (
-          <div className="df-review-create">
-            <SelectField
-              disabled={mutation.isPending}
-              label="Klasa nowego bbox"
-              onChange={(event) => {
-                setNewCategoryId(event.target.value);
-              }}
-              options={profile.categories.map((category) => ({
-                label: category.name,
-                value: category.id,
-              }))}
-              value={newCategoryId}
-            />
-            <p>
-              {redrawTargetLabel === null
-                ? "Przeciągnij na obrazie, aby dodać ręczny bbox."
-                : `Tryb zmiany geometrii: ${redrawTargetLabel}. Przeciągnij na obrazie, aby zastąpić bbox tej anotacji.`}
-            </p>
-            <div className="df-review-annotations__geometry">
-              {(["x", "y", "width", "height"] as const).map((field) => (
-                <TextField
-                  disabled={mutation.isPending}
-                  inputMode="numeric"
-                  key={field}
-                  label={`Nowy ${field}`}
-                  onChange={(event) => {
-                    setNewGeometry((current) => ({
-                      ...current,
-                      [field]: event.target.value,
-                    }));
-                    setNewGeometryError(null);
-                  }}
-                  type="number"
-                  value={newGeometry[field]}
-                  width="short"
-                />
-              ))}
-            </div>
-            {newGeometryError === null ? null : (
-              <p className="df-review-annotations__invalid" role="alert">
-                {newGeometryError}
-              </p>
-            )}
-            <Button
-              disabled={mutation.isPending}
-              loading={currentBusyKey === "create"}
-              onClick={() => {
-                const parsed = parseGeometryDraft(newGeometry, {
-                  width: frame.width,
-                  height: frame.height,
-                });
-                setNewGeometryError(parsed.error);
-                if (parsed.bbox !== null && newCategoryId !== "") {
-                  submit({
-                    bbox: parsed.bbox,
-                    categoryId: newCategoryId,
-                    expectedVersion: frame.version,
-                    kind: "create",
-                  });
-                }
-              }}
-              variant="secondary"
-            >
-              Dodaj bbox z pól
-            </Button>
-          </div>
-        ) : null}
+      </section>
 
-      </Panel>
-
-      <Panel
-        aside={
-          <StatusBadge srLabel="Aktywne anotacje:" tone="neutral">
-            {activeAnnotations.length}
-          </StatusBadge>
-        }
-        className="df-review-workspace__inspector"
-        description="Kliknij klasę, aby zaznaczyć jej bbox; kolejne kliknięcia przechodzą między wystąpieniami."
-        eyebrow="Bieżąca klatka"
-        title="Anotacje na klatce"
-      >
-        <ClassList
-          annotations={activeAnnotations}
-          categories={profile.categories}
-          disabled={editorDisabled}
-          onSelect={selectAnnotation}
-          selectedId={selectedId}
-        />
-        <section aria-labelledby="copy-previous-heading" className="df-review-copy">
-          <div>
-            <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
-            <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
-          </div>
-          <SelectField
-            disabled={copyDisabled}
-            label="Grupa anotacji"
-            onChange={(event) => {
-              setCopySelection(event.target.value);
-              setCopyFeedback(null);
-            }}
-            options={[
-              { label: "Pola HUD (gra)", value: "game" },
-              { label: "Znaki", value: "character" },
-              ...profile.categories.map((category) => ({
-                label: `Klasa: ${category.name}`,
-                value: `category:${category.id}`,
-              })),
-            ]}
-            value={copySelection}
-          />
-          <Button
-            disabled={copyDisabled}
-            loading={currentBusyKey === "copy-previous"}
-            onClick={copyPrevious}
-            size="sm"
-            title="Skrót: R"
-            variant="secondary"
-          >
-            Powtórz <kbd>R</kbd>
-          </Button>
-          <p aria-live="polite" className="df-review-copy__status">
-            {frame.frame_index === 0
-              ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
-              : !capabilities.canEdit
-                ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
-                : copyFeedback}
-          </p>
-        </section>
-      </Panel>
     </>
   );
 }
