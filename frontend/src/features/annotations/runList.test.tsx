@@ -81,5 +81,7 @@ it("opens the existing annotation deep-link for the selected run", async () => {
   await user.click(await screen.findByRole("button", { name: "Otwórz weryfikację" }));
 
   expect(app.router.state.location.pathname).toBe("/annotations/run-1");
-    expect(await screen.findByRole("region", { name: "Klatki runu" })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("group", { name: "Filtr statusu klatek" }),
+  ).toBeInTheDocument();
 });

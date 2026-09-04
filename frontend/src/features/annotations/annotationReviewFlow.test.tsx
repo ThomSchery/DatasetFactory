@@ -137,6 +137,140 @@ describe("annotation review query states", () => {
     expect(classHealth).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("keeps a drawn bbox as a client draft and Escape discards it without POST", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const inspector = screen.getByRole("heading", { name: "Anotacje na klatce" }).closest("section");
+    expect(inspector).not.toBeNull();
+    expect(within(inspector as HTMLElement).getByText("1", { selector: ".df-status-badge" })).toBeVisible();
+
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+
+    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+    expect(within(overlay).getAllByRole("option")).toHaveLength(2);
+    expect(within(overlay).getByRole("option", { name: /^Szkic — wybierz klasę:/ })).toHaveClass(
+      "df-region-overlay__shape--draft",
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).not.toBeInTheDocument();
+    expect(within(overlay).getAllByRole("option")).toHaveLength(1);
+    expect(within(inspector as HTMLElement).getByText("1", { selector: ".df-status-badge" })).toBeVisible();
+    expect(
+      fetchSpy.mock.calls.some(
+        ([url, init]) =>
+          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps the draft after a failed explicit class save", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({
+      mutation: (url) =>
+        url.endsWith("/annotations")
+          ? { status: 500, body: errorEnvelope("internal_error") }
+          : { status: 200, body: frameDetailFixture() },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+    await user.clear(field);
+    await user.type(field, "health");
+    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+
+    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+    expect(within(overlay).getByRole("option", { name: /^Szkic — wybierz klasę:/ })).toBeVisible();
+    const post = fetchSpy.mock.calls.find(
+      ([url, init]) =>
+        url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+    );
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      bbox: { x: 600, y: 500, width: 200, height: 100 },
+      category_id: "category-2",
+      expected_version: 7,
+    });
+  });
+
+  it("discards the unsaved draft when another annotation or filter is selected", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    let overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const draw = () => {
+      fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+      fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+      fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    };
+
+    draw();
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    expect(within(overlay).getAllByRole("option")).toHaveLength(1);
+
+    draw();
+    await user.click(screen.getByRole("button", { name: /Wszystkie/ }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Wszystkie/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+    overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    expect(within(overlay).getAllByRole("option")).toHaveLength(1);
+    expect(
+      fetchSpy.mock.calls.some(
+        ([url, init]) =>
+          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
   it("updates geometry fields live and saves the dragged bbox through the existing PATCH", async () => {
     const user = userEvent.setup();
     const updated = annotationFixture({ x: 300, y: 220, width: 40, height: 32, version: 4 });
@@ -210,7 +344,7 @@ describe("annotation review query states", () => {
 });
 
 describe("temporal frame navigation", () => {
-  it("moves in run order, reports position and clears the selected annotation", async () => {
+  it("selects any filtered frame from the dropdown and clears the selected annotation", async () => {
     const user = userEvent.setup();
     const firstSummary = frameSummaryFixture({ frame_index: 0, id: "frame-1", timestamp_ms: 0 });
     const secondSummary = frameSummaryFixture({ frame_index: 1, id: "frame-2", timestamp_ms: 1_000 });
@@ -251,11 +385,12 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    expect(await screen.findByLabelText("Pozycja 1 z 2")).toHaveTextContent("1 / 2");
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
+    expect(screen.getByLabelText("Pozycja 1 z 2")).toHaveTextContent("1 / 2");
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
     expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Następna klatka" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Wybierz klatkę" }), "frame-2");
 
     expect(await screen.findByLabelText("Pozycja 2 z 2")).toHaveTextContent("2 / 2");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -279,7 +414,7 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.keyboard(shortcut);
 
     await waitFor(() => {
@@ -308,6 +443,25 @@ describe("temporal frame navigation", () => {
     expect(classField).toHaveValue("axr");
     expect(decisions).toHaveLength(0);
     expect(copies).toHaveLength(0);
+  });
+
+  it("does not trigger review shortcuts while the frame dropdown owns the keystroke", async () => {
+    const user = userEvent.setup();
+    const decisions: unknown[] = [];
+    reviewApi({
+      mutation: (url, init) => {
+        if (url.endsWith("/review")) decisions.push(JSON.parse(String(init?.body)));
+        return { status: 200, body: frameDetailFixture() };
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("img", { name: /Klatka 17 runu run-1/ });
+    const frameSelect = screen.getByRole("combobox", { name: "Wybierz klatkę" });
+    frameSelect.focus();
+    await user.keyboard("a");
+
+    expect(decisions).toHaveLength(0);
   });
 
   it("copies the selected group with R and reports replaced annotations", async () => {
@@ -369,7 +523,7 @@ describe("temporal frame navigation", () => {
 });
 
 describe("review filters and mutations", () => {
-  it("shows status counts while temporal navigation remains independent of the pending list", async () => {
+  it("uses the active filter for the dropdown, arrows and position counter", async () => {
     const user = userEvent.setup();
     const pendingSummary = frameSummaryFixture({ frame_index: 0, id: "frame-1", timestamp_ms: 0 });
     const acceptedSummary = frameSummaryFixture({
@@ -411,8 +565,13 @@ describe("review filters and mutations", () => {
             body: framePageFixture({ items: [acceptedSummary], page: 2, page_size: 1, total: 2 }),
           };
         }
-        const items = status === "accepted" ? [acceptedSummary] : [pendingSummary];
-        return { status: 200, body: framePageFixture({ items, total: 1 }) };
+        const items =
+          status === "accepted"
+            ? [acceptedSummary]
+            : status === "pending"
+              ? [pendingSummary]
+              : [pendingSummary, acceptedSummary];
+        return { status: 200, body: framePageFixture({ items, total: items.length }) };
       }
       if (url === "/api/v1/frames/frame-1") return { status: 200, body: pendingFrame };
       if (url === "/api/v1/frames/frame-2") return { status: 200, body: acceptedFrame };
@@ -420,7 +579,8 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const filters = await screen.findByRole("group", { name: "Filtr statusu klatek" });
+    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
+    const filters = screen.getByRole("group", { name: "Filtr statusu klatek" });
     expect(within(filters).getByRole("button", { name: /Wszystkie\s*2/ })).toBeVisible();
     expect(within(filters).getByRole("button", { name: /Oczekujące\s*1/ })).toHaveAttribute(
       "aria-pressed",
@@ -429,15 +589,27 @@ describe("review filters and mutations", () => {
     expect(within(filters).getByRole("button", { name: /Zaakceptowane\s*1/ })).toBeVisible();
     expect(within(filters).getByRole("button", { name: /Odrzucone\s*0/ })).toBeVisible();
 
-    expect(await screen.findByLabelText("Pozycja 1 z 2")).toBeVisible();
+    expect(screen.getByLabelText("Pozycja 1 z 1")).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveDisplayValue(
+      "Klatka 0 · 0.000 s · oczekująca",
+    );
+    expect(screen.getByRole("button", { name: "Następna klatka" })).toBeDisabled();
+
+    await user.click(within(filters).getByRole("button", { name: /Wszystkie\s*2/ }));
+    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
+    expect(screen.getByLabelText("Pozycja 1 z 2")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Następna klatka" }));
 
-    expect(await screen.findByLabelText("Pozycja 2 z 2")).toBeVisible();
-    expect(screen.getByRole("img", { name: "Klatka 1 runu run-1" })).toBeVisible();
-    expect(within(filters).getByRole("button", { name: /Oczekujące\s*1/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    await screen.findByRole("img", { name: "Klatka 1 runu run-1" });
+    expect(screen.getByLabelText("Pozycja 2 z 2")).toBeVisible();
+
+    await user.click(
+      within(screen.getByRole("group", { name: "Filtr statusu klatek" })).getByRole("button", {
+        name: /Oczekujące\s*1/,
+      }),
     );
+    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
+    expect(screen.getByLabelText("Pozycja 1 z 1")).toBeVisible();
   });
 
   it("uses the rejected filter as the route to reopen and sends the current frame version", async () => {
@@ -483,7 +655,7 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: /Odrzucone/ }));
     expect(await screen.findByRole("button", { name: "Otwórz ponownie" })).toBeEnabled();
     expect(rejectedRequested).toBe(true);
@@ -538,7 +710,7 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
@@ -630,7 +802,7 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
@@ -653,7 +825,7 @@ describe("review filters and mutations", () => {
 });
 
 describe("keyboard-complete annotation list", () => {
-  it("exposes selection, class, delete, geometry and manual create as native keyboard controls", async () => {
+  it("exposes selection, class, delete, geometry and draft confirmation as native controls", async () => {
     const user = userEvent.setup();
     const requests: { method: string; url: string }[] = [];
     reviewApi({
@@ -663,7 +835,7 @@ describe("keyboard-complete annotation list", () => {
       },
     });
     renderApp(["/annotations/run-1"]);
-    await screen.findByText("Obraz i bbox");
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
 
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classSelect = screen.getByLabelText("Klasa");
@@ -692,15 +864,22 @@ describe("keyboard-complete annotation list", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(deleteButton).toBeEnabled());
-    for (const [label, value] of [
-      ["Nowy x", "10"],
-      ["Nowy y", "20"],
-      ["Nowy width", "30"],
-      ["Nowy height", "40"],
-    ] as const) {
-      await user.type(screen.getByLabelText(label), value);
-    }
-    const createButton = screen.getByRole("button", { name: "Dodaj bbox z pól" });
+    await user.keyboard("{Escape}");
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      bottom: 540,
+      height: 540,
+      left: 0,
+      right: 960,
+      top: 0,
+      width: 960,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    const createButton = screen.getByRole("button", { name: "Zapisz klasę" });
     createButton.focus();
     await user.keyboard("{Enter}");
 

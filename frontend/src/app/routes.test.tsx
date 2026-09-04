@@ -85,7 +85,9 @@ describe("the five FE-04 routes", () => {
     renderApp(["/annotations/run-42"]);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
-    expect(await screen.findByRole("region", { name: "Klatki runu" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("group", { name: "Filtr statusu klatek" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
   });
@@ -106,10 +108,9 @@ describe("the five FE-04 routes", () => {
   });
 
   it("keeps runId in the URL rather than in component state", async () => {
-    renderApp(["/annotations/run-42"]);
-    expect(await screen.findByRole("region", { name: "Klatki runu" })).toHaveTextContent(
-      "run-42",
-    );
+    const app = renderApp(["/annotations/run-42"]);
+    await screen.findByText("Brak klatek dla wybranego filtra");
+    expect(app.router.state.location.pathname).toBe("/annotations/run-42");
   });
 
   it("shows an explicit empty state for an unknown path", () => {

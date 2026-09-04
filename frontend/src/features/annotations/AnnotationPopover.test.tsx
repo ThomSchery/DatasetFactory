@@ -25,6 +25,7 @@ const categories: Category[] = [
 ];
 
 function renderPopover(overrides: {
+  draft?: boolean;
   invalid?: boolean;
   onCategoryChange?: (categoryId: string) => void;
   onClose?: () => void;
@@ -40,6 +41,7 @@ function renderPopover(overrides: {
         busyKey={null}
         categories={categories}
         disabled={false}
+        draft={overrides.draft}
         drawing={false}
         frameSize={{ height: 1080, width: 1920 }}
         geometryPreview={null}
@@ -87,5 +89,20 @@ describe("AnnotationPopover", () => {
 
     expect(onClose).toHaveBeenCalledOnce();
     expect(onGeometryChange).not.toHaveBeenCalled();
+  });
+
+  it("names an unmatched draft class explicitly and cannot save it", async () => {
+    const user = userEvent.setup();
+    const { onCategoryChange } = renderPopover({ draft: true });
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+
+    await user.clear(field);
+    await user.type(field, "health and armour{Enter}");
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Brak takiej klasy w profilu. Wybierz istniejącą klasę albo porzuć szkic.",
+    );
+    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(onCategoryChange).not.toHaveBeenCalled();
   });
 });

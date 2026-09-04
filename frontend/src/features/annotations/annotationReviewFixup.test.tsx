@@ -108,15 +108,14 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     await user.click(screen.getByText(/^x 100 · y 120/));
     await user.click(screen.getByRole("button", { name: "Przerysuj bbox" }));
-    expect(screen.getByText(/Tryb zmiany geometrii: 7 \(ann-1\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Anuluj przerysowanie" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
-    expect(screen.queryByText(/Tryb zmiany geometrii:/)).not.toBeInTheDocument();
-    expect(screen.getByText("Przeciągnij na obrazie, aby dodać ręczny bbox.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Anuluj przerysowanie" })).not.toBeInTheDocument();
 
     const surface = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
     layOut(surface);
@@ -130,12 +129,13 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
           ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
         ),
       ).toBe(false);
+      expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
       expect(
         fetchSpy.mock.calls.some(
           ([url, init]) =>
             url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
         ),
-      ).toBe(true);
+      ).toBe(false);
     });
   });
 
@@ -188,12 +188,14 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     const fetchSpy = stubFetch((url) => requireResponse(get(url), url));
     renderApp(["/annotations/run-1"]);
 
-    expect(await screen.findByText("Obraz i bbox")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" }),
+    ).toBeInTheDocument();
     expect(
       fetchSpy.mock.calls.some(([url]) => url === `/api/v1/profiles/${PROFILE.id}`),
     ).toBe(true);
     expect(fetchSpy.mock.calls.some(([url]) => url === "/api/v1/profiles/current")).toBe(false);
-    expect(screen.getAllByRole("option", { name: "health" })).toHaveLength(1);
+    expect(screen.getByRole("option", { name: "Klasa: health" })).toBeVisible();
   });
 
   it("shows central profile_not_found copy for a missing run profile", async () => {
@@ -211,42 +213,35 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     expect(alert).toHaveTextContent("Kod: profile_not_found");
   });
 
-  it("clamps an empty second page after reviewing its last frame", async () => {
+  it("aggregates every backend page into the frame dropdown", async () => {
     const user = userEvent.setup();
     const firstSummary = frameSummaryFixture({ id: "frame-page-1", frame_index: 1 });
-    const lastSummary = frameSummaryFixture({ id: "frame-page-2", frame_index: 13 });
-    let reviewed = false;
+    const lastSummary = frameSummaryFixture({ id: "frame-page-101", frame_index: 101 });
+    const requestedPages: string[] = [];
     const get = reviewGet({
-      frame: (frameId) => frameDetailFixture({ frame_index: frameId === "frame-page-2" ? 13 : 1, id: frameId }),
+      frame: (frameId) =>
+        frameDetailFixture({ frame_index: frameId === "frame-page-101" ? 101 : 1, id: frameId }),
       frames: (url) => {
-        if (url.includes("page=2")) {
-          return reviewed
-            ? framePageFixture({ items: [], page: 2, total: 12 })
-            : framePageFixture({ items: [lastSummary], page: 2, total: 13 });
+        const query = new URL(url, "http://datasetfactory.test").searchParams;
+        if (query.get("page_size") === "1") {
+          return framePageFixture({ items: [], page_size: 1, total: 101 });
         }
-        return framePageFixture({ items: [firstSummary], page: 1, total: reviewed ? 12 : 13 });
+        requestedPages.push(query.get("page") ?? "");
+        return query.get("page") === "2"
+          ? framePageFixture({ items: [lastSummary], page: 2, page_size: 100, total: 101 })
+          : framePageFixture({ items: [firstSummary], page: 1, page_size: 100, total: 101 });
       },
     });
-    stubFetch((url, init) => {
-      if (init?.method === "POST" && url === "/api/v1/frames/frame-page-2/review") {
-        reviewed = true;
-        return {
-          body: frameDetailFixture({ id: "frame-page-2", review_status: "accepted", version: 8 }),
-          status: 200,
-        };
-      }
-      return requireResponse(get(url), url);
-    });
+    stubFetch((url) => requireResponse(get(url), url));
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Następna" }));
-    expect(await screen.findByText("Klatka 13")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Zaakceptuj klatkę" }));
+    await screen.findByRole("img", { name: "Klatka 1 runu run-1" });
+    const select = screen.getByRole("combobox", { name: "Wybierz klatkę" });
+    expect(within(select).getAllByRole("option")).toHaveLength(2);
+    expect(requestedPages).toEqual(["1", "2"]);
+    await user.selectOptions(select, "frame-page-101");
 
-    await waitFor(() => {
-      expect(screen.getByText("Strona 1 z 1")).toBeInTheDocument();
-      expect(screen.getAllByText("Klatka 1").length).toBeGreaterThanOrEqual(1);
-    });
+    expect(await screen.findByRole("img", { name: "Klatka 101 runu run-1" })).toBeVisible();
   });
 
   it("serializes the whole run screen while a write is pending", async () => {
@@ -254,7 +249,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     const second = frameSummaryFixture({ id: "frame-2", frame_index: 18 });
     const frames = framePageFixture({
       items: [frameSummaryFixture(), second],
-      total: 13,
+      total: 2,
     });
     const get = reviewGet({
       frame: (frameId) => frameDetailFixture({ id: frameId }),
@@ -274,7 +269,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
@@ -288,11 +283,10 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     ).getAllByRole("button")) {
       expect(filterButton).toBeDisabled();
     }
-    expect(screen.getByRole("button", { name: "Następna" })).toBeDisabled();
-    const openSecond = screen.getByRole("button", { name: "Otwórz" });
-    expect(openSecond).toBeDisabled();
-    await user.click(openSecond);
-    expect(screen.queryByText("Klatka 18", { selector: "p" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Następna klatka" })).toBeDisabled();
+    const frameSelect = screen.getByRole("combobox", { name: "Wybierz klatkę" });
+    expect(frameSelect).toBeDisabled();
+    expect(frameSelect).toHaveValue("frame-1");
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
 
     resolveMutation?.(
@@ -358,7 +352,7 @@ describe("success refetches authoritative versions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
@@ -413,7 +407,7 @@ describe("success refetches authoritative versions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByText("Obraz i bbox");
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
@@ -478,16 +472,12 @@ describe("success refetches authoritative versions", () => {
       });
       renderApp(["/annotations/run-1"]);
 
-      await screen.findByText("Obraz i bbox");
-      for (const [label, value] of [
-        ["Nowy x", "10"],
-        ["Nowy y", "20"],
-        ["Nowy width", "30"],
-        ["Nowy height", "40"],
-      ] as const) {
-        await user.type(screen.getByLabelText(label), value);
-      }
-      const create = screen.getByRole("button", { name: "Dodaj bbox z pól" });
+      const surface = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+      layOut(surface);
+      fireEvent.pointerDown(surface, { clientX: 10, clientY: 10, pointerId: 1 });
+      fireEvent.pointerMove(surface, { clientX: 30, clientY: 30, pointerId: 1 });
+      fireEvent.pointerUp(surface, { clientX: 30, clientY: 30, pointerId: 1 });
+      const create = screen.getByRole("button", { name: "Zapisz klasę" });
       await user.click(create);
       await waitFor(() => {
         expect(frameRead).toBeGreaterThanOrEqual(2);

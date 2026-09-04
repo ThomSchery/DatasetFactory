@@ -54,7 +54,7 @@ describe("terminal annotation refresh", () => {
         return { body: profile, status: 200 };
       }
       if (url.startsWith("/api/v1/runs/run-1/frames?")) {
-        if (url.includes("page_size=12")) listReads += 1;
+        if (url.includes("page_size=100")) listReads += 1;
         return { body: framePageFixture(), status: 200 };
       }
       if (url === "/api/v1/frames/frame-1") {
@@ -74,14 +74,13 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(editor).getByText(/^x 100/));
     const existingX = within(editor).getByLabelText("x");
     await user.clear(existingX);
     await user.type(existingX, "321");
-    await user.type(screen.getByLabelText("Nowy x"), "55");
     await user.click(within(editor).getByRole("button", { name: "Przerysuj bbox" }));
 
     await act(async () => {
@@ -96,9 +95,8 @@ describe("terminal annotation refresh", () => {
       ).toHaveLength(2);
     });
     expect(within(editor).getByLabelText("x")).toHaveValue(321);
-    expect(screen.getByLabelText("Nowy x")).toHaveValue(55);
     expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
-    expect(screen.getByText(/Tryb zmiany geometrii: 7 \(ann-1\)/)).toBeVisible();
+    expect(within(editor).getByRole("button", { name: "Anuluj przerysowanie" })).toBeVisible();
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
@@ -169,7 +167,7 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(editor).getByText(/^x 100/));
@@ -248,7 +246,7 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(editor).getByText(/^x 100/));
@@ -325,7 +323,7 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(editor).getByText(/^x 100/));
@@ -373,7 +371,7 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const editor = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(editor).getByText(/^x 100/));
@@ -428,14 +426,14 @@ describe("terminal annotation refresh", () => {
         return { body: profile, status: 200 };
       }
       if (url.startsWith("/api/v1/runs/run-a/frames?")) {
-        if (url.includes("page_size=12")) reads.listA += 1;
+        if (url.includes("page_size=100")) reads.listA += 1;
         return {
           body: framePageFixture({ items: [frameSummaryFixture({ id: "frame-a" })] }),
           status: 200,
         };
       }
       if (url.startsWith("/api/v1/runs/run-b/frames?")) {
-        if (url.includes("page_size=12")) reads.listB += 1;
+        if (url.includes("page_size=100")) reads.listB += 1;
         return {
           body: framePageFixture({ items: [frameSummaryFixture({ id: "frame-b" })] }),
           status: 200,
@@ -453,15 +451,14 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient, router } = renderApp(["/annotations/run-b"]);
 
-    await screen.findByText("Run run-b");
-    await screen.findByRole("heading", { name: "Obraz i bbox" });
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveValue("frame-b"));
     queryClient.setQueryDefaults(queryKeys.run("run-b"), { staleTime: Infinity });
     queryClient.setQueryDefaults(queryKeys.frame("frame-b"), { staleTime: Infinity });
 
     await act(async () => {
       await router.navigate("/annotations/run-a");
     });
-    await screen.findByText("Run run-a");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveValue("frame-a"));
     await waitFor(() => {
       expect(reads.frameA).toBe(1);
       expect(reads.listA).toBe(1);
@@ -470,7 +467,7 @@ describe("terminal annotation refresh", () => {
     await act(async () => {
       await router.navigate("/annotations/run-b");
     });
-    await screen.findByText("Run run-b");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveValue("frame-b"));
     await waitFor(() => {
       expect(reads.runB).toBe(1);
       expect(reads.listB).toBe(1);

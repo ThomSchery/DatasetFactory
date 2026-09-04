@@ -80,21 +80,31 @@ async function assertFrameFilterCountsFit(page: Page): Promise<void> {
   }
 }
 
-async function assertImagePrecedesNumericCreateTools(page: Page): Promise<void> {
+async function assertCompactReviewLayout(page: Page): Promise<void> {
   const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
-  const createTools = page.locator(".df-review-create");
+  const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+  const toolbar = page.locator(".df-review-toolbar");
   const overlayBounds = await overlay.boundingBox();
-  const createBounds = await createTools.boundingBox();
+  const inspectorBounds = await inspector.boundingBox();
+  const toolbarBounds = await toolbar.boundingBox();
   expect(overlayBounds).not.toBeNull();
-  expect(createBounds).not.toBeNull();
-  if (overlayBounds === null || createBounds === null) {
-    throw new Error("Review image or numeric create tools have no browser geometry");
+  expect(inspectorBounds).not.toBeNull();
+  expect(toolbarBounds).not.toBeNull();
+  if (overlayBounds === null || inspectorBounds === null || toolbarBounds === null) {
+    throw new Error("Review toolbar, inspector or image has no browser geometry");
   }
   expect(overlayBounds.y, "review image should remain above the fold at 1000 px").toBeLessThan(600);
-  expect(
-    createBounds.y,
-    "numeric bbox tools should follow the review image instead of pushing it below the fold",
-  ).toBeGreaterThanOrEqual(overlayBounds.y + overlayBounds.height);
+  expect(inspectorBounds.x, "class inspector should remain left of the review image").toBeLessThan(
+    overlayBounds.x,
+  );
+  expect(toolbarBounds.y + toolbarBounds.height, "toolbar should precede both work columns").toBeLessThanOrEqual(
+    Math.min(inspectorBounds.y, overlayBounds.y),
+  );
+  await expect(page.getByLabel("Wybierz klatkę")).toBeVisible();
+  await expect(page.getByLabel("Klasa nowego bbox")).toHaveCount(0);
+  await expect(page.getByLabel("Nowy x")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Dodaj bbox z pól" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Obraz i bbox" })).toHaveCount(0);
 }
 
 async function assertResolvedCssVariables(page: Page): Promise<void> {
@@ -280,9 +290,9 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     { phase: "review" },
     (current) => current.getByRole("button", { name: /Oczekujące/ }),
     async (current) => {
-      await expect(current.getByRole("heading", { name: "Obraz i bbox" })).toBeVisible();
+      await expect(current.getByRole("listbox", { name: "Bbox anotacji na klatce" })).toBeVisible();
       await assertFrameFilterCountsFit(current);
-      await assertImagePrecedesNumericCreateTools(current);
+      await assertCompactReviewLayout(current);
       await assertAnnotationPopoverDoesNotCoverBox(current);
     },
   );

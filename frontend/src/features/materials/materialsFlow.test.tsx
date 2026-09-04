@@ -145,9 +145,9 @@ describe("materials: from a file to a started run", () => {
 
     // §Logika.2: starting the run is what puts `runId` in the URL.
     expect(await screen.findByRole("heading", { level: 1, name: "Anotacje" })).toBeInTheDocument();
-    expect(await screen.findByRole("region", { name: "Klatki runu" })).toHaveTextContent(
-      "run-1",
-    );
+    expect(
+      await screen.findByRole("group", { name: "Filtr statusu klatek" }),
+    ).toBeInTheDocument();
 
     const startCall = fetchSpy.mock.calls.find(([url]) => String(url).endsWith("/start"));
     expect(JSON.parse(String(startCall?.[1]?.body))).toEqual({ expected_version: 1 });

@@ -605,6 +605,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await frameSurface.dispatchEvent("pointerdown", { ...manualFrom, pointerId: 2 });
   await frameSurface.dispatchEvent("pointermove", { ...manualTo, pointerId: 2 });
   await frameSurface.dispatchEvent("pointerup", { ...manualTo, pointerId: 2 });
+  const draftPopover = page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+  await expect(draftPopover).toBeVisible();
+  await draftPopover.getByRole("button", { name: "Zapisz klasę" }).click();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
@@ -633,10 +636,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("accepted");
 
-  const frameListPanel = page.getByRole("region", { name: "Klatki runu" });
-  const secondFrameRow = frameListPanel.getByRole("listitem").filter({ hasText: "Klatka 1" });
-  await expect(secondFrameRow).toBeVisible();
-  await secondFrameRow.getByRole("button").click();
+  const frameSelect = page.getByLabel("Wybierz klatkę");
+  await expect(frameSelect).toBeVisible();
+  await frameSelect.selectOption(secondFrameId);
   await expect(page.getByRole("img", { name: `Klatka 1 runu ${runId}` })).toBeVisible();
   await page.getByRole("button", { name: "Zaakceptuj klatkę" }).click();
   await expect
