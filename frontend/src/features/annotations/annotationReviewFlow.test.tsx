@@ -22,24 +22,37 @@ const PROFILE = profileFixture({
   ],
 });
 
+/** A profile with several classes per level, so a subset is a real subset. */
+const RICH_PROFILE = profileFixture({
+  categories: [
+    { id: "score", name: "Score", kind: "game" },
+    { id: "timer", name: "Timer", kind: "game" },
+    { id: "category-1", name: "7", kind: "character" },
+    { id: "category-2", name: "health", kind: "game" },
+    { id: "digit-1", name: "1", kind: "character" },
+  ],
+});
+
 interface ReviewApiOptions {
   frame?: FrameDetail;
   frames?: Page<FrameSummary>;
   mutation?: (url: string, init: RequestInit | undefined) => StubbedResponse;
+  profile?: typeof PROFILE;
 }
 
 function reviewApi(options: ReviewApiOptions = {}) {
   const frame = options.frame ?? frameDetailFixture();
   const frames = options.frames ?? framePageFixture();
+  const profile = options.profile ?? PROFILE;
   return stubFetch((url, init) => {
     if (init?.method !== undefined && init.method !== "GET") {
       return options.mutation?.(url, init) ?? { status: 200, body: frame };
     }
     if (url === "/api/v1/runs/run-1") {
-      return { status: 200, body: runFixture({ id: "run-1", profile_id: PROFILE.id }) };
+      return { status: 200, body: runFixture({ id: "run-1", profile_id: profile.id }) };
     }
-    if (url === `/api/v1/profiles/${PROFILE.id}`) {
-      return { status: 200, body: PROFILE };
+    if (url === `/api/v1/profiles/${profile.id}`) {
+      return { status: 200, body: profile };
     }
     if (url.startsWith("/api/v1/runs/run-1/frames?")) {
       return { status: 200, body: frames };
@@ -48,7 +61,7 @@ function reviewApi(options: ReviewApiOptions = {}) {
       return { status: 200, body: frame };
     }
     if (url === "/api/v1/dashboard") {
-      return { status: 200, body: dashboardFixture({ profile: PROFILE }) };
+      return { status: 200, body: dashboardFixture({ profile }) };
     }
     throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
   });
@@ -210,6 +223,7 @@ describe("annotation review query states", () => {
     const field = screen.getByRole("textbox", { name: "Klasa" });
     await user.clear(field);
     await user.type(field, "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
     expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
@@ -464,10 +478,8 @@ describe("temporal frame navigation", () => {
     expect(decisions).toHaveLength(0);
   });
 
-  it("copies the selected group with R and reports replaced annotations", async () => {
-    const user = userEvent.setup();
-    const requests: unknown[] = [];
-    reviewApi({
+  function copyApi(requests: unknown[]) {
+    return reviewApi({
       frame: frameDetailFixture({ frame_index: 1 }),
       mutation: (url, init) => {
         if (url.endsWith("/copy-previous")) {
@@ -476,22 +488,128 @@ describe("temporal frame navigation", () => {
         }
         return { status: 200, body: frameDetailFixture({ frame_index: 1 }) };
       },
+      profile: RICH_PROFILE,
     });
+  }
+
+  it("copies the preselected HUD level with R and reports replaced annotations", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
-    const group = await screen.findByLabelText("Grupa anotacji");
-    await user.selectOptions(group, "category:category-2");
+    // The default selection is the whole HUD level, and a whole level is still
+    // the scope the backend has always answered.
+    expect(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     screen.getByRole("button", { name: /Powtórz R/ }).focus();
     await user.keyboard("r");
 
     await waitFor(() => {
-      expect(requests).toContainEqual({
-        scope: "category",
-        category_id: "category-2",
-        expected_version: 7,
-      });
+      expect(requests).toContainEqual({ scope: "game", expected_version: 7 });
     });
     expect(await screen.findByText("Skopiowano: 2. Zastąpiono: 1.")).toBeInTheDocument();
+  });
+
+  it("selects every class of a level with one click on its checkbox", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    copyApi(requests);
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
+    for (const name of ["Score", "Timer", "health"]) {
+      expect(screen.getByRole("checkbox", { name })).toHaveAttribute("aria-checked", "false");
+    }
+
+    await user.click(screen.getByRole("checkbox", { name: "Znaki" }));
+    for (const name of ["7", "1"]) {
+      expect(screen.getByRole("checkbox", { name })).toHaveAttribute("aria-checked", "true");
+    }
+    await user.click(screen.getByRole("button", { name: /Powtórz R/ }));
+
+    await waitFor(() => {
+      expect(requests).toContainEqual({ scope: "character", expected_version: 7 });
+    });
+  });
+
+  it("marks a partly selected level as mixed and copies the subset in one request", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    copyApi(requests);
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("checkbox", { name: "Timer" }));
+    expect(screen.getByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
+      "aria-checked",
+      "mixed",
+    );
+    await user.click(screen.getByRole("checkbox", { name: "7" }));
+    await user.click(screen.getByRole("button", { name: /Powtórz R/ }));
+
+    await waitFor(() => {
+      expect(requests).toEqual([
+        {
+          scope: "categories",
+          category_ids: ["score", "category-1", "category-2"],
+          expected_version: 7,
+        },
+      ]);
+    });
+  });
+
+  it("filters the class list by typing and keeps the level rows scrollable", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    copyApi(requests);
+    renderApp(["/annotations/run-1"]);
+
+    await user.type(await screen.findByLabelText("Filtruj klasy"), "tim");
+
+    expect(screen.getByRole("checkbox", { name: "Timer" })).toBeVisible();
+    expect(screen.queryByRole("checkbox", { name: "Score" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Znaki" })).not.toBeInTheDocument();
+  });
+
+  it("refuses to copy when the selection is empty and says why", async () => {
+    const user = userEvent.setup();
+    const requests: unknown[] = [];
+    copyApi(requests);
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
+    expect(screen.getByRole("button", { name: /Powtórz R/ })).toBeDisabled();
+    expect(
+      screen.getByText("Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia."),
+    ).toBeVisible();
+
+    screen.getByRole("button", { name: "Zaakceptuj klatkę" }).focus();
+    await user.keyboard("r");
+    expect(requests).toEqual([]);
+  });
+
+  it("does not trigger review shortcuts from inside the class picker", async () => {
+    const user = userEvent.setup();
+    const decisions: unknown[] = [];
+    const requests: unknown[] = [];
+    reviewApi({
+      mutation: (url, init) => {
+        if (url.endsWith("/review")) decisions.push(JSON.parse(String(init?.body)));
+        if (url.endsWith("/copy-previous")) requests.push(JSON.parse(String(init?.body)));
+        return { status: 200, body: frameDetailFixture() };
+      },
+      profile: RICH_PROFILE,
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const row = await screen.findByRole("checkbox", { name: "Timer" });
+    row.focus();
+    await user.keyboard("axr");
+
+    expect(decisions).toEqual([]);
+    expect(requests).toEqual([]);
   });
 
   it("disables copy on the first frame and explains why", async () => {
@@ -715,6 +833,7 @@ describe("review filters and mutations", () => {
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
     await user.type(classField, "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
     const alert = await screen.findByRole("alert");
@@ -807,6 +926,7 @@ describe("review filters and mutations", () => {
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
     await user.type(classField, "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     const saveButton = screen.getByRole("button", { name: "Zapisz klasę" });
     await user.click(saveButton);
 

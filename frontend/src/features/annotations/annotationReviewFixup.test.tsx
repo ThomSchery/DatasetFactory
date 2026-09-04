@@ -195,7 +195,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
       fetchSpy.mock.calls.some(([url]) => url === `/api/v1/profiles/${PROFILE.id}`),
     ).toBe(true);
     expect(fetchSpy.mock.calls.some(([url]) => url === "/api/v1/profiles/current")).toBe(false);
-    expect(screen.getByRole("option", { name: "Klasa: health" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "health" })).toBeVisible();
   });
 
   it("shows central profile_not_found copy for a missing run profile", async () => {
@@ -274,6 +274,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
     await user.type(classField, "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     const save = screen.getByRole("button", { name: "Zapisz klasę" });
     await user.click(save);
 
@@ -357,6 +358,7 @@ describe("success refetches authoritative versions", () => {
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
     await user.type(classField, "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
     const conflict = await screen.findByRole("alert");
@@ -368,6 +370,7 @@ describe("success refetches authoritative versions", () => {
 
     await user.clear(screen.getByLabelText("Klasa"));
     await user.type(screen.getByLabelText("Klasa"), "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
     await waitFor(() => {
@@ -412,6 +415,7 @@ describe("success refetches authoritative versions", () => {
     const classField = screen.getByLabelText("Klasa");
     await user.clear(classField);
     await user.type(classField, "health");
+    await user.click(screen.getByRole("option", { name: "health" }));
     const save = screen.getByRole("button", { name: "Zapisz klasę" });
     await user.click(save);
     await waitFor(() => {

@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { Annotation, BBox, Category } from "../../api";
 import { Button } from "../../components/common/Button";
+import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
+import { copyOptionGroups } from "./copySelection";
 import { geometryDraft, parseGeometryDraft, type GeometryDraft } from "./geometryForm";
 import { resolvePopoverPlacement, sourceBoxToRendered, type PopoverPlacement } from "./popoverPlacement";
 
@@ -28,31 +30,26 @@ interface AnnotationPopoverProps {
 
 interface FormState {
   categoryBaselineId: string;
-  categoryBaselineName: string;
   categoryId: string;
   draft: GeometryDraft;
   geometryBaseline: GeometryDraft;
   geometryError: string | null;
-  query: string;
 }
 
-function initialFormState(annotation: Annotation, categoryName: string): FormState {
+function initialFormState(annotation: Annotation): FormState {
   const baseline = geometryDraft(annotation);
   return {
     categoryBaselineId: annotation.category_id,
-    categoryBaselineName: categoryName,
     categoryId: annotation.category_id,
     draft: baseline,
     geometryBaseline: baseline,
     geometryError: null,
-    query: categoryName,
   };
 }
 
 function syncFormState(
   current: FormState,
   annotation: Annotation,
-  categoryName: string,
   frameSize: { height: number; width: number },
 ): FormState {
   const nextGeometryBaseline = geometryDraft(annotation);
@@ -64,12 +61,9 @@ function syncFormState(
     }
   }
 
-  const categoryClean =
-    current.categoryId === current.categoryBaselineId &&
-    current.query === current.categoryBaselineName;
+  const categoryClean = current.categoryId === current.categoryBaselineId;
   return {
     categoryBaselineId: annotation.category_id,
-    categoryBaselineName: categoryName,
     categoryId: categoryClean ? annotation.category_id : current.categoryId,
     draft: nextDraft,
     geometryBaseline: nextGeometryBaseline,
@@ -77,7 +71,6 @@ function syncFormState(
       current.geometryError === null
         ? null
         : parseGeometryDraft(nextDraft, frameSize).error,
-    query: categoryClean ? categoryName : current.query,
   };
 }
 
@@ -98,33 +91,21 @@ export function AnnotationPopover({
   onToggleDrawTarget,
 }: AnnotationPopoverProps) {
   const categoryName = categories.find((category) => category.id === annotation.category_id)?.name ?? annotation.category_id;
-  const [form, setForm] = useState<FormState>(() => initialFormState(annotation, categoryName));
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [form, setForm] = useState<FormState>(() => initialFormState(annotation));
   const [geometryOpen, setGeometryOpen] = useState(false);
   const [placement, setPlacement] = useState<PopoverPlacement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const displayedDraft = geometryPreview === null ? form.draft : geometryDraft(geometryPreview);
-  const filteredCategories = useMemo(() => {
-    const query = form.query.trim().toLocaleLowerCase("pl");
-    const filtered = query === ""
-      ? [...categories]
-      : categories.filter((category) => category.name.toLocaleLowerCase("pl").includes(query));
-    return filtered.sort((first, second) => {
-      if (first.id === form.categoryId) return -1;
-      if (second.id === form.categoryId) return 1;
-      return first.name.localeCompare(second.name, "pl");
-    });
-  }, [categories, form.categoryId, form.query]);
+  const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
 
   useEffect(() => {
-    setForm((current) => syncFormState(current, annotation, categoryName, frameSize));
+    setForm((current) => syncFormState(current, annotation, frameSize));
   }, [
     annotation.category_id,
     annotation.height,
     annotation.width,
     annotation.x,
     annotation.y,
-    categoryName,
     frameSize.height,
     frameSize.width,
   ]);
@@ -149,53 +130,25 @@ export function AnnotationPopover({
     );
     setPlacement(next);
   }, [
-    activeIndex,
     annotation.height,
     annotation.width,
     annotation.x,
     annotation.y,
-    filteredCategories.length,
+    classGroups,
     frameSize.height,
     frameSize.width,
     geometryOpen,
   ]);
 
-  function choose(category: Category): void {
-    setForm((current) => ({ ...current, categoryId: category.id, query: category.name }));
-  }
-
-  function saveCategory(): void {
-    const active = filteredCategories[activeIndex];
-    if (active === undefined) {
+  function saveCategory(categoryId: string): void {
+    if (categoryId === "") {
       return;
     }
-    const categoryId = active.id;
     if (!draft && categoryId === annotation.category_id) {
       onClose();
       return;
     }
     onCategoryChange(categoryId);
-  }
-
-  function handleClassKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) =>
-        Math.min(Math.max(current + direction, 0), Math.max(0, filteredCategories.length - 1)),
-      );
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      saveCategory();
-    }
   }
 
   return (
@@ -227,41 +180,27 @@ export function AnnotationPopover({
         </span>
       </header>
 
-      <TextField
+      <GroupedOptionList
         autoFocus
-        autoComplete="off"
         disabled={disabled}
-        label="Klasa"
-        onChange={(event) => {
-          setForm((current) => ({ ...current, query: event.target.value }));
-          setActiveIndex(0);
+        emptyMessage={
+          draft
+            ? "Brak takiej klasy w profilu. Wybierz istniejącą klasę albo porzuć szkic."
+            : "Brak takiej klasy w profilu. Wybierz istniejącą klasę."
+        }
+        filterLabel="Klasa"
+        groups={classGroups}
+        key={annotation.id}
+        label="Klasy profilu"
+        mode="single"
+        onChange={(selection) => {
+          setForm((current) => ({ ...current, categoryId: selection[0] ?? "" }));
         }}
-        onKeyDown={handleClassKeyDown}
-        value={form.query}
+        onConfirm={(selection) => {
+          saveCategory(selection[0] ?? "");
+        }}
+        selectedIds={form.categoryId === "" ? [] : [form.categoryId]}
       />
-      <ul aria-label="Pasujące klasy" className="df-annotation-popover__options" role="listbox">
-        {filteredCategories.map((category, index) => (
-          <li aria-selected={index === activeIndex} key={category.id} role="option">
-            <Button
-              disabled={disabled}
-              onClick={() => {
-                choose(category);
-                setActiveIndex(index);
-              }}
-              size="sm"
-              variant={index === activeIndex ? "primary" : "secondary"}
-            >
-              {category.name}
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {filteredCategories.length === 0 ? (
-        <p className="df-annotation-popover__empty" role="status">
-          Brak takiej klasy w profilu. Wybierz istniejącą klasę
-          {draft ? " albo porzuć szkic." : "."}
-        </p>
-      ) : null}
 
       <div className="df-annotation-popover__actions">
         <Button disabled={disabled} loading={busyKey === `delete:${annotation.id}`} onClick={onDelete} size="sm" variant="muted">
@@ -269,9 +208,11 @@ export function AnnotationPopover({
         </Button>
         <Button
           aria-label="Zapisz klasę"
-          disabled={disabled || filteredCategories.length === 0}
+          disabled={disabled || form.categoryId === ""}
           loading={draft ? busyKey === "create" : busyKey === `category:${annotation.id}`}
-          onClick={saveCategory}
+          onClick={() => {
+            saveCategory(form.categoryId);
+          }}
           size="sm"
         >
           Zapisz <kbd>Enter</kbd>

@@ -78,6 +78,7 @@ frontend/src/components/
 | `Field` | `frontend/src/components/common/Field` | Prymityw pod nową kontrolkę formularza: etykieta, opis, komunikat błędu i powiązania ARIA. Nie używać wprost, gdy wystarczy `TextField`/`SelectField`. |
 | `TextField` | `frontend/src/components/common/TextField` | Każde pole tekstowe lub liczbowe; jedyny dozwolony `<input>` w aplikacji. |
 | `SelectField` | `frontend/src/components/common/SelectField` | Każda lista wyboru; jedyny dozwolony `<select>` w aplikacji. |
+| `GroupedOptionList` | `frontend/src/components/common/GroupedOptionList` | Wybór z listy dwupoziomowej: grupy i ich pozycje, z filtrowaniem. Jedyny dozwolony sposób renderowania pola wyboru (checkboxa) i listy z wcięciem. Gdy poziomy nie są potrzebne — `SelectField`. |
 | `DataList` | `frontend/src/components/common/DataList` | Pary etykieta/wartość: metadane projektu, profilu, runu, liczby klatek. |
 | `RegionOverlay` | `frontend/src/components/common/RegionOverlay` | Prostokąty nad obrazem: regiony HUD profilu, boksy weryfikacji. Jedyny dozwolony sposób rysowania i wskazywania geometrii nad `<img>`. |
 
@@ -204,6 +205,41 @@ którego kontrolka nie opisuje przez `aria-describedby`.
 Szerokości: `full` = `--measure-copy` (ścieżka pliku), `short` = `12ch`
 (interwał w ms) — GRID-10. Slot komunikatu błędu ma stałą wysokość, więc
 pojawienie się błędu nie przesuwa kolejnych pól (SPACING-04).
+
+### GroupedOptionList
+
+Lista dwupoziomowa z filtrowaniem. Props: `groups` (`id`, `label`, `options`),
+`selectedIds`, `onChange`, `mode` (`single` albo `multiple`), `label`,
+`filterLabel`, `emptyMessage`, `onConfirm?`, `autoFocus?`, `disabled?`.
+
+| Tryb | Struktura ARIA | Wiersz grupy |
+|---|---|---|
+| `multiple` | `role="group"` na całości i na każdej grupie; wiersze `role="checkbox"` z `aria-checked` | interaktywny: zaznacza i odznacza wszystkie **widoczne** pozycje grupy naraz |
+| `single` | `role="listbox"`, `role="group"` na grupę, wiersze `role="option"` z `aria-selected` | nieinteraktywny nagłówek |
+
+| Element | Wygląd |
+|---|---|
+| wiersz | wysokość min. `--control-height-sm` (GRID-05), `--radius-sm`, `--font-size-sm` |
+| wiersz grupy | dodatkowo `--font-weight-semibold` (TYPO-07 — hierarchię niesie waga) |
+| wiersz pozycji | wcięcie `--size-md`, czyli o krok większe niż odstęp między wierszami (SPACING-01) |
+| znacznik wyboru | kwadrat `--size-sm`, obrys `--color-stroke-strong-default` (BWIDTH-03), zaznaczony wypełniony `--color-fill-brand-impeccable` |
+| stan częściowy | `aria-checked="mixed"` + poprzeczka zamiast wypełnienia — różnica kształtu, nie samego koloru (COLOR-09) |
+| hover / zaznaczony / disabled | `--color-surface-neutral-hover` / `--color-fill-brand-impeccable-soft` / `--opacity-disabled` |
+| lista | `max-height` `calc(var(--size-xxl) * 3)` z przewijaniem — 38 klas nie może rozepchać panelu |
+
+Trzy własności są powodem istnienia tego komponentu:
+
+1. **Poziomy i pola wyboru**, których natywny `select` nie ma. Grupa jest
+   jednostką operacyjną: jedno kliknięcie zaznacza wszystkie jej pozycje.
+2. **Klawiatura**, którą natywny `select` dawał za darmo: roving tabindex po
+   widocznych wierszach, strzałki, `Home`/`End`, `Enter`/`Spacja`, a pole
+   filtrowania jest wejściem i wyjściem z listy.
+3. **Granica skrótów.** Korzeń niesie `data-shortcut-scope`, więc ekran
+   bindujący gołe litery rozpozna, że to zdarzenie nie należy do niego.
+
+Zaznaczenie **nie podąża za fokusem**. Przejście strzałkami po liście niczego
+nie wybiera — inaczej świeżo narysowany box dostawałby klasę, której człowiek
+nie wskazał.
 
 ### DataList
 

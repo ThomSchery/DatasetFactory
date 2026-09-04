@@ -260,19 +260,10 @@
   justify-content: space-between;
 }
 
-.df-annotation-popover__options {
-  display: grid;
-  gap: calc(var(--size-xs) / 2);
+/* The popover is a floating layer, so its list is shorter than the one in the
+   side panel: it has to leave the edited bbox visible. */
+.df-annotation-popover .df-grouped-options__list {
   max-height: calc(var(--size-xxl) * 2);
-  padding: var(--size-none);
-  margin: var(--size-none);
-  overflow-y: auto;
-  list-style: none;
-}
-
-.df-annotation-popover__options .df-button {
-  justify-content: flex-start;
-  width: 100%;
 }
 
 .df-annotation-popover__actions {
@@ -311,13 +302,6 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
   text-align: right;
-}
-
-.df-annotation-popover__empty {
-  margin: var(--size-none);
-  color: var(--color-status-warning-default);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-standard);
 }
 
 .df-review-annotations__item {

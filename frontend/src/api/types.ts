@@ -289,11 +289,18 @@ export interface CreateAnnotationRequest {
   expected_version: number;
 }
 
-export type CopyPreviousScope = "game" | "character" | "category";
+export type CopyPreviousScope = "game" | "character" | "category" | "categories";
 
+/**
+ * `categories` carries an arbitrary subset of classes in a single request. It
+ * exists so that a subset selected in the picker stays one transaction: a copy
+ * is all-or-nothing, and a sequence of per-class requests could not promise
+ * that.
+ */
 export interface CopyPreviousAnnotationsRequest {
   scope: CopyPreviousScope;
   category_id?: string;
+  category_ids?: readonly string[];
   expected_version: number;
 }
 

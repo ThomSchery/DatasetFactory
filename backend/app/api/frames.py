@@ -28,8 +28,17 @@ class CreateAnnotationRequest(StrictModel):
 
 
 class CopyPreviousAnnotationsRequest(StrictModel):
-    scope: Literal["game", "character", "category"]
+    """
+    `categories` was added for FE-008, where the picker can select a subset of
+    classes rather than one class or a whole kind. It is a separate scope rather
+    than a list on `category`, so the three original shapes keep their exact
+    meaning, and it is one request rather than one per class, so the copy stays
+    the atomic operation FE-004 promised.
+    """
+
+    scope: Literal["game", "character", "category", "categories"]
     category_id: str | None = None
+    category_ids: tuple[str, ...] | None = None
     expected_version: int = Field(ge=1)
 
     @model_validator(mode="after")
@@ -38,6 +47,12 @@ class CopyPreviousAnnotationsRequest(StrictModel):
             raise ValueError("category_id is required for category scope")
         if self.scope != "category" and self.category_id is not None:
             raise ValueError("category_id is only allowed for category scope")
+        if self.scope == "categories" and not self.category_ids:
+            raise ValueError("category_ids is required for categories scope")
+        if self.scope != "categories" and self.category_ids is not None:
+            raise ValueError("category_ids is only allowed for categories scope")
+        if self.category_ids is not None and any(not item for item in self.category_ids):
+            raise ValueError("category_ids must not contain an empty identifier")
         return self
 
 
@@ -153,6 +168,7 @@ def create_frames_router(review_provider: ReviewProvider) -> APIRouter:
                 frame_id,
                 scope=payload.scope,
                 category_id=payload.category_id,
+                category_ids=payload.category_ids,
                 expected_version=payload.expected_version,
             )
         except ReviewUseCaseError as error:

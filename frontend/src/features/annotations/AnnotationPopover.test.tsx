@@ -25,6 +25,7 @@ const categories: Category[] = [
 ];
 
 function renderPopover(overrides: {
+  annotation?: Annotation;
   draft?: boolean;
   invalid?: boolean;
   onCategoryChange?: (categoryId: string) => void;
@@ -37,7 +38,7 @@ function renderPopover(overrides: {
   render(
     <div>
       <AnnotationPopover
-        annotation={annotation}
+        annotation={overrides.annotation ?? annotation}
         busyKey={null}
         categories={categories}
         disabled={false}
@@ -93,10 +94,12 @@ describe("AnnotationPopover", () => {
 
   it("names an unmatched draft class explicitly and cannot save it", async () => {
     const user = userEvent.setup();
-    const { onCategoryChange } = renderPopover({ draft: true });
+    const { onCategoryChange } = renderPopover({
+      annotation: { ...annotation, category_id: "" },
+      draft: true,
+    });
     const field = screen.getByRole("textbox", { name: "Klasa" });
 
-    await user.clear(field);
     await user.type(field, "health and armour{Enter}");
 
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -104,5 +107,28 @@ describe("AnnotationPopover", () => {
     );
     expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
+  });
+
+  it("leaves a fresh draft with no class chosen and no way to save one by accident", async () => {
+    const user = userEvent.setup();
+    const { onCategoryChange } = renderPopover({
+      annotation: { ...annotation, category_id: "" },
+      draft: true,
+    });
+
+    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    for (const option of screen.getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-selected", "false");
+    }
+
+    // Walking the list is not choosing from it.
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(onCategoryChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("option", { name: "Health" }));
+    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 });

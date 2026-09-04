@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from backend.app.access.store.database import Database
 from backend.app.access.store.models import Annotation, Category, Frame, PipelineRun
@@ -276,6 +277,7 @@ class AnnotationRepository:
         *,
         scope: str,
         category_id: str | None,
+        category_ids: tuple[str, ...] | None = None,
         expected_version: int,
     ) -> CopyPreviousResult:
         with self._database.session() as session:
@@ -302,11 +304,21 @@ class AnnotationRepository:
             if previous is None:
                 raise ReviewPreviousFrameError
 
+            category_filter: ColumnElement[bool]
             if scope == "category":
                 if category_id is None:
                     raise ReviewCategoryError
                 self._require_allowed_category(session, category_id, run.profile_id)
                 category_filter = Category.id == category_id
+            elif scope == "categories":
+                # Every identifier is validated before the first write, so a
+                # list containing one class from another profile leaves the
+                # target frame and its version untouched.
+                if not category_ids:
+                    raise ReviewCategoryError
+                for item in category_ids:
+                    self._require_allowed_category(session, item, run.profile_id)
+                category_filter = Category.id.in_(tuple(category_ids))
             else:
                 category_filter = Category.kind == scope
 

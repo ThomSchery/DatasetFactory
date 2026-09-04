@@ -15,7 +15,6 @@ import {
   type Annotation,
   type BBox,
   type CopyPreviousAnnotationsResult,
-  type CopyPreviousScope,
   type ErrorPresentation,
   type FrameCounts,
   type FrameSummary,
@@ -24,14 +23,18 @@ import {
 } from "../../api";
 import { Button } from "../../components/common/Button";
 import { DataList } from "../../components/common/DataList";
+import {
+  GroupedOptionList,
+  SHORTCUT_SCOPE_ATTRIBUTE,
+} from "../../components/common/GroupedOptionList";
 import { Notice } from "../../components/common/Notice";
 import { Panel } from "../../components/common/Panel";
 import { RegionOverlay, type OverlayShape } from "../../components/common/RegionOverlay";
-import { SelectField } from "../../components/common/SelectField";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { AnnotationPopover } from "./AnnotationPopover";
 import { ClassList } from "./ClassList";
+import { categoryIdsOfKind, copyOptionGroups, copyPreviousTarget } from "./copySelection";
 import { FrameToolbar } from "./FrameToolbar";
 import { geometryDraft, parseGeometryDraft } from "./geometryForm";
 import {
@@ -188,7 +191,11 @@ function LoadedFrameEditor({
   const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
-  const [copySelection, setCopySelection] = useState("game");
+  // The HUD level is preselected whole, which is the request the panel sent by
+  // default before the picker existed.
+  const [copySelection, setCopySelection] = useState<readonly string[]>(() =>
+    categoryIdsOfKind(profile.categories, "game"),
+  );
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const capabilities = frameReviewCapabilities(frame.stage_status, frame.review_status);
   const activeAnnotations = useMemo(
@@ -319,26 +326,23 @@ function LoadedFrameEditor({
   const stage = describeFrameStage(frame.stage_status);
   const editorDisabled = !capabilities.canEdit || mutation.isPending;
   const canDirectEdit = capabilities.canEdit && redrawMode === null;
-  const copyDisabled = frame.frame_index === 0 || !capabilities.canEdit || mutation.isPending;
+  const copyTarget = copyPreviousTarget(copySelection, profile.categories);
+  const copyDisabled =
+    frame.frame_index === 0 ||
+    !capabilities.canEdit ||
+    mutation.isPending ||
+    copyTarget === null;
 
   function copyPrevious(): void {
-    if (copyDisabled) {
+    if (copyDisabled || copyTarget === null) {
       return;
     }
-    const [scopeValue, categoryId] = copySelection.split(":", 2);
-    const scope: CopyPreviousScope =
-      scopeValue === "category"
-        ? "category"
-        : scopeValue === "character"
-          ? "character"
-          : "game";
     setActionError(null);
     setCopyFeedback(null);
     mutation.mutate({
-      ...(scope === "category" && categoryId !== undefined ? { categoryId } : {}),
       expectedVersion: frame.version,
       kind: "copy-previous",
-      scope,
+      target: copyTarget,
     });
   }
 
@@ -352,7 +356,12 @@ function LoadedFrameEditor({
         event.ctrlKey ||
         event.metaKey ||
         (target instanceof HTMLElement &&
-          (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)))
+          (target.isContentEditable ||
+            ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) ||
+            // A custom option list owns its keystrokes the way a native
+            // `<select>` did; it says so with the attribute rather than by
+            // being recognisable by tag name.
+            target.closest(`[${SHORTCUT_SCOPE_ATTRIBUTE}]`) !== null))
       ) {
         return;
       }
@@ -371,21 +380,17 @@ function LoadedFrameEditor({
         setActionError(null);
         mutation.mutate({ decision: "reject", expectedVersion: frame.version, kind: "review" });
       } else if (key === "r" && !copyDisabled) {
+        const target = copyPreviousTarget(copySelection, profile.categories);
+        if (target === null) {
+          return;
+        }
         event.preventDefault();
-        const [scopeValue, categoryId] = copySelection.split(":", 2);
-        const scope: CopyPreviousScope =
-          scopeValue === "category"
-            ? "category"
-            : scopeValue === "character"
-              ? "character"
-              : "game";
         setActionError(null);
         setCopyFeedback(null);
         mutation.mutate({
-          ...(scope === "category" && categoryId !== undefined ? { categoryId } : {}),
           expectedVersion: frame.version,
           kind: "copy-previous",
-          scope,
+          target,
         });
       }
     }
@@ -402,6 +407,7 @@ function LoadedFrameEditor({
     copySelection,
     frame.version,
     mutation,
+    profile.categories,
   ]);
 
   function submit(intent: ReviewMutationIntent): void {
@@ -557,22 +563,18 @@ function LoadedFrameEditor({
             <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
             <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
           </div>
-          <SelectField
-            disabled={copyDisabled}
+          <GroupedOptionList
+            disabled={!capabilities.canEdit || mutation.isPending || frame.frame_index === 0}
+            emptyMessage="Żadna klasa profilu nie pasuje do wpisanego tekstu."
+            filterLabel="Filtruj klasy"
+            groups={copyOptionGroups(profile.categories)}
             label="Grupa anotacji"
-            onChange={(event) => {
-              setCopySelection(event.target.value);
+            mode="multiple"
+            onChange={(selection) => {
+              setCopySelection(selection);
               setCopyFeedback(null);
             }}
-            options={[
-              { label: "Pola HUD (gra)", value: "game" },
-              { label: "Znaki", value: "character" },
-              ...profile.categories.map((category) => ({
-                label: `Klasa: ${category.name}`,
-                value: `category:${category.id}`,
-              })),
-            ]}
-            value={copySelection}
+            selectedIds={copySelection}
           />
           <Button
             disabled={copyDisabled}
@@ -589,7 +591,9 @@ function LoadedFrameEditor({
               ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
               : !capabilities.canEdit
                 ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
-                : copyFeedback}
+                : copyTarget === null
+                  ? "Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia."
+                  : copyFeedback}
           </p>
         </section>
       </Panel>

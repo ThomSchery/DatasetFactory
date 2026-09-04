@@ -577,6 +577,248 @@ def test_copy_previous_replaces_only_the_selected_group_and_keeps_provenance_man
         ) == (seed.game_category_id, 10, 11, 20, 12, "manual", None, None)
 
 
+def _seed_copy_previous_subset(
+    composition: CompositionRoot,
+    seed: ReviewSeed,
+) -> tuple[str, dict[str, str]]:
+    """
+    A target frame carrying one annotation per category, over the seeded source
+    frame that already holds two annotations in `category_id`. Enough to tell
+    "replaced inside the chosen scope" apart from "replaced everything".
+    """
+    target_frame_id = str(uuid4())
+    targets = {
+        "first": str(uuid4()),
+        "second": str(uuid4()),
+        "game": str(uuid4()),
+    }
+    source_second_id = str(uuid4())
+    with composition.database.session() as session:
+        source = session.get(Frame, seed.frame_id)
+        assert source is not None
+        source.review_status = "rejected"
+        session.add(
+            Frame(
+                id=target_frame_id,
+                run_id=seed.run_id,
+                frame_index=2,
+                timestamp_ms=2000,
+                image_relpath=f"runs/{seed.run_id}/frames/00000002.jpg",
+                stage_status="review_pending",
+                review_status="pending",
+                width=100,
+                height=50,
+                version=1,
+            )
+        )
+        session.flush()
+        session.add_all(
+            [
+                Annotation(
+                    id=source_second_id,
+                    frame_id=seed.frame_id,
+                    category_id=seed.alternate_category_id,
+                    x=8,
+                    y=2,
+                    width=6,
+                    height=6,
+                    confidence=None,
+                    source="manual",
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                ),
+                Annotation(
+                    id=targets["first"],
+                    frame_id=target_frame_id,
+                    category_id=seed.category_id,
+                    x=40,
+                    y=2,
+                    width=4,
+                    height=4,
+                    confidence=None,
+                    source="manual",
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                ),
+                Annotation(
+                    id=targets["second"],
+                    frame_id=target_frame_id,
+                    category_id=seed.alternate_category_id,
+                    x=50,
+                    y=2,
+                    width=4,
+                    height=4,
+                    confidence=None,
+                    source="manual",
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                ),
+                Annotation(
+                    id=targets["game"],
+                    frame_id=target_frame_id,
+                    category_id=seed.game_category_id,
+                    x=60,
+                    y=2,
+                    width=4,
+                    height=4,
+                    confidence=None,
+                    source="manual",
+                    observation_id=None,
+                    status="proposed",
+                    version=1,
+                ),
+            ]
+        )
+    return target_frame_id, targets
+
+
+def test_copy_previous_categories_replaces_only_the_listed_classes(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    target_frame_id, targets = _seed_copy_previous_subset(composition, seed)
+
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        copied = client.post(
+            f"/api/v1/frames/{target_frame_id}/annotations/copy-previous",
+            json={
+                "scope": "categories",
+                "category_ids": [seed.category_id],
+                "expected_version": 1,
+            },
+        )
+        assert copied.status_code == 200, copied.text
+        assert copied.json() == {"copied": 2, "replaced": 1, "frame_version": 2}
+
+    with composition.database.session() as session:
+        target = session.get(Frame, target_frame_id)
+        replaced = session.get(Annotation, targets["first"])
+        other_character = session.get(Annotation, targets["second"])
+        game = session.get(Annotation, targets["game"])
+        assert target is not None and target.version == 2
+        assert replaced is not None and replaced.status == "deleted"
+        # The whole point of a subset: a class the user did not list keeps its
+        # annotations and its version, in its own group and in the other one.
+        assert other_character is not None and other_character.status == "proposed"
+        assert other_character.version == 1
+        assert game is not None and game.status == "proposed" and game.version == 1
+        active = tuple(
+            session.scalars(
+                select(Annotation).where(
+                    Annotation.frame_id == target_frame_id,
+                    Annotation.status != "deleted",
+                )
+            )
+        )
+        fresh = tuple(item for item in active if item.id not in set(targets.values()))
+        assert len(fresh) == 2
+        assert {
+            (item.category_id, item.source, item.confidence, item.observation_id) for item in fresh
+        } == {(seed.category_id, "manual", None, None)}
+        assert sorted(item.x for item in fresh) == [1, 6]
+
+
+def test_copy_previous_categories_copies_a_multi_class_subset_at_once(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    target_frame_id, targets = _seed_copy_previous_subset(composition, seed)
+
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        copied = client.post(
+            f"/api/v1/frames/{target_frame_id}/annotations/copy-previous",
+            json={
+                "scope": "categories",
+                "category_ids": [seed.category_id, seed.alternate_category_id],
+                "expected_version": 1,
+            },
+        )
+        assert copied.status_code == 200, copied.text
+        # Two classes, one request, one version bump — not one bump per class.
+        assert copied.json() == {"copied": 3, "replaced": 2, "frame_version": 2}
+
+    with composition.database.session() as session:
+        target = session.get(Frame, target_frame_id)
+        run = session.get(PipelineRun, seed.run_id)
+        game = session.get(Annotation, targets["game"])
+        assert target is not None and target.version == 2
+        assert run is not None and run.review_revision == 1
+        assert game is not None and game.status == "proposed" and game.version == 1
+
+
+def test_copy_previous_categories_with_one_invalid_entry_changes_nothing(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    target_frame_id, targets = _seed_copy_previous_subset(composition, seed)
+
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/frames/{target_frame_id}/annotations/copy-previous",
+            json={
+                "scope": "categories",
+                "category_ids": [seed.category_id, seed.foreign_category_id],
+                "expected_version": 1,
+            },
+        )
+        assert response.status_code == 400, response.text
+        assert response.json()["error"]["code"] == "category_not_allowed"
+
+    with composition.database.session() as session:
+        target = session.get(Frame, target_frame_id)
+        run = session.get(PipelineRun, seed.run_id)
+        assert target is not None and target.version == 1
+        assert run is not None and run.review_revision == 0
+        # Atomicity: the valid entry ahead of the rejected one copied nothing.
+        for annotation_id in targets.values():
+            annotation = session.get(Annotation, annotation_id)
+            assert annotation is not None
+            assert annotation.status == "proposed" and annotation.version == 1
+        assert len(
+            tuple(session.scalars(select(Annotation).where(Annotation.frame_id == target_frame_id)))
+        ) == len(targets)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"scope": "categories", "expected_version": 1},
+        {"scope": "categories", "category_ids": [], "expected_version": 1},
+        {"scope": "categories", "category_ids": [""], "expected_version": 1},
+        {"scope": "game", "category_ids": ["anything"], "expected_version": 1},
+        {
+            "scope": "categories",
+            "category_id": "anything",
+            "category_ids": ["anything"],
+            "expected_version": 1,
+        },
+    ],
+)
+def test_copy_previous_rejects_malformed_category_lists(
+    composition: CompositionRoot,
+    tmp_path: Path,
+    payload: dict[str, object],
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/frames/{seed.frame_id}/annotations/copy-previous",
+            json=payload,
+        )
+        assert response.status_code == 400, response.text
+        assert response.json()["error"]["code"] == "validation_error"
+
+
 def test_copy_previous_reports_first_frame_and_does_not_mutate_it(
     composition: CompositionRoot,
     tmp_path: Path,

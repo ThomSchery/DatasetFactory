@@ -186,7 +186,10 @@ describe("terminal annotation refresh", () => {
       expect(within(editor).getByLabelText("y")).toHaveValue(222);
       expect(within(editor).getByLabelText("width")).toHaveValue(10);
       expect(within(editor).getByLabelText("height")).toHaveValue(32);
-      expect(within(editor).getByLabelText("Klasa")).toHaveValue("health");
+      expect(within(editor).getByRole("option", { name: "health" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
       expect(
         within(editor).queryByText("Bbox musi mieścić się w granicach całej klatki."),
       ).not.toBeInTheDocument();
@@ -337,7 +340,10 @@ describe("terminal annotation refresh", () => {
       expect(within(editor).getByLabelText("y")).toHaveValue(222);
       expect(within(editor).getByLabelText("width")).toHaveValue(50);
       expect(within(editor).getByLabelText("height")).toHaveValue(36);
-      expect(within(editor).getByLabelText("Klasa")).toHaveValue("health");
+      expect(within(editor).getByRole("option", { name: "health" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
     });
   });
 

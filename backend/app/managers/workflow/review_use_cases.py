@@ -171,8 +171,9 @@ class ReviewUseCases:
         self,
         frame_id: str,
         *,
-        scope: Literal["game", "character", "category"],
+        scope: Literal["game", "character", "category", "categories"],
         category_id: str | None,
+        category_ids: tuple[str, ...] | None = None,
         expected_version: int,
     ) -> CopyPreviousResult:
         try:
@@ -180,6 +181,7 @@ class ReviewUseCases:
                 frame_id,
                 scope=scope,
                 category_id=category_id,
+                category_ids=category_ids,
                 expected_version=expected_version,
             )
         except Exception as exc:

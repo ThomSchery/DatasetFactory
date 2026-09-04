@@ -1,0 +1,126 @@
+/*
+ * A two-level option list. The hierarchy is carried by indentation and weight
+ * (SPACING-01, TYPO-07), never by a second font size, and the partial state by
+ * the shape of the mark (COLOR-09) on top of `aria-checked="mixed"`.
+ */
+
+.df-grouped-options {
+  display: grid;
+  gap: var(--size-xs);
+  min-width: 0;
+}
+
+.df-grouped-options__list {
+  display: grid;
+  gap: var(--size-xs);
+  /* F1.5: 38 character classes have to stay scrollable inside a popover and
+     inside a side panel, so the height is capped here rather than at each
+     call site. */
+  max-height: calc(var(--size-xxl) * 3);
+  padding: calc(var(--size-xs) / 2);
+  border-radius: var(--radius-md);
+  background: var(--color-background-primary-default);
+  overflow-y: auto;
+}
+
+.df-grouped-options__group {
+  display: grid;
+  gap: calc(var(--size-xs) / 2);
+}
+
+.df-grouped-options__group-title {
+  min-height: var(--control-height-sm);
+  padding: var(--size-xs) calc(var(--size-xs) / 2);
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-tight);
+  text-transform: uppercase;
+}
+
+.df-grouped-options__row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  /* GRID-05: a desktop hit area, so a class row is never a hairline target. */
+  min-height: var(--control-height-sm);
+  padding: calc(var(--size-xs) / 2) var(--size-xs);
+  /* RADIUS-04: smaller than the list container, which pads it. */
+  border-radius: var(--radius-sm);
+  color: var(--color-text-strong-default);
+  cursor: pointer;
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-grouped-options__row--group {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* SPACING-01: the indent is a whole step larger than the gap between rows, so
+   the level reads before the text does. */
+.df-grouped-options__row--option {
+  margin-inline-start: var(--size-md);
+}
+
+.df-grouped-options__row:hover {
+  background: var(--color-surface-neutral-hover);
+}
+
+.df-grouped-options__row--checked {
+  background: var(--color-fill-brand-impeccable-soft);
+}
+
+.df-grouped-options__row[aria-disabled="true"] {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+/* BWIDTH-03: a checkbox is one of the few elements that natively needs a
+   visible border in its resting state. */
+.df-grouped-options__mark {
+  flex: none;
+  width: var(--size-sm);
+  height: var(--size-sm);
+  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-transparent);
+}
+
+.df-grouped-options__row[data-checked="true"] .df-grouped-options__mark {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable);
+}
+
+/* The partial state differs from the full one in shape, not only in colour: a
+   centred bar instead of a filled square (COLOR-09). */
+.df-grouped-options__row[data-checked="mixed"] .df-grouped-options__mark {
+  border-color: var(--color-fill-brand-impeccable);
+  background:
+    linear-gradient(
+      to bottom,
+      var(--color-surface-transparent) 0%,
+      var(--color-surface-transparent) 40%,
+      var(--color-fill-brand-impeccable) 40%,
+      var(--color-fill-brand-impeccable) 60%,
+      var(--color-surface-transparent) 60%,
+      var(--color-surface-transparent) 100%
+    );
+}
+
+.df-grouped-options__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-grouped-options__empty {
+  margin: var(--size-none);
+  color: var(--color-status-warning-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}

@@ -6,21 +6,16 @@ import {
   updateAnnotation,
   type BBox,
   type CopyPreviousAnnotationsResult,
-  type CopyPreviousScope,
   type ReviewDecision,
 } from "../../api";
+import type { CopyPreviousTarget } from "./copySelection";
 
 export type ReviewMutationIntent =
   | { annotationId: string; categoryId: string; expectedVersion: number; kind: "category" }
   | { annotationId: string; bbox: BBox; expectedVersion: number; kind: "geometry" }
   | { annotationId: string; expectedVersion: number; kind: "delete" }
   | { bbox: BBox; categoryId: string; expectedVersion: number; kind: "create" }
-  | {
-      categoryId?: string;
-      expectedVersion: number;
-      kind: "copy-previous";
-      scope: CopyPreviousScope;
-    }
+  | { expectedVersion: number; kind: "copy-previous"; target: CopyPreviousTarget }
   | { decision: ReviewDecision; expectedVersion: number; kind: "review" };
 
 /** Shared mutation scope used to serialize every write on one review screen. */
@@ -58,8 +53,7 @@ export async function executeReviewMutation(
       return;
     case "copy-previous":
       return copyPreviousAnnotations(frameId, {
-        scope: intent.scope,
-        ...(intent.categoryId === undefined ? {} : { category_id: intent.categoryId }),
+        ...intent.target,
         expected_version: intent.expectedVersion,
       });
     case "review":

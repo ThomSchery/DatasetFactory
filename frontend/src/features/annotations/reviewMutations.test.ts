@@ -45,10 +45,29 @@ const cases: Case[] = [
   },
   {
     label: "kopiowanie grupy z poprzedniej klatki",
-    intent: { kind: "copy-previous", scope: "category", categoryId: "cat-1", expectedVersion: 7 },
+    intent: {
+      kind: "copy-previous",
+      target: { category_id: "cat-1", scope: "category" },
+      expectedVersion: 7,
+    },
     expectedMethod: "POST",
     expectedUrl: "/api/v1/frames/frame-1/annotations/copy-previous",
     expectedBody: { scope: "category", category_id: "cat-1", expected_version: 7 },
+  },
+  {
+    label: "kopiowanie podzbioru klas jednym żądaniem",
+    intent: {
+      kind: "copy-previous",
+      target: { category_ids: ["cat-1", "cat-2"], scope: "categories" },
+      expectedVersion: 7,
+    },
+    expectedMethod: "POST",
+    expectedUrl: "/api/v1/frames/frame-1/annotations/copy-previous",
+    expectedBody: {
+      scope: "categories",
+      category_ids: ["cat-1", "cat-2"],
+      expected_version: 7,
+    },
   },
   ...(["accept", "reject", "reopen"] as const).map((decision) => ({
     label: decision,
