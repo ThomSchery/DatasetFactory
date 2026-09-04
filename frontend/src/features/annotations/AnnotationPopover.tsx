@@ -110,6 +110,47 @@ export function AnnotationPopover({
     frameSize.width,
   ]);
 
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    function handleOutsidePointerDown(event: Event): void {
+      const popover = popoverRef.current;
+      const target = event.target;
+      if (popover === null || !(target instanceof Node)) {
+        return;
+      }
+      if (popover.contains(target)) {
+        return;
+      }
+      // The bbox this popover edits is not "outside" it. Without this, the
+      // first pixel of a drag on the edited box — or on an unsaved one —
+      // would abandon it halfway through the gesture.
+      if (
+        target instanceof Element &&
+        target.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ===
+          annotation.id
+      ) {
+        return;
+      }
+      closeRef.current();
+    }
+
+    /*
+     * Bubble phase on the document, and deliberately no `preventDefault` or
+     * `stopPropagation`. React delegates to the root container, which sits
+     * below `document`, so the drawing surface has already begun its gesture
+     * by the time this runs: closing the popover is a second effect of the
+     * same `pointerdown`, never a replacement for it. `pointerdown` rather
+     * than `click`, because the click that ends the drawing gesture arrives
+     * after this popover exists and would close it on sight.
+     */
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+    };
+  }, [annotation.id]);
+
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     const container = popover?.parentElement;
@@ -156,12 +197,6 @@ export function AnnotationPopover({
       aria-label={draft ? "Wybierz klasę dla nowego bbox" : `Edytuj anotację ${categoryName}`}
       className="df-annotation-popover"
       data-side={placement?.side}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          onClose();
-        }
-      }}
       ref={popoverRef}
       role="dialog"
       style={placement === null ? { visibility: "hidden" } : { left: placement.left, top: placement.top }}
@@ -272,7 +307,6 @@ export function AnnotationPopover({
           </Button>
         </div>
       </details>
-      <p className="df-annotation-popover__hint"><kbd>Esc</kbd> zamyka bez zmian</p>
     </div>
   );
 }

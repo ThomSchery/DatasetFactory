@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -37,6 +37,14 @@ function renderPopover(overrides: {
   const onGeometryChange = overrides.onGeometryChange ?? vi.fn();
   render(
     <div>
+      {/* The surface the popover floats over, in the shape the overlay gives
+          it: a group per shape, carrying the id the popover matches on. */}
+      <div data-testid="outside">
+        <div data-overlay-shape-id={annotation.id}>
+          <span data-testid="own-shape-fill" />
+        </div>
+        <div data-overlay-shape-id="ann-2" data-testid="other-shape" />
+      </div>
       <AnnotationPopover
         annotation={overrides.annotation ?? annotation}
         busyKey={null}
@@ -70,26 +78,56 @@ describe("AnnotationPopover", () => {
     expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 
-  it("closes with Escape without persisting a class", async () => {
-    const user = userEvent.setup();
+  it("closes on a pointerdown outside itself and saves nothing", async () => {
     const { onCategoryChange, onClose } = renderPopover();
 
-    await user.type(screen.getByRole("textbox", { name: "Klasa" }), "{Escape}");
+    fireEvent.pointerDown(screen.getByTestId("outside"));
 
     expect(onClose).toHaveBeenCalledOnce();
     expect(onCategoryChange).not.toHaveBeenCalled();
   });
 
-  it("closes with Escape from a geometry field without persisting its draft", async () => {
+  it("abandons an edited geometry draft on the same outside pointerdown", async () => {
     const user = userEvent.setup();
     const { onClose, onGeometryChange } = renderPopover({ invalid: true });
     const xField = screen.getByRole("spinbutton", { name: "x" });
 
     await user.clear(xField);
-    await user.type(xField, "11{Escape}");
+    await user.type(xField, "11");
+    fireEvent.pointerDown(screen.getByTestId("outside"));
 
     expect(onClose).toHaveBeenCalledOnce();
     expect(onGeometryChange).not.toHaveBeenCalled();
+  });
+
+  it("stays open while the pointer works inside it", async () => {
+    const { onClose } = renderPopover();
+
+    fireEvent.pointerDown(screen.getByRole("textbox", { name: "Klasa" }));
+    fireEvent.pointerDown(screen.getByRole("option", { name: "Health" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("treats the bbox it edits as part of itself, so a drag on it is not a dismissal", () => {
+    const { onClose } = renderPopover();
+
+    fireEvent.pointerDown(screen.getByTestId("own-shape-fill"));
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(screen.getByTestId("other-shape"));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("has no Escape hint and no Escape handler left", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderPopover();
+
+    await user.type(screen.getByRole("textbox", { name: "Klasa" }), "{Escape}");
+    await user.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Esc/)).not.toBeInTheDocument();
   });
 
   it("names an unmatched draft class explicitly and cannot save it", async () => {

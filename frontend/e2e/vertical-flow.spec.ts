@@ -602,11 +602,43 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     clientX: manualFrameBounds.x + manualFrameBounds.width * 0.45,
     clientY: manualFrameBounds.y + manualFrameBounds.height * 0.45,
   };
-  await frameSurface.dispatchEvent("pointerdown", { ...manualFrom, pointerId: 2 });
-  await frameSurface.dispatchEvent("pointermove", { ...manualTo, pointerId: 2 });
-  await frameSurface.dispatchEvent("pointerup", { ...manualTo, pointerId: 2 });
+  /*
+   * The real browser is the only place this is worth asserting: dismissing the
+   * popover must not consume the `pointerdown` that begins the next drawing.
+   * `page.mouse` produces genuine pointer events, capture and all, which is
+   * exactly what jsdom cannot reproduce.
+   */
+  const abandonFrom = {
+    x: manualFrameBounds.x + manualFrameBounds.width * 0.6,
+    y: manualFrameBounds.y + manualFrameBounds.height * 0.6,
+  };
+  const abandonTo = {
+    x: manualFrameBounds.x + manualFrameBounds.width * 0.7,
+    y: manualFrameBounds.y + manualFrameBounds.height * 0.72,
+  };
+  await page.mouse.move(abandonFrom.x, abandonFrom.y);
+  await page.mouse.down();
+  await page.mouse.move(abandonTo.x, abandonTo.y, { steps: 4 });
+  await page.mouse.up();
   const draftPopover = page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
   await expect(draftPopover).toBeVisible();
+
+  // One gesture: the popover closes and the same press starts the next box.
+  await page.mouse.move(manualFrom.clientX, manualFrom.clientY);
+  await page.mouse.down();
+  await expect(draftPopover).toBeHidden();
+  await page.mouse.move(manualTo.clientX, manualTo.clientY, { steps: 4 });
+  await page.mouse.up();
+  await expect(draftPopover).toBeVisible();
+
+  const abandoned = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+  expect(
+    abandoned.annotations.filter(
+      (annotation) => annotation.source === "manual" && annotation.status !== "deleted",
+    ),
+  ).toHaveLength(0);
+
+  await draftPopover.getByRole("option", { name: "7" }).click();
   await draftPopover.getByRole("button", { name: "Zapisz klasę" }).click();
   await expect
     .poll(async () => {

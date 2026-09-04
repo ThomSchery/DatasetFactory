@@ -150,8 +150,7 @@ describe("annotation review query states", () => {
     expect(classHealth).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("keeps a drawn bbox as a client draft and Escape discards it without POST", async () => {
-    const user = userEvent.setup();
+  it("keeps a drawn bbox as a client draft and a click outside discards it without POST", async () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
@@ -181,7 +180,7 @@ describe("annotation review query states", () => {
       "df-region-overlay__shape--draft",
     );
 
-    await user.keyboard("{Escape}");
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje na klatce" }));
 
     expect(screen.queryByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).not.toBeInTheDocument();
     expect(within(overlay).getAllByRole("option")).toHaveLength(1);
@@ -192,6 +191,76 @@ describe("annotation review query states", () => {
           url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
       ),
     ).toBe(false);
+  });
+
+  it("closes on the image without eating the pointerdown that starts the next box", async () => {
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+
+    // One gesture, both effects: the popover closes and the very same
+    // pointerdown begins the next drawing. Losing it would leave the user
+    // unable to draw straight after dismissing a popover, with nothing on
+    // screen to explain why.
+    fireEvent.pointerDown(overlay, { clientX: 500, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
+    fireEvent.pointerUp(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
+
+    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+    const draftShape = within(overlay).getByRole("option", { name: /^Szkic — wybierz klasę:/ });
+    // The second rectangle, not the first: the abandoned draft did not linger.
+    expect(draftShape).toHaveAttribute("aria-label", expect.stringContaining("x 1000, y 400"));
+    expect(within(overlay).getAllByRole("option")).toHaveLength(2);
+    expect(
+      fetchSpy.mock.calls.some(
+        ([url, init]) =>
+          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps the popover open while the bbox it edits is dragged", async () => {
+    const user = userEvent.setup();
+    reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const fill = within(overlay)
+      .getByRole("option")
+      .querySelector(".df-region-overlay__shape-fill");
+
+    fireEvent.pointerDown(fill as Element, { clientX: 55, clientY: 65, pointerId: 1 });
+
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
   });
 
   it("keeps the draft after a failed explicit class save", async () => {
@@ -984,7 +1053,7 @@ describe("keyboard-complete annotation list", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(deleteButton).toBeEnabled());
-    await user.keyboard("{Escape}");
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje na klatce" }));
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       bottom: 540,
       height: 540,
