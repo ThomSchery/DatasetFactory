@@ -214,3 +214,21 @@ Plan implementacji:
 - Ukierunkowany Vitest: 75/75 testów w 5 plikach (`GroupedOptionList`,
   `AnnotationPopover`, pełny flow, wcześniejsze fixupy i terminal refetch).
 - Frontend typecheck: 0 błędów.
+
+### Pełna bramka FE-008-FIX1
+
+Przy wolnych portach 8000/5173 wykonano jeden nieprzerwany przebieg dokładnie
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`:
+
+- backend format: 255 plików, 0,3 s;
+- backend lint: 0 błędów, 0,1 s;
+- backend typy: 0 błędów w 99 plikach, 2,1 s;
+- backend testy: 347/347, 317,8 s;
+- frontend typy: 0 błędów, 1,3 s;
+- frontend testy: 549/549 w 40 plikach, 34,9 s;
+- frontend build: 0 błędów, 2,1 s;
+- Playwright Chromium E2E: 4/4, 71,4 s;
+- E2E root safety: 2/2, 0,7 s.
+
+Wynik: 9/9 bramek zielonych. Fix nie zmienia wyglądu; deterministyczne zrzuty
+visual QA nie zmieniły się. Po przebiegu porty są wolne.
