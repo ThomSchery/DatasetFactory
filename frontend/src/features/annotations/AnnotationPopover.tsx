@@ -202,7 +202,7 @@ export function AnnotationPopover({
       style={placement === null ? { visibility: "hidden" } : { left: placement.left, top: placement.top }}
     >
       <header className="df-annotation-popover__header">
-        <strong>{draft ? "Nowa anotacja · szkic" : "Anotacja"}</strong>
+        <strong>{draft ? "Nowa anotacja · box" : "Anotacja"}</strong>
         <span className="df-annotation-popover__badges">
           <StatusBadge srLabel="Źródło:" tone={annotation.source === "ocr" ? "brand" : "success"}>
             {annotation.source === "ocr" ? "OCR" : "Ręczna"}
@@ -220,7 +220,7 @@ export function AnnotationPopover({
         disabled={disabled}
         emptyMessage={
           draft
-            ? "Brak takiej klasy w profilu. Wybierz istniejącą klasę albo porzuć szkic."
+            ? "Brak takiej klasy w profilu. Wybierz istniejącą klasę albo porzuć box."
             : "Brak takiej klasy w profilu. Wybierz istniejącą klasę."
         }
         filterLabel="Klasa"
@@ -239,7 +239,7 @@ export function AnnotationPopover({
 
       <div className="df-annotation-popover__actions">
         <Button disabled={disabled} loading={busyKey === `delete:${annotation.id}`} onClick={onDelete} size="sm" variant="muted">
-          {draft ? "Porzuć szkic" : "Usuń"}
+          {draft ? "Porzuć box" : "Usuń"}
         </Button>
         <Button
           aria-label="Zapisz klasę"

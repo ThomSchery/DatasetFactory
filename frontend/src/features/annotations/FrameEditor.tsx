@@ -303,9 +303,9 @@ function LoadedFrameEditor({
   if (draftBBox !== null) {
     shapes.push({
       ...draftBBox,
-      displayLabel: "Szkic",
+      displayLabel: "Box",
       id: DRAFT_ANNOTATION_ID,
-      label: "Szkic — wybierz klasę",
+      label: "Box — wybierz klasę",
       tone: "draft",
     });
   }

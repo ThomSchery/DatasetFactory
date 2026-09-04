@@ -176,7 +176,7 @@ describe("annotation review query states", () => {
 
     expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
-    expect(within(overlay).getByRole("option", { name: /^Szkic — wybierz klasę:/ })).toHaveClass(
+    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toHaveClass(
       "df-region-overlay__shape--draft",
     );
 
@@ -224,7 +224,7 @@ describe("annotation review query states", () => {
     fireEvent.pointerUp(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
 
     expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-    const draftShape = within(overlay).getByRole("option", { name: /^Szkic — wybierz klasę:/ });
+    const draftShape = within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ });
     // The second rectangle, not the first: the abandoned draft did not linger.
     expect(draftShape).toHaveAttribute("aria-label", expect.stringContaining("x 1000, y 400"));
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
@@ -297,7 +297,7 @@ describe("annotation review query states", () => {
 
     expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
     expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-    expect(within(overlay).getByRole("option", { name: /^Szkic — wybierz klasę:/ })).toBeVisible();
+    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toBeVisible();
     const post = fetchSpy.mock.calls.find(
       ([url, init]) =>
         url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
