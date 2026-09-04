@@ -149,5 +149,19 @@ a niepoprawna pozycja listy przerywa całość przed pierwszym zapisem.
 - F4 potwierdzone przez zleceniodawcę: struktura grupowana w popoverze nowego
   boxa, bez wstępnie wpisanej wartości, zapis nieaktywny do wyboru klasy.
 - Zrzuty visual QA odświeżone po całości — ekran zmienia wygląd w F1–F4.
-</content>
-</invoke>
+
+## Bramka końcowa — 2026-09-04
+
+- Pierwsza próba zatrzymała się w preflight przed bramką 1: w worktree brakowało
+  lokalnego, ignorowanego przez Git pliku `.env`; wszystkie 9 bramek zostało
+  pominiętych. Skopiowano konfigurację z głównego worktree i uruchomiono
+  `scripts/bootstrap.ps1` (zależności z lockfile, Chromium, 0 luk npm).
+- Następnie wykonano jeden nieprzerwany przebieg dokładnie komendą
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`.
+- Wynik: 9/9 zielonych bramek — backend format 254 pliki, lint 0 błędów,
+  mypy 0 błędów w 99 plikach, pytest 347/347, frontend typecheck 0 błędów,
+  Vitest 547/547 w 40 plikach, build 0 błędów, Playwright Chromium 4/4,
+  E2E root safety 2/2.
+- Świadomie obejrzano odświeżony `annotations-1440.png` w pełnej rozdzielczości:
+  hierarchia grupy i klasy, fokus, licznik, akcja oraz brak przepełnienia są
+  czytelne. Pozostałe deterministyczne zrzuty nie zmieniły się.
