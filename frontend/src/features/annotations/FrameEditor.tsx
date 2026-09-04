@@ -314,7 +314,9 @@ function LoadedFrameEditor({
       ? undefined
       : {
           ...draftBBox,
-          category_id: profile.categories[0]?.id ?? "",
+          // No class until a human picks one. A default here would be a label
+          // nobody chose, one save away from the dataset.
+          category_id: "",
           confidence: null,
           id: DRAFT_ANNOTATION_ID,
           observation_id: null,

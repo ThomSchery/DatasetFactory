@@ -482,6 +482,8 @@ describe("success refetches authoritative versions", () => {
       fireEvent.pointerMove(surface, { clientX: 30, clientY: 30, pointerId: 1 });
       fireEvent.pointerUp(surface, { clientX: 30, clientY: 30, pointerId: 1 });
       const create = screen.getByRole("button", { name: "Zapisz klasę" });
+      expect(create).toBeDisabled();
+      await user.click(screen.getByRole("option", { name: "7" }));
       await user.click(create);
       await waitFor(() => {
         expect(frameRead).toBeGreaterThanOrEqual(2);

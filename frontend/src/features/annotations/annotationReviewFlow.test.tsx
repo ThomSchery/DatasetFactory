@@ -193,6 +193,51 @@ describe("annotation review query states", () => {
     ).toBe(false);
   });
 
+  it("opens a drawn box ready to choose from, with nothing chosen for the user", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({ profile: RICH_PROFILE });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+
+    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    expect(within(popover).getByLabelText("Klasa")).toHaveValue("");
+    expect(within(popover).getByLabelText("Klasa")).toHaveFocus();
+    for (const option of within(popover).getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-selected", "false");
+    }
+    expect(within(popover).getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+
+    await user.click(within(popover).getByRole("option", { name: "Timer" }));
+    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+
+    await waitFor(() => {
+      const post = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+      );
+      expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+        bbox: { x: 600, y: 500, width: 200, height: 100 },
+        category_id: "timer",
+        expected_version: 7,
+      });
+    });
+  });
+
   it("closes on the image without eating the pointerdown that starts the next box", async () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -1068,6 +1113,7 @@ describe("keyboard-complete annotation list", () => {
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    await user.click(screen.getByRole("option", { name: "7" }));
     const createButton = screen.getByRole("button", { name: "Zapisz klasę" });
     createButton.focus();
     await user.keyboard("{Enter}");
