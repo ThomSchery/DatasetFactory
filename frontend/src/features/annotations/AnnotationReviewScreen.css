@@ -234,17 +234,13 @@
 }
 
 .df-annotation-popover {
-  position: absolute;
-  z-index: 2;
   display: grid;
   gap: var(--size-xs);
-  width: calc(var(--size-xxl) * 5);
-  max-width: calc(100vw - (var(--size-md) * 2));
+  width: 100%;
   padding: var(--size-sm);
-  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
   border-radius: var(--radius-md);
   background: var(--color-surface-neutral-raised);
-  box-shadow: var(--shadow-elevation-high);
 }
 
 .df-annotation-popover__header,
@@ -258,12 +254,6 @@
 
 .df-annotation-popover__header {
   justify-content: space-between;
-}
-
-/* The popover is a floating layer, so its list is shorter than the one in the
-   side panel: it has to leave the edited bbox visible. */
-.df-annotation-popover .df-grouped-options__list {
-  max-height: calc(var(--size-xxl) * 2);
 }
 
 .df-annotation-popover__actions {

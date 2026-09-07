@@ -255,6 +255,42 @@ export function clampRectToSource(rect: SourceRect, source: SourceSize): SourceR
   };
 }
 
+export type NudgeDirection = "up" | "down" | "left" | "right";
+
+/** Moves a whole rectangle by a keyboard step without changing its extent. */
+export function nudgeRect(
+  rect: SourceRect,
+  direction: NudgeDirection,
+  step: number,
+  source: SourceSize,
+): SourceRect {
+  const delta: Record<NudgeDirection, SourcePoint> = {
+    up: { x: 0, y: -step },
+    down: { x: 0, y: step },
+    left: { x: -step, y: 0 },
+    right: { x: step, y: 0 },
+  };
+  const candidate = {
+    ...rect,
+    x: rect.x + delta[direction].x,
+    y: rect.y + delta[direction].y,
+  };
+  // Clamp the top-left corner against the source space reduced by the fixed
+  // extent. Calling the shared clamp keeps the source-boundary policy in one
+  // place, while rebuilding from `rect` guarantees that nudge never resizes.
+  const origin = clampRectToSource(
+    { x: candidate.x, y: candidate.y, width: 0, height: 0 },
+    {
+      width: Math.max(0, source.width - rect.width),
+      height: Math.max(0, source.height - rect.height),
+    },
+  );
+  if (origin.x === rect.x && origin.y === rect.y) {
+    return rect;
+  }
+  return { ...rect, x: origin.x, y: origin.y };
+}
+
 /** Positive width and height. Mirrors `Field(gt=0)` on `RegionRequest`. */
 export function isDrawableRect(rect: SourceRect): boolean {
   return rect.width > 0 && rect.height > 0;

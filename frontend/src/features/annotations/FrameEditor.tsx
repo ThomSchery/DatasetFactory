@@ -29,7 +29,13 @@ import {
 } from "../../components/common/GroupedOptionList";
 import { Notice } from "../../components/common/Notice";
 import { Panel } from "../../components/common/Panel";
-import { RegionOverlay, type OverlayShape } from "../../components/common/RegionOverlay";
+import {
+  nudgeRect,
+  RegionOverlay,
+  sourceRectsEqual,
+  type NudgeDirection,
+  type OverlayShape,
+} from "../../components/common/RegionOverlay";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { AnnotationPopover } from "./AnnotationPopover";
@@ -169,6 +175,21 @@ interface GeometryPreview {
 }
 
 const DRAFT_ANNOTATION_ID = "new-annotation-draft";
+
+function nudgeDirection(key: string): NudgeDirection | null {
+  switch (key) {
+    case "ArrowUp":
+      return "up";
+    case "ArrowDown":
+      return "down";
+    case "ArrowLeft":
+      return "left";
+    case "ArrowRight":
+      return "right";
+    default:
+      return null;
+  }
+}
 
 function LoadedFrameEditor({
   counts,
@@ -367,6 +388,36 @@ function LoadedFrameEditor({
       ) {
         return;
       }
+      const direction = nudgeDirection(event.key);
+      if (canDirectEdit && !editorDisabled && selectedId !== null) {
+        if (direction !== null) {
+          const currentBBox =
+            selectedId === DRAFT_ANNOTATION_ID
+              ? draftBBox
+              : geometryPreview?.annotationId === selectedId
+                ? geometryPreview.bbox
+                : selectedAnnotation;
+          if (currentBBox !== null && currentBBox !== undefined) {
+            const nextBBox = nudgeRect(
+              currentBBox,
+              direction,
+              event.shiftKey ? 10 : 1,
+              { width: frame.width, height: frame.height },
+            );
+            if (!sourceRectsEqual(currentBBox, nextBBox)) {
+              event.preventDefault();
+              previewAnnotationGeometry(selectedId, nextBBox);
+              return;
+            }
+          }
+        } else if (event.key === "Enter") {
+          if (geometryPreview?.annotationId === selectedId) {
+            event.preventDefault();
+            commitAnnotationGeometry(selectedId, geometryPreview.bbox);
+            return;
+          }
+        }
+      }
       const key = event.key.toLocaleLowerCase("pl");
       if (
         key === "a" &&
@@ -403,13 +454,21 @@ function LoadedFrameEditor({
     };
   }, [
     activeAnnotations.length,
+    canDirectEdit,
     capabilities.canAccept,
     capabilities.canReject,
     copyDisabled,
     copySelection,
+    draftBBox,
+    editorDisabled,
+    frame.height,
     frame.version,
+    frame.width,
+    geometryPreview,
     mutation,
     profile.categories,
+    selectedAnnotation,
+    selectedId,
   ]);
 
   function submit(intent: ReviewMutationIntent): void {
@@ -664,88 +723,6 @@ function LoadedFrameEditor({
           interactionMode="draw"
           key={`frame-image-${String(imageAttempt)}`}
           label="Bbox anotacji na klatce"
-          floatingLayer={
-            popoverAnnotation === undefined ? null : (
-              <AnnotationPopover
-                annotation={popoverAnnotation}
-                busyKey={currentBusyKey}
-                categories={profile.categories}
-                disabled={editorDisabled}
-                draft={selectedId === DRAFT_ANNOTATION_ID}
-                drawing={
-                  selectedId !== DRAFT_ANNOTATION_ID &&
-                  redrawMode?.annotationId === popoverAnnotation.id
-                }
-                frameSize={{ height: frame.height, width: frame.width }}
-                geometryPreview={
-                  selectedId !== DRAFT_ANNOTATION_ID &&
-                  geometryPreview?.annotationId === popoverAnnotation.id
-                    ? geometryPreview.bbox
-                    : null
-                }
-                invalid={
-                  selectedId === DRAFT_ANNOTATION_ID
-                    ? false
-                    : invalidSet.has(popoverAnnotation.id)
-                }
-                key={popoverAnnotation.id}
-                onCategoryChange={(categoryId) => {
-                  if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
-                    submit({
-                      bbox: draftBBox,
-                      categoryId,
-                      expectedVersion: frame.version,
-                      kind: "create",
-                    });
-                    return;
-                  }
-                  submit({
-                    annotationId: popoverAnnotation.id,
-                    categoryId,
-                    expectedVersion: popoverAnnotation.version,
-                    kind: "category",
-                  });
-                }}
-                onClose={() => {
-                  setDraftBBox(null);
-                  setSelectedId(null);
-                  setGeometryPreview(null);
-                  setRedrawMode(null);
-                }}
-                onDelete={() => {
-                  if (selectedId === DRAFT_ANNOTATION_ID) {
-                    setDraftBBox(null);
-                    setSelectedId(null);
-                    return;
-                  }
-                  submit({
-                    annotationId: popoverAnnotation.id,
-                    expectedVersion: popoverAnnotation.version,
-                    kind: "delete",
-                  });
-                }}
-                onGeometryChange={(bbox) => {
-                  if (selectedId === DRAFT_ANNOTATION_ID) {
-                    setDraftBBox(bbox);
-                    return;
-                  }
-                  changeAnnotationGeometry(popoverAnnotation, bbox);
-                }}
-                onToggleDrawTarget={() => {
-                  if (selectedId === DRAFT_ANNOTATION_ID) {
-                    setDraftBBox(null);
-                    setSelectedId(null);
-                    return;
-                  }
-                  setRedrawMode((current) =>
-                    current?.annotationId === popoverAnnotation.id
-                      ? null
-                      : { annotationId: popoverAnnotation.id, kind: "redraw" },
-                  );
-                }}
-              />
-            )
-          }
           onDraw={capabilities.canEdit ? handleDraw : undefined}
           onImageError={() => {
             setImageError(true);
@@ -780,6 +757,87 @@ function LoadedFrameEditor({
           shapes={shapes}
           source={{ width: frame.width, height: frame.height }}
         />
+
+        {popoverAnnotation === undefined ? null : (
+          <AnnotationPopover
+            annotation={popoverAnnotation}
+            busyKey={currentBusyKey}
+            categories={profile.categories}
+            disabled={editorDisabled}
+            draft={selectedId === DRAFT_ANNOTATION_ID}
+            drawing={
+              selectedId !== DRAFT_ANNOTATION_ID &&
+              redrawMode?.annotationId === popoverAnnotation.id
+            }
+            frameSize={{ height: frame.height, width: frame.width }}
+            geometryPreview={
+              selectedId !== DRAFT_ANNOTATION_ID &&
+              geometryPreview?.annotationId === popoverAnnotation.id
+                ? geometryPreview.bbox
+                : null
+            }
+            invalid={
+              selectedId === DRAFT_ANNOTATION_ID
+                ? false
+                : invalidSet.has(popoverAnnotation.id)
+            }
+            key={popoverAnnotation.id}
+            onCategoryChange={(categoryId) => {
+              if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
+                submit({
+                  bbox: draftBBox,
+                  categoryId,
+                  expectedVersion: frame.version,
+                  kind: "create",
+                });
+                return;
+              }
+              submit({
+                annotationId: popoverAnnotation.id,
+                categoryId,
+                expectedVersion: popoverAnnotation.version,
+                kind: "category",
+              });
+            }}
+            onClose={() => {
+              setDraftBBox(null);
+              setSelectedId(null);
+              setGeometryPreview(null);
+              setRedrawMode(null);
+            }}
+            onDelete={() => {
+              if (selectedId === DRAFT_ANNOTATION_ID) {
+                setDraftBBox(null);
+                setSelectedId(null);
+                return;
+              }
+              submit({
+                annotationId: popoverAnnotation.id,
+                expectedVersion: popoverAnnotation.version,
+                kind: "delete",
+              });
+            }}
+            onGeometryChange={(bbox) => {
+              if (selectedId === DRAFT_ANNOTATION_ID) {
+                setDraftBBox(bbox);
+                return;
+              }
+              changeAnnotationGeometry(popoverAnnotation, bbox);
+            }}
+            onToggleDrawTarget={() => {
+              if (selectedId === DRAFT_ANNOTATION_ID) {
+                setDraftBBox(null);
+                setSelectedId(null);
+                return;
+              }
+              setRedrawMode((current) =>
+                current?.annotationId === popoverAnnotation.id
+                  ? null
+                  : { annotationId: popoverAnnotation.id, kind: "redraw" },
+              );
+            }}
+          />
+        )}
 
       </section>
 

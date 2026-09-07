@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Annotation, BBox, Category } from "../../api";
 import { Button } from "../../components/common/Button";
@@ -7,7 +7,6 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
 import { copyOptionGroups } from "./copySelection";
 import { geometryDraft, parseGeometryDraft, type GeometryDraft } from "./geometryForm";
-import { resolvePopoverPlacement, sourceBoxToRendered, type PopoverPlacement } from "./popoverPlacement";
 
 const GEOMETRY_FIELDS = ["x", "y", "width", "height"] as const;
 
@@ -92,8 +91,6 @@ export function AnnotationPopover({
 }: AnnotationPopoverProps) {
   const categoryName = categories.find((category) => category.id === annotation.category_id)?.name ?? annotation.category_id;
   const [form, setForm] = useState<FormState>(() => initialFormState(annotation));
-  const [geometryOpen, setGeometryOpen] = useState(false);
-  const [placement, setPlacement] = useState<PopoverPlacement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const displayedDraft = geometryPreview === null ? form.draft : geometryDraft(geometryPreview);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
@@ -151,36 +148,6 @@ export function AnnotationPopover({
     };
   }, [annotation.id]);
 
-  useLayoutEffect(() => {
-    const popover = popoverRef.current;
-    const container = popover?.parentElement;
-    if (popover === null || container == null) {
-      return;
-    }
-    const containerBox = container.getBoundingClientRect();
-    const popoverBox = popover.getBoundingClientRect();
-    const tokenGap = Number.parseFloat(
-      getComputedStyle(container).getPropertyValue("--size-xs"),
-    );
-    const anchor = sourceBoxToRendered(annotation, frameSize, containerBox);
-    const next = resolvePopoverPlacement(
-      anchor,
-      containerBox,
-      { height: popoverBox.height, width: popoverBox.width },
-      Number.isFinite(tokenGap) && tokenGap > 0 ? tokenGap : 8,
-    );
-    setPlacement(next);
-  }, [
-    annotation.height,
-    annotation.width,
-    annotation.x,
-    annotation.y,
-    classGroups,
-    frameSize.height,
-    frameSize.width,
-    geometryOpen,
-  ]);
-
   function saveCategory(categoryId: string): void {
     if (categoryId === "") {
       return;
@@ -196,10 +163,8 @@ export function AnnotationPopover({
     <div
       aria-label={draft ? "Wybierz klasę dla nowego bbox" : `Edytuj anotację ${categoryName}`}
       className="df-annotation-popover"
-      data-side={placement?.side}
       ref={popoverRef}
       role="dialog"
-      style={placement === null ? { visibility: "hidden" } : { left: placement.left, top: placement.top }}
     >
       <header className="df-annotation-popover__header">
         <strong>{draft ? "Nowa anotacja · box" : "Anotacja"}</strong>
@@ -257,9 +222,6 @@ export function AnnotationPopover({
       <details
         className="df-annotation-popover__geometry"
         open={invalid || undefined}
-        onToggle={(event) => {
-          setGeometryOpen(event.currentTarget.open);
-        }}
       >
         <summary>
           x {displayedDraft.x} · y {displayedDraft.y} · w {displayedDraft.width} · h {displayedDraft.height}

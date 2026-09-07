@@ -52,8 +52,6 @@ export interface RegionOverlayProps {
   interactionMode?: "select" | "draw";
   /** Accessible name of the set of rectangles. */
   label: string;
-  /** Interactive HTML rendered in the same positioned box as the image/SVG. */
-  floatingLayer?: ReactNode;
   onImageError?: () => void;
   /** Absent means the surface is read-only: existing shapes, no new ones. */
   onDraw?: (rect: SourceRect) => void;
@@ -163,7 +161,6 @@ function capturePointer(surface: SVGSVGElement, pointerId: number, capture: bool
  */
 export function RegionOverlay({
   disabled = false,
-  floatingLayer,
   imageAlt,
   imageUrl,
   interactionMode = "select",
@@ -526,7 +523,6 @@ export function RegionOverlay({
             ),
           )}
         </div>
-        {floatingLayer}
         </>
       )}
     </div>
