@@ -573,14 +573,18 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).annotations[0]?.x)
     .toBe(edgeX);
-  const edgeFillBounds = await selectedOption.locator(".df-region-overlay__shape-fill").boundingBox();
-  const edgePopoverBounds = await annotationEditor.boundingBox();
-  expect(edgeFillBounds).not.toBeNull();
-  expect(edgePopoverBounds).not.toBeNull();
-  if (edgeFillBounds === null || edgePopoverBounds === null) {
-    throw new Error("Edge-positioned bbox or popover has no browser geometry");
+  const frameImageBounds = await page
+    .getByRole("img", { name: `Klatka 0 runu ${runId}` })
+    .boundingBox();
+  const dockedPopoverBounds = await annotationEditor.boundingBox();
+  expect(frameImageBounds).not.toBeNull();
+  expect(dockedPopoverBounds).not.toBeNull();
+  if (frameImageBounds === null || dockedPopoverBounds === null) {
+    throw new Error("Frame image or docked annotation panel has no browser geometry");
   }
-  expect(edgePopoverBounds.x + edgePopoverBounds.width).toBeLessThanOrEqual(edgeFillBounds.x);
+  expect(dockedPopoverBounds.y).toBeGreaterThanOrEqual(
+    frameImageBounds.y + frameImageBounds.height,
+  );
 
   await annotationEditor.getByRole("button", { name: "Usuń" }).click();
   await expect(page.getByText("Ta klatka nie ma aktywnych anotacji.")).toBeVisible();

@@ -25,31 +25,21 @@ async function assertNoOverflow(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
-async function assertAnnotationPopoverDoesNotCoverBox(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+async function assertAnnotationPopoverIsDocked(page: Page): Promise<void> {
   const popover = page.getByRole("dialog", { name: /Edytuj anotację/ });
   await expect(popover).toBeVisible();
-  const fill = page
-    .getByRole("listbox", { name: "Bbox anotacji na klatce" })
-    .getByRole("option")
-    .first()
-    .locator(".df-region-overlay__shape-fill");
+  const image = page.getByRole("img", { name: /Klatka .* runu/ });
   const popoverBounds = await popover.boundingBox();
-  const fillBounds = await fill.boundingBox();
+  const imageBounds = await image.boundingBox();
   expect(popoverBounds).not.toBeNull();
-  expect(fillBounds).not.toBeNull();
-  if (popoverBounds === null || fillBounds === null) {
-    throw new Error("Annotation popover or selected bbox has no browser geometry at 1280 px");
+  expect(imageBounds).not.toBeNull();
+  if (popoverBounds === null || imageBounds === null) {
+    throw new Error("Annotation panel or frame image has no browser geometry at 1280 px");
   }
-  const overlaps =
-    popoverBounds.x < fillBounds.x + fillBounds.width &&
-    popoverBounds.x + popoverBounds.width > fillBounds.x &&
-    popoverBounds.y < fillBounds.y + fillBounds.height &&
-    popoverBounds.y + popoverBounds.height > fillBounds.y;
-  expect(overlaps, "annotation popover covers its edited bbox at 1280 px").toBe(false);
+  expect(popoverBounds.y, "annotation panel must start below the frame image").toBeGreaterThanOrEqual(
+    imageBounds.y + imageBounds.height,
+  );
 
-  await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
 async function assertFrameFilterCountsFit(page: Page): Promise<void> {
@@ -288,12 +278,20 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     "annotations",
     "/annotations/run-1",
     { phase: "review" },
-    (current) => current.getByRole("button", { name: /Oczekujące/ }),
+    (current) => current.getByRole("button", { name: /Klasa .* 1 anotacji/ }),
     async (current) => {
       await expect(current.getByRole("listbox", { name: "Bbox anotacji na klatce" })).toBeVisible();
       await assertFrameFilterCountsFit(current);
       await assertCompactReviewLayout(current);
-      await assertAnnotationPopoverDoesNotCoverBox(current);
+      await current.setViewportSize({ width: 1280, height: 1000 });
+      await current.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+      await assertAnnotationPopoverIsDocked(current);
+      await current.setViewportSize({ width: 1440, height: 1000 });
+    },
+    async (current) => {
+      await current.keyboard.press("Enter");
+      await assertAnnotationPopoverIsDocked(current);
+      await current.getByRole("button", { name: /Klasa .* 1 anotacji/ }).focus();
     },
   );
   await capture(

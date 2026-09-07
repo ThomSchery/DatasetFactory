@@ -141,7 +141,14 @@ describe("annotation review query states", () => {
     fireEvent.click(firstFill as Element);
     expect(options[0]).toHaveAttribute("aria-selected", "true");
     expect(classSeven).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    expect(dialog).toBeVisible();
+    const preview = screen.getByRole("region", { name: "Podgląd klatki 17" });
+    const overlayRoot = overlay.closest(".df-region-overlay");
+    expect(overlayRoot).not.toBeNull();
+    expect(dialog.parentElement).toBe(preview);
+    expect(dialog.previousElementSibling).toBe(overlayRoot);
+    expect(overlayRoot).not.toContainElement(dialog);
 
     await user.click(classHealth);
     expect(options[0]).toHaveAttribute("aria-selected", "false");
@@ -248,6 +255,162 @@ describe("annotation review query states", () => {
         expected_version: 7,
       });
     });
+  });
+
+  it("nudges a draft in source pixels without POST before or after Enter", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 540,
+      right: 960,
+      bottom: 540,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+
+    screen.getByText(/^x 600 · y 500/).focus();
+    await user.keyboard("{ArrowRight}{Shift>}{ArrowDown}{/Shift}");
+
+    expect(
+      within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ }),
+    ).toHaveAttribute("aria-label", expect.stringContaining("x 601, y 510"));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+
+    await user.keyboard("{Enter}");
+
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
+
+  it("accumulates three nudges in one preview and sends exactly one PATCH on Enter", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await user.click(classButton);
+    classButton.focus();
+    await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
+
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120"),
+    );
+    expect(screen.getByText(/^x 103 · y 120/)).toBeVisible();
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+      ),
+    ).toHaveLength(0);
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      const patches = fetchSpy.mock.calls.filter(
+        ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+      );
+      expect(patches).toHaveLength(1);
+      expect(JSON.parse(String(patches[0]?.[1]?.body))).toEqual({
+        bbox: { x: 103, y: 120, width: 40, height: 32 },
+        expected_version: 3,
+      });
+    });
+  });
+
+  it("uses a ten-pixel step for Shift+ArrowDown", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await user.click(classButton);
+    classButton.focus();
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 100, y 130"),
+    );
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("does not create a preview, prevent scrolling or request a PATCH at the frame edge", async () => {
+    const edge = annotationFixture({ x: 1880, width: 40 });
+    const fetchSpy = reviewApi({ frame: frameDetailFixture({ annotations: [edge] }) });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    fireEvent.click(classButton);
+    classButton.focus();
+
+    expect(fireEvent.keyDown(classButton, { key: "ArrowRight" })).toBe(true);
+    expect(screen.getByText(/^x 1880 · y 120/)).toBeVisible();
+    fireEvent.keyDown(classButton, { key: "Enter" });
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("leaves ArrowRight to the x field while it owns focus", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(dialog).getByText(/^x 100 · y 120/));
+    within(dialog).getByLabelText("x").focus();
+    await user.keyboard("{ArrowRight}");
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 100, y 120"),
+    );
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("leaves arrows to the scoped class picker while it owns focus", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({ profile: RICH_PROFILE });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const classOption = within(dialog).getByRole("option", { name: "7" });
+    classOption.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 100, y 120"),
+    );
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("does not nudge or request geometry for a frozen frame", async () => {
+    const fetchSpy = reviewApi({
+      frame: frameDetailFixture({ review_status: "accepted" }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const option = within(overlay).getByRole("option");
+    fireEvent.click(option.querySelector(".df-region-overlay__shape-fill") as Element);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+
+    expect(option).toHaveAttribute("aria-label", expect.stringContaining("x 100, y 120"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
   });
 
   it("closes on the image without eating the pointerdown that starts the next box", async () => {

@@ -8,6 +8,7 @@ import {
   handleTargetSize,
   isDrawableRect,
   moveRectWithinSource,
+  nudgeRect,
   rectContainsPoint,
   rectFromPoints,
   resizeCornerPoint,
@@ -180,6 +181,52 @@ describe("direct rectangle editing", () => {
       width: 1820,
       height: 960,
     });
+  });
+});
+
+describe("nudgeRect", () => {
+  const rect = { x: 100, y: 120, width: 40, height: 32 };
+
+  it.each([
+    ["left", 1, { x: 99, y: 120 }],
+    ["right", 10, { x: 110, y: 120 }],
+    ["up", 1, { x: 100, y: 119 }],
+    ["down", 10, { x: 100, y: 130 }],
+  ] as const)("moves %s by %i source pixels", (direction, step, expected) => {
+    expect(nudgeRect(rect, direction, step, SOURCE)).toEqual({
+      ...rect,
+      ...expected,
+    });
+  });
+
+  it.each([
+    ["left", { ...rect, x: 0 }, { x: 0, y: rect.y }],
+    ["up", { ...rect, y: 0 }, { x: rect.x, y: 0 }],
+    ["right", { ...rect, x: SOURCE.width - rect.width }, { x: 1880, y: rect.y }],
+    ["down", { ...rect, y: SOURCE.height - rect.height }, { x: rect.x, y: 1048 }],
+  ] as const)("clamps the whole box at the %s edge", (direction, edgeRect, expected) => {
+    expect(nudgeRect(edgeRect, direction, 10, SOURCE)).toEqual({
+      ...edgeRect,
+      ...expected,
+    });
+  });
+
+  it("returns the original rectangle for a no-op in a corner", () => {
+    const corner = { ...rect, x: 0, y: 0 };
+
+    expect(nudgeRect(corner, "left", 1, SOURCE)).toBe(corner);
+    expect(nudgeRect(corner, "up", 10, SOURCE)).toBe(corner);
+  });
+
+  it("never changes width or height while clamping", () => {
+    const moved = nudgeRect(
+      { x: 1879, y: 1047, width: 40, height: 32 },
+      "right",
+      10,
+      SOURCE,
+    );
+
+    expect(moved).toEqual({ x: 1880, y: 1047, width: 40, height: 32 });
   });
 });
 
