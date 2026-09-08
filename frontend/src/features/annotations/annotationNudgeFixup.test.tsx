@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -89,6 +89,30 @@ function overlayShape(): HTMLElement {
   return within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
     "option",
   );
+}
+
+function overlaySurface(): HTMLElement {
+  const overlay = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+    bottom: 1080,
+    height: 1080,
+    left: 0,
+    right: 1920,
+    top: 0,
+    width: 1920,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect);
+  return overlay;
+}
+
+function ownShapeFill(): Element {
+  const fill = overlayShape().querySelector(".df-region-overlay__shape-fill");
+  if (fill === null) {
+    throw new Error("Selected annotation is missing its fill target");
+  }
+  return fill;
 }
 
 /** Selects the only annotation and leaves focus outside the docked panel. */
@@ -396,6 +420,69 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Zaakceptuj klatkę" })).toBeEnabled();
     });
+  });
+});
+
+describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", () => {
+  function expectNudgeStillVisible(fetchSpy: FetchSpy): void {
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(mutations(fetchSpy)).toHaveLength(0);
+  }
+
+  it("keeps a nudge after a complete pointerdown and pointerup with no movement", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+
+    fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 110, clientY: 130, pointerId: 1 });
+
+    expectNudgeStillVisible(fetchSpy);
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+  });
+
+  it("keeps a nudge after pointercancel without movement", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+
+    fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
+    fireEvent.pointerCancel(overlay, { clientX: 110, clientY: 130, pointerId: 1 });
+
+    expectNudgeStillVisible(fetchSpy);
+  });
+
+  it("rolls a cancelled real move back to the nudge, not the stored bbox", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+
+    fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 113, y 120"),
+    );
+    fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+
+    expectNudgeStillVisible(fetchSpy);
   });
 });
 
