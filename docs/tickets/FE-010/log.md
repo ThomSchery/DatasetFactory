@@ -56,7 +56,7 @@ wyraźny między kanwą i zapleczem (`--size-md`/`--size-lg`).
 | Kanwa (`RegionOverlay`) i obraz | Pełna szerokość obszaru roboczego, ograniczenie wysokością viewportu, zachowanie proporcji i obrysu obrazu. | Grid & Spacing: GRID-01/02/08/12, SPACING-01/11; UI & Visuals: BORDER-07, BWIDTH-08, RADIUS-02/04 |
 | Etykieta numeru klatki | Mała warstwa w lewym górnym rogu, ochronne ciemne tło, `pointer-events: none`, dane tabularne/mono. | UI & Visuals: COLOR-08, OVERLAY-01/02/06, RADIUS-02; Typography: TYPO-02/07, FONTSIZE-08/09/10, LHEIGHT-09, CASING-01/02 |
 | Celownik prowadzący | Dwie przerywane linie przez cały `viewBox`, lokalny stan kursora w `RegionOverlay`, stała grubość CSS, bez hit-testingu. | UI & Visuals: COLOR-08, BWIDTH-08/10, OVERLAY-06, OPACITY-02 |
-| Sterowanie zoomem | Stały wskaźnik procentowy w prawym górnym rogu kanwy i mały przycisk `Dopasuj`, dostępny z klawiatury; nie zmienia rozmiaru layoutu. | Grid & Spacing: GRID-01/02, SPACING-01/02; UI & Visuals: COLOR-08, OVERLAY-01/02/06, BORDER-02, RADIUS-02; Typography: TYPO-07, FONTSIZE-09/10 |
+| Sterowanie zoomem | Stały wskaźnik procentowy w prawym górnym rogu kanwy i kompaktowy przycisk `1×`, dostępny z klawiatury jako „Dopasuj kanwę do widoku”; nie zmienia rozmiaru layoutu. | Grid & Spacing: GRID-01/02, SPACING-01/02; UI & Visuals: COLOR-08, OVERLAY-01/02/06, BORDER-02, RADIUS-02; Typography: TYPO-07, FONTSIZE-09/10 |
 | Pan kanwy | Bez osobnego paska: środkowy przycisk albo `Spacja` + lewy przycisk; kursor `grab/grabbing`, jawne rozstrzygnięcie gestu przed rysowaniem. | UI & Visuals: OVERLAY-06, OPACITY-02; Grid & Spacing: GRID-08/11 |
 | Dokowany panel anotacji | Pozostaje bezpośrednio pod obrazem, nigdy go nie przykrywa i nie trafia nad obszar gestu. | Grid & Spacing: GRID-01/02, SPACING-01/02; UI & Visuals: BORDER-02, RADIUS-02 |
 | Inspektor anotacji (`Panel`) | Przeniesiony wizualnie i w DOM pod kanwę; zawartość i interakcje bez zmian. | Grid & Spacing: GRID-01/02/12, SPACING-01/02/06; UI & Visuals: BORDER-02, RADIUS-02; Typography: TYPO-07, LHEIGHT-10 |
@@ -108,7 +108,48 @@ wyraźny między kanwą i zapleczem (`--size-md`/`--size-lg`).
   każdej z tych warstw przechodził do overlayu i tworzył wyłącznie lokalny draft,
   bez żądania mutującego.
 - Screenshot QA: `docs/tickets/FE-010/fe-010-canvas-crosshair-1440.png`.
+- Screenshot QA przy zoomie 125%, z widocznym celownikiem i otwartym panelem:
+  `docs/tickets/FE-010/fe-010-zoom-crosshair-1440.png` (1440 × 2006 px,
+  obejrzany w pełnej rozdzielczości).
 - `impeccable detect --scope layout` po zmianie: `[]`.
+
+### Zoom i pan — pomiary Chromium
+
+- Rzeczywisty `Ctrl` + kółko zmienił skalę z **100% na 125%**. Renderowana
+  szerokość obrazu wzrosła z **981,297 px do 1226,621 px**, natomiast viewport
+  kanwy pozostał **983,328 × 553,984 px**.
+- Punkt zakotwiczenia pod kursorem zmienił znormalizowaną pozycję o mniej niż
+  **0,0003** na każdej osi (różnica wynika z subpikselowego obrysu viewportu).
+- Pan środkowym przyciskiem przesunął transformację o dokładnie **80 × 45 px**;
+  osobny test Chromium potwierdził także `Spacja` + lewy przycisk.
+- Zwykłe kółko bez `Ctrl` nie miało `defaultPrevented`; listener jest jawnie
+  niepasywny, lecz przechwytuje wyłącznie obsługiwany zoom.
+- Reset `1×` zachował otwarty panel oraz identyczny draft
+  `x 864, y 486, width 110, height 75`; zoom, pan i reset wykonały **0 mutacji**.
+- Etykiety poruszają się z obrazem, ale zachowują stały rozmiar ekranowy dzięki
+  odwrotnej skali. Obrysy i celownik zachowują `non-scaling-stroke`.
+- Hit target uchwytu jest dzielony przez bieżący zoom: dla przykładowego bboxa
+  19 × 40 px ma rozmiar 10 × 10 jednostek przy dopasowaniu i 1,25 × 1,25 przy
+  8×, czyli zachowuje ten sam ślad ekranowy na obu końcach zakresu.
+
+### Wyniki pełnej bramki
+
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`
+zakończył się wynikiem **PASS — 9/9 bramek, 0 pominiętych**:
+
+- backend: format i lint bez uwag, mypy bez błędów, **347/347 testów**;
+- frontend: typy bez błędów, **40/40 plików i 600/600 testów**;
+- build produkcyjny: sukces; jedyne ostrzeżenie dotyczy istniejącego rozmiaru
+  głównego chunka powyżej 500 kB;
+- E2E Chromium: **6/6 scenariuszy**, w tym pełny vertical flow, QA pięciu tras,
+  kanwa/celownik/zoom/pan, stan zamrożony i ochrona screenshotu po utracie focusu;
+- bezpieczeństwo katalogu roboczego E2E: **2/2 testy**.
+
+Dodatkowy retest FE-009/FE-010 objął **5/5 plików i 162/162 testy**. Pierwszy
+przebieg pełnej bramki wykrył zbyt szeroki stały próg testu layoutu oraz próbę
+przesunięcia kursora do kanwy przewiniętej poza viewport przez focus inspektora.
+Asercje zostały powiązane z rzeczywistą geometrią wiersza i jawnie przywracają
+SVG do viewportu bez zmiany focusu; po korekcie pełna bramka przeszła od początku.
 
 ## Regresje FE-009 — osobne dowody
 
