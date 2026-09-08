@@ -18,3 +18,4 @@ export type {
   SourceRect,
   SourceSize,
 } from "./geometry";
+export { isOverlayPanPointerDown } from "./panIntent";

@@ -27,6 +27,7 @@ import {
   type SourceRect,
   type SourceSize,
 } from "./geometry";
+import { markOverlayPanPointerDown } from "./panIntent";
 import "./RegionOverlay.css";
 
 export type { SourceRect, SourceSize } from "./geometry";
@@ -264,7 +265,6 @@ export function RegionOverlay({
       if (viewport === null) {
         return;
       }
-      event.preventDefault();
       const bounds = viewport.getBoundingClientRect();
       const current = viewRef.current;
       const requested =
@@ -277,6 +277,7 @@ export function RegionOverlay({
       if (scale === current.scale) {
         return;
       }
+      event.preventDefault();
       if (scale === 1) {
         resetView();
         return;
@@ -308,7 +309,7 @@ export function RegionOverlay({
   useEffect(() => {
     const targetIsEditable = (target: EventTarget | null) =>
       target instanceof HTMLElement &&
-      (target.isContentEditable || target.matches("input, textarea, select, button"));
+      (target.isContentEditable || target.matches("input, textarea, select"));
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if ((event.code !== "Space" && event.key !== " ") || targetIsEditable(event.target)) {
         return;
@@ -409,6 +410,7 @@ export function RegionOverlay({
     suppressCapturedClickRef.current = false;
     const wantsPan = event.button === 1 || (event.button === 0 && spacePressedRef.current);
     if (wantsPan) {
+      markOverlayPanPointerDown(event.nativeEvent);
       event.preventDefault();
       panGestureRef.current = {
         originClient: { x: event.clientX, y: event.clientY },

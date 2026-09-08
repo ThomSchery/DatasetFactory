@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Annotation, BBox, Category } from "../../api";
 import { Button } from "../../components/common/Button";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
+import { isOverlayPanPointerDown } from "../../components/common/RegionOverlay";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
 import { copyOptionGroups } from "./copySelection";
@@ -144,6 +145,12 @@ export function AnnotationPopover({
         return;
       }
       if (popover.contains(target)) {
+        return;
+      }
+      // Panning is a view-only gesture. RegionOverlay marks the exact native
+      // pointerdown before it bubbles here so the panel and its unsaved
+      // geometry preview survive without weakening ordinary outside-dismiss.
+      if (isOverlayPanPointerDown(event)) {
         return;
       }
       // The bbox this popover edits is not "outside" it. Without this, the
