@@ -759,13 +759,6 @@ function LoadedFrameEditor({
           </Notice>
         ) : null}
 
-        {unsavedGeometry === null ? null : (
-          <Notice title="Niezapisane przesunięcie bboxa" tone="warning">
-            Zaznacz ten bbox i naciśnij <kbd>Enter</kbd>, aby zapisać przesunięcie, albo kliknij
-            poza panelem, aby je porzucić. Akceptacja klatki jest zablokowana, dopóki przesunięcie
-            nie zostanie rozstrzygnięte — zaakceptowana klatka jest terminalna.
-          </Notice>
-        )}
         {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
         {imageError ? (
           <div className="df-review-image-error">
@@ -827,6 +820,13 @@ function LoadedFrameEditor({
           source={{ width: frame.width, height: frame.height }}
         />
 
+        {unsavedGeometry === null ? null : (
+          <Notice title="Niezapisane przesunięcie bboxa" tone="warning">
+            Zaznacz ten bbox i naciśnij <kbd>Enter</kbd>, aby zapisać przesunięcie, albo kliknij
+            poza panelem, aby je porzucić. Akceptacja klatki jest zablokowana, dopóki przesunięcie
+            nie zostanie rozstrzygnięte — zaakceptowana klatka jest terminalna.
+          </Notice>
+        )}
         {popoverAnnotation === undefined ? null : (
           <AnnotationPopover
             annotation={popoverAnnotation}
