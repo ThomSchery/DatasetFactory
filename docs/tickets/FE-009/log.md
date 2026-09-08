@@ -396,3 +396,23 @@ PATCH, Enter wysyła dokładnie jeden PATCH z bieżącym `expected_version`, a
   zero requestów.
 - TypeScript: 0 błędów. Celowany zestaw 3 plików: 55/55. Rozszerzony zestaw
   regresji FE-009/FIX1/FIX2: 179/179 w 8 plikach. Chromium vertical-flow: 1/1.
+
+## Pełna bramka FIX2 — 2026-09-08
+
+- Przed startem `.env` był obecny, porty 8000 i 5173 były wolne.
+- Jeden nieprzerwany przebieg
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`
+  zakończył się **9/9 PASS, 0 SKIP, exit code 0**:
+  - backend format: 256 plików, 0,1 s;
+  - backend lint: 0 błędów, 0,1 s;
+  - backend typy: 0 błędów w 99 plikach, 1,6 s;
+  - backend testy: 347/347, 345,1 s (pytest 338,66 s);
+  - frontend typy: 0 błędów, 1,2 s;
+  - frontend testy: 586/586 w 40 plikach, 44,4 s;
+  - frontend build: 304 moduły, 2,6 s;
+  - Playwright Chromium: 4/4, 55,0 s;
+  - E2E root safety: 2/2, 0,9 s.
+- Bramka potwierdza ponownie punkt 2 listy „MUSZĄ przeżyć”: realny drag/resize
+  własnego bboxa nie zamyka panelu. Nowe sondy uzupełniają go o pełne no-op
+  `pointerup`, no-op `pointercancel` i przerwany realny ruch; każdy zachowuje
+  baseline preview i wykonuje zero requestów.
