@@ -176,3 +176,184 @@
 - Po tym finalnym przebiegu ponownie obejrzano wygenerowany screenshot
   `annotations-1440.png` w pełnej rozdzielczości; wynik visual QA opisany wyżej
   pozostaje aktualny.
+
+# FE-009-FIX1 — `geometryPreview` jako stan trwały
+
+Wejście: zimne review FE-009, `CHANGES REQUESTED`, 1 × P1, 2 × P2, 1 × P3.
+Baza: `c5ac620`. Zakres: wyłącznie FIX-A…FIX-D.
+
+## Diagnoza przyjęta bez sporu
+
+Przed FE-009 `geometryPreview` żyło tylko między `onShapeChange` a
+`onShapeChangeEnd` jednego gestu myszą. Nudge uczynił z niego stan spoczynkowy,
+w którym operator siedzi dowolnie długo, a `AnnotationPopover` nadal traktował
+go jak chwilowy podgląd: wyświetlał `displayedDraft` liczone z preview, ale
+`onChange` i „Zapisz geometrię” pracowały na niezależnym `form.draft`. P1 i oba
+P2 są objawami tego jednego przeoczenia, więc naprawiana jest przyczyna:
+**geometria efektywna = `geometryPreview ?? annotation`** jako jedyne źródło
+prawdy dla baseline'u, wyświetlania i zapisu.
+
+## Design Plan przed kodem (FIX1)
+
+Nowe elementy interfejsu są dwa i oba są nieinteraktywne, więc reguła 2.1
+`new-component.md` (zakaz inline'owych elementów interaktywnych) nie jest
+naruszona; oba korzystają z istniejących komponentów `common/`.
+
+1. Znacznik w panelu anotacji: `StatusBadge tone="warning"` z tekstem
+   „Niezapisane” plus zdanie mikrokopii z `<kbd>Enter</kbd>`, umieszczony nad
+   rozwijaną sekcją geometrii, żeby był widoczny także przy zwiniętym
+   `<details>`.
+2. Komunikat na poziomie kolumny podglądu: `Notice tone="warning"` — dokładnie
+   jego udokumentowane zastosowanie („komunikat trwający tak długo, jak jego
+   warunek”). Niesie powód blokady akceptacji i przeżywa zamknięcie panelu po
+   zapisie klasy.
+
+Checklista wytycznych:
+
+- [x] Layout/siatka: `GRID-01`, `GRID-02`, `SPACING-01`. Znacznik dziedziczy
+      rytm `--size-xs` istniejącej siatki panelu; `Notice` wchodzi w istniejący
+      stos kolumny podglądu obok `InlineError`, bez nowego kontenera.
+- [x] Typografia: `FONTSIZE-02`, `LHEIGHT-09`, `TYPO-07`. Mikrokopia znacznika
+      to `--font-size-sm` / `--line-height-standard`; `<kbd>` używa istniejącej
+      reguły monospaced z `.df-annotation-popover__actions kbd`.
+- [x] Kolory: `COLOR-08`, `COLOR-09`. Ton ostrzegawczy niesie
+      `--color-status-warning-default` na badge'u, ale znaczenie jest też
+      zapisane słowem („Niezapisane przesunięcie”), więc nie zależy od koloru.
+      Tekst pozostaje na `--color-text-weak-default`.
+- [x] Obramowania i promień: bez zmian. Znacznik nie ma własnego obrysu,
+      `Notice` używa swojego akcentu `border-inline-start` (BORDER-05).
+- [x] Cienie: brak. Panel pozostaje zadokowany bez elevacji (SHADOW-05).
+- [x] Interakcje: `COLOR-07`, `OPACITY-02`. Nowy stan disabled dotyczy wyłącznie
+      istniejącego `Button` „Zaakceptuj klatkę” i korzysta z jego
+      `--opacity-disabled`; nie powstaje żaden nowy wariant.
+- [x] Komponenty: `StatusBadge`, `Notice`, `Button`, `TextField` — wszystkie już
+      w katalogu (sekcje 4–5). Nowy komponent nie jest potrzebny.
+
+## Decyzje projektowe FIX1
+
+- **FIX-A.** `syncFormState` dostaje geometrię efektywną zamiast `annotation`,
+  a `displayedDraft` znika. Pola i „Zapisz geometrię” czytają wyłącznie
+  `form.draft`, więc nie istnieje ścieżka, w której wartość widoczna i wysyłana
+  różnią się. Polityka dirty/clean zostaje bez zmian: pole równe baseline'owi
+  podąża za nową geometrią, pole ręcznie zmienione zostaje — ta sama reguła,
+  która od FE-008 chroni edycję przy refetchu tej samej anotacji.
+- **FIX-B.** `Enter` nie jest konsumowany, gdy `event.target` leży wewnątrz
+  korzenia panelu. Kontraktem jest jawny atrybut
+  `data-annotation-popover` eksportowany z komponentu, nie nazwa klasy CSS —
+  ten sam wzorzec, co `data-shortcut-scope` w `GroupedOptionList`. Guard na
+  `Alt`/`Ctrl`/`Meta`, `INPUT`/`SELECT`/`TEXTAREA` i `data-shortcut-scope`
+  pozostaje nietknięty, a strzałki nadal działają z panelu.
+- **FIX-C.** Znacznik i blokada akceptacji zależą od tego, czy preview *różni
+  się* od zapisanej anotacji, a nie od tego, skąd pochodzi. Rozważony był
+  dyskryminator `origin: "drag" | "keyboard"`, który usunąłby krótkie mignięcie
+  komunikatu w trakcie przeciągania myszą; odrzucony, bo zostawiałby nieoznaczony
+  dokładnie ten przypadek, w którym preview z gestu myszą jednak zostanie stanem
+  spoczynkowym (utracone `pointerup`) — czyli tę samą klasę błędu, którą review
+  właśnie znalazło. Podczas przeciągania geometria faktycznie nie jest zapisana,
+  więc komunikat nie kłamie.
+- **FIX-D.** Krok to zawsze dokładnie `step` px. Zakres ruchu to zakres
+  dozwolony poszerzony o bieżącą pozycję prostokąta, więc box w granicach
+  zatrzymuje się na krawędzi, box poza kadrem idzie po `step` px i nie jest
+  wciągany skokiem, a jednocześnie nie może pogłębić istniejącego naruszenia.
+  Klampowana jest wyłącznie oś, po której nastąpił ruch.
+
+## Domknięcie implementacji FIX1
+
+- Błąd mutacji geometrii nie czyści już `geometryPreview`. Operator widzi nadal
+  ten sam bbox i znacznik niezapisanej pracy, a ponowienie nie zaczyna się od
+  starej geometrii. Konflikt wersji może odświeżyć anotację, ale preview zostaje
+  ocenione względem nowej odpowiedzi serwera.
+- Udany zapis klasy zamyka panel jak wcześniej tylko wtedy, gdy anotacja nie ma
+  niezapisanej geometrii. Przy aktywnym preview wybór klasy zachowuje zaznaczenie,
+  panel i marker. Jawny `data-annotation-selection-target` na chipie klasy pozwala
+  outside-dismiss odróżnić ponowny wybór tej samej anotacji od przejścia do innej;
+  w drugim przypadku obowiązuje dotychczasowe czyszczenie preview.
+- Zablokowany przycisk „Zaakceptuj klatkę” ma znacznik
+  `data-preserve-annotation-preview`, żeby sam `pointerdown` na disabled control
+  nie porzucał pracy, której ten przycisk ma bronić. Skrót `a` i klik wysyłają
+  w tym stanie zero requestów review.
+- Pierwszy łączny przebieg obu speców E2E wykrył regresję w trakcie dragowania:
+  `Notice` pojawiał się nad obrazem po pierwszym `pointermove`, przesuwał aktywny
+  `RegionOverlay` i zmieniał wyliczenie `y` (`oczekiwane 190`, widoczne `0`).
+  Komunikat przeniesiono bezpośrednio pod overlay. Powtórzony vertical flow
+  przeszedł 1/1, a visual QA dodatkowo mierzy teraz, że współrzędna `y` powierzchni
+  rysowania jest identyczna przed i po utworzeniu preview.
+
+## Weryfikacja FIX1 przed pełną bramką
+
+- TypeScript: `npx tsc --noEmit` — 0 błędów.
+- Sondy FIX-A…FIX-D: 75/75 w 3 plikach.
+- Rozszerzony wymagany zestaw Vitest: 176/176 w 8 plikach
+  (`GroupedOptionList`, `RegionOverlay`, geometria, `AnnotationPopover`, nowy
+  `annotationNudgeFixup`, review flow, review fixup i terminal refresh).
+- Chromium vertical flow po korekcie stabilności layoutu: 1/1.
+- Chromium visual QA po dodaniu asercji stabilności overlaya: 2/2.
+- Detector Impeccable dla czterech zmienionych plików UI/CSS: `[]`.
+- Screenshot `annotations-1440.png` obejrzany ponownie w pełnej rozdzielczości:
+  box i etykieta są niezasłonięte, ostrzeżenie leży pod obrazem, dokowany panel
+  pokazuje badge „Niezapisane”, wartości `x/y/w/h` i focus ring; brak poziomego
+  overflow.
+
+## Sondy findingów z zimnego review — wynik końcowy
+
+- [x] **FIX-A / P1 — jedno źródło prawdy.** `ArrowRight ×3` pokazuje `x=103`,
+      a „Zapisz geometrię” wysyła dokładnie jeden PATCH z `bbox.x=103` i
+      `expected_version=3`. Po wyczyszczeniu pola i wpisaniu `555` pole oraz
+      summary pokazują `555`, jedyny PATCH ma `bbox.x=555`, a zapis `1035` nie
+      występuje. Dalszy nudge aktualizuje czyste pola, zachowuje ręcznie zmienione
+      i jeden PATCH składa obie wartości.
+- [x] **FIX-B / P2 — Enter należy do panelu.** Fokus „Usuń” + Enter daje jeden
+      DELETE i zero PATCH geometrii; „Zapisz klasę” daje jeden PATCH klasy i zero
+      PATCH geometrii; „Przerysuj bbox” uzbraja redraw i wysyła zero requestów.
+      Enter z fokusem poza panelem nadal daje dokładnie jeden PATCH geometrii.
+- [x] **FIX-C / P2 — preview nie ginie po cichu.** Ponowny klik tego samego chipa
+      klasy zachowuje `x=103`, marker i wysyła zero requestów. Udany zapis klasy
+      wysyła jeden PATCH klasy, zero PATCH geometrii i zachowuje panel/preview.
+      Błąd PATCH geometrii pozostawia bbox i marker po dokładnie jednym requestcie;
+      refetch tej samej anotacji wykonuje dodatkowy GET, zero mutacji i zachowuje
+      preview. Skrót `a` oraz klik disabled „Zaakceptuj” dają zero POST review,
+      dopóki Enter nie zapisze przesunięcia.
+- [x] **FIX-D / P3 — clamp kroku.** Dla `x=1900`, `w=40`, szerokości 1920:
+      ArrowLeft daje `x=1899`, Shift+ArrowLeft daje `x=1890`; krok pionowy nie
+      zmienia `x`, a ruch pogłębiający naruszenie jest no-opem. Box w granicach
+      nadal zatrzymuje się na krawędzi. Próba zapisu wciąż niepoprawnego `x=1899`
+      wysyła zero requestów, pokazuje `bbox_invalid` i nie cofa preview.
+
+## Sześć zachowań „MUSZĄ przeżyć” — retest po FIX1
+
+1. [x] Outside `pointerdown` zamyka panel bez zapisu, porzuca draft i ten sam
+       pointerdown na obrazie rozpoczyna nowy box — testy komponentowe oraz realny
+       `page.mouse` w `vertical-flow.spec.ts`, zielone w pełnej bramce.
+2. [x] Pointerdown/drag/resize własnego `[data-overlay-shape-id]` nie zamyka
+       panelu — sonda `AnnotationPopover` i bezpośrednie gesty vertical-flow.
+3. [x] `Escape` nadal nie ma hintu ani handlera — test komponentowy zielony.
+4. [x] Pusty Enter w autofocusowanym filtrze nie wybiera klasy i wysyła zero POST
+       — regresja review fixup zielona w pełnym Vitest.
+5. [x] `key={popoverAnnotation.id}` pozostaje w call-site; zmiana anotacji
+       remountuje formularz, a refetch tej samej zachowuje dirty state oraz
+       geometry preview — testy terminal refresh i nowa sonda refetch.
+6. [x] Zwykły błąd POST zachowuje draft do ponowienia — review flow zielony;
+       dodatkowo błąd PATCH geometrii zachowuje teraz trwały preview.
+
+Dodatkowe niezmienniki FE-009 również są zielone: seria strzałek wysyła zero
+PATCH, Enter wysyła dokładnie jeden PATCH z bieżącym `expected_version`, a
+`preventDefault` występuje tylko przy rzeczywistym ruchu.
+
+## Pełna bramka FIX1 — 2026-09-08
+
+- Przed startem `.env` był obecny, a porty 8000 i 5173 były wolne.
+- Wykonano jeden nieprzerwany przebieg dokładnie komendą
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`.
+- Wynik: **9/9 PASS, 0 SKIP, exit code 0**:
+  - backend format: 256 plików, 2,2 s;
+  - backend lint: 0 błędów, 0,1 s;
+  - backend typy: 0 błędów w 99 plikach, 2,6 s;
+  - backend testy: 347/347, 341,6 s (pytest 334,44 s);
+  - frontend typy: 0 błędów, 1,9 s;
+  - frontend testy: 583/583 w 40 plikach, 37,7 s;
+  - frontend build: 304 moduły, 2,0 s;
+  - Playwright Chromium E2E: 4/4, 56,9 s;
+  - E2E root safety: 2/2, 0,8 s.
+- Po bramce finalny deterministic screenshot obejrzano jeszcze raz w pełnej
+  rozdzielczości 1440 × 1418: overlay nie zmienia położenia po nudge, ostrzeżenie
+  znajduje się pod obrazem, panel jest zadokowany i w całości czytelny.
