@@ -73,22 +73,36 @@ async function assertFrameFilterCountsFit(page: Page): Promise<void> {
 async function assertCompactReviewLayout(page: Page): Promise<void> {
   const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+  const details = page.getByRole("region", { name: "Dane klatki" });
   const toolbar = page.locator(".df-review-toolbar");
   const overlayBounds = await overlay.boundingBox();
   const inspectorBounds = await inspector.boundingBox();
+  const detailsBounds = await details.boundingBox();
   const toolbarBounds = await toolbar.boundingBox();
   expect(overlayBounds).not.toBeNull();
   expect(inspectorBounds).not.toBeNull();
+  expect(detailsBounds).not.toBeNull();
   expect(toolbarBounds).not.toBeNull();
-  if (overlayBounds === null || inspectorBounds === null || toolbarBounds === null) {
-    throw new Error("Review toolbar, inspector or image has no browser geometry");
+  if (
+    overlayBounds === null ||
+    inspectorBounds === null ||
+    detailsBounds === null ||
+    toolbarBounds === null
+  ) {
+    throw new Error("Review toolbar, canvas or supporting content has no browser geometry");
   }
   expect(overlayBounds.y, "review image should remain above the fold at 1000 px").toBeLessThan(600);
-  expect(inspectorBounds.x, "class inspector should remain left of the review image").toBeLessThan(
-    overlayBounds.x,
+  expect(overlayBounds.width, "review image should use the full-width canvas row").toBeGreaterThan(
+    900,
   );
-  expect(toolbarBounds.y + toolbarBounds.height, "toolbar should precede both work columns").toBeLessThanOrEqual(
-    Math.min(inspectorBounds.y, overlayBounds.y),
+  expect(inspectorBounds.y, "class inspector should sit below the canvas").toBeGreaterThanOrEqual(
+    overlayBounds.y + overlayBounds.height,
+  );
+  expect(detailsBounds.y, "frame details should sit below the canvas").toBeGreaterThanOrEqual(
+    overlayBounds.y + overlayBounds.height,
+  );
+  expect(toolbarBounds.y + toolbarBounds.height, "toolbar should precede the canvas").toBeLessThanOrEqual(
+    overlayBounds.y,
   );
   await expect(page.getByLabel("Wybierz klatkę")).toBeVisible();
   await expect(page.getByLabel("Klasa nowego bbox")).toHaveCount(0);
@@ -315,6 +329,15 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
         current.getByRole("status", { name: "Niezapisane przesunięcie bboxa" }),
       ).toBeVisible();
       await expect(current.getByRole("button", { name: "Zaakceptuj klatkę" })).toBeDisabled();
+      const overlayBounds = await overlay.boundingBox();
+      if (overlayBounds === null) {
+        throw new Error("Review canvas has no browser geometry before the FE-010 screenshot");
+      }
+      await current.mouse.move(
+        overlayBounds.x + overlayBounds.width * 0.62,
+        overlayBounds.y + overlayBounds.height * 0.38,
+      );
+      await expect(current.locator("[data-overlay-crosshair]")).toBeVisible();
     },
   );
   await capture(
@@ -350,6 +373,102 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     current.getByRole("button", { name: "Spróbuj ponownie" }), async (current) => {
       await expect(current.getByText("Nie udało się wczytać dashboardu")).toBeVisible();
     });
+});
+
+test("pełnoszeroka kanwa i celownik zachowują stałą geometrię oraz przepuszczają gest", async ({
+  page,
+}) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  const mutationRequests: string[] = [];
+  page.on("request", (request) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+      mutationRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    }
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/annotations/run-1");
+
+  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const image = page.getByRole("img", { name: /Klatka .* runu/ });
+  const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+  const details = page.getByRole("region", { name: "Dane klatki" });
+  await expect(overlay).toBeVisible();
+  const initial = await overlay.boundingBox();
+  const imageBounds = await image.boundingBox();
+  const inspectorBounds = await inspector.boundingBox();
+  const detailsBounds = await details.boundingBox();
+  expect(initial).not.toBeNull();
+  expect(imageBounds).not.toBeNull();
+  expect(inspectorBounds).not.toBeNull();
+  expect(detailsBounds).not.toBeNull();
+  if (
+    initial === null ||
+    imageBounds === null ||
+    inspectorBounds === null ||
+    detailsBounds === null
+  ) {
+    throw new Error("FE-010 layout has no browser geometry");
+  }
+  expect(imageBounds.width).toBeGreaterThan(900);
+  expect(inspectorBounds.y).toBeGreaterThanOrEqual(imageBounds.y + imageBounds.height);
+  expect(detailsBounds.y).toBeGreaterThanOrEqual(imageBounds.y + imageBounds.height);
+
+  const center = {
+    x: initial.x + initial.width / 2,
+    y: initial.y + initial.height / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  const hovered = await overlay.boundingBox();
+  expect(hovered?.height).toBe(initial.height);
+  const crosshair = page.locator("[data-overlay-crosshair]");
+  await expect(crosshair).toBeVisible();
+  await expect(crosshair).toHaveCSS("pointer-events", "none");
+
+  await page.mouse.down();
+  await page.mouse.move(center.x + 48, center.y + 32, { steps: 3 });
+  const duringGesture = await overlay.boundingBox();
+  expect(duringGesture?.height).toBe(initial.height);
+  await page.mouse.up();
+  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+  expect(mutationRequests).toEqual([]);
+
+  const frameLabel = page.locator(".df-region-overlay__corner-label");
+  await expect(frameLabel).toHaveCSS("pointer-events", "none");
+  const labelBounds = await frameLabel.boundingBox();
+  expect(labelBounds).not.toBeNull();
+  if (labelBounds === null) {
+    throw new Error("Frame label has no browser geometry");
+  }
+  const labelPoint = {
+    x: labelBounds.x + labelBounds.width / 2,
+    y: labelBounds.y + labelBounds.height / 2,
+  };
+  await page.mouse.move(labelPoint.x, labelPoint.y);
+  await page.mouse.down();
+  await page.mouse.move(labelPoint.x + 48, labelPoint.y + 48, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+  expect((await overlay.boundingBox())?.height).toBe(initial.height);
+  expect(mutationRequests).toEqual([]);
+
+  await page.mouse.move(8, 8);
+  await expect(crosshair).toHaveCount(0);
+});
+
+test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
+  const api = new ApiHarness({ phase: "accepted" });
+  await api.install(page);
+  await page.goto("/annotations/run-1");
+  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  await expect(overlay).toBeVisible();
+  const bounds = await overlay.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) {
+    throw new Error("Frozen canvas has no browser geometry");
+  }
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await expect(page.locator("[data-overlay-crosshair]")).toHaveCount(0);
 });
 
 test("nie zapisuje screenshotu po utracie route-specific focusu", async ({ page }) => {
