@@ -357,3 +357,42 @@ PATCH, Enter wysyła dokładnie jeden PATCH z bieżącym `expected_version`, a
 - Po bramce finalny deterministic screenshot obejrzano jeszcze raz w pełnej
   rozdzielczości 1440 × 1418: overlay nie zmienia położenia po nudge, ostrzeżenie
   znajduje się pod obrazem, panel jest zadokowany i w całości czytelny.
+
+# FE-009-FIX2 — anulowanie gestu przywraca jego baseline
+
+## Plan FIX2 i zakres UI
+
+- Elementy interfejsu w zakresie: zaznaczony bbox w `RegionOverlay`, dokowany
+  `AnnotationPopover`, badge „Niezapisane” oraz `Notice` blokujący akceptację.
+  Żaden z nich nie zmienia wyglądu, kolejności DOM, copy ani zachowania fokusu;
+  zmienia się wyłącznie cykl życia istniejącego `geometryPreview` podczas
+  `pointerup` bez ruchu i `pointercancel`.
+- `RegionOverlay` pozostaje nietknięty. Call-site w `FrameEditor` zapamiętuje
+  preview obecne przed pierwszym `onShapeChange` danego gestu i przy
+  `onShapeChangeCancel` przywraca tę wartość. Zakończony ruch nadal commituję
+  dotychczasową ścieżką `onShapeChangeEnd`.
+- Moduły/ID UI/UX: `OVERLAY-01` i `OVERLAY-06` (widoczny bbox i poprawny
+  hit-target gestu), `COLOR-09` (stan niezapisany nie zależy wyłącznie od koloru),
+  `OPACITY-02` i `BORDER-06` (istniejące stany interakcji/fokusu bez zmian),
+  `GRID-01`/`SPACING-01` (brak zmian layoutu), `FONTSIZE-02`/`LHEIGHT-09`
+  (istniejąca mikrokopia bez zmian), `RADIUS-05`, `BORDER-05`, `SHADOW-05`
+  (panel i Notice bez zmian wizualnych). Użyte komponenty common pozostają te
+  same: `RegionOverlay`, `StatusBadge`, `Notice`, `Button`; brak nowego elementu
+  interaktywnego i brak CSS.
+- Granice: bez backendu, bez `copySelection`/`GroupedOptionList`, bez mapowania
+  source↔display, bez zoom/pan i bez zmian wewnątrz `RegionOverlay`.
+
+## Implementacja i sondy FIX2
+
+- `manipulationBaselineRef` rozróżnia brak aktywnego gestu od baseline'u `null`.
+  Pierwszy callback `onShapeChange` zapisuje całe preview sprzed `pointerdown`;
+  kolejne ruchy go nie nadpisują. Cancel przywraca baseline, a udany end czyści
+  ref przed istniejącym commitem.
+- Sonda recenzenta: nudge `100 → 103`, pełne `pointerdown` + `pointerup` bez
+  ruchu we własnym bboxie — overlay nadal `x=103`, oba znaczniki widoczne,
+  panel otwarty, zero requestów.
+- `pointercancel` bez ruchu daje ten sam wynik. Rzeczywisty ruch `103 → 113`
+  przerwany `pointercancel` wraca do `103`, nie do zapisanych `100`, i wysyła
+  zero requestów.
+- TypeScript: 0 błędów. Celowany zestaw 3 plików: 55/55. Rozszerzony zestaw
+  regresji FE-009/FIX1/FIX2: 179/179 w 8 plikach. Chromium vertical-flow: 1/1.
