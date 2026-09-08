@@ -177,6 +177,17 @@ interface GeometryPreview {
   bbox: BBox;
 }
 
+interface ManipulationBaseline {
+  annotationId: string;
+  preview: GeometryPreview | null;
+  selectionEpoch: number;
+}
+
+interface SelectionContext {
+  annotationId: string | null;
+  epoch: number;
+}
+
 const DRAFT_ANNOTATION_ID = "new-annotation-draft";
 
 function nudgeDirection(key: string): NudgeDirection | null {
@@ -210,7 +221,8 @@ function LoadedFrameEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [redrawMode, setRedrawMode] = useState<RedrawMode | null>(null);
   const [geometryPreview, setGeometryPreview] = useState<GeometryPreview | null>(null);
-  const manipulationBaselineRef = useRef<{ preview: GeometryPreview | null } | null>(null);
+  const manipulationBaselineRef = useRef<ManipulationBaseline | null>(null);
+  const selectionContextRef = useRef<SelectionContext>({ annotationId: null, epoch: 0 });
   const [draftBBox, setDraftBBox] = useState<BBox | null>(null);
   const [imageError, setImageError] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
@@ -231,6 +243,30 @@ function LoadedFrameEditor({
     () => new Map(profile.categories.map((category) => [category.id, category.name])),
     [profile.categories],
   );
+
+  function updateSelectionContext(annotationId: string | null): void {
+    const current = selectionContextRef.current;
+    if (annotationId === current.annotationId) {
+      return;
+    }
+    selectionContextRef.current = {
+      annotationId,
+      epoch: current.epoch + 1,
+    };
+    manipulationBaselineRef.current = null;
+  }
+
+  function closeSelectionContext(): void {
+    selectionContextRef.current = {
+      annotationId: null,
+      epoch: selectionContextRef.current.epoch + 1,
+    };
+    manipulationBaselineRef.current = null;
+  }
+
+  useEffect(() => {
+    updateSelectionContext(selectedId);
+  }, [selectedId]);
 
   const mutation = useMutation<void | CopyPreviousAnnotationsResult, unknown, ReviewMutationIntent>({
     mutationKey: reviewMutationKey(runId),
@@ -276,6 +312,7 @@ function LoadedFrameEditor({
       }
       if (intent.kind === "create") {
         setDraftBBox(null);
+        updateSelectionContext(null);
         setSelectedId(null);
       }
       if (intent.kind === "copy-previous" && data !== undefined) {
@@ -537,19 +574,52 @@ function LoadedFrameEditor({
   }
 
   function previewManipulationGeometry(annotationId: string, bbox: BBox): void {
-    manipulationBaselineRef.current ??= { preview: geometryPreview };
+    const selectionContext = selectionContextRef.current;
+    if (annotationId !== selectionContext.annotationId) {
+      return;
+    }
+    manipulationBaselineRef.current ??= {
+      annotationId,
+      preview: geometryPreview,
+      selectionEpoch: selectionContext.epoch,
+    };
+    if (
+      manipulationBaselineRef.current.annotationId !== annotationId ||
+      manipulationBaselineRef.current.selectionEpoch !== selectionContext.epoch
+    ) {
+      return;
+    }
     previewAnnotationGeometry(annotationId, bbox);
   }
 
-  function cancelManipulationGeometry(): void {
-    const baseline = manipulationBaselineRef.current?.preview ?? null;
+  function cancelManipulationGeometry(annotationId: string): void {
+    const baseline = manipulationBaselineRef.current;
+    if (baseline?.annotationId !== annotationId) {
+      return;
+    }
     manipulationBaselineRef.current = null;
-    setGeometryPreview(baseline);
+    const selectionContext = selectionContextRef.current;
+    if (
+      annotationId === selectionContext.annotationId &&
+      baseline.selectionEpoch === selectionContext.epoch
+    ) {
+      setGeometryPreview(baseline.preview);
+    }
   }
 
   function commitManipulationGeometry(annotationId: string, bbox: BBox): void {
+    const baseline = manipulationBaselineRef.current;
+    if (baseline?.annotationId !== annotationId) {
+      return;
+    }
     manipulationBaselineRef.current = null;
-    commitAnnotationGeometry(annotationId, bbox);
+    const selectionContext = selectionContextRef.current;
+    if (
+      annotationId === selectionContext.annotationId &&
+      baseline.selectionEpoch === selectionContext.epoch
+    ) {
+      commitAnnotationGeometry(annotationId, bbox);
+    }
   }
 
   function commitAnnotationGeometry(annotationId: string, bbox: BBox): void {
@@ -596,10 +666,12 @@ function LoadedFrameEditor({
     }
     setActionError(null);
     setDraftBBox(bbox);
+    updateSelectionContext(DRAFT_ANNOTATION_ID);
     setSelectedId(DRAFT_ANNOTATION_ID);
   }
 
   function selectAnnotation(annotationId: string): void {
+    updateSelectionContext(annotationId);
     if (annotationId !== DRAFT_ANNOTATION_ID) {
       setDraftBBox(null);
     }
@@ -814,6 +886,7 @@ function LoadedFrameEditor({
               ? (annotationId) => {
                   if (annotationId === DRAFT_ANNOTATION_ID) {
                     setDraftBBox(null);
+                    updateSelectionContext(null);
                     setSelectedId(null);
                     return;
                   }
@@ -886,6 +959,7 @@ function LoadedFrameEditor({
               });
             }}
             onClose={() => {
+              closeSelectionContext();
               setDraftBBox(null);
               setSelectedId(null);
               setGeometryPreview(null);
@@ -894,6 +968,7 @@ function LoadedFrameEditor({
             onDelete={() => {
               if (selectedId === DRAFT_ANNOTATION_ID) {
                 setDraftBBox(null);
+                updateSelectionContext(null);
                 setSelectedId(null);
                 return;
               }
@@ -913,6 +988,7 @@ function LoadedFrameEditor({
             onToggleDrawTarget={() => {
               if (selectedId === DRAFT_ANNOTATION_ID) {
                 setDraftBBox(null);
+                updateSelectionContext(null);
                 setSelectedId(null);
                 return;
               }
