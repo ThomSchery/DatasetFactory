@@ -43,6 +43,8 @@ export interface OverlayShape extends SourceRect {
 }
 
 export interface RegionOverlayProps {
+  /** Optional visual identifier pinned inside the picture; never participates in hit testing. */
+  cornerLabel?: ReactNode;
   /** Disables drawing, selection and removal without unmounting the picture. */
   disabled?: boolean;
   imageAlt: string;
@@ -160,6 +162,7 @@ function capturePointer(surface: SVGSVGElement, pointerId: number, capture: bool
  *     edge keeps its width in CSS pixels through `vector-effect`.
  */
 export function RegionOverlay({
+  cornerLabel,
   disabled = false,
   imageAlt,
   imageUrl,
@@ -182,11 +185,13 @@ export function RegionOverlay({
   const suppressCapturedClickRef = useRef(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [manipulation, setManipulation] = useState<Manipulation | null>(null);
+  const [cursorPoint, setCursorPoint] = useState<SourcePoint | null>(null);
 
   const canDraw = onDraw !== undefined && !disabled && source !== null;
   const canInteract = !disabled;
   const canEditShapes =
     onShapeChange !== undefined && onShapeChangeEnd !== undefined && canInteract && source !== null;
+  const canGuide = canDraw || canEditShapes;
 
   function sourcePointAt(clientX: number, clientY: number): SourcePoint | null {
     const surface = surfaceRef.current;
@@ -301,8 +306,9 @@ export function RegionOverlay({
   }
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    const point = pointFrom(event);
+    setCursorPoint(canGuide ? point : null);
     if (manipulation !== null) {
-      const point = pointFrom(event);
       if (point !== null) {
         const currentRect = rectForManipulation(manipulation, point);
         setManipulation({ ...manipulation, currentRect });
@@ -313,7 +319,6 @@ export function RegionOverlay({
     if (draft === null) {
       return;
     }
-    const point = pointFrom(event);
     if (point !== null) {
       setDraft({ ...draft, current: point });
     }
@@ -447,6 +452,7 @@ export function RegionOverlay({
             }
             setManipulation(null);
             setDraft(null);
+            setCursorPoint(null);
             suppressCapturedClickRef.current = false;
           }}
           onClickCapture={(event) => {
@@ -464,6 +470,9 @@ export function RegionOverlay({
             }
           }}
           onPointerDown={handlePointerDown}
+          onPointerLeave={() => {
+            setCursorPoint(null);
+          }}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           // `none` rather than the default `xMidYMid meet`: it makes the map
@@ -493,6 +502,28 @@ export function RegionOverlay({
               tabbable={canInteract && (selectedId === null ? index === 0 : shape.id === selectedId)}
             />
           ))}
+          {!canGuide || cursorPoint === null ? null : (
+            <g
+              aria-hidden="true"
+              className="df-region-overlay__crosshair"
+              data-overlay-crosshair="true"
+            >
+              <line
+                className="df-region-overlay__crosshair-line"
+                x1={cursorPoint.x}
+                x2={cursorPoint.x}
+                y1={0}
+                y2={source.height}
+              />
+              <line
+                className="df-region-overlay__crosshair-line"
+                x1={0}
+                x2={source.width}
+                y1={cursorPoint.y}
+                y2={cursorPoint.y}
+              />
+            </g>
+          )}
           {draftRect === null ? null : (
             <rect
               aria-hidden="true"
@@ -524,6 +555,11 @@ export function RegionOverlay({
           )}
         </div>
         </>
+      )}
+      {cornerLabel === undefined ? null : (
+        <span aria-hidden="true" className="df-region-overlay__corner-label">
+          {cornerLabel}
+        </span>
       )}
     </div>
   );

@@ -8,10 +8,9 @@
   display: grid;
   grid-template-areas:
     "toolbar toolbar"
-    "inspector preview";
-  grid-template-columns:
-    minmax(calc(var(--size-xxl) * 3), 1fr)
-    minmax(0, 4fr);
+    "preview preview"
+    "inspector details";
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
   gap: var(--size-md);
   min-width: 0;
@@ -37,6 +36,8 @@
 
 .df-review-workspace__preview {
   grid-area: preview;
+  display: grid;
+  gap: var(--size-sm);
   padding: var(--size-md);
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
   border-radius: var(--radius-lg);
@@ -50,8 +51,13 @@
   grid-area: inspector;
 }
 
+.df-review-workspace__details {
+  grid-area: details;
+}
+
 .df-review-workspace__preview,
-.df-review-workspace__inspector {
+.df-review-workspace__inspector,
+.df-review-workspace__details {
   min-width: 0;
 }
 
@@ -371,6 +377,20 @@
 }
 
 .df-review-workspace .df-region-overlay {
-  margin-block: var(--size-md);
+  margin-block: var(--size-none);
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
+}
+
+.df-review-workspace__preview .df-region-overlay__image {
+  max-height: calc(100dvh - (var(--size-xxl) * 7));
+}
+
+.df-review-workspace__preview .df-annotation-popover {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.df-review-workspace__preview .df-annotation-popover__header,
+.df-review-workspace__preview .df-annotation-popover__unsaved,
+.df-review-workspace__preview .df-annotation-popover__geometry {
+  grid-column: 1 / -1;
 }

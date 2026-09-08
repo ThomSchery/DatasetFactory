@@ -39,6 +39,18 @@
   cursor: crosshair;
 }
 
+.df-region-overlay__crosshair {
+  pointer-events: none;
+}
+
+.df-region-overlay__crosshair-line {
+  stroke: var(--color-text-strong-default);
+  stroke-width: var(--border-width-default);
+  stroke-dasharray: var(--size-xs) var(--size-xs);
+  opacity: var(--opacity-hover);
+  vector-effect: non-scaling-stroke;
+}
+
 .df-region-overlay__shape {
   cursor: pointer;
 }
@@ -167,6 +179,22 @@
   position: absolute;
   inset: var(--size-none);
   overflow: visible;
+  pointer-events: none;
+}
+
+.df-region-overlay__corner-label {
+  position: absolute;
+  top: var(--size-xs);
+  left: var(--size-xs);
+  z-index: 1;
+  padding: calc(var(--size-xs) / 2) var(--size-xs);
+  border-radius: var(--radius-sm);
+  background: var(--color-overlay-scrim);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
   pointer-events: none;
 }
 
