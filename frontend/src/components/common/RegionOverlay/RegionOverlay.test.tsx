@@ -29,6 +29,26 @@ function layOutSurface(surface: Element, width: number, left = 0, top = 0): void
   } as DOMRect);
 }
 
+function layOutViewport(surface: Element, width: number, left = 0, top = 0): HTMLElement {
+  const viewport = surface.closest(".df-region-overlay");
+  if (!(viewport instanceof HTMLElement)) {
+    throw new Error("Region overlay viewport is missing");
+  }
+  const height = (width * SOURCE.height) / SOURCE.width;
+  vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  } as DOMRect);
+  return viewport;
+}
+
 /** Drags from one fraction of the surface to another, in surface-relative terms. */
 function dragAcross(
   surface: Element,
@@ -229,6 +249,112 @@ describe("the drawing surface", () => {
     layOutSurface(surface, 960);
     fireEvent.pointerMove(surface, { clientX: 240, clientY: 135, pointerId: 1 });
     expect(surface.querySelector("[data-overlay-crosshair]")).not.toBeInTheDocument();
+  });
+
+  it("zooms around the Ctrl-wheel cursor, caps at 8x and resets from a visible control", async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    const surface = surfaceElement();
+    layOutSurface(surface, 960, 100, 50);
+    const viewport = layOutViewport(surface, 960, 100, 50);
+
+    const handled = fireEvent.wheel(surface, {
+      clientX: 340,
+      clientY: 185,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+
+    expect(handled).toBe(false);
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("125%");
+    expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
+      transform: "translate(-60px, -33.75px) scale(1.25)",
+    });
+
+    for (let step = 0; step < 12; step += 1) {
+      fireEvent.wheel(surface, {
+        clientX: 340,
+        clientY: 185,
+        ctrlKey: true,
+        deltaY: -100,
+      });
+    }
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("800%");
+
+    await user.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1)",
+    });
+  });
+
+  it("leaves an ordinary wheel gesture to the page", () => {
+    renderOverlay();
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    layOutViewport(surface, 960);
+
+    const unhandled = fireEvent.wheel(surface, { clientX: 480, clientY: 270, deltaY: 100 });
+
+    expect(unhandled).toBe(true);
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+  });
+
+  it.each([
+    ["middle button", 1, false],
+    ["Space plus left button", 0, true],
+  ] as const)("pans with the %s without starting a drawing", (_, button, holdSpace) => {
+    const onDraw = vi.fn();
+    renderOverlay({ onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    if (holdSpace) {
+      fireEvent.keyDown(window, { key: " " });
+    }
+
+    fireEvent.pointerDown(surface, { button, clientX: 480, clientY: 270, pointerId: 7 });
+    fireEvent.pointerMove(surface, { button, clientX: 520, clientY: 300, pointerId: 7 });
+
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
+      transform: "translate(-80px, -37.5px) scale(1.25)",
+    });
+    expect(onDraw).not.toHaveBeenCalled();
+
+    fireEvent.pointerUp(surface, { button, clientX: 520, clientY: 300, pointerId: 7 });
+    if (holdSpace) {
+      fireEvent.keyUp(window, { key: " " });
+    }
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(onDraw).not.toHaveBeenCalled();
+  });
+
+  it("keeps drawing in source pixels after zooming and panning the presentation", () => {
+    const onDraw = vi.fn();
+    renderOverlay({ onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    layOutViewport(surface, 960);
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+
+    // The DOM reports the one transformed SVG rectangle. The existing shared
+    // clientPointToSource path must invert it without any zoom-specific math.
+    layOutSurface(surface, 1200, -120, -67.5);
+    dragAcross(surface, { xRatio: 0.25, yRatio: 0.25 }, { xRatio: 0.75, yRatio: 0.5 });
+
+    expect(onDraw).toHaveBeenCalledWith({ x: 480, y: 270, width: 960, height: 270 });
   });
 
   it("turns a drag into a region in source coordinates", () => {
