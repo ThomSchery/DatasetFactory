@@ -416,3 +416,62 @@ PATCH, Enter wysyła dokładnie jeden PATCH z bieżącym `expected_version`, a
   własnego bboxa nie zamyka panelu. Nowe sondy uzupełniają go o pełne no-op
   `pointerup`, no-op `pointercancel` i przerwany realny ruch; każdy zachowuje
   baseline preview i wykonuje zero requestów.
+
+# FE-009-FIX3 — baseline gestu scoped do anotacji
+
+## Finding re-review FIX2 (1 × P2)
+
+`manipulationBaselineRef` wprowadzony w FIX2 nie miał właściciela: nie był
+powiązany z anotacją ani epoką zaznaczenia, nie był unieważniany w
+`selectAnnotation` ani przy zamknięciu panelu, a `cancelManipulationGeometry`
+ignorował `annotationId` przekazywany przez `RegionOverlay`
+(`onShapeChangeCancel?.(manipulation.shapeId)`). Sekwencja: nudge A `100 → 103`,
+start realnego gestu A, wybór B w trakcie gestu, `pointercancel` A — B
+zaznaczona, ale A wskrzeszona jako niezapisane `x: 103`. Kolejny anulowany gest B
+mógł nieść baseline A.
+
+## Plan FIX3 i zakres UI
+
+- Elementy interfejsu bez zmian wizualnych: zaznaczony bbox w `RegionOverlay`,
+  dokowany `AnnotationPopover`, badge „Niezapisane”, `Notice` blokujący
+  akceptację. Zmienia się wyłącznie właściciel i cykl życia `manipulationBaselineRef`.
+- `RegionOverlay` nietknięty — sygnatura `onShapeChangeCancel(id)` już
+  przekazywała `annotationId`, brakowało tylko jego użycia po stronie
+  `FrameEditor`.
+- Granice: bez backendu, bez `copySelection`/`GroupedOptionList`, bez mapowania
+  source↔display, bez zoom/pan, bez zmian w `RegionOverlay`. Wszystko
+  zaakceptowane w FE-009/FIX1/FIX2 zostaje bez zmian.
+
+## Implementacja
+
+- Baseline ma teraz właściciela: `ManipulationBaseline { annotationId, preview,
+  selectionEpoch }`. Synchroniczny `selectionContextRef { annotationId, epoch }`
+  jest jedynym źródłem bieżącego kontekstu — nie zależy od closure `selectedId`.
+- `updateSelectionContext(id)` bumpuje epokę i zeruje baseline tylko przy realnej
+  zmianie ID; wołany imperatywnie w `selectAnnotation`, przy przejściu do draftu,
+  przy czyszczeniu zaznaczenia po `create` i przy dismiss draftu, oraz z
+  `useEffect([selectedId])` jako sieć bezpieczeństwa. `closeSelectionContext()`
+  w `onClose` bumpuje epokę i zeruje baseline.
+- `previewManipulationGeometry` ignoruje callback dla anotacji spoza bieżącego
+  kontekstu; baseline zapisuje `selectionEpoch` z chwili pierwszego
+  `onShapeChange`.
+- `cancelManipulationGeometry(annotationId)` i `commitManipulationGeometry`
+  działają tylko gdy baseline należy do przekazanego `annotationId` **oraz**
+  jego `selectionEpoch` zgadza się z bieżącym kontekstem. Cancel z nieaktualnego
+  kontekstu nie robi nic — nie przywraca preview, nie wysyła żądania.
+
+## Sondy FIX3
+
+- Pełna sekwencja z findingu: A nudge `100 → 103` → ruch A do `113` → wybór B →
+  `pointercancel` A → gest B i `pointercancel` B. Po każdym kroku asercja
+  zaznaczenia, geometrii na overlayu, znaczników i liczby żądań. A nie
+  zmartwychwstaje (wraca do `100`), B nie dostaje baseline'u A (wraca do `400`),
+  zero mutacji.
+- Zamknięcie panelu w trakcie gestu (`pointerdown` w nagłówek „Anotacje”), potem
+  `pointercancel` — brak wskrzeszenia; ponowny wybór tej samej anotacji pokazuje
+  zapisane `100`, nie stary baseline.
+- Wszystkie pięć sond FIX2 nadal przechodzi: no-op `pointerdown`+`pointerup`,
+  no-op `pointercancel`, realny ruch `103 → 113` anulowany do `103`, refetch w
+  środku gestu, `pointercancel` po nieudanym PATCH.
+- TypeScript: 0 błędów. Celowany zestaw `src/features/annotations`: 113/113 w 9
+  plikach.
