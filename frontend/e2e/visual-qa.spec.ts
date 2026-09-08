@@ -75,26 +75,35 @@ async function assertCompactReviewLayout(page: Page): Promise<void> {
   const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
   const details = page.getByRole("region", { name: "Dane klatki" });
   const toolbar = page.locator(".df-review-toolbar");
+  const preview = page.locator(".df-review-workspace__preview");
   const overlayBounds = await overlay.boundingBox();
   const inspectorBounds = await inspector.boundingBox();
   const detailsBounds = await details.boundingBox();
   const toolbarBounds = await toolbar.boundingBox();
+  const previewBounds = await preview.boundingBox();
   expect(overlayBounds).not.toBeNull();
   expect(inspectorBounds).not.toBeNull();
   expect(detailsBounds).not.toBeNull();
   expect(toolbarBounds).not.toBeNull();
+  expect(previewBounds).not.toBeNull();
   if (
     overlayBounds === null ||
     inspectorBounds === null ||
     detailsBounds === null ||
-    toolbarBounds === null
+    toolbarBounds === null ||
+    previewBounds === null
   ) {
     throw new Error("Review toolbar, canvas or supporting content has no browser geometry");
   }
   expect(overlayBounds.y, "review image should remain above the fold at 1000 px").toBeLessThan(600);
-  expect(overlayBounds.width, "review image should use the full-width canvas row").toBeGreaterThan(
-    900,
-  );
+  expect(
+    previewBounds.width,
+    "canvas row should span the same workspace width as the toolbar",
+  ).toBeGreaterThanOrEqual(toolbarBounds.width - 1);
+  expect(
+    overlayBounds.width,
+    "review image should be wider than either supporting column",
+  ).toBeGreaterThan(inspectorBounds.width);
   expect(inspectorBounds.y, "class inspector should sit below the canvas").toBeGreaterThanOrEqual(
     overlayBounds.y + overlayBounds.height,
   );
@@ -329,6 +338,10 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
         current.getByRole("status", { name: "Niezapisane przesunięcie bboxa" }),
       ).toBeVisible();
       await expect(current.getByRole("button", { name: "Zaakceptuj klatkę" })).toBeDisabled();
+      // Focusing the inspector below the canvas scrolls the SVG above the
+      // viewport. Bring it back without changing the pinned keyboard focus so
+      // the real pointermove (and therefore the screenshot) can show the guide.
+      await overlay.scrollIntoViewIfNeeded();
       const overlayBounds = await overlay.boundingBox();
       if (overlayBounds === null) {
         throw new Error("Review canvas has no browser geometry before the FE-010 screenshot");
