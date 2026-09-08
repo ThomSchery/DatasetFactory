@@ -71,3 +71,107 @@ tylko dolną krawędź. `ResizeObserver` obserwuje poprzedzającą kanwę, a nie
 - Visual QA: viewport-only screenshot z otwartym panelem oraz dolną krawędzią
   panelu wewnątrz `innerHeight`.
 - Pełna bramka `scripts/check.ps1`: 9/9, zero SKIP.
+
+## Implementacja
+
+### Pan i outside-dismiss
+
+- `RegionOverlay` zapisuje natywny `pointerdown` rozpoznany jako pan w
+  `WeakSet<Event>`. Dokumentowy listener `AnnotationPopover` sprawdza ten sam
+  obiekt zdarzenia i pomija wyłącznie ten jeden gest. Zwykły pointerdown poza
+  panelem nadal go zamyka i nie ma utrzymywanej flagi, która mogłaby przeciec do
+  następnego gestu.
+- Guard Spacji traktuje jako edytowalne tylko `input`, `textarea`, `select` i
+  `contenteditable`. Zwykły przycisk z fokusem nie blokuje panu, gdy wskaźnik
+  znajduje się nad kanwą; poza kanwą zachowuje natywne zachowanie przycisku.
+- Testy komponentu i ekranu liczą stan panelu, marker preview, geometrię i
+  mutacje po `pointerdown`, w trakcie ruchu i po `pointerup` dla obu gestów.
+
+### Panel w wysokości viewportu
+
+- `AnnotationPopover` mierzy `innerHeight - panel.top` w `useLayoutEffect` i
+  zapisuje wynik do lokalnej zmiennej CSS. Aktualizacja następuje przy resize,
+  scrollu oraz zmianie rozmiaru poprzedzającego `RegionOverlay`.
+- `ResizeObserver` nie obserwuje panelu. Jego `max-height` nie jest zatem
+  wejściem do kolejnego pomiaru; zmiana może wpłynąć tylko na dolną krawędź.
+- `overflow-y: auto` pojawia się wyłącznie wtedy, gdy naturalna wysokość
+  panelu przekracza dostępny budżet. Obraz i jego dotychczasowy limit wysokości
+  nie zostały zmienione.
+
+### Granice zoomu
+
+- `preventDefault()` następuje dopiero po obliczeniu skali i odrzuceniu no-opu.
+  Wewnątrz 1×–8× zoom nadal jest przechwytywany; na podłodze 1× i suficie 8×
+  zdarzenie zostaje dla przeglądarki.
+
+## Próby, błędy i korekty sond
+
+1. Nowe testy uruchomione przed implementacją dały oczekiwane **4 FAIL**:
+   no-op wheel przy 1×, Spacja z fokusem przycisku, zamknięcie panelu przez
+   middle-pan i narysowanie draftu zamiast Space-pan. Pozostałe 55 testów w
+   tych plikach przechodziło.
+2. Po zmianie produktu ten sam zestaw dał **59/59 PASS**.
+3. Pierwsza rozszerzona sonda Chromium nie trafiła kółkiem w kanwę, ponieważ
+   kliknięcie chipa przewinęło stronę, a test zachował wcześniejszą
+   współrzędną. Sondę poprawiono przez powrót scrolla do początku i
+   `focus({ preventScroll: true })`; kod produktu nie wymagał korekty.
+4. Repozytorium nie definiuje osobnego skryptu `npm run lint`; rolę statycznej
+   bramki frontendu pełnią `typecheck`, Vitest, build i detektor UI w oficjalnym
+   `scripts/check.ps1` oraz opisanym niżej przebiegu Impeccable.
+
+## Pomiary Chromium po fixupie
+
+Fixture visual QA, skala 1×, panel otwarty:
+
+| Viewport | `image.width` | `image.height` | `panel.top` | `panel.bottom` | `innerHeight` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1280 × 1000 | 829,266 px | 551,984 px | 769,781 px | 999,781 px | 1000 px |
+| 1440 × 1000 | 829,266 px | 551,984 px | 769,781 px | 999,781 px | 1000 px |
+
+Przed fixupem `panel.bottom = 1058 px`; po fixupie dolna krawędź ma
+**0,219 px zapasu** i przechodzi asercję `panel.bottom <= innerHeight` w obu
+szerokościach.
+
+Ten sam realny run `b4a755c9-4e55-4142-bc09-50f7469e124b`, którym mierzono
+FE-010 przed fixupem, przy 1440 × 1000 i wskaźniku zoomu 100%:
+
+- `image.width = 981,296875 px`;
+- `image.height = 551,984375 px`.
+
+Szerokość 1× pozostaje zatem zgodna z wartością sprzed fixupu
+**981,297 px**; przewijanie panelu nie pomniejszyło kanwy.
+
+### Gesty i zdarzenia
+
+- W realnym Chromium nudge `x=100→102`, panel `1`, marker niezapisanego
+  przesunięcia `1` i zoom 125% pozostawały bez zmian po middle-pan oraz po
+  `Spacja` + LMB z fokusem na chipie klasy. Po każdym kroku geometria nadal
+  zawierała `x 102, y 120`; liczba mutujących requestów wynosiła **0**.
+- Zwykłe kółko bez `Ctrl`: `defaultPrevented=false`.
+- `Ctrl` + kółko wywołujące zmianę 100%→125%: przechwycone.
+- `Ctrl` + kółko oddalające przy 1× oraz przybliżające przy 8×:
+  `defaultPrevented=false` na obu końcach.
+- Cel i znacznik uchwytu zachowują kontrakt FE-010: hit target ma 10 × 10
+  jednostek źródła przy 1× i 1,25 × 1,25 przy 8×, co daje stały ślad
+  około 10,4 × 10,4 CSS px na obu końcach zakresu.
+
+## Wynik końcowy
+
+- Impeccable detector, zakres `layout`, zmienione pliki UI: **0 findingów**.
+- Viewport-only screenshot 1440 × 1000 z otwartym panelem:
+  `docs/tickets/FE-001/screenshots/annotations-1440.png`; obejrzany w pełnej
+  rozdzielczości.
+- Pełny, nieprzerwany `scripts/check.ps1`: **PASS 9/9, 0 SKIP**.
+  - backend format/lint/mypy: PASS;
+  - backend testy: **347/347**;
+  - frontend typy: PASS;
+  - frontend testy: **605/605** w 40 plikach;
+  - build: PASS (wyłącznie istniejące ostrzeżenie o chunku >500 kB);
+  - Chromium E2E: **6/6**;
+  - bezpieczeństwo katalogu E2E: **2/2**.
+
+Dziewięć niezmienników FE-009 przechodzi w pełnym suite: outside-dismiss z
+tym samym gestem rysowania, ochrona własnego bboxa, brak Escape, pusty Enter,
+remount tylko przy zmianie anotacji, zachowanie draftu po błędzie, 0 PATCH dla
+strzałek i jeden dla Enter, izolacja baseline gestu oraz zadokowanie panelu pod
+obrazem.
