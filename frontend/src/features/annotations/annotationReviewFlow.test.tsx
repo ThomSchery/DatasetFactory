@@ -120,9 +120,35 @@ describe("annotation review query states", () => {
       "src",
       "/api/v1/frames/frame-1/image",
     );
+    expect(screen.getByText("Klatka 17", { selector: ".df-region-overlay__corner-label" })).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     expect(screen.getByText("Ręczna")).toBeInTheDocument();
     expect(screen.getByText("7 · 91%")).toBeInTheDocument();
+  });
+
+  it("orders the full-width canvas before inspector, metadata and notices", async () => {
+    reviewApi({
+      frame: frameDetailFixture({ review_status: "accepted" }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const preview = await screen.findByRole("region", { name: "Podgląd klatki 17" });
+    const overlay = within(preview).getByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const inspector = screen.getByRole("region", { name: "Anotacje na klatce" });
+    const details = screen.getByText("Timestamp").closest(".df-review-workspace__details");
+    const terminalNotice = screen.getByRole("status", { name: "Klatka zaakceptowana" });
+
+    expect(details).not.toBeNull();
+    expect(preview.compareDocumentPosition(inspector) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(preview.compareDocumentPosition(details as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(preview).not.toContainElement(terminalNotice);
+    expect(details).toContainElement(terminalNotice);
+    expect(overlay.closest(".df-region-overlay")).toContainElement(
+      screen.getByText("Klatka 17", { selector: ".df-region-overlay__corner-label" }),
+    );
   });
 
   it("keeps image and inspector selection synchronized through one selectedId", async () => {

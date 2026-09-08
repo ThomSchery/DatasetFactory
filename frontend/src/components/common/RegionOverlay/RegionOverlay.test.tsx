@@ -47,6 +47,8 @@ function dragAcross(
 }
 
 interface HarnessProps {
+  cornerLabel?: string;
+  disabled?: boolean;
   initialShapes?: OverlayShape[];
   initialSelectedId?: string | null;
   interactionMode?: "select" | "draw";
@@ -59,6 +61,8 @@ interface HarnessProps {
 
 /** The overlay driven the way a feature drives it: it owns the shape list. */
 function Harness({
+  cornerLabel,
+  disabled = false,
   initialShapes = [],
   initialSelectedId = null,
   interactionMode = "select",
@@ -74,6 +78,8 @@ function Harness({
 
   return (
     <RegionOverlay
+      cornerLabel={cornerLabel}
+      disabled={disabled}
       imageAlt="Obraz referencyjny"
       imageUrl="/api/v1/assets/references/asset-1"
       interactionMode={interactionMode}
@@ -159,6 +165,70 @@ describe("the drawing surface", () => {
     renderOverlay();
 
     expect(surfaceElement()).toHaveAttribute("viewBox", "0 0 1920 1080");
+  });
+
+  it("keeps the frame label inside the canvas without making it interactive", () => {
+    renderOverlay({ cornerLabel: "Klatka 17" });
+
+    const label = screen.getByText("Klatka 17");
+    expect(label).toHaveClass("df-region-overlay__corner-label");
+    expect(label).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("maps pointer movement through the shared source transform and hides the guide on leave", () => {
+    const onDraw = vi.fn();
+    renderOverlay({ onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960, 100, 50);
+
+    fireEvent.pointerMove(surface, { clientX: 340, clientY: 185, pointerId: 1 });
+
+    const guide = surface.querySelector("[data-overlay-crosshair]");
+    expect(guide).not.toBeNull();
+    const [vertical, horizontal] = Array.from(guide?.querySelectorAll("line") ?? []);
+    expect(vertical).toHaveAttribute("x1", "480");
+    expect(vertical).toHaveAttribute("x2", "480");
+    expect(vertical).toHaveAttribute("y1", "0");
+    expect(vertical).toHaveAttribute("y2", "1080");
+    expect(horizontal).toHaveAttribute("x1", "0");
+    expect(horizontal).toHaveAttribute("x2", "1920");
+    expect(horizontal).toHaveAttribute("y1", "270");
+    expect(horizontal).toHaveAttribute("y2", "270");
+    expect(onDraw).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+
+    fireEvent.pointerLeave(surface, { pointerId: 1 });
+    expect(surface.querySelector("[data-overlay-crosshair]")).not.toBeInTheDocument();
+  });
+
+  it("does not render the guide when editing is disabled or unavailable", () => {
+    const { rerender } = render(
+      <RegionOverlay
+        disabled
+        imageAlt="Obraz referencyjny"
+        imageUrl="/api/v1/assets/references/asset-1"
+        label="Regiony HUD"
+        onDraw={vi.fn()}
+        source={SOURCE}
+      />,
+    );
+    let surface = surfaceElement();
+    layOutSurface(surface, 960);
+    fireEvent.pointerMove(surface, { clientX: 240, clientY: 135, pointerId: 1 });
+    expect(surface.querySelector("[data-overlay-crosshair]")).not.toBeInTheDocument();
+
+    rerender(
+      <RegionOverlay
+        imageAlt="Obraz referencyjny"
+        imageUrl="/api/v1/assets/references/asset-1"
+        label="Regiony HUD"
+        source={SOURCE}
+      />,
+    );
+    surface = surfaceElement();
+    layOutSurface(surface, 960);
+    fireEvent.pointerMove(surface, { clientX: 240, clientY: 135, pointerId: 1 });
+    expect(surface.querySelector("[data-overlay-crosshair]")).not.toBeInTheDocument();
   });
 
   it("turns a drag into a region in source coordinates", () => {
