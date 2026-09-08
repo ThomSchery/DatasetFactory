@@ -114,6 +114,25 @@ function overlaySurface(): HTMLElement {
   return overlay;
 }
 
+function layOutOverlayViewport(overlay: HTMLElement): HTMLElement {
+  const viewport = overlay.closest(".df-region-overlay");
+  if (!(viewport instanceof HTMLElement)) {
+    throw new Error("Annotation overlay is missing its viewport");
+  }
+  vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+    bottom: 1080,
+    height: 1080,
+    left: 0,
+    right: 1920,
+    top: 0,
+    width: 1920,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect);
+  return viewport;
+}
+
 function ownShapeFill(shape = overlayShape()): Element {
   const fill = shape.querySelector(".df-region-overlay__shape-fill");
   if (fill === null) {
@@ -132,6 +151,108 @@ async function selectAndNudge(user: ReturnType<typeof userEvent.setup>, presses 
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("FE-010-FIX1 — pan is a non-destructive canvas gesture", () => {
+  function expectUnsavedNudge(fetchSpy: FetchSpy): void {
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 102, y 120"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(mutations(fetchSpy)).toHaveLength(0);
+  }
+
+  it("keeps an open panel and its unsaved nudge through a middle-button pan", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user, 2);
+    const overlay = overlaySurface();
+    const viewport = layOutOverlayViewport(overlay);
+    fireEvent.wheel(overlay, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+
+    fireEvent.pointerDown(overlay, {
+      button: 1,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 7,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    expectUnsavedNudge(fetchSpy);
+
+    fireEvent.pointerMove(overlay, {
+      button: 1,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 7,
+    });
+    fireEvent.pointerUp(overlay, {
+      button: 1,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 7,
+    });
+
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expectUnsavedNudge(fetchSpy);
+  });
+
+  it("uses Space plus left button for pan when the selected class chip owns focus", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user, 2);
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    expect(classButton).toHaveFocus();
+    const overlay = overlaySurface();
+    const viewport = layOutOverlayViewport(overlay);
+    fireEvent.wheel(overlay, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    fireEvent.pointerEnter(overlay, { clientX: 480, clientY: 270, pointerId: 8 });
+    fireEvent.keyDown(classButton, { code: "Space", key: " " });
+
+    fireEvent.pointerDown(overlay, {
+      button: 0,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 8,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    expectUnsavedNudge(fetchSpy);
+
+    fireEvent.pointerMove(overlay, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 8,
+    });
+    fireEvent.pointerUp(overlay, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 8,
+    });
+    fireEvent.keyUp(classButton, { code: "Space", key: " " });
+
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expectUnsavedNudge(fetchSpy);
+  });
 });
 
 describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {

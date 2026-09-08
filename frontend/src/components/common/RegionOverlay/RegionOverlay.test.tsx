@@ -300,6 +300,47 @@ describe("the drawing surface", () => {
     expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
   });
 
+  it("leaves Ctrl-wheel to the browser when the requested zoom is already at a limit", () => {
+    renderOverlay();
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    layOutViewport(surface, 960);
+
+    const atMinimum = fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: 100,
+    });
+    expect(atMinimum).toBe(true);
+
+    const withinRange = fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    expect(withinRange).toBe(false);
+
+    for (let step = 0; step < 12; step += 1) {
+      fireEvent.wheel(surface, {
+        clientX: 480,
+        clientY: 270,
+        ctrlKey: true,
+        deltaY: -100,
+      });
+    }
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("800%");
+
+    const atMaximum = fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    expect(atMaximum).toBe(true);
+  });
+
   it.each([
     ["middle button", 1, false],
     ["Space plus left button", 0, true],
@@ -332,6 +373,50 @@ describe("the drawing surface", () => {
     if (holdSpace) {
       fireEvent.keyUp(window, { key: " " });
     }
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(onDraw).not.toHaveBeenCalled();
+  });
+
+  it("lets Space start a canvas pan while a non-editable button owns focus", () => {
+    const onDraw = vi.fn();
+    renderOverlay({ onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+
+    const resetButton = screen.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+    resetButton.focus();
+    fireEvent.pointerEnter(surface, { clientX: 480, clientY: 270, pointerId: 8 });
+    fireEvent.keyDown(resetButton, { code: "Space", key: " " });
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 8,
+    });
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 8,
+    });
+
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    expect(onDraw).not.toHaveBeenCalled();
+
+    fireEvent.pointerUp(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 8,
+    });
+    fireEvent.keyUp(resetButton, { code: "Space", key: " " });
     expect(viewport).not.toHaveAttribute("data-panning");
     expect(onDraw).not.toHaveBeenCalled();
   });
