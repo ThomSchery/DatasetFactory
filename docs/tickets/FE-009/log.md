@@ -475,3 +475,25 @@ mógł nieść baseline A.
   środku gestu, `pointercancel` po nieudanym PATCH.
 - TypeScript: 0 błędów. Celowany zestaw `src/features/annotations`: 113/113 w 9
   plikach.
+
+## Pełna bramka FIX3 — 2026-09-08
+
+- Przed startem `.env` był obecny, porty 8000 i 5173 były wolne.
+- Jeden nieprzerwany przebieg
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`
+  zakończył się **9/9 PASS, 0 SKIP, exit code 0**:
+  - backend format: 256 plików, 0,1 s;
+  - backend lint: 0 błędów, 0,1 s;
+  - backend typy: 0 błędów w 99 plikach, 1,6 s;
+  - backend testy: 347/347, 334,9 s (pytest 329,18 s);
+  - frontend typy: 0 błędów, 1,4 s;
+  - frontend testy: 590/590 w 40 plikach, 28,5 s;
+  - frontend build: 1,7 s;
+  - Playwright Chromium: 4/4, 49,6 s (w tym `visual-qa` dokowanego panelu);
+  - E2E root safety: 2/2, 0,6 s.
+- Wzrost liczby testów frontendu 586 → 590: cztery nowe sondy w
+  `annotationNudgeFixup.test.tsx` (cross-selection, close/reselect, refetch,
+  failed-commit cancel).
+- Sześć „zachowań, które MUSZĄ przeżyć” bez regresji — potwierdzone osobno w
+  raporcie FIX3 do koordynatora; `visual-qa` Playwright potwierdza dokowany,
+  czytelny panel bez zmian layoutu.
