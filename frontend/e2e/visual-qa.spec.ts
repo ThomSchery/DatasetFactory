@@ -292,6 +292,29 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
       await current.keyboard.press("Enter");
       await assertAnnotationPopoverIsDocked(current);
       await current.getByRole("button", { name: /Klasa .* 1 anotacji/ }).focus();
+      const overlay = current.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+      const overlayBeforeNudge = await overlay.boundingBox();
+      expect(overlayBeforeNudge).not.toBeNull();
+      /*
+       * One arrow, deliberately not committed: the screenshot has to show the
+       * unsaved-geometry marker, because that marker is the whole answer to
+       * "where did my nudge go" (FE-009-FIX1). `ArrowRight` sends no request,
+       * and the class button keeps focus for the focus-ring check.
+       */
+      await current.keyboard.press("ArrowRight");
+      const overlayAfterNudge = await overlay.boundingBox();
+      expect(overlayAfterNudge).not.toBeNull();
+      expect(
+        overlayAfterNudge?.y,
+        "the unsaved notice must not move the drawing surface during an edit",
+      ).toBe(overlayBeforeNudge?.y);
+      await expect(
+        current.getByText("Przesunięcie bboxa nie jest jeszcze zapisane.", { exact: false }),
+      ).toBeVisible();
+      await expect(
+        current.getByRole("status", { name: "Niezapisane przesunięcie bboxa" }),
+      ).toBeVisible();
+      await expect(current.getByRole("button", { name: "Zaakceptuj klatkę" })).toBeDisabled();
     },
   );
   await capture(
