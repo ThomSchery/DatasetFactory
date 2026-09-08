@@ -375,7 +375,7 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     });
 });
 
-test("pełnoszeroka kanwa i celownik zachowują stałą geometrię oraz przepuszczają gest", async ({
+test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometrię", async ({
   page,
 }) => {
   const api = new ApiHarness({ phase: "review" });
