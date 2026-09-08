@@ -25,7 +25,13 @@ async function assertNoOverflow(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
-async function assertAnnotationPopoverIsDocked(page: Page): Promise<void> {
+interface AnnotationViewportMetrics {
+  image: { height: number; width: number };
+  panel: { bottom: number; top: number };
+  viewportHeight: number;
+}
+
+async function assertAnnotationPopoverIsDocked(page: Page): Promise<AnnotationViewportMetrics> {
   const popover = page.getByRole("dialog", { name: /Edytuj anotację/ });
   await expect(popover).toBeVisible();
   const image = page.getByRole("img", { name: /Klatka .* runu/ });
@@ -34,12 +40,20 @@ async function assertAnnotationPopoverIsDocked(page: Page): Promise<void> {
   expect(popoverBounds).not.toBeNull();
   expect(imageBounds).not.toBeNull();
   if (popoverBounds === null || imageBounds === null) {
-    throw new Error("Annotation panel or frame image has no browser geometry at 1280 px");
+    throw new Error("Annotation panel or frame image has no browser geometry");
   }
   expect(popoverBounds.y, "annotation panel must start below the frame image").toBeGreaterThanOrEqual(
     imageBounds.y + imageBounds.height,
   );
-
+  const metrics = {
+    image: { height: imageBounds.height, width: imageBounds.width },
+    panel: { bottom: popoverBounds.y + popoverBounds.height, top: popoverBounds.y },
+    viewportHeight: await page.evaluate(() => window.innerHeight),
+  };
+  expect(metrics.panel.bottom, "annotation panel must fit inside the viewport").toBeLessThanOrEqual(
+    metrics.viewportHeight + 0.5,
+  );
+  return metrics;
 }
 
 async function assertFrameFilterCountsFit(page: Page): Promise<void> {
@@ -247,12 +261,17 @@ async function capture(
   page: Page,
   name: string,
   route: string,
-  options: { dashboardMode?: DashboardMode; phase?: HarnessPhase } = {},
+  options: {
+    dashboardMode?: DashboardMode;
+    fullPage?: boolean;
+    phase?: HarnessPhase;
+  } = {},
   focusTarget: (page: Page) => Locator,
   prepare?: (page: Page) => Promise<void>,
   beforeScreenshot?: (page: Page) => Promise<void>,
 ): Promise<void> {
-  const api = new ApiHarness(options);
+  const { fullPage = true, ...harnessOptions } = options;
+  const api = new ApiHarness(harnessOptions);
   await api.install(page);
   const externalFonts: string[] = [];
   page.on("request", (request) => {
@@ -276,7 +295,7 @@ async function capture(
     page.screenshot({
       animations: "disabled",
       caret: "hide",
-      fullPage: true,
+      fullPage,
     }),
   );
   await writeFile(
@@ -300,7 +319,7 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     page,
     "annotations",
     "/annotations/run-1",
-    { phase: "review" },
+    { fullPage: false, phase: "review" },
     (current) => current.getByRole("button", { name: /Klasa .* 1 anotacji/ }),
     async (current) => {
       await expect(current.getByRole("listbox", { name: "Bbox anotacji na klatce" })).toBeVisible();
@@ -455,11 +474,40 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
     return { dispatched: element.dispatchEvent(event), prevented: event.defaultPrevented };
   });
   expect(ordinaryWheel).toEqual({ dispatched: true, prevented: false });
+  const minimumCtrlWheel = await overlay.evaluate((element) => {
+    const event = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      deltaY: 100,
+    });
+    return { dispatched: element.dispatchEvent(event), prevented: event.defaultPrevented };
+  });
+  expect(minimumCtrlWheel).toEqual({ dispatched: true, prevented: false });
+
+  const classButton = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
+  await classButton.click();
+  await classButton.evaluate((element) => {
+    if (element instanceof HTMLElement) {
+      element.focus({ preventScroll: true });
+    }
+  });
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  const editDialog = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const selectedShape = overlay.getByRole("option").first();
+  await expect(editDialog).toBeVisible();
+  await expect(selectedShape).toHaveAttribute("aria-label", /x 102, y 120/);
+  await expect(page.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+  const nudgedGeometryLabel = await selectedShape.getAttribute("aria-label");
+  expect(mutationRequests).toEqual([]);
+  await page.evaluate(() => window.scrollTo(0, 0));
 
   const anchorRatio = {
     x: (center.x - initial.x) / initial.width,
     y: (center.y - initial.y) / initial.height,
   };
+  await page.mouse.move(center.x, center.y);
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
@@ -485,10 +533,18 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.mouse.up({ button: "middle" });
   const afterMiddlePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
   expect(afterMiddlePan).not.toBe(beforeMiddlePan);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(editDialog).toBeVisible();
+  expect(await selectedShape.getAttribute("aria-label")).toBe(nudgedGeometryLabel);
+  await expect(page.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
   expect(mutationRequests).toEqual([]);
 
   await page.mouse.move(center.x, center.y);
+  await classButton.evaluate((element) => {
+    if (element instanceof HTMLElement) {
+      element.focus({ preventScroll: true });
+    }
+  });
+  await expect(classButton).toBeFocused();
   await page.keyboard.down("Space");
   const beforeSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
   await page.mouse.down();
@@ -497,8 +553,46 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.keyboard.up("Space");
   const afterSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
   expect(afterSpacePan).not.toBe(beforeSpacePan);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(editDialog).toBeVisible();
+  expect(await selectedShape.getAttribute("aria-label")).toBe(nudgedGeometryLabel);
+  await expect(page.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
+  expect(mutationRequests).toEqual([]);
+
+  await overlay.evaluate((element) => {
+    for (let step = 0; step < 12; step += 1) {
+      element.dispatchEvent(
+        new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 480,
+          clientY: 270,
+          ctrlKey: true,
+          deltaY: -100,
+        }),
+      );
+    }
+  });
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("800%");
+  const maximumCtrlWheel = await overlay.evaluate((element) => {
+    const event = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    return { dispatched: element.dispatchEvent(event), prevented: event.defaultPrevented };
+  });
+  expect(maximumCtrlWheel).toEqual({ dispatched: true, prevented: false });
+
+  await page.getByRole("button", { name: "Dopasuj kanwę do widoku" }).click();
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(editDialog).toBeVisible();
+  expect(await selectedShape.getAttribute("aria-label")).toBe(nudgedGeometryLabel);
   expect(mutationRequests).toEqual([]);
 
   const drawingSurface = await overlay.boundingBox();

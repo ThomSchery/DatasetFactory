@@ -240,10 +240,14 @@
 }
 
 .df-annotation-popover {
+  --df-annotation-popover-viewport-room: 100dvh;
+
   display: grid;
   gap: var(--size-xs);
   width: 100%;
+  max-height: var(--df-annotation-popover-viewport-room);
   padding: var(--size-sm);
+  overflow-y: auto;
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
   border-radius: var(--radius-md);
   background: var(--color-surface-neutral-raised);

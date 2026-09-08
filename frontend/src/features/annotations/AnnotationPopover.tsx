@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { Annotation, BBox, Category } from "../../api";
 import { Button } from "../../components/common/Button";
@@ -10,6 +10,7 @@ import { copyOptionGroups } from "./copySelection";
 import { geometryDraft, parseGeometryDraft, type GeometryDraft } from "./geometryForm";
 
 const GEOMETRY_FIELDS = ["x", "y", "width", "height"] as const;
+const VIEWPORT_ROOM_PROPERTY = "--df-annotation-popover-viewport-room";
 
 /**
  * Marks the panel root for screen-level keyboard handlers.
@@ -119,6 +120,45 @@ export function AnnotationPopover({
   );
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
+
+  useLayoutEffect(() => {
+    const popover = popoverRef.current;
+    if (popover === null) {
+      return;
+    }
+
+    const updateViewportRoom = () => {
+      const availableHeight = Math.max(
+        0,
+        Math.floor(window.innerHeight - popover.getBoundingClientRect().top),
+      );
+      const nextValue = `${String(availableHeight)}px`;
+      if (popover.style.getPropertyValue(VIEWPORT_ROOM_PROPERTY) !== nextValue) {
+        popover.style.setProperty(VIEWPORT_ROOM_PROPERTY, nextValue);
+      }
+    };
+
+    updateViewportRoom();
+    window.addEventListener("resize", updateViewportRoom);
+    window.addEventListener("scroll", updateViewportRoom, { passive: true });
+
+    // The panel follows RegionOverlay in the preview grid. Its available room
+    // therefore changes when the responsive canvas changes size; observing the
+    // canvas (never the constrained panel itself) keeps the measurement
+    // current without creating a resize feedback loop.
+    const overlay = popover.previousElementSibling;
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateViewportRoom);
+    if (observer !== null && overlay instanceof Element) {
+      observer.observe(overlay);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateViewportRoom);
+      window.removeEventListener("scroll", updateViewportRoom);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     setForm((current) =>
