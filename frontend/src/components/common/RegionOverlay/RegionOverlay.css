@@ -21,6 +21,8 @@
 }
 
 .df-region-overlay__zoom-stage {
+  --df-overlay-inverse-zoom: 1;
+
   position: relative;
   display: block;
   width: fit-content;
