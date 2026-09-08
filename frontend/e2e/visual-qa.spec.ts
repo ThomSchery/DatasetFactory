@@ -460,6 +460,7 @@ test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
   const api = new ApiHarness({ phase: "accepted" });
   await api.install(page);
   await page.goto("/annotations/run-1");
+  await page.getByRole("button", { name: /Zaakcept\.\s*1/ }).click();
   const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   await expect(overlay).toBeVisible();
   const bounds = await overlay.boundingBox();
