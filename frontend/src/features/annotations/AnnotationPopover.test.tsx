@@ -24,18 +24,21 @@ const categories: Category[] = [
   { id: "health", kind: "game", name: "Health" },
 ];
 
-function renderPopover(overrides: {
+interface PopoverOverrides {
   annotation?: Annotation;
   draft?: boolean;
+  geometryPreview?: { height: number; width: number; x: number; y: number } | null;
   invalid?: boolean;
   onCategoryChange?: (categoryId: string) => void;
   onClose?: () => void;
   onGeometryChange?: (bbox: { height: number; width: number; x: number; y: number }) => void;
-} = {}) {
+}
+
+function renderPopover(overrides: PopoverOverrides = {}) {
   const onCategoryChange = overrides.onCategoryChange ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
   const onGeometryChange = overrides.onGeometryChange ?? vi.fn();
-  render(
+  const tree = (current: PopoverOverrides) => (
     <div>
       {/* The surface the popover floats over, in the shape the overlay gives
           it: a group per shape, carrying the id the popover matches on. */}
@@ -46,24 +49,33 @@ function renderPopover(overrides: {
         <div data-overlay-shape-id="ann-2" data-testid="other-shape" />
       </div>
       <AnnotationPopover
-        annotation={overrides.annotation ?? annotation}
+        annotation={current.annotation ?? annotation}
         busyKey={null}
         categories={categories}
         disabled={false}
-        draft={overrides.draft}
+        draft={current.draft}
         drawing={false}
         frameSize={{ height: 1080, width: 1920 }}
-        geometryPreview={null}
-        invalid={overrides.invalid ?? false}
+        geometryPreview={current.geometryPreview ?? null}
+        invalid={current.invalid ?? false}
         onCategoryChange={onCategoryChange}
         onClose={onClose}
         onDelete={vi.fn()}
         onGeometryChange={onGeometryChange}
         onToggleDrawTarget={vi.fn()}
       />
-    </div>,
+    </div>
   );
-  return { onCategoryChange, onClose, onGeometryChange };
+  const view = render(tree(overrides));
+  return {
+    onCategoryChange,
+    onClose,
+    onGeometryChange,
+    /** Re-renders with new props, the way a preview update reaches the panel. */
+    update: (next: PopoverOverrides) => {
+      view.rerender(tree({ ...overrides, ...next }));
+    },
+  };
 }
 
 describe("AnnotationPopover", () => {
@@ -145,6 +157,82 @@ describe("AnnotationPopover", () => {
     );
     expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
+  });
+
+  /*
+   * FE-009-FIX1 (P1). `geometryPreview` used to feed a separate `displayedDraft`
+   * while `onChange` and "Zapisz geometrię" worked on `form.draft`, so the panel
+   * could show 103 and PATCH 100 — or show 103, take "555" and PATCH 1035.
+   */
+  describe("with an unsaved geometry preview", () => {
+    const preview = { x: 103, y: 20, width: 12, height: 20 };
+
+    it("saves exactly the geometry it displays", async () => {
+      const user = userEvent.setup();
+      const { onGeometryChange } = renderPopover({ geometryPreview: preview });
+
+      expect(screen.getByRole("spinbutton", { name: "x" })).toHaveValue(103);
+      expect(screen.getByText(/^x 103 · y 20/)).toBeVisible();
+
+      await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
+
+      expect(onGeometryChange).toHaveBeenCalledExactlyOnceWith(preview);
+    });
+
+    it("sends the number typed into a field, never that number appended to the preview", async () => {
+      const user = userEvent.setup();
+      const { onGeometryChange } = renderPopover({ geometryPreview: preview });
+      const xField = screen.getByRole("spinbutton", { name: "x" });
+
+      await user.clear(xField);
+      await user.type(xField, "555");
+
+      expect(xField).toHaveValue(555);
+      expect(screen.getByText(/^x 555 · y 20/)).toBeVisible();
+
+      await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
+
+      expect(onGeometryChange).toHaveBeenCalledExactlyOnceWith({ ...preview, x: 555 });
+      expect(onGeometryChange).not.toHaveBeenCalledWith(
+        expect.objectContaining({ x: 1035 }),
+      );
+    });
+
+    it("moves clean fields with a further nudge and leaves an edited one alone", async () => {
+      const user = userEvent.setup();
+      const { onGeometryChange, update } = renderPopover({ geometryPreview: preview });
+      const yField = screen.getByRole("spinbutton", { name: "y" });
+
+      await user.clear(yField);
+      await user.type(yField, "999");
+      update({ geometryPreview: { ...preview, x: 105 } });
+
+      expect(screen.getByRole("spinbutton", { name: "x" })).toHaveValue(105);
+      expect(yField).toHaveValue(999);
+
+      await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
+
+      expect(onGeometryChange).toHaveBeenCalledExactlyOnceWith({
+        ...preview,
+        x: 105,
+        y: 999,
+      });
+    });
+
+    it("marks the geometry as unsaved and names the key that saves it", () => {
+      const { update } = renderPopover({ geometryPreview: preview });
+
+      const marker = screen.getByText(/Przesunięcie bboxa nie jest jeszcze zapisane/);
+      expect(marker).toBeVisible();
+      expect(marker).toHaveTextContent("Enter");
+      expect(screen.getByText("Niezapisane")).toBeVisible();
+
+      update({ geometryPreview: null });
+
+      expect(
+        screen.queryByText(/Przesunięcie bboxa nie jest jeszcze zapisane/),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("leaves a fresh draft with no class chosen and no way to save one by accident", async () => {

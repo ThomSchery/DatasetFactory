@@ -228,6 +228,45 @@ describe("nudgeRect", () => {
 
     expect(moved).toEqual({ x: 1880, y: 1047, width: 40, height: 32 });
   });
+
+  /*
+   * FE-009-FIX1 (P3). A box the app already flags as "Boks poza granicami
+   * klatki" is the one that most needs pixel work, and clamping the candidate
+   * teleported it to the edge on the very first arrow: x 1900 → 1880.
+   */
+  describe("a rectangle that starts outside the frame", () => {
+    const outside = { x: 1900, y: 120, width: 40, height: 32 };
+
+    it("moves by exactly the step, in either step size", () => {
+      expect(nudgeRect(outside, "left", 1, SOURCE)).toEqual({ ...outside, x: 1899 });
+      expect(nudgeRect(outside, "left", 10, SOURCE)).toEqual({ ...outside, x: 1890 });
+    });
+
+    it("walks back into the frame one step at a time", () => {
+      let walked = outside;
+      for (let step = 0; step < 3; step += 1) {
+        walked = nudgeRect(walked, "left", 10, SOURCE);
+      }
+
+      expect(walked).toEqual({ ...outside, x: 1870 });
+    });
+
+    it("cannot deepen its own violation", () => {
+      expect(nudgeRect(outside, "right", 1, SOURCE)).toBe(outside);
+      expect(nudgeRect(outside, "right", 10, SOURCE)).toBe(outside);
+    });
+
+    it("keeps the axis it is not moving along untouched", () => {
+      // Clamping the whole candidate used to drag x back to 1880 on a
+      // vertical nudge, resizing nothing but moving what nobody asked to move.
+      expect(nudgeRect(outside, "down", 1, SOURCE)).toEqual({ ...outside, y: 121 });
+      expect(nudgeRect({ ...outside, y: 1060 }, "left", 1, SOURCE)).toEqual({
+        ...outside,
+        x: 1899,
+        y: 1060,
+      });
+    });
+  });
 });
 
 /*
