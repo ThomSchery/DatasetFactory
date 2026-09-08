@@ -91,6 +91,13 @@ function overlayShape(): HTMLElement {
   );
 }
 
+function overlayShapeNamed(name: RegExp): HTMLElement {
+  return within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
+    "option",
+    { name },
+  );
+}
+
 function overlaySurface(): HTMLElement {
   const overlay = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
@@ -107,8 +114,8 @@ function overlaySurface(): HTMLElement {
   return overlay;
 }
 
-function ownShapeFill(): Element {
-  const fill = overlayShape().querySelector(".df-region-overlay__shape-fill");
+function ownShapeFill(shape = overlayShape()): Element {
+  const fill = shape.querySelector(".df-region-overlay__shape-fill");
   if (fill === null) {
     throw new Error("Selected annotation is missing its fill target");
   }
@@ -483,6 +490,177 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
 
     expectNudgeStillVisible(fetchSpy);
+  });
+
+  it("keeps the pre-gesture nudge through a refetch and cancel", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    const { queryClient } = renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+    const frameReadsBefore = fetchSpy.mock.calls.filter(
+      ([url, init]) => url === "/api/v1/frames/frame-1" && (init?.method ?? "GET") === "GET",
+    ).length;
+
+    fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+    await act(async () => {
+      await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.frame("frame-1") });
+    });
+    fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([url, init]) => url === "/api/v1/frames/frame-1" && (init?.method ?? "GET") === "GET",
+      ),
+    ).toHaveLength(frameReadsBefore + 1);
+    expectNudgeStillVisible(fetchSpy);
+  });
+
+  it("does not restore the old baseline after a failed committed gesture", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({
+      mutation: () => ({ status: 500, body: errorEnvelope("internal_error") }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+
+    fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+
+    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
+    expect(geometryPatches(fetchSpy)).toHaveLength(1);
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 113, y 120"),
+    );
+
+    fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 113, y 120"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(geometryPatches(fetchSpy)).toHaveLength(1);
+  });
+});
+
+describe("FE-009-FIX3 — a gesture baseline belongs to one selection context", () => {
+  const secondAnnotation = annotationFixture({
+    category_id: "category-2",
+    id: "ann-2",
+    x: 400,
+  });
+
+  function expectNoUnsavedGeometry(fetchSpy: FetchSpy): void {
+    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Niezapisane przesunięcie bboxa" }),
+    ).not.toBeInTheDocument();
+    expect(mutations(fetchSpy)).toHaveLength(0);
+  }
+
+  it("cannot resurrect A after selecting B and cannot leak A into B's next cancel", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({
+      frame: frameDetailFixture({ annotations: [annotationFixture(), secondAnnotation] }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+
+    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute("aria-selected", "true");
+    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(mutations(fetchSpy)).toHaveLength(0);
+
+    fireEvent.pointerDown(ownShapeFill(overlayShapeNamed(/^7, źródło OCR:/)), {
+      clientX: 110,
+      clientY: 130,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 113, y 120"),
+    );
+    expect(mutations(fetchSpy)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
+    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute("aria-selected", "true");
+    // RegionOverlay still paints its in-flight local manipulation until the
+    // old pointer is cancelled; FrameEditor has already discarded A's preview.
+    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 113, y 120"),
+    );
+    expectNoUnsavedGeometry(fetchSpy);
+
+    fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute("aria-selected", "true");
+    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 100, y 120"),
+    );
+    expectNoUnsavedGeometry(fetchSpy);
+
+    fireEvent.pointerDown(ownShapeFill(overlayShapeNamed(/^health, źródło OCR:/)), {
+      clientX: 410,
+      clientY: 130,
+      pointerId: 2,
+    });
+    fireEvent.pointerMove(overlay, { clientX: 420, clientY: 130, pointerId: 2 });
+    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 410, y 120"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(mutations(fetchSpy)).toHaveLength(0);
+
+    fireEvent.pointerCancel(overlay, { clientX: 420, clientY: 130, pointerId: 2 });
+    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 400, y 120"),
+    );
+    expectNoUnsavedGeometry(fetchSpy);
+  });
+
+  it("does not restore a baseline after closing and reselecting the same annotation", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+    const overlay = overlaySurface();
+    fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje" }));
+    expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
+    expectNoUnsavedGeometry(fetchSpy);
+
+    fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 100, y 120"),
+    );
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expectNoUnsavedGeometry(fetchSpy);
   });
 });
 
