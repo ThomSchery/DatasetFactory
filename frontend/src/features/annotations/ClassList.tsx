@@ -50,6 +50,8 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
       {groups.map((group) => {
         const selectedIndex = group.annotations.findIndex((item) => item.id === selectedId);
         const selected = selectedIndex >= 0;
+        const nextIndex = selected ? (selectedIndex + 1) % group.annotations.length : 0;
+        const nextAnnotation = group.annotations[nextIndex];
         const sources = new Set(group.annotations.map((annotation) => annotation.source));
         const label = group.category?.name ?? group.categoryId;
         return (
@@ -57,12 +59,11 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
             <Button
               aria-label={`Klasa ${label}, ${group.annotations.length} anotacji`}
               aria-pressed={selected}
+              data-annotation-selection-target={nextAnnotation?.id}
               disabled={disabled}
               onClick={() => {
-                const nextIndex = selected ? (selectedIndex + 1) % group.annotations.length : 0;
-                const next = group.annotations[nextIndex];
-                if (next !== undefined) {
-                  onSelect(next.id);
+                if (nextAnnotation !== undefined) {
+                  onSelect(nextAnnotation.id);
                 }
               }}
               size="sm"

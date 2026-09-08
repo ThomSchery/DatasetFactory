@@ -270,25 +270,29 @@ export function nudgeRect(
     left: { x: -step, y: 0 },
     right: { x: step, y: 0 },
   };
-  const candidate = {
-    ...rect,
-    x: rect.x + delta[direction].x,
-    y: rect.y + delta[direction].y,
-  };
-  // Clamp the top-left corner against the source space reduced by the fixed
-  // extent. Calling the shared clamp keeps the source-boundary policy in one
-  // place, while rebuilding from `rect` guarantees that nudge never resizes.
-  const origin = clampRectToSource(
-    { x: candidate.x, y: candidate.y, width: 0, height: 0 },
-    {
-      width: Math.max(0, source.width - rect.width),
-      height: Math.max(0, source.height - rect.height),
-    },
-  );
-  if (origin.x === rect.x && origin.y === rect.y) {
+  const horizontal = direction === "left" || direction === "right";
+  const current = horizontal ? rect.x : rect.y;
+  const extent = horizontal ? rect.width : rect.height;
+  const size = horizontal ? source.width : source.height;
+  /*
+   * Clamp the step, not the candidate. The in-bounds range is the source space
+   * reduced by the fixed extent — rebuilt from `rect`, so nudge never resizes.
+   * A rectangle that already sits outside that range keeps its exact step
+   * instead of being teleported to the edge: "Boks poza granicami klatki" is a
+   * state the app explicitly supports, and it is the one that most needs pixel
+   * work. Widening the range by the current position — rather than dropping the
+   * clamp — means such a box can walk back into the frame one step at a time
+   * but can never deepen an existing violation.
+   */
+  const inBoundsMax = Math.max(0, size - extent);
+  const lower = Math.min(0, current);
+  const upper = Math.max(inBoundsMax, current);
+  const moved = current + (horizontal ? delta[direction].x : delta[direction].y);
+  const next = Math.min(upper, Math.max(lower, moved));
+  if (next === current) {
     return rect;
   }
-  return { ...rect, x: origin.x, y: origin.y };
+  return horizontal ? { ...rect, x: next } : { ...rect, y: next };
 }
 
 /** Positive width and height. Mirrors `Field(gt=0)` on `RegionRequest`. */

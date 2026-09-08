@@ -260,9 +260,21 @@
   justify-content: flex-end;
 }
 
-.df-annotation-popover__actions kbd {
+.df-annotation-popover__actions kbd,
+.df-annotation-popover__unsaved kbd,
+.df-review-workspace__preview .df-notice kbd {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
+}
+
+.df-annotation-popover__unsaved {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  flex-wrap: wrap;
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
 }
 
 .df-annotation-popover__geometry {

@@ -10,6 +10,16 @@ import { geometryDraft, parseGeometryDraft, type GeometryDraft } from "./geometr
 
 const GEOMETRY_FIELDS = ["x", "y", "width", "height"] as const;
 
+/**
+ * Marks the panel root for screen-level keyboard handlers.
+ *
+ * The frame editor binds `Enter` to committing a geometry preview, and every
+ * button inside this panel already means something else by `Enter`. An explicit
+ * attribute — the same contract `GroupedOptionList` uses for its shortcut scope
+ * — says so without making a CSS class name load-bearing.
+ */
+export const ANNOTATION_POPOVER_SCOPE_ATTRIBUTE = "data-annotation-popover";
+
 interface AnnotationPopoverProps {
   annotation: Annotation;
   busyKey: string | null;
@@ -35,11 +45,14 @@ interface FormState {
   geometryError: string | null;
 }
 
-function initialFormState(annotation: Annotation): FormState {
-  const baseline = geometryDraft(annotation);
+/** The geometry the panel is about: the unsaved preview when one exists. */
+type EffectiveGeometry = Pick<Annotation, "height" | "width" | "x" | "y">;
+
+function initialFormState(categoryId: string, geometry: EffectiveGeometry): FormState {
+  const baseline = geometryDraft(geometry);
   return {
-    categoryBaselineId: annotation.category_id,
-    categoryId: annotation.category_id,
+    categoryBaselineId: categoryId,
+    categoryId,
     draft: baseline,
     geometryBaseline: baseline,
     geometryError: null,
@@ -48,10 +61,11 @@ function initialFormState(annotation: Annotation): FormState {
 
 function syncFormState(
   current: FormState,
-  annotation: Annotation,
+  categoryId: string,
+  geometry: EffectiveGeometry,
   frameSize: { height: number; width: number },
 ): FormState {
-  const nextGeometryBaseline = geometryDraft(annotation);
+  const nextGeometryBaseline = geometryDraft(geometry);
   const nextDraft = { ...current.draft };
 
   for (const field of GEOMETRY_FIELDS) {
@@ -62,8 +76,8 @@ function syncFormState(
 
   const categoryClean = current.categoryId === current.categoryBaselineId;
   return {
-    categoryBaselineId: annotation.category_id,
-    categoryId: categoryClean ? annotation.category_id : current.categoryId,
+    categoryBaselineId: categoryId,
+    categoryId: categoryClean ? categoryId : current.categoryId,
     draft: nextDraft,
     geometryBaseline: nextGeometryBaseline,
     geometryError:
@@ -90,19 +104,31 @@ export function AnnotationPopover({
   onToggleDrawTarget,
 }: AnnotationPopoverProps) {
   const categoryName = categories.find((category) => category.id === annotation.category_id)?.name ?? annotation.category_id;
-  const [form, setForm] = useState<FormState>(() => initialFormState(annotation));
+  /*
+   * One geometry, three consumers. `geometryPreview` used to exist only between
+   * `onShapeChange` and `onShapeChangeEnd` of a single mouse gesture; keyboard
+   * nudging turned it into a state the operator sits in for as long as they
+   * like. Feeding the baseline, the fields and the save button from the same
+   * value is what removes the split where the panel showed one number and the
+   * PATCH carried another.
+   */
+  const effectiveGeometry: EffectiveGeometry = geometryPreview ?? annotation;
+  const [form, setForm] = useState<FormState>(() =>
+    initialFormState(annotation.category_id, effectiveGeometry),
+  );
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const displayedDraft = geometryPreview === null ? form.draft : geometryDraft(geometryPreview);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
 
   useEffect(() => {
-    setForm((current) => syncFormState(current, annotation, frameSize));
+    setForm((current) =>
+      syncFormState(current, annotation.category_id, effectiveGeometry, frameSize),
+    );
   }, [
     annotation.category_id,
-    annotation.height,
-    annotation.width,
-    annotation.x,
-    annotation.y,
+    effectiveGeometry.height,
+    effectiveGeometry.width,
+    effectiveGeometry.x,
+    effectiveGeometry.y,
     frameSize.height,
     frameSize.width,
   ]);
@@ -127,6 +153,15 @@ export function AnnotationPopover({
         target instanceof Element &&
         target.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ===
           annotation.id
+      ) {
+        return;
+      }
+      if (
+        target instanceof Element &&
+        (target
+          .closest("[data-annotation-selection-target]")
+          ?.getAttribute("data-annotation-selection-target") === annotation.id ||
+          target.closest("[data-preserve-annotation-preview]") !== null)
       ) {
         return;
       }
@@ -163,6 +198,7 @@ export function AnnotationPopover({
     <div
       aria-label={draft ? "Wybierz klasę dla nowego bbox" : `Edytuj anotację ${categoryName}`}
       className="df-annotation-popover"
+      data-annotation-popover="panel"
       ref={popoverRef}
       role="dialog"
     >
@@ -219,12 +255,23 @@ export function AnnotationPopover({
         </Button>
       </div>
 
+      {geometryPreview === null ? null : (
+        <p className="df-annotation-popover__unsaved">
+          <StatusBadge srLabel="Stan geometrii:" tone="warning">
+            Niezapisane
+          </StatusBadge>
+          <span>
+            Przesunięcie bboxa nie jest jeszcze zapisane. Naciśnij <kbd>Enter</kbd>, aby je zapisać.
+          </span>
+        </p>
+      )}
+
       <details
         className="df-annotation-popover__geometry"
         open={invalid || undefined}
       >
         <summary>
-          x {displayedDraft.x} · y {displayedDraft.y} · w {displayedDraft.width} · h {displayedDraft.height}
+          x {form.draft.x} · y {form.draft.y} · w {form.draft.width} · h {form.draft.height}
         </summary>
         <div className="df-annotation-popover__geometry-fields">
           {GEOMETRY_FIELDS.map((field) => (
@@ -241,7 +288,7 @@ export function AnnotationPopover({
                 }));
               }}
               type="number"
-              value={displayedDraft[field]}
+              value={form.draft[field]}
               width="short"
             />
           ))}

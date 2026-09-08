@@ -38,7 +38,10 @@ import {
 } from "../../components/common/RegionOverlay";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
-import { AnnotationPopover } from "./AnnotationPopover";
+import {
+  ANNOTATION_POPOVER_SCOPE_ATTRIBUTE,
+  AnnotationPopover,
+} from "./AnnotationPopover";
 import { ClassList } from "./ClassList";
 import { categoryIdsOfKind, copyOptionGroups, copyPreviousTarget } from "./copySelection";
 import { FrameToolbar } from "./FrameToolbar";
@@ -235,9 +238,6 @@ function LoadedFrameEditor({
       if (intent.kind === "copy-previous") {
         setCopyFeedback(null);
       }
-      if (intent.kind === "geometry") {
-        setGeometryPreview(null);
-      }
       const presentation = describeApiError(error);
       setActionError(presentation);
       if (presentation.code === "bbox_invalid") {
@@ -266,7 +266,12 @@ function LoadedFrameEditor({
         setSelectedId((current) => (current === intent.annotationId ? null : current));
       }
       if (intent.kind === "category") {
-        setSelectedId((current) => (current === intent.annotationId ? null : current));
+        setSelectedId((current) =>
+          current === intent.annotationId &&
+          geometryPreview?.annotationId !== intent.annotationId
+            ? null
+            : current,
+        );
       }
       if (intent.kind === "create") {
         setDraftBBox(null);
@@ -296,6 +301,23 @@ function LoadedFrameEditor({
     selectedId === null
       ? undefined
       : activeAnnotations.find((annotation) => annotation.id === selectedId);
+  const previewedAnnotation =
+    geometryPreview === null
+      ? undefined
+      : activeAnnotations.find((annotation) => annotation.id === geometryPreview.annotationId);
+  /*
+   * Geometry the operator moved but has not saved. Measured against the stored
+   * annotation rather than against how the preview was produced: a preview that
+   * a refetch has caught up with is not unsaved work, and a mouse gesture whose
+   * `pointerup` never arrives is — the same resting state keyboard nudging
+   * introduced. Anything non-null here is work that would vanish silently.
+   */
+  const unsavedGeometry: BBox | null =
+    geometryPreview !== null &&
+    previewedAnnotation !== undefined &&
+    !sourceRectsEqual(previewedAnnotation, geometryPreview.bbox)
+      ? geometryPreview.bbox
+      : null;
   const shapes: OverlayShape[] = activeAnnotations.map((annotation) => {
     const categoryName = categoryById.get(annotation.category_id) ?? annotation.category_id;
     const confidenceLabel =
@@ -411,7 +433,19 @@ function LoadedFrameEditor({
             }
           }
         } else if (event.key === "Enter") {
-          if (geometryPreview?.annotationId === selectedId) {
+          /*
+           * `Enter` inside the docked panel belongs to whatever the operator
+           * has focused: "Usuń", "Zapisz klasę", "Przerysuj bbox" — the last of
+           * which advertises `Enter` as its own shortcut. Only `Enter` from
+           * outside the panel commits the preview. The guard this branch shares
+           * with the letter shortcuts excludes fields and the class picker, but
+           * those shortcuts never consumed `Enter`, so buttons were never a
+           * case it had to cover.
+           */
+          const insidePanel =
+            target instanceof Element &&
+            target.closest(`[${ANNOTATION_POPOVER_SCOPE_ATTRIBUTE}]`) !== null;
+          if (!insidePanel && geometryPreview?.annotationId === selectedId) {
             event.preventDefault();
             commitAnnotationGeometry(selectedId, geometryPreview.bbox);
             return;
@@ -423,6 +457,9 @@ function LoadedFrameEditor({
         key === "a" &&
         capabilities.canAccept &&
         activeAnnotations.length > 0 &&
+        // An accepted frame is terminal, so losing a nudge to it is
+        // irreversible. The panel says why the shortcut does nothing.
+        unsavedGeometry === null &&
         !mutation.isPending
       ) {
         event.preventDefault();
@@ -469,6 +506,7 @@ function LoadedFrameEditor({
     profile.categories,
     selectedAnnotation,
     selectedId,
+    unsavedGeometry,
   ]);
 
   function submit(intent: ReviewMutationIntent): void {
@@ -512,7 +550,20 @@ function LoadedFrameEditor({
       height: frame.height,
     });
     if (parsed.bbox === null) {
-      setGeometryPreview(null);
+      /*
+       * The verdict the backend would return for this rectangle, reached
+       * without spending a request — and without discarding the move. A box
+       * that starts outside the frame walks back into it one step at a time,
+       * so an early `Enter` has to explain itself rather than silently reset
+       * the box to where the nudging started.
+       */
+      setActionError({
+        ...describeErrorCode("bbox_invalid"),
+        annotationIds: [annotationId],
+        code: "bbox_invalid",
+        details: {},
+        requestId: null,
+      });
       return;
     }
     changeAnnotationGeometry(annotation, parsed.bbox);
@@ -552,13 +603,24 @@ function LoadedFrameEditor({
             {capabilities.canAccept ? (
               <Button
                 aria-label="Zaakceptuj klatkę"
-                disabled={mutation.isPending || activeAnnotations.length === 0}
+                data-preserve-annotation-preview={unsavedGeometry !== null || undefined}
+                disabled={
+                  mutation.isPending ||
+                  activeAnnotations.length === 0 ||
+                  unsavedGeometry !== null
+                }
                 loading={currentBusyKey === "review:accept"}
                 onClick={() => {
                   submit({ decision: "accept", expectedVersion: frame.version, kind: "review" });
                 }}
                 size="sm"
-                title={activeAnnotations.length === 0 ? "Akceptacja wymaga aktywnej anotacji" : "Skrót: A"}
+                title={
+                  unsavedGeometry !== null
+                    ? "Najpierw zapisz albo porzuć niezapisane przesunięcie bboxa"
+                    : activeAnnotations.length === 0
+                      ? "Akceptacja wymaga aktywnej anotacji"
+                      : "Skrót: A"
+                }
               >
                 Zaakceptuj <kbd>A</kbd>
               </Button>
@@ -697,6 +759,13 @@ function LoadedFrameEditor({
           </Notice>
         ) : null}
 
+        {unsavedGeometry === null ? null : (
+          <Notice title="Niezapisane przesunięcie bboxa" tone="warning">
+            Zaznacz ten bbox i naciśnij <kbd>Enter</kbd>, aby zapisać przesunięcie, albo kliknij
+            poza panelem, aby je porzucić. Akceptacja klatki jest zablokowana, dopóki przesunięcie
+            nie zostanie rozstrzygnięte — zaakceptowana klatka jest terminalna.
+          </Notice>
+        )}
         {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
         {imageError ? (
           <div className="df-review-image-error">
@@ -773,7 +842,7 @@ function LoadedFrameEditor({
             geometryPreview={
               selectedId !== DRAFT_ANNOTATION_ID &&
               geometryPreview?.annotationId === popoverAnnotation.id
-                ? geometryPreview.bbox
+                ? unsavedGeometry
                 : null
             }
             invalid={
