@@ -334,6 +334,15 @@ describe("corner targets", () => {
     expect(rectContainsPoint(target, { x: 319, y: 300 })).toBe(true);
     expect(rectContainsPoint(target, { x: 322, y: 302 })).toBe(true);
   });
+
+  it("keeps the fitted hit footprint constant at 8x presentation zoom", () => {
+    expect(handleTargetRect(reading, "south-east", 8)).toEqual({
+      x: 318,
+      y: 299,
+      width: 1.25,
+      height: 1.25,
+    });
+  });
 });
 
 describe("clampRectToSource", () => {

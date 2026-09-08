@@ -390,11 +390,14 @@ test("pełnoszeroka kanwa i celownik zachowują stałą geometrię oraz przepusz
   await page.goto("/annotations/run-1");
 
   const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const canvas = page.locator(".df-region-overlay");
+  const zoomStage = page.locator("[data-overlay-zoom-stage]");
   const image = page.getByRole("img", { name: /Klatka .* runu/ });
   const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
   const details = page.getByRole("region", { name: "Dane klatki" });
   await expect(overlay).toBeVisible();
   const initial = await overlay.boundingBox();
+  const initialCanvas = await canvas.boundingBox();
   const imageBounds = await image.boundingBox();
   const inspectorBounds = await inspector.boundingBox();
   const detailsBounds = await details.boundingBox();
@@ -404,13 +407,17 @@ test("pełnoszeroka kanwa i celownik zachowują stałą geometrię oraz przepusz
   expect(detailsBounds).not.toBeNull();
   if (
     initial === null ||
+    initialCanvas === null ||
     imageBounds === null ||
     inspectorBounds === null ||
     detailsBounds === null
   ) {
     throw new Error("FE-010 layout has no browser geometry");
   }
-  expect(imageBounds.width).toBeGreaterThan(900);
+  // This fixture is 1280×852, so the viewport-height cap binds before the
+  // available full row does. The real 16:9 frame used for visual QA exceeds
+  // 980 px; this less-wide fixture should still clear 800 px.
+  expect(imageBounds.width).toBeGreaterThan(800);
   expect(inspectorBounds.y).toBeGreaterThanOrEqual(imageBounds.y + imageBounds.height);
   expect(detailsBounds.y).toBeGreaterThanOrEqual(imageBounds.y + imageBounds.height);
 
@@ -419,18 +426,93 @@ test("pełnoszeroka kanwa i celownik zachowują stałą geometrię oraz przepusz
     y: initial.y + initial.height / 2,
   };
   await page.mouse.move(center.x, center.y);
-  const hovered = await overlay.boundingBox();
-  expect(hovered?.height).toBe(initial.height);
+  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   const crosshair = page.locator("[data-overlay-crosshair]");
   await expect(crosshair).toBeVisible();
   await expect(crosshair).toHaveCSS("pointer-events", "none");
+  const displayLabel = page.locator("[data-overlay-label-for]").first();
+  await expect(displayLabel).toBeVisible();
+  const fittedLabelFontSize = await displayLabel.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).fontSize),
+  );
+  const fittedLabelBounds = await displayLabel.boundingBox();
+
+  const ordinaryWheel = await overlay.evaluate((element) => {
+    const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 100 });
+    return { dispatched: element.dispatchEvent(event), prevented: event.defaultPrevented };
+  });
+  expect(ordinaryWheel).toEqual({ dispatched: true, prevented: false });
+
+  const anchorRatio = {
+    x: (center.x - initial.x) / initial.width,
+    y: (center.y - initial.y) / initial.height,
+  };
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  const zoomed = await overlay.boundingBox();
+  expect(zoomed).not.toBeNull();
+  if (zoomed === null) {
+    throw new Error("Zoomed FE-010 canvas has no browser geometry");
+  }
+  expect(zoomed.width).toBeCloseTo(initial.width * 1.25, 0);
+  expect((center.x - zoomed.x) / zoomed.width).toBeCloseTo(anchorRatio.x, 2);
+  expect((center.y - zoomed.y) / zoomed.height).toBeCloseTo(anchorRatio.y, 2);
+  expect(
+    await displayLabel.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ).toBe(fittedLabelFontSize);
+  expect((await displayLabel.boundingBox())?.height).toBeCloseTo(fittedLabelBounds?.height ?? 0, 0);
+  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
+  expect(mutationRequests).toEqual([]);
+
+  const beforeMiddlePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(center.x + 48, center.y + 32, { steps: 3 });
+  await page.mouse.up({ button: "middle" });
+  const afterMiddlePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  expect(afterMiddlePan).not.toBe(beforeMiddlePan);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(mutationRequests).toEqual([]);
+
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Space");
+  const beforeSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  await page.mouse.down();
+  await page.mouse.move(center.x - 32, center.y - 24, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+  const afterSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  expect(afterSpacePan).not.toBe(beforeSpacePan);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
+  expect(mutationRequests).toEqual([]);
+
+  const drawingSurface = await overlay.boundingBox();
+  expect(drawingSurface).not.toBeNull();
+  if (drawingSurface === null) {
+    throw new Error("Panned FE-010 canvas has no browser geometry");
+  }
+  const drawStart = {
+    x: Math.max(initialCanvas.x + 120, drawingSurface.x + drawingSurface.width * 0.45),
+    y: Math.max(initialCanvas.y + 120, drawingSurface.y + drawingSurface.height * 0.45),
+  };
+  await page.mouse.move(drawStart.x, drawStart.y);
 
   await page.mouse.down();
-  await page.mouse.move(center.x + 48, center.y + 32, { steps: 3 });
-  const duringGesture = await overlay.boundingBox();
-  expect(duringGesture?.height).toBe(initial.height);
+  await page.mouse.move(drawStart.x + 48, drawStart.y + 32, { steps: 3 });
+  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   await page.mouse.up();
   await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+  expect(mutationRequests).toEqual([]);
+
+  const draft = overlay.getByRole("option", { name: /^Box — wybierz klasę:/ });
+  const draftBeforeReset = await draft.getAttribute("aria-label");
+  await page.getByRole("button", { name: "Dopasuj kanwę do widoku" }).click();
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+  expect(await draft.getAttribute("aria-label")).toBe(draftBeforeReset);
+  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   expect(mutationRequests).toEqual([]);
 
   const frameLabel = page.locator(".df-region-overlay__corner-label");
@@ -449,7 +531,7 @@ test("pełnoszeroka kanwa i celownik zachowują stałą geometrię oraz przepusz
   await page.mouse.move(labelPoint.x + 48, labelPoint.y + 48, { steps: 3 });
   await page.mouse.up();
   await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-  expect((await overlay.boundingBox())?.height).toBe(initial.height);
+  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   expect(mutationRequests).toEqual([]);
 
   await page.mouse.move(8, 8);
@@ -460,7 +542,7 @@ test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
   const api = new ApiHarness({ phase: "accepted" });
   await api.install(page);
   await page.goto("/annotations/run-1");
-  await page.getByRole("button", { name: /Zaakcept\.\s*1/ }).click();
+  await page.getByRole("button", { name: /Zaakceptowane\s*1/ }).click();
   const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   await expect(overlay).toBeVisible();
   const bounds = await overlay.boundingBox();
