@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   describeApiError,
@@ -210,6 +210,7 @@ function LoadedFrameEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [redrawMode, setRedrawMode] = useState<RedrawMode | null>(null);
   const [geometryPreview, setGeometryPreview] = useState<GeometryPreview | null>(null);
+  const manipulationBaselineRef = useRef<{ preview: GeometryPreview | null } | null>(null);
   const [draftBBox, setDraftBBox] = useState<BBox | null>(null);
   const [imageError, setImageError] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
@@ -535,6 +536,22 @@ function LoadedFrameEditor({
     setGeometryPreview({ annotationId, bbox });
   }
 
+  function previewManipulationGeometry(annotationId: string, bbox: BBox): void {
+    manipulationBaselineRef.current ??= { preview: geometryPreview };
+    previewAnnotationGeometry(annotationId, bbox);
+  }
+
+  function cancelManipulationGeometry(): void {
+    const baseline = manipulationBaselineRef.current?.preview ?? null;
+    manipulationBaselineRef.current = null;
+    setGeometryPreview(baseline);
+  }
+
+  function commitManipulationGeometry(annotationId: string, bbox: BBox): void {
+    manipulationBaselineRef.current = null;
+    commitAnnotationGeometry(annotationId, bbox);
+  }
+
   function commitAnnotationGeometry(annotationId: string, bbox: BBox): void {
     if (annotationId === DRAFT_ANNOTATION_ID) {
       setDraftBBox(bbox);
@@ -812,9 +829,9 @@ function LoadedFrameEditor({
               : undefined
           }
           onSelect={selectAnnotation}
-          onShapeChange={canDirectEdit ? previewAnnotationGeometry : undefined}
-          onShapeChangeCancel={canDirectEdit ? () => setGeometryPreview(null) : undefined}
-          onShapeChangeEnd={canDirectEdit ? commitAnnotationGeometry : undefined}
+          onShapeChange={canDirectEdit ? previewManipulationGeometry : undefined}
+          onShapeChangeCancel={canDirectEdit ? cancelManipulationGeometry : undefined}
+          onShapeChangeEnd={canDirectEdit ? commitManipulationGeometry : undefined}
           selectedId={selectedId}
           shapes={shapes}
           source={{ width: frame.width, height: frame.height }}
