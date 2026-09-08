@@ -7,11 +7,13 @@ Implementacja jest celowo zawężona zgodnie z przekazaniem koordynatora do:
 1. pełnoszerokiej kanwy ograniczonej wysokością viewportu,
 2. numeru klatki w rogu obrazu,
 3. metadanych, inspektora i komunikatów pod kanwą,
-4. lokalnego, nieinteraktywnego celownika prowadzącego w `RegionOverlay`.
+4. lokalnego, nieinteraktywnego celownika prowadzącego w `RegionOverlay`,
+5. zoomu `Ctrl` + kółko zakotwiczonego pod kursorem oraz panu środkowym
+   przyciskiem albo `Spacja` + przeciągnięcie.
 
-Zoom, pan, pionowy pasek narzędzi, wielokąty i pędzel pozostają poza tym
-zakresem. Artefakt planistyczny opisuje zoom/pan, ale nowsze przekazanie
-koordynatora jawnie odkłada je do kolejnego ticketu.
+Pionowy pasek narzędzi, wielokąty i pędzel pozostają poza tym zakresem. Zoom i
+pan zostały dopisane do FE-010 późniejszą decyzją użytkownika; nie zmieniają
+geometrii źródłowej ani kontraktu mutacji.
 
 ## Ocena układu przed zmianą
 
@@ -54,6 +56,8 @@ wyraźny między kanwą i zapleczem (`--size-md`/`--size-lg`).
 | Kanwa (`RegionOverlay`) i obraz | Pełna szerokość obszaru roboczego, ograniczenie wysokością viewportu, zachowanie proporcji i obrysu obrazu. | Grid & Spacing: GRID-01/02/08/12, SPACING-01/11; UI & Visuals: BORDER-07, BWIDTH-08, RADIUS-02/04 |
 | Etykieta numeru klatki | Mała warstwa w lewym górnym rogu, ochronne ciemne tło, `pointer-events: none`, dane tabularne/mono. | UI & Visuals: COLOR-08, OVERLAY-01/02/06, RADIUS-02; Typography: TYPO-02/07, FONTSIZE-08/09/10, LHEIGHT-09, CASING-01/02 |
 | Celownik prowadzący | Dwie przerywane linie przez cały `viewBox`, lokalny stan kursora w `RegionOverlay`, stała grubość CSS, bez hit-testingu. | UI & Visuals: COLOR-08, BWIDTH-08/10, OVERLAY-06, OPACITY-02 |
+| Sterowanie zoomem | Stały wskaźnik procentowy w prawym górnym rogu kanwy i mały przycisk `Dopasuj`, dostępny z klawiatury; nie zmienia rozmiaru layoutu. | Grid & Spacing: GRID-01/02, SPACING-01/02; UI & Visuals: COLOR-08, OVERLAY-01/02/06, BORDER-02, RADIUS-02; Typography: TYPO-07, FONTSIZE-09/10 |
+| Pan kanwy | Bez osobnego paska: środkowy przycisk albo `Spacja` + lewy przycisk; kursor `grab/grabbing`, jawne rozstrzygnięcie gestu przed rysowaniem. | UI & Visuals: OVERLAY-06, OPACITY-02; Grid & Spacing: GRID-08/11 |
 | Dokowany panel anotacji | Pozostaje bezpośrednio pod obrazem, nigdy go nie przykrywa i nie trafia nad obszar gestu. | Grid & Spacing: GRID-01/02, SPACING-01/02; UI & Visuals: BORDER-02, RADIUS-02 |
 | Inspektor anotacji (`Panel`) | Przeniesiony wizualnie i w DOM pod kanwę; zawartość i interakcje bez zmian. | Grid & Spacing: GRID-01/02/12, SPACING-01/02/06; UI & Visuals: BORDER-02, RADIUS-02; Typography: TYPO-07, LHEIGHT-10 |
 | Metadane (`DataList`) | Timestamp, wymiary, etap i wersja pod kanwą, obok inspektora. Numer klatki nie wraca do listy. | Grid & Spacing: GRID-01/02/12, SPACING-01/02; Typography: TYPO-07, FONTSIZE-09/10, LHEIGHT-10 |
@@ -79,16 +83,60 @@ wyraźny między kanwą i zapleczem (`--size-md`/`--size-lg`).
   niewykorzystane, bo nie powstaje nowa warstwa głębi (SHADOW-01..05).
 - [x] **Interakcje:** celownik i etykieta mają `pointer-events: none`; stan
   disabled nadal wynika z komponentu, a ruch kursora nie uruchamia callbacków
-  domenowych (COLOR-07, OPACITY-02, OVERLAY-06).
+  domenowych. `Ctrl` + kółko przechwytuje wyłącznie obsługiwany zoom, zwykłe
+  kółko przewija stronę, a pan jest rozdzielony od lewego gestu rysowania
+  (COLOR-07, OPACITY-02, OVERLAY-06).
 - [x] **Komponenty:** użyte istniejące `RegionOverlay`, `Panel`, `DataList`,
-  `Notice`, `InlineError`, `Button`, `StatusBadge` i `AnnotationPopover`; nie
-  powstaje nowy element interaktywny ani nowy komponent wspólny.
+  `Notice`, `InlineError`, `Button`, `StatusBadge` i `AnnotationPopover`;
+  jedynym nowym sterowaniem jest mały przycisk resetu zoomu z istniejącego
+  komponentu `Button`.
 
 ## Pomiar i weryfikacja
 
 - Szerokość obrazu przed zmianą: **805,578 px** przy viewportcie
   **1440 × 1000 px** (headless Chromium, lokalny realny run
   `b4a755c9-4e55-4142-bc09-50f7469e124b`; `getBoundingClientRect()` obrazu).
-- Szerokość obrazu po zmianie: do uzupełnienia tym samym pomiarem i viewportem.
-- Wysokość kanwy w stanach bez kursora / z kursorem / podczas gestu: do
-  uzupełnienia testem E2E na rzeczywistym `getBoundingClientRect()`.
+- Szerokość obrazu po zmianie: **981,297 px** w tym samym viewportcie
+  **1440 × 1000 px** i dla tego samego runu (`getBoundingClientRect()` obrazu).
+  Wzrost wynosi **175,719 px**, czyli około **21,8%**.
+- Wysokość kanwy w stanach bez kursora / z kursorem / podczas rzeczywistego
+  gestu wskaźnika wynosiła kolejno **551,984 / 551,984 / 551,984 px**. Celownik
+  nie wywołuje przesunięcia układu.
+- Dokowany panel anotacji zaczynał się na `y = 769,781 px`, bezpośrednio pod
+  kanwą; jego początek pozostawał widoczny w pierwszym viewportcie.
+- Celownik oraz etykieta klatki miały `pointer-events: none`. Gest rozpoczęty na
+  każdej z tych warstw przechodził do overlayu i tworzył wyłącznie lokalny draft,
+  bez żądania mutującego.
+- Screenshot QA: `docs/tickets/FE-010/fe-010-canvas-crosshair-1440.png`.
+- `impeccable detect --scope layout` po zmianie: `[]`.
+
+## Regresje FE-009 — osobne dowody
+
+1. **Kliknięcie poza panelem i ten sam gest rozpoczynający bbox:** test
+   `closes on the image without eating the pointerdown that starts the next box`
+   oraz test Chromium rozpoczynający gest także na etykiecie klatki.
+2. **Kliknięcie, przeciągnięcie i resize własnego bboxa nie zamykają panelu:**
+   `treats the bbox it edits as part of itself, so a drag on it is not a dismissal`
+   i `keeps the popover open while the bbox it edits is dragged`.
+3. **Escape pozostaje nieobsłużony:**
+   `has no Escape hint and no Escape handler left`.
+4. **Enter w pustym, zautofokusowanym filtrze nie wybiera klasy i nie zapisuje:**
+   `ignores Enter in an empty filter until a row is explicitly focused`; brak
+   wywołań `onChange` i `onConfirm` oznacza brak ścieżki do POST.
+5. **Panel remountuje się wyłącznie przy zmianie anotacji:** zachowany literal
+   `key={popoverAnnotation.id}` oraz testy `survives reselecting its class chip
+   without sending a request` i `survives a refetch of the same annotation and
+   sends no mutation`.
+6. **Zwykły błąd zapisu zachowuje draft:**
+   `keeps the draft after a failed explicit class save` i `survives a failed
+   geometry PATCH instead of rolling the overlay back`.
+7. **Strzałki nie wysyłają PATCH, Enter wysyła dokładnie jeden z bieżącą
+   wersją:** `accumulates three nudges in one preview and sends exactly one PATCH
+   on Enter`, z asercją `expected_version: 3`.
+8. **Baseline gestu jest związany z anotacją i epoką wyboru:**
+   `cannot resurrect A after selecting B and cannot leak A into B's next cancel`
+   oraz `does not restore a baseline after closing and reselecting the same
+   annotation`.
+9. **Panel pozostaje dokowany i nie przykrywa obrazu:** test helpera
+   `assertAnnotationPopoverIsDocked`, test pełnoszerokiej kanwy w Chromium i
+   screenshot QA wymieniony wyżej.
