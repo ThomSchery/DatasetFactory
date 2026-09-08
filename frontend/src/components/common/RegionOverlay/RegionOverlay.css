@@ -10,6 +10,7 @@
   width: fit-content;
   max-width: 100%;
   margin: var(--size-md) auto;
+  overflow: hidden;
   border-radius: var(--radius-md);
   background-color: var(--color-background-primary-default);
   line-height: var(--line-height-tight);
@@ -17,6 +18,15 @@
 
 .df-region-overlay[data-disabled] {
   opacity: var(--opacity-disabled);
+}
+
+.df-region-overlay__zoom-stage {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  transform-origin: top left;
+  will-change: transform;
 }
 
 .df-region-overlay__image {
@@ -37,6 +47,14 @@
 
 .df-region-overlay__surface--drawable {
   cursor: crosshair;
+}
+
+.df-region-overlay__surface--pan-ready {
+  cursor: grab;
+}
+
+.df-region-overlay__surface--panning {
+  cursor: grabbing;
 }
 
 .df-region-overlay__crosshair {
@@ -186,7 +204,7 @@
   position: absolute;
   top: var(--size-xs);
   left: var(--size-xs);
-  z-index: 1;
+  z-index: 2;
   padding: calc(var(--size-xs) / 2) var(--size-xs);
   border-radius: var(--radius-sm);
   background: var(--color-overlay-scrim);
@@ -196,6 +214,36 @@
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   pointer-events: none;
+}
+
+.df-region-overlay__zoom-controls {
+  position: absolute;
+  top: var(--size-xs);
+  right: var(--size-xs);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  padding: calc(var(--size-xs) / 2);
+  border-radius: var(--radius-md);
+  background: var(--color-overlay-scrim);
+  color: var(--color-text-strong-default);
+}
+
+.df-region-overlay__zoom-value {
+  min-width: var(--size-xl);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-align: center;
+}
+
+.df-region-overlay__zoom-controls .df-button {
+  min-width: var(--control-height-sm);
+  min-height: var(--control-height-sm);
+  padding-inline: var(--size-xs);
+  background: var(--color-background-primary-default);
 }
 
 .df-region-overlay__label {
@@ -214,7 +262,8 @@
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   white-space: nowrap;
-  transform: translateY(-100%);
+  transform: scale(var(--df-overlay-inverse-zoom, 1)) translateY(-100%);
+  transform-origin: top left;
 }
 
 .df-region-overlay__label--manual {

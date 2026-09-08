@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -6,6 +7,8 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
+
+import { Button } from "../Button/Button";
 
 import {
   clampRectToSource,
@@ -94,6 +97,40 @@ interface Manipulation {
   shapeId: string;
 }
 
+interface ViewTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+interface PanGesture {
+  originClient: SourcePoint;
+  originView: ViewTransform;
+  pointerId: number;
+}
+
+const FIT_VIEW: ViewTransform = { scale: 1, x: 0, y: 0 };
+const MAX_ZOOM = 8;
+const ZOOM_STEP = 1.25;
+
+function rounded(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function clampPan(
+  point: SourcePoint,
+  scale: number,
+  viewport: { width: number; height: number },
+): SourcePoint {
+  if (scale <= 1 || viewport.width <= 0 || viewport.height <= 0) {
+    return { x: 0, y: 0 };
+  }
+  return {
+    x: rounded(Math.min(0, Math.max(viewport.width * (1 - scale), point.x))),
+    y: rounded(Math.min(0, Math.max(viewport.height * (1 - scale), point.y))),
+  };
+}
+
 const RESIZE_CORNERS: readonly ResizeCorner[] = [
   "north-west",
   "north-east",
@@ -180,18 +217,143 @@ export function RegionOverlay({
   shapes = [],
   source,
 }: RegionOverlayProps) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<SVGSVGElement | null>(null);
   const optionRefs = useRef(new Map<string, SVGGElement>());
   const suppressCapturedClickRef = useRef(false);
+  const pointerInsideRef = useRef(false);
+  const spacePressedRef = useRef(false);
+  const panGestureRef = useRef<PanGesture | null>(null);
+  const viewRef = useRef<ViewTransform>(FIT_VIEW);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [manipulation, setManipulation] = useState<Manipulation | null>(null);
   const [cursorPoint, setCursorPoint] = useState<SourcePoint | null>(null);
+  const [spacePressed, setSpacePressed] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const [view, setView] = useState<ViewTransform>(FIT_VIEW);
 
   const canDraw = onDraw !== undefined && !disabled && source !== null;
   const canInteract = !disabled;
   const canEditShapes =
     onShapeChange !== undefined && onShapeChangeEnd !== undefined && canInteract && source !== null;
   const canGuide = canDraw || canEditShapes;
+
+  function updateView(next: ViewTransform): void {
+    viewRef.current = next;
+    setView(next);
+  }
+
+  function resetView(): void {
+    updateView(FIT_VIEW);
+  }
+
+  useEffect(() => {
+    resetView();
+  }, [imageUrl, source?.height, source?.width]);
+
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (surface === null || source === null) {
+      return;
+    }
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      if (!event.ctrlKey || event.deltaY === 0) {
+        return;
+      }
+      const viewport = viewportRef.current;
+      if (viewport === null) {
+        return;
+      }
+      event.preventDefault();
+      const bounds = viewport.getBoundingClientRect();
+      const current = viewRef.current;
+      const requested =
+        event.deltaY < 0
+          ? current.scale * ZOOM_STEP
+          : event.deltaY > 0
+            ? current.scale / ZOOM_STEP
+            : current.scale;
+      const scale = rounded(Math.min(MAX_ZOOM, Math.max(1, requested)));
+      if (scale === current.scale) {
+        return;
+      }
+      if (scale === 1) {
+        resetView();
+        return;
+      }
+      const anchor = {
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      };
+      const contentPoint = {
+        x: (anchor.x - current.x) / current.scale,
+        y: (anchor.y - current.y) / current.scale,
+      };
+      const pan = clampPan(
+        {
+          x: anchor.x - contentPoint.x * scale,
+          y: anchor.y - contentPoint.y * scale,
+        },
+        scale,
+        bounds,
+      );
+      updateView({ scale, ...pan });
+    };
+    surface.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      surface.removeEventListener("wheel", handleWheel);
+    };
+  }, [source]);
+
+  useEffect(() => {
+    const targetIsEditable = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.matches("input, textarea, select, button"));
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if ((event.code !== "Space" && event.key !== " ") || targetIsEditable(event.target)) {
+        return;
+      }
+      spacePressedRef.current = true;
+      if (pointerInsideRef.current) {
+        event.preventDefault();
+        setSpacePressed(true);
+      }
+    };
+    const releaseSpace = (event?: globalThis.KeyboardEvent) => {
+      if (event !== undefined && event.code !== "Space" && event.key !== " ") {
+        return;
+      }
+      spacePressedRef.current = false;
+      setSpacePressed(false);
+    };
+    const handleBlur = () => releaseSpace();
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", releaseSpace);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", releaseSpace);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
+  useEffect(() => {
+    const constrainView = () => {
+      const viewport = viewportRef.current;
+      const current = viewRef.current;
+      if (viewport === null || current.scale === 1) {
+        return;
+      }
+      const pan = clampPan(current, current.scale, viewport.getBoundingClientRect());
+      if (pan.x !== current.x || pan.y !== current.y) {
+        updateView({ ...current, ...pan });
+      }
+    };
+    window.addEventListener("resize", constrainView);
+    return () => {
+      window.removeEventListener("resize", constrainView);
+    };
+  }, []);
 
   function sourcePointAt(clientX: number, clientY: number): SourcePoint | null {
     const surface = surfaceRef.current;
@@ -245,6 +407,23 @@ export function RegionOverlay({
     // next physical pointerdown starts a new sequence and must not inherit its
     // deduplication marker.
     suppressCapturedClickRef.current = false;
+    const wantsPan = event.button === 1 || (event.button === 0 && spacePressedRef.current);
+    if (wantsPan) {
+      event.preventDefault();
+      panGestureRef.current = {
+        originClient: { x: event.clientX, y: event.clientY },
+        originView: viewRef.current,
+        pointerId: event.pointerId,
+      };
+      setPanning(true);
+      if (surfaceRef.current !== null) {
+        capturePointer(surfaceRef.current, event.pointerId, true);
+      }
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
     const point = pointFrom(event);
     if (canEditShapes && point !== null && selectedId !== null) {
       const targetCorner = resizeCornerFromTarget(event.target);
@@ -308,6 +487,22 @@ export function RegionOverlay({
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
     const point = pointFrom(event);
     setCursorPoint(canGuide ? point : null);
+    const panGesture = panGestureRef.current;
+    if (panGesture !== null && panGesture.pointerId === event.pointerId) {
+      const viewport = viewportRef.current;
+      if (viewport !== null) {
+        const pan = clampPan(
+          {
+            x: panGesture.originView.x + event.clientX - panGesture.originClient.x,
+            y: panGesture.originView.y + event.clientY - panGesture.originClient.y,
+          },
+          panGesture.originView.scale,
+          viewport.getBoundingClientRect(),
+        );
+        updateView({ ...panGesture.originView, ...pan });
+      }
+      return;
+    }
     if (manipulation !== null) {
       if (point !== null) {
         const currentRect = rectForManipulation(manipulation, point);
@@ -327,6 +522,12 @@ export function RegionOverlay({
   function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
     if (surfaceRef.current !== null) {
       capturePointer(surfaceRef.current, event.pointerId, false);
+    }
+    if (panGestureRef.current?.pointerId === event.pointerId) {
+      panGestureRef.current = null;
+      setPanning(false);
+      suppressCapturedClickRef.current = true;
+      return;
     }
     if (manipulation !== null) {
       const point = pointFrom(event);
@@ -420,6 +621,8 @@ export function RegionOverlay({
   const surfaceClasses = [
     "df-region-overlay__surface",
     canDraw ? "df-region-overlay__surface--drawable" : null,
+    spacePressed ? "df-region-overlay__surface--pan-ready" : null,
+    panning ? "df-region-overlay__surface--panning" : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -429,7 +632,20 @@ export function RegionOverlay({
       className="df-region-overlay"
       data-disabled={disabled || undefined}
       data-interaction-mode={interactionMode}
+      data-panning={panning || undefined}
+      data-zoomed={view.scale > 1 || undefined}
+      ref={viewportRef}
     >
+      <div
+        className="df-region-overlay__zoom-stage"
+        data-overlay-zoom-stage="true"
+        style={
+          {
+            "--df-overlay-inverse-zoom": String(1 / view.scale),
+            transform: `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.scale)})`,
+          } as CSSProperties
+        }
+      >
       <img
         alt={imageAlt}
         className="df-region-overlay__image"
@@ -445,7 +661,14 @@ export function RegionOverlay({
         <svg
           aria-label={label}
           className={surfaceClasses}
-          onPointerCancel={() => {
+          onPointerCancel={(event) => {
+            if (panGestureRef.current?.pointerId === event.pointerId) {
+              capturePointer(event.currentTarget, event.pointerId, false);
+              panGestureRef.current = null;
+              setPanning(false);
+              suppressCapturedClickRef.current = false;
+              return;
+            }
             if (manipulation !== null) {
               onShapeChange?.(manipulation.shapeId, manipulation.originRect);
               onShapeChangeCancel?.(manipulation.shapeId);
@@ -470,7 +693,15 @@ export function RegionOverlay({
             }
           }}
           onPointerDown={handlePointerDown}
+          onPointerEnter={() => {
+            pointerInsideRef.current = true;
+            if (spacePressedRef.current) {
+              setSpacePressed(true);
+            }
+          }}
           onPointerLeave={() => {
+            pointerInsideRef.current = false;
+            setSpacePressed(false);
             setCursorPoint(null);
           }}
           onPointerMove={handlePointerMove}
@@ -500,6 +731,7 @@ export function RegionOverlay({
               selected={shape.id === selectedId}
               shape={shape}
               tabbable={canInteract && (selectedId === null ? index === 0 : shape.id === selectedId)}
+              zoom={view.scale}
             />
           ))}
           {!canGuide || cursorPoint === null ? null : (
@@ -556,10 +788,27 @@ export function RegionOverlay({
         </div>
         </>
       )}
+      </div>
       {cornerLabel === undefined ? null : (
         <span aria-hidden="true" className="df-region-overlay__corner-label">
           {cornerLabel}
         </span>
+      )}
+      {source === null ? null : (
+        <div className="df-region-overlay__zoom-controls" data-preserve-annotation-preview="true">
+          <output aria-label="Powiększenie kanwy" className="df-region-overlay__zoom-value">
+            {String(Math.round(view.scale * 100))}%
+          </output>
+          <Button
+            aria-label="Dopasuj kanwę do widoku"
+            disabled={view.scale === 1}
+            onClick={resetView}
+            size="sm"
+            variant="muted"
+          >
+            1×
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -573,6 +822,7 @@ interface ShapeOptionProps {
   selected: boolean;
   shape: OverlayShape;
   tabbable: boolean;
+  zoom: number;
 }
 
 /** Geometry belongs in the name: a rectangle is not describable by its label alone. */
@@ -589,6 +839,7 @@ function ShapeOption({
   selected,
   shape,
   tabbable,
+  zoom,
 }: ShapeOptionProps): ReactNode {
   const classes = [
     "df-region-overlay__shape",
@@ -641,7 +892,7 @@ function ShapeOption({
                 <rect className="df-region-overlay__shape-handle-visual" {...marker} />
                 <rect
                   className="df-region-overlay__shape-handle-hit"
-                  {...handleTargetRect(shape, corner)}
+                  {...handleTargetRect(shape, corner, zoom)}
                 />
               </g>
             );

@@ -172,8 +172,15 @@ export function handleTargetSize(rect: SourceRect): number {
  * gesture, so a target reaching into it would be a cursor promising a resize
  * that never happens.
  */
-export function handleTargetRect(rect: SourceRect, corner: ResizeCorner): SourceRect {
-  const size = handleTargetSize(rect);
+export function handleTargetRect(
+  rect: SourceRect,
+  corner: ResizeCorner,
+  presentationScale = 1,
+): SourceRect {
+  // The zoom stage scales SVG fill hit targets. Dividing by the presentation
+  // scale keeps the on-screen target identical to its fitted-size footprint,
+  // so an 8× view does not let one handle swallow neighbouring OCR boxes.
+  const size = handleTargetSize(rect) / Math.max(1, presentationScale);
   const east = rect.x + Math.max(0, rect.width - 1);
   const south = rect.y + Math.max(0, rect.height - 1);
   return {
