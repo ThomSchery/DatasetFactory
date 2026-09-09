@@ -79,3 +79,74 @@ unieważnienie interakcji.
    `Tab`/`Enter` na `1×` → move; pełne retesty FE-009/Space/layout.
 5. `docs(fe-011)`: wyniki sond i pełna bramka 9/9.
 
+## Implementacja
+
+- `finishPanGesture(suppressClick)` jest jedynym prymitywem kończącym aktywną
+  epokę panu. Zwalnia pointer capture zapamiętanego `pointerId`, zeruje
+  `panGestureRef`, usuwa `panning` i ustawia deduplikację następującego clicku
+  zgodnie z rodzajem końca. Korzystają z niego również zwykły `pointerup` i
+  `pointercancel`.
+- `invalidatePanInteraction()` wyłącza `panMode` i wywołuje ten prymityw. Jest
+  używane przez `resetView()` oraz efekt zmiany zaznaczenia.
+- `previousSelectedIdRef` odróżnia zmianę tożsamości A → B od ponownego wyboru
+  A → A. `useLayoutEffect` unieważnia rękę przed następnym paintem po zmianie
+  selekcji, bez migotania starego `aria-pressed=true` w nowym kontekście.
+- Reset najpierw unieważnia interakcję, potem ustawia `FIT_VIEW`. Stary
+  `originView` nie jest już osiągalny dla następnego `pointermove`.
+- Zwykłe kliknięcie `Zakończ przesuwanie` nie wywołuje invalidacji aktywnej
+  epoki. Zachowanie zaakceptowane w review pozostaje: rozpoczęty gest kończy się
+  normalnie, a następny LMB wraca do rysowania/edycji.
+
+Nie pojawił się kolejny stan wymagający osobnego miejsca invalidacji.
+`pointerup`, `pointercancel`, reset i zmiana selekcji składają się z jednego
+prymitywu końca gestu; reset oraz selekcja dzielą dodatkowo jedno unieważnienie
+właściciela interakcji. Pełny automat stanów pozostaje poza zakresem.
+
+## Sondy findingów
+
+### FIX-A — zmiana zaznaczenia
+
+- Komponent: przy ręce ON ponowny `Enter` na A pozostawia rękę aktywną;
+  `Enter` na B natychmiast daje `aria-pressed=false`, pozostawia B jako
+  `aria-selected=true`, a kolejny LMB edytuje/rysuje bez zmiany transformu.
+- Komponent: kliknięcie B bezpośrednio na kanwie daje ten sam wynik.
+- Ekran: A jest najpierw przesunięte nudgem `100 → 101`, następnie przy 156%
+  ręka jest włączona, a B wybrane fokusem i `Enter`. B pozostaje wybrane,
+  kontrolka ręki jest wyłączona, kolejny drag na B nie zmienia transformu i
+  wykonuje zero mutacji.
+
+### FIX-B — reset aktywnej epoki
+
+- Komponent: 156%, ręka ON, LMB wciśnięty, reset `1×`, dalszy move i osobno
+  `pointerup` albo `pointercancel` pozostają przy 100%, bez draftu.
+- Ekran: niezapisany nudge `100 → 101` pozostaje w bboxie, panelu i statusie po
+  resecie aktywnego panu; zoom zostaje 100%, `panning` znika, mutacji zero.
+- Prawdziwy Playwright/Chromium: dokładna sekwencja recenzenta 156% → ręka ON →
+  trzymany LMB → `Tab` na `1×` → `Enter` → dalszy `page.mouse.move` → release.
+  Po każdym kroku po resecie zoom i transform pozostają 100%/`FIT_VIEW`, nie ma
+  draftu ani mutacji.
+
+## Próby i korekty sond
+
+1. Testy uruchomione przed zmianą produkcyjną dały oczekiwane **6 FAIL** przy
+   **67 PASS**: dwie ścieżki selekcji, dwa końce resetowanego gestu oraz obie
+   sondy ekranowe.
+2. Po implementacji 5/6 przeszło. Ostatnia sonda ekranowa klikała pustą
+   powierzchnię, więc poprawny outside-dismiss zdejmował B. Skorygowano cel na
+   wypełnienie wybranego bboxa B: test sprawdza teraz przekazanie LMB do edycji
+   nowego kontekstu, zgodnie z findingiem, bez osłabiania FE-009.
+3. Pierwsza sonda Chromium resetu dodała nudge do sekwencji recenzenta. Globalny
+   `Enter` edytora poprawnie przejmował wtedy klawisz do zapisu nudge'a, zamiast
+   aktywować `1×`. Dowody rozdzielono: exact Chromium bez nudge'a oraz osobna
+   integracyjna sonda zachowania nudge'a przy resecie.
+
+## Preflight
+
+- Vitest: **40 plików, 619/619 PASS**.
+- Typecheck i build Vite: PASS; pozostaje zastane ostrzeżenie o głównym chunku
+  większym niż 500 kB.
+- Playwright/Chromium FE-011: **2/2 PASS**; pomiary części B pozostały bez zmian:
+  `883.984×588.406`, `1043.984×694.906`, `1280×852` dla trzech wymaganych
+  viewportów, z `panel.bottom <= innerHeight`.
+- Impeccable detector, zakres `layout`, zmieniony plik UI: `[]`.
+
