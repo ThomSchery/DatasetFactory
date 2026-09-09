@@ -138,3 +138,53 @@ test("FE-011 daje obrazowi szerokość viewportu i pokazuje pan bez skrótów", 
 
   console.log(`FE011_AFTER ${JSON.stringify(measurements)}`);
 });
+
+test("FE-011-FIX1 reset 1x unieważnia nadal trzymany pan", async ({ page }) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/annotations/run-1");
+
+  const canvas = page.locator(".df-region-overlay");
+  const zoomStage = page.locator("[data-overlay-zoom-stage]");
+  await canvas.scrollIntoViewIfNeeded();
+  const canvasBounds = await canvas.boundingBox();
+  if (canvasBounds === null) {
+    throw new Error("FE-011-FIX1 canvas has no browser geometry");
+  }
+  const center = {
+    x: canvasBounds.x + canvasBounds.width / 2,
+    y: canvasBounds.y + canvasBounds.height / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("156%");
+
+  await page.getByRole("button", { name: "Przesuwaj kadr" }).click();
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await expect(canvas).toHaveAttribute("data-panning", "true");
+  await page.keyboard.press("Tab");
+  const resetButton = page.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+  await expect(resetButton).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  await expect(canvas).not.toHaveAttribute("data-panning");
+  const resetTransform = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+
+  await page.mouse.move(center.x + 96, center.y + 64, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  expect(await zoomStage.evaluate((element) => getComputedStyle(element).transform)).toBe(
+    resetTransform,
+  );
+  await expect(page.getByRole("button", { name: "Przesuwaj kadr" })).toBeDisabled();
+  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toHaveCount(0);
+  expect(
+    api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
+  ).toEqual([]);
+});
