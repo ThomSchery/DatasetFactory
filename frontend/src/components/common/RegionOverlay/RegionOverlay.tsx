@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -256,6 +257,7 @@ export function RegionOverlay({
   const spacePressedRef = useRef(false);
   const spaceUsedForPanRef = useRef(false);
   const panGestureRef = useRef<PanGesture | null>(null);
+  const previousSelectedIdRef = useRef(selectedId);
   const viewRef = useRef<ViewTransform>(FIT_VIEW);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [manipulation, setManipulation] = useState<Manipulation | null>(null);
@@ -276,10 +278,38 @@ export function RegionOverlay({
     setView(next);
   }
 
-  function resetView(): void {
+  function finishPanGesture(suppressClick: boolean): boolean {
+    const gesture = panGestureRef.current;
+    if (gesture === null) {
+      setPanning(false);
+      return false;
+    }
+    if (surfaceRef.current !== null) {
+      capturePointer(surfaceRef.current, gesture.pointerId, false);
+    }
+    panGestureRef.current = null;
+    setPanning(false);
+    suppressCapturedClickRef.current = suppressClick;
+    return true;
+  }
+
+  function invalidatePanInteraction(): void {
     setPanMode(false);
+    finishPanGesture(true);
+  }
+
+  function resetView(): void {
+    invalidatePanInteraction();
     updateView(FIT_VIEW);
   }
+
+  useLayoutEffect(() => {
+    if (previousSelectedIdRef.current === selectedId) {
+      return;
+    }
+    previousSelectedIdRef.current = selectedId;
+    invalidatePanInteraction();
+  }, [selectedId]);
 
   useEffect(() => {
     resetView();
@@ -580,14 +610,12 @@ export function RegionOverlay({
   }
 
   function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (panGestureRef.current?.pointerId === event.pointerId) {
+      finishPanGesture(true);
+      return;
+    }
     if (surfaceRef.current !== null) {
       capturePointer(surfaceRef.current, event.pointerId, false);
-    }
-    if (panGestureRef.current?.pointerId === event.pointerId) {
-      panGestureRef.current = null;
-      setPanning(false);
-      suppressCapturedClickRef.current = true;
-      return;
     }
     if (manipulation !== null) {
       const point = pointFrom(event);
@@ -724,10 +752,7 @@ export function RegionOverlay({
           className={surfaceClasses}
           onPointerCancel={(event) => {
             if (panGestureRef.current?.pointerId === event.pointerId) {
-              capturePointer(event.currentTarget, event.pointerId, false);
-              panGestureRef.current = null;
-              setPanning(false);
-              suppressCapturedClickRef.current = false;
+              finishPanGesture(false);
               return;
             }
             if (manipulation !== null) {
