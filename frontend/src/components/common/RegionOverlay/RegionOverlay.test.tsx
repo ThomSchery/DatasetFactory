@@ -447,6 +447,57 @@ describe("the drawing surface", () => {
     expect(fireEvent.keyUp(resetButton, { code: "Space", key: " " })).toBe(true);
   });
 
+  it("consumes document Space over the canvas before it can scroll and still pans", () => {
+    const onDraw = vi.fn();
+    renderOverlay({ onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.pointerEnter(surface, { clientX: 480, clientY: 270, pointerId: 10 });
+    expect(fireEvent.keyDown(document.body, { code: "Space", key: " " })).toBe(false);
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 10,
+    });
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 10,
+    });
+
+    expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
+      transform: "translate(-80px, -37.5px) scale(1.25)",
+    });
+    expect(onDraw).not.toHaveBeenCalled();
+
+    fireEvent.pointerUp(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 10,
+    });
+    expect(fireEvent.keyUp(document.body, { code: "Space", key: " " })).toBe(false);
+  });
+
+  it("leaves document Space native while the pointer is outside the canvas", () => {
+    renderOverlay();
+    expect(document.activeElement).toBe(document.body);
+
+    expect(fireEvent.keyDown(document.body, { code: "Space", key: " " })).toBe(true);
+    expect(fireEvent.keyUp(document.body, { code: "Space", key: " " })).toBe(true);
+  });
+
   it("keeps drawing in source pixels after zooming and panning the presentation", () => {
     const onDraw = vi.fn();
     renderOverlay({ onDraw });

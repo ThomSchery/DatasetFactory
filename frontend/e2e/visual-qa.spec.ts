@@ -716,6 +716,61 @@ test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({
   expect(deletesAfterNativeReset).toHaveLength(0);
 });
 
+test("Space nad kanwą nie przewija dokumentu przy naturalnym fokusie body", async ({ page }) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/annotations/run-1");
+
+  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const canvas = page.locator(".df-region-overlay");
+  const zoomStage = page.locator("[data-overlay-zoom-stage]");
+  await expect(overlay).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  const canvasBounds = await canvas.boundingBox();
+  if (canvasBounds === null) {
+    throw new Error("FE-010-FIX3 canvas has no browser geometry");
+  }
+  const center = {
+    x: canvasBounds.x + canvasBounds.width / 2,
+    y: canvasBounds.y + canvasBounds.height / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+
+  const beforeSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  await page.keyboard.down("Space");
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 40, center.y + 28, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+
+  const afterSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  expect(afterSpacePan).not.toBe(beforeSpacePan);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(
+    api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
+  ).toHaveLength(0);
+
+  await page.mouse.move(8, 8);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect(
+    api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
+  ).toHaveLength(0);
+});
+
 test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
   const api = new ApiHarness({ phase: "accepted" });
   await api.install(page);
