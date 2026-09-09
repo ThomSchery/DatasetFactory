@@ -150,3 +150,36 @@ właściciela interakcji. Pełny automat stanów pozostaje poza zakresem.
   viewportów, z `panel.bottom <= innerHeight`.
 - Impeccable detector, zakres `layout`, zmieniony plik UI: `[]`.
 
+## Retest obciążeniowy panelu
+
+Do repozytoryjnego Playwrighta dodano stałą regresję wariantu recenzenta:
+viewport `1280×720` i sztuczna zawartość panelu o wysokości `1200 px`.
+Zmierzono `panel.top = 165.203125`, `panel.bottom = 719.203125`,
+`clientHeight = 552`, `scrollHeight = 1494` oraz `overflow-y = auto`. Panel
+pozostaje w viewportcie, a nadmiar treści przewija się wewnątrz niego.
+
+## Pełna bramka po wszystkich zmianach
+
+Jedna końcowa, nieprzerwana bramka `scripts/check.ps1` po dodaniu także testu
+obciążeniowego zakończyła się **PASS 9/9, 0 SKIP**:
+
+1. backend format: PASS, 263 pliki;
+2. backend lint: PASS;
+3. backend mypy: PASS, 99 plików źródłowych;
+4. backend tests: **347/347 PASS**;
+5. frontend typecheck: PASS;
+6. frontend tests: **40 plików, 619/619 PASS**;
+7. frontend build: PASS, wyłącznie zastane ostrzeżenie o chunku ponad 500 kB;
+8. Playwright/Chromium: **12/12 PASS**;
+9. root safety: **2/2 PASS**.
+
+Końcowy Playwright obejmuje rysowanie przy 1×, brak rysowania w trybie ręki,
+przełączenie zaznaczenia i nudge, pełny kontrakt `Space` z FE-010-FIX2/FIX3/FIX4,
+dziewięć zachowań FE-009, stabilność layoutu, trzy pomiary części B, findingi
+FIX-A/FIX-B oraz obciążeniowy panel. Reprodukcja i pomiary używają
+repozytoryjnego Playwrighta z prawdziwym headless Chromium i `page.mouse`, nie
+in-app Browser; nie stanowią dowodu systemowych zachowań okna takich jak
+`Alt+Tab`.
+
+Po bramce porty `8000`, `5173` i `5174` są wolne. Nie wykonano `push` ani
+`merge`.
