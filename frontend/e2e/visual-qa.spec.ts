@@ -771,6 +771,67 @@ test("Space nad kanwą nie przewija dokumentu przy naturalnym fokusie body", asy
   ).toHaveLength(0);
 });
 
+test("wciąż trzymany Space nie przewija dokumentu po zakończeniu panu poza kanwą", async ({
+  page,
+}) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/annotations/run-1");
+
+  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const canvas = page.locator(".df-region-overlay");
+  const zoomStage = page.locator("[data-overlay-zoom-stage]");
+  await expect(overlay).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  const canvasBounds = await canvas.boundingBox();
+  if (canvasBounds === null) {
+    throw new Error("FE-010-FIX4 canvas has no browser geometry");
+  }
+  const center = {
+    x: canvasBounds.x + canvasBounds.width / 2,
+    y: canvasBounds.y + canvasBounds.height / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+
+  const beforePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  await page.keyboard.down("Space");
+  await page.mouse.down();
+  // Drag out past the top-left corner and release the button there, so pointer
+  // capture ends and onPointerLeave clears the inside flag before Space is up.
+  await page.mouse.move(10, 10, { steps: 4 });
+  await page.mouse.up();
+  await page.mouse.move(2, 2);
+
+  const afterPan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  expect(afterPan).not.toBe(beforePan);
+
+  // The key is still physically held; the browser now emits auto-repeat
+  // keydowns with repeat=true. They must stay consumed until keyup.
+  await page.keyboard.down("Space");
+  await page.keyboard.down("Space");
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.keyboard.up("Space");
+  expect(
+    api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
+  ).toHaveLength(0);
+
+  // No pan this hold: a held, repeating Space outside the canvas still scrolls.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.keyboard.down("Space");
+  await page.keyboard.down("Space");
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await page.keyboard.up("Space");
+});
+
 test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
   const api = new ApiHarness({ phase: "accepted" });
   await api.install(page);
