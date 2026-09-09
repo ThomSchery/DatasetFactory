@@ -295,16 +295,16 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
     const stage = viewport.querySelector("[data-overlay-zoom-stage]");
     const transform = stage?.getAttribute("style");
 
-    fireEvent.pointerDown(overlay, {
+    fireEvent.pointerDown(ownShapeFill(second), {
       button: 0,
-      clientX: 900,
-      clientY: 500,
+      clientX: 410,
+      clientY: 130,
       pointerId: 41,
     });
     fireEvent.pointerMove(overlay, {
       button: 0,
-      clientX: 940,
-      clientY: 540,
+      clientX: 420,
+      clientY: 130,
       pointerId: 41,
     });
     expect(stage?.getAttribute("style")).toBe(transform);
