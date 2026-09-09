@@ -498,6 +498,65 @@ describe("the drawing surface", () => {
     expect(fireEvent.keyUp(document.body, { code: "Space", key: " " })).toBe(true);
   });
 
+  it("keeps consuming Space auto-repeat after a pan ends with the pointer outside the canvas", () => {
+    const onDraw = vi.fn();
+    renderOverlay({ onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.pointerEnter(surface, { clientX: 480, clientY: 270, pointerId: 11 });
+    expect(fireEvent.keyDown(document.body, { code: "Space", key: " " })).toBe(false);
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 11,
+    });
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 11,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+
+    // Natural release order: left button up first, past the canvas edge, then
+    // Space. Pointer capture releases and onPointerLeave clears the inside flag.
+    fireEvent.pointerUp(surface, {
+      button: 0,
+      clientX: 900,
+      clientY: 700,
+      pointerId: 11,
+    });
+    fireEvent.pointerLeave(surface);
+
+    // The still-held Space keeps auto-repeating; it must stay consumed so the
+    // document cannot scroll mid-hold.
+    expect(
+      fireEvent.keyDown(document.body, { code: "Space", key: " ", repeat: true }),
+    ).toBe(false);
+    expect(fireEvent.keyUp(document.body, { code: "Space", key: " " })).toBe(false);
+  });
+
+  it("leaves held Space auto-repeat native outside the canvas when no pan happened", () => {
+    renderOverlay();
+    expect(document.activeElement).toBe(document.body);
+
+    expect(fireEvent.keyDown(document.body, { code: "Space", key: " " })).toBe(true);
+    expect(
+      fireEvent.keyDown(document.body, { code: "Space", key: " ", repeat: true }),
+    ).toBe(true);
+    expect(fireEvent.keyUp(document.body, { code: "Space", key: " " })).toBe(true);
+  });
+
   it("keeps drawing in source pixels after zooming and panning the presentation", () => {
     const onDraw = vi.fn();
     renderOverlay({ onDraw });
