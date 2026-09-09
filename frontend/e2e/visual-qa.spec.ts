@@ -645,6 +645,77 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await expect(crosshair).toHaveCount(0);
 });
 
+test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({ page }) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/annotations/run-1");
+
+  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const canvas = page.locator(".df-region-overlay");
+  const zoomStage = page.locator("[data-overlay-zoom-stage]");
+  await expect(overlay).toBeVisible();
+  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+  const dialog = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const deleteButton = dialog.getByRole("button", { name: "Usuń" });
+  await expect(deleteButton).toBeVisible();
+
+  await overlay.scrollIntoViewIfNeeded();
+  const canvasBounds = await canvas.boundingBox();
+  if (canvasBounds === null) {
+    throw new Error("FE-010-FIX2 canvas has no browser geometry");
+  }
+  const center = {
+    x: canvasBounds.x + canvasBounds.width / 2,
+    y: canvasBounds.y + canvasBounds.height / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+
+  await page.mouse.move(8, 8);
+  await deleteButton.evaluate((element) => {
+    if (element instanceof HTMLElement) {
+      element.focus({ preventScroll: true });
+    }
+  });
+  await expect(deleteButton).toBeFocused();
+  await page.keyboard.down("Space");
+  await page.mouse.move(center.x, center.y);
+  const beforeSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 40, center.y + 28, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+
+  const afterSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
+  expect(afterSpacePan).not.toBe(beforeSpacePan);
+  await expect(dialog).toBeVisible();
+  await expect(overlay.getByRole("option")).toHaveCount(1);
+  const deletesAfterPan = api.requests.filter(
+    (request) => request.method === "DELETE" && request.pathname === "/annotations/ann-1",
+  );
+  expect(deletesAfterPan).toHaveLength(0);
+
+  const resetButton = page.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+  await page.mouse.move(center.x, center.y);
+  await resetButton.evaluate((element) => {
+    if (element instanceof HTMLElement) {
+      element.focus({ preventScroll: true });
+    }
+  });
+  await expect(resetButton).toBeFocused();
+  await page.keyboard.press("Space");
+
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  const deletesAfterNativeReset = api.requests.filter(
+    (request) => request.method === "DELETE" && request.pathname === "/annotations/ann-1",
+  );
+  expect(deletesAfterNativeReset).toHaveLength(0);
+});
+
 test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
   const api = new ApiHarness({ phase: "accepted" });
   await api.install(page);

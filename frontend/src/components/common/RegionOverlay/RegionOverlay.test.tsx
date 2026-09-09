@@ -377,7 +377,7 @@ describe("the drawing surface", () => {
     expect(onDraw).not.toHaveBeenCalled();
   });
 
-  it("lets Space start a canvas pan while a non-editable button owns focus", () => {
+  it("consumes Space on keyup after it starts a canvas pan from a focused button", () => {
     const onDraw = vi.fn();
     renderOverlay({ onDraw });
     const surface = surfaceElement();
@@ -392,8 +392,10 @@ describe("the drawing surface", () => {
 
     const resetButton = screen.getByRole("button", { name: "Dopasuj kanwę do widoku" });
     resetButton.focus();
+    const keyDownAllowed = fireEvent.keyDown(resetButton, { code: "Space", key: " " });
+    expect(keyDownAllowed).toBe(true);
+
     fireEvent.pointerEnter(surface, { clientX: 480, clientY: 270, pointerId: 8 });
-    fireEvent.keyDown(resetButton, { code: "Space", key: " " });
     fireEvent.pointerDown(surface, {
       button: 0,
       clientX: 480,
@@ -416,9 +418,33 @@ describe("the drawing surface", () => {
       clientY: 300,
       pointerId: 8,
     });
-    fireEvent.keyUp(resetButton, { code: "Space", key: " " });
+    // Browser key repeat must not erase the fact that this press already
+    // started a Space-pan before the one matching keyup is dispatched.
+    fireEvent.keyDown(resetButton, { code: "Space", key: " ", repeat: true });
+    const keyUpAllowed = fireEvent.keyUp(resetButton, { code: "Space", key: " " });
     expect(viewport).not.toHaveAttribute("data-panning");
     expect(onDraw).not.toHaveBeenCalled();
+    expect(keyUpAllowed).toBe(false);
+  });
+
+  it("leaves Space native on a focused button over the canvas when no pan happens", () => {
+    renderOverlay();
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    layOutViewport(surface, 960);
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+
+    const resetButton = screen.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+    resetButton.focus();
+    fireEvent.pointerEnter(surface, { clientX: 480, clientY: 270, pointerId: 9 });
+
+    expect(fireEvent.keyDown(resetButton, { code: "Space", key: " " })).toBe(true);
+    expect(fireEvent.keyUp(resetButton, { code: "Space", key: " " })).toBe(true);
   });
 
   it("keeps drawing in source pixels after zooming and panning the presentation", () => {

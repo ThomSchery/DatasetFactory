@@ -255,6 +255,57 @@ describe("FE-010-FIX1 — pan is a non-destructive canvas gesture", () => {
   });
 });
 
+describe("FE-010-FIX2 — Space-pan cannot activate the focused panel button", () => {
+  it("keeps Usuń inert after Space begins outside the canvas and is then used to pan", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const deleteButton = within(dialog).getByRole("button", { name: "Usuń" });
+    deleteButton.focus();
+    expect(deleteButton).toHaveFocus();
+
+    const overlay = overlaySurface();
+    const viewport = layOutOverlayViewport(overlay);
+    fireEvent.wheel(overlay, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+
+    await user.keyboard("{Space>}");
+    fireEvent.pointerEnter(overlay, { clientX: 480, clientY: 270, pointerId: 12 });
+    fireEvent.pointerDown(overlay, {
+      button: 0,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 12,
+    });
+    fireEvent.pointerMove(overlay, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 12,
+    });
+    fireEvent.pointerUp(overlay, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 12,
+    });
+    await user.keyboard("{/Space}");
+
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(dialog).toBeVisible();
+    expect(overlayShape()).toBeVisible();
+    expect(mutations(fetchSpy).filter((request) => request.method === "DELETE")).toHaveLength(0);
+  });
+});
+
 describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {
   it("saves the nudged value the fields display, not the stale annotation", async () => {
     const user = userEvent.setup();
