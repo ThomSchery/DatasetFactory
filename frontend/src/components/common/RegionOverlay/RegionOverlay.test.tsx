@@ -288,6 +288,129 @@ describe("the drawing surface", () => {
     });
   });
 
+  it("offers a visible hand mode that gives left drag to pan and returns it to drawing", async () => {
+    const user = userEvent.setup();
+    const onDraw = vi.fn();
+    renderOverlay({
+      initialSelectedId: "region-1",
+      initialShapes: [
+        { id: "region-1", label: "Region 1", x: 120, y: 90, width: 240, height: 180 },
+      ],
+      interactionMode: "draw",
+      onDraw,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const handButton = screen.getByRole("button", { name: "Przesuwaj kadr" });
+
+    expect(handButton).toBeVisible();
+    expect(handButton).toBeDisabled();
+    expect(handButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    expect(handButton).toBeEnabled();
+
+    await user.click(handButton);
+    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: /Region 1:/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    fireEvent.pointerMove(surface, { clientX: 480, clientY: 270, pointerId: 12 });
+    expect(surface.querySelector("[data-overlay-crosshair]")).not.toBeInTheDocument();
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 12,
+    });
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 12,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
+      transform: "translate(-80px, -37.5px) scale(1.25)",
+    });
+    expect(onDraw).not.toHaveBeenCalled();
+    fireEvent.pointerUp(surface, {
+      button: 0,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 12,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Zakończ przesuwanie" }));
+    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    dragAcross(surface, { xRatio: 0.6, yRatio: 0.6 }, { xRatio: 0.8, yRatio: 0.8 });
+    expect(onDraw).toHaveBeenCalledOnce();
+  });
+
+  it("clamps hand-mode pan to every image edge at 156 percent", async () => {
+    const user = userEvent.setup();
+    renderOverlay({ onDraw: vi.fn() });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+
+    for (let step = 0; step < 2; step += 1) {
+      fireEvent.wheel(surface, {
+        clientX: 480,
+        clientY: 270,
+        ctrlKey: true,
+        deltaY: -100,
+      });
+    }
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("156%");
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+
+    const panTo = (pointerId: number, dx: number, dy: number) => {
+      fireEvent.pointerDown(surface, {
+        button: 0,
+        clientX: 480,
+        clientY: 270,
+        pointerId,
+      });
+      fireEvent.pointerMove(surface, {
+        button: 0,
+        clientX: 480 + dx,
+        clientY: 270 + dy,
+        pointerId,
+      });
+      fireEvent.pointerUp(surface, {
+        button: 0,
+        clientX: 480 + dx,
+        clientY: 270 + dy,
+        pointerId,
+      });
+    };
+
+    panTo(20, 5000, 5000);
+    expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1.563)" });
+    panTo(21, -5000, 0);
+    expect(stage).toHaveStyle({ transform: "translate(-540.48px, 0px) scale(1.563)" });
+    panTo(22, 0, -5000);
+    expect(stage).toHaveStyle({ transform: "translate(-540.48px, -304.02px) scale(1.563)" });
+    panTo(23, 5000, 0);
+    expect(stage).toHaveStyle({ transform: "translate(0px, -304.02px) scale(1.563)" });
+  });
+
   it("leaves an ordinary wheel gesture to the page", () => {
     renderOverlay();
     const surface = surfaceElement();
