@@ -224,6 +224,7 @@ export function RegionOverlay({
   const suppressCapturedClickRef = useRef(false);
   const pointerInsideRef = useRef(false);
   const spacePressedRef = useRef(false);
+  const spaceUsedForPanRef = useRef(false);
   const panGestureRef = useRef<PanGesture | null>(null);
   const viewRef = useRef<ViewTransform>(FIT_VIEW);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -314,9 +315,11 @@ export function RegionOverlay({
       if ((event.code !== "Space" && event.key !== " ") || targetIsEditable(event.target)) {
         return;
       }
+      if (!spacePressedRef.current) {
+        spaceUsedForPanRef.current = false;
+      }
       spacePressedRef.current = true;
       if (pointerInsideRef.current) {
-        event.preventDefault();
         setSpacePressed(true);
       }
     };
@@ -324,8 +327,13 @@ export function RegionOverlay({
       if (event !== undefined && event.code !== "Space" && event.key !== " ") {
         return;
       }
+      const usedForPan = spaceUsedForPanRef.current;
       spacePressedRef.current = false;
+      spaceUsedForPanRef.current = false;
       setSpacePressed(false);
+      if (event !== undefined && usedForPan) {
+        event.preventDefault();
+      }
     };
     const handleBlur = () => releaseSpace();
     window.addEventListener("keydown", handleKeyDown);
@@ -408,10 +416,14 @@ export function RegionOverlay({
     // next physical pointerdown starts a new sequence and must not inherit its
     // deduplication marker.
     suppressCapturedClickRef.current = false;
-    const wantsPan = event.button === 1 || (event.button === 0 && spacePressedRef.current);
+    const wantsSpacePan = event.button === 0 && spacePressedRef.current;
+    const wantsPan = event.button === 1 || wantsSpacePan;
     if (wantsPan) {
       markOverlayPanPointerDown(event.nativeEvent);
       event.preventDefault();
+      if (wantsSpacePan) {
+        spaceUsedForPanRef.current = true;
+      }
       panGestureRef.current = {
         originClient: { x: event.clientX, y: event.clientY },
         originView: viewRef.current,
