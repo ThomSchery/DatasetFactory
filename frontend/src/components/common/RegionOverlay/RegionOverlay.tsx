@@ -350,6 +350,15 @@ export function RegionOverlay({
         spaceUsedForPanRef.current = false;
       }
       spacePressedRef.current = true;
+      // Once this physical Space has armed a pan, it owns every later repeat of
+      // the same hold. Auto-repeat keeps firing while the key is down, and the
+      // natural release order — left button up, then Space — can drop the
+      // pointer past the canvas edge before the key is up. Keep consuming those
+      // repeats through keyup/blur so the document cannot scroll mid-hold,
+      // regardless of where `pointerInsideRef` currently points.
+      if (event.repeat && spaceUsedForPanRef.current) {
+        event.preventDefault();
+      }
       if (pointerInsideRef.current) {
         if (targetIntent === "pan") {
           event.preventDefault();
