@@ -255,6 +255,109 @@ describe("FE-010-FIX1 — pan is a non-destructive canvas gesture", () => {
   });
 });
 
+describe("FE-011-FIX1 — pan state ends with its selection and view context", () => {
+  const secondAnnotation = annotationFixture({
+    category_id: "category-2",
+    id: "ann-2",
+    x: 400,
+  });
+
+  it("returns LMB to the keyboard-selected annotation context without a mutation", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({
+      frame: frameDetailFixture({ annotations: [annotationFixture(), secondAnnotation] }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user, 1);
+    const overlay = overlaySurface();
+    const viewport = layOutOverlayViewport(overlay);
+    for (let step = 0; step < 2; step += 1) {
+      fireEvent.wheel(overlay, {
+        clientX: 960,
+        clientY: 540,
+        ctrlKey: true,
+        deltaY: -100,
+      });
+    }
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+
+    const second = overlayShapeNamed(/^health, źródło OCR:/);
+    second.focus();
+    fireEvent.keyDown(second, { key: "Enter" });
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    const transform = stage?.getAttribute("style");
+
+    fireEvent.pointerDown(overlay, {
+      button: 0,
+      clientX: 900,
+      clientY: 500,
+      pointerId: 41,
+    });
+    fireEvent.pointerMove(overlay, {
+      button: 0,
+      clientX: 940,
+      clientY: 540,
+      pointerId: 41,
+    });
+    expect(stage?.getAttribute("style")).toBe(transform);
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(mutations(fetchSpy)).toHaveLength(0);
+    fireEvent.pointerCancel(overlay, { button: 0, pointerId: 41 });
+  });
+
+  it("preserves an unsaved nudge while reset invalidates a held hand pan", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user, 1);
+    const overlay = overlaySurface();
+    const viewport = layOutOverlayViewport(overlay);
+    for (let step = 0; step < 2; step += 1) {
+      fireEvent.wheel(overlay, {
+        clientX: 960,
+        clientY: 540,
+        ctrlKey: true,
+        deltaY: -100,
+      });
+    }
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    fireEvent.pointerDown(overlay, {
+      button: 0,
+      clientX: 960,
+      clientY: 540,
+      pointerId: 42,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
+    fireEvent.pointerMove(overlay, {
+      button: 0,
+      clientX: 1040,
+      clientY: 600,
+      pointerId: 42,
+    });
+    fireEvent.pointerUp(overlay, { button: 0, pointerId: 42 });
+
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 101, y 120"));
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(mutations(fetchSpy)).toHaveLength(0);
+  });
+});
+
 describe("FE-010-FIX2 — Space-pan cannot activate the focused panel button", () => {
   it("keeps Usuń inert after Space begins outside the canvas and is then used to pan", async () => {
     const user = userEvent.setup();

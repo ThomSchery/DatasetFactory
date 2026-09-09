@@ -411,6 +411,145 @@ describe("the drawing surface", () => {
     expect(stage).toHaveStyle({ transform: "translate(0px, -304.02px) scale(1.563)" });
   });
 
+  it("invalidates hand mode only when keyboard selection changes identity", async () => {
+    const user = userEvent.setup();
+    const onDraw = vi.fn();
+    renderOverlay({
+      initialSelectedId: "region-1",
+      initialShapes: [
+        { id: "region-1", label: "Region 1", x: 120, y: 90, width: 120, height: 90 },
+        { id: "region-2", label: "Region 2", x: 400, y: 90, width: 120, height: 90 },
+      ],
+      interactionMode: "draw",
+      onDraw,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+
+    const first = screen.getByRole("option", { name: /Region 1:/ });
+    first.focus();
+    fireEvent.keyDown(first, { key: "Enter" });
+    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    const second = screen.getByRole("option", { name: /Region 2:/ });
+    second.focus();
+    fireEvent.keyDown(second, { key: "Enter" });
+    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(second).toHaveAttribute("aria-selected", "true");
+
+    const transform = stage?.getAttribute("style");
+    dragAcross(surface, { xRatio: 0.6, yRatio: 0.6 }, { xRatio: 0.8, yRatio: 0.8 });
+    expect(stage?.getAttribute("style")).toBe(transform);
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(onDraw).toHaveBeenCalledOnce();
+  });
+
+  it("invalidates hand mode when another shape is selected by canvas click", async () => {
+    const user = userEvent.setup();
+    const onDraw = vi.fn();
+    renderOverlay({
+      initialSelectedId: "region-1",
+      initialShapes: [
+        { id: "region-1", label: "Region 1", x: 120, y: 90, width: 120, height: 90 },
+        { id: "region-2", label: "Region 2", x: 400, y: 90, width: 120, height: 90 },
+      ],
+      interactionMode: "draw",
+      onDraw,
+    });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+
+    const second = screen.getByRole("option", { name: /Region 2:/ });
+    const fill = second.querySelector(".df-region-overlay__shape-fill");
+    expect(fill).not.toBeNull();
+    fireEvent.click(fill as Element, { clientX: 230, clientY: 65 });
+
+    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(second).toHaveAttribute("aria-selected", "true");
+    const transform = stage?.getAttribute("style");
+    dragAcross(surface, { xRatio: 0.6, yRatio: 0.6 }, { xRatio: 0.8, yRatio: 0.8 });
+    expect(stage?.getAttribute("style")).toBe(transform);
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(onDraw).toHaveBeenCalledOnce();
+  });
+
+  it.each(["pointerup", "pointercancel"])(
+    "keeps 1x after reset invalidates a held pan followed by %s",
+    async (release) => {
+      const user = userEvent.setup();
+      const onDraw = vi.fn();
+      renderOverlay({ interactionMode: "draw", onDraw });
+      const surface = surfaceElement();
+      layOutSurface(surface, 960);
+      const viewport = layOutViewport(surface, 960);
+      const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+      for (let step = 0; step < 2; step += 1) {
+        fireEvent.wheel(surface, {
+          clientX: 480,
+          clientY: 270,
+          ctrlKey: true,
+          deltaY: -100,
+        });
+      }
+      await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+      fireEvent.pointerDown(surface, {
+        button: 0,
+        clientX: 480,
+        clientY: 270,
+        pointerId: 31,
+      });
+      expect(viewport).toHaveAttribute("data-panning", "true");
+
+      fireEvent.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
+      expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+      expect(viewport).not.toHaveAttribute("data-panning");
+      expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1)" });
+
+      fireEvent.pointerMove(surface, {
+        button: 0,
+        clientX: 560,
+        clientY: 320,
+        pointerId: 31,
+      });
+      if (release === "pointerup") {
+        fireEvent.pointerUp(surface, { button: 0, pointerId: 31 });
+      } else {
+        fireEvent.pointerCancel(surface, { button: 0, pointerId: 31 });
+      }
+
+      expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+      expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1)" });
+      expect(onDraw).not.toHaveBeenCalled();
+    },
+  );
+
   it("leaves an ordinary wheel gesture to the page", () => {
     renderOverlay();
     const surface = surfaceElement();
