@@ -188,3 +188,36 @@ test("FE-011-FIX1 reset 1x unieważnia nadal trzymany pan", async ({ page }) => 
     api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
   ).toEqual([]);
 });
+
+test("FE-011-FIX1 wysoki panel nadal mieści się w viewportcie", async ({ page }) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/annotations/run-1");
+  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  await expect(panel).toBeVisible();
+
+  const metrics = await panel.evaluate((element) => {
+    const stressContent = document.createElement("div");
+    stressContent.style.height = "1200px";
+    stressContent.style.flex = "0 0 1200px";
+    stressContent.setAttribute("data-fe011-stress-content", "true");
+    element.append(stressContent);
+    const bounds = element.getBoundingClientRect();
+    return {
+      bottom: bounds.bottom,
+      clientHeight: element.clientHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight,
+      top: bounds.top,
+      viewportHeight: window.innerHeight,
+    };
+  });
+
+  expect(metrics.bottom).toBeLessThanOrEqual(metrics.viewportHeight + 0.5);
+  expect(metrics.overflowY).toBe("auto");
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  expect(api.requests.filter((request) => request.method !== "GET")).toEqual([]);
+  console.log(`FE011_STRESS_PANEL ${JSON.stringify(metrics)}`);
+});
