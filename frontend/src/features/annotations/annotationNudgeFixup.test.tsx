@@ -277,7 +277,7 @@ describe("FE-010-FIX2 — Space-pan cannot activate the focused panel button", (
       deltaY: -100,
     });
 
-    await user.keyboard("{Space>}");
+    await user.keyboard("[Space>]");
     fireEvent.pointerEnter(overlay, { clientX: 480, clientY: 270, pointerId: 12 });
     fireEvent.pointerDown(overlay, {
       button: 0,
@@ -297,7 +297,7 @@ describe("FE-010-FIX2 — Space-pan cannot activate the focused panel button", (
       clientY: 300,
       pointerId: 12,
     });
-    await user.keyboard("{/Space}");
+    await user.keyboard("[/Space]");
 
     expect(viewport).not.toHaveAttribute("data-panning");
     expect(dialog).toBeVisible();
