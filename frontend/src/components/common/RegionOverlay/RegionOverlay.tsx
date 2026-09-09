@@ -113,6 +113,36 @@ interface PanGesture {
 const FIT_VIEW: ViewTransform = { scale: 1, x: 0, y: 0 };
 const MAX_ZOOM = 8;
 const ZOOM_STEP = 1.25;
+const SPACE_INTERACTION_OWNER_SELECTOR = [
+  "button",
+  "input",
+  "select",
+  "summary",
+  "textarea",
+  '[contenteditable]:not([contenteditable="false"])',
+  "[data-shortcut-scope]",
+].join(", ");
+
+type SpaceTargetIntent = "activation" | "editing" | "pan";
+
+/** Resolves who owns Space before the global canvas shortcut can act on it. */
+function spaceTargetIntent(event: globalThis.KeyboardEvent): SpaceTargetIntent {
+  const target = event.target;
+  const owner =
+    target instanceof Element ? target.closest(SPACE_INTERACTION_OWNER_SELECTOR) : null;
+  if (
+    owner instanceof HTMLInputElement ||
+    owner instanceof HTMLSelectElement ||
+    owner instanceof HTMLTextAreaElement ||
+    (owner instanceof HTMLElement && owner.isContentEditable)
+  ) {
+    return "editing";
+  }
+  if (owner !== null || event.defaultPrevented) {
+    return "activation";
+  }
+  return "pan";
+}
 
 function rounded(value: number): number {
   return Math.round(value * 1000) / 1000;
@@ -308,11 +338,12 @@ export function RegionOverlay({
   }, [source]);
 
   useEffect(() => {
-    const targetIsEditable = (target: EventTarget | null) =>
-      target instanceof HTMLElement &&
-      (target.isContentEditable || target.matches("input, textarea, select"));
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if ((event.code !== "Space" && event.key !== " ") || targetIsEditable(event.target)) {
+      if (event.code !== "Space" && event.key !== " ") {
+        return;
+      }
+      const targetIntent = spaceTargetIntent(event);
+      if (targetIntent === "editing") {
         return;
       }
       if (!spacePressedRef.current) {
@@ -320,6 +351,9 @@ export function RegionOverlay({
       }
       spacePressedRef.current = true;
       if (pointerInsideRef.current) {
+        if (targetIntent === "pan") {
+          event.preventDefault();
+        }
         setSpacePressed(true);
       }
     };
