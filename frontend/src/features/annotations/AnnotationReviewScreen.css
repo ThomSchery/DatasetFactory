@@ -385,10 +385,6 @@
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
 }
 
-.df-review-workspace__preview .df-region-overlay__image {
-  max-height: calc(100dvh - (var(--size-xxl) * 7));
-}
-
 .df-review-workspace__preview .df-annotation-popover {
   grid-template-columns: minmax(0, 1fr) auto;
 }
