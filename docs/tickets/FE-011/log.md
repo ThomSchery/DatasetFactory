@@ -183,3 +183,40 @@ jeżeli jego naturalna wysokość przekracza aktualny budżet.
   `docs/tickets/FE-011/screenshots/annotations-pan-1440.png`; obejrzany w pełnej
   rozdzielczości. Odświeżony również deterministyczny baseline
   `docs/tickets/FE-001/screenshots/annotations-1440.png`.
+
+## Wynik końcowy
+
+Pełna, pojedyncza i nieprzerwana bramka
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`:
+**PASS 9/9, zero SKIP**.
+
+- backend format: PASS, 262 pliki już sformatowane;
+- backend lint: PASS;
+- backend mypy: PASS, 99 plików źródłowych;
+- backend testy: **347/347 PASS**;
+- frontend typy: PASS;
+- frontend testy: **613/613 PASS** w 40 plikach;
+- frontend build: PASS;
+- repozytoryjny Playwright/Chromium: **10/10 PASS**;
+- E2E root safety: **2/2 PASS**.
+
+Dziewięć nienaruszalnych zachowań FE-009 przechodzi w pełnym suite:
+
+1. outside-dismiss współdziała z tym samym gestem rysowania;
+2. pointerdown na własnym bboxie nie zamyka panelu;
+3. `Escape` nie wprowadza bocznej ścieżki anulowania;
+4. pusty `Enter` nie zapisuje ani nie tworzy;
+5. remount formularza następuje tylko po zmianie anotacji;
+6. draft pozostaje po błędzie zapisu;
+7. strzałki wykonują zero PATCH, a `Enter` dokładnie jeden;
+8. baseline gestu jest izolowany;
+9. panel pozostaje zadokowany pod obrazem.
+
+Kontrakt `Space` z FE-010-FIX2/FIX3/FIX4 przechodzi osobnymi scenariuszami
+Chromium: bez realnego panu przycisk aktywuje się natywnie; po realnym panie nie
+aktywuje się; nad kanwą dokument nie jest przewijany; auto-repeat po zakończonym
+panie również nie przewija. Środkowy przycisk i `Space`+LMB pozostają
+niezmienione, a nowy tryb ręki jest dodatkową, widoczną ścieżką LMB.
+
+Po bramce porty 8000, 5173 i 5174 nie nasłuchują. Gałąź nie była pushowana ani
+mergowana.
