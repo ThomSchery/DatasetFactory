@@ -109,3 +109,77 @@ naprawa przepływu i layoutu, nie redesign.
 Visual QA: screenshot ograniczony do viewportu 1440×1000, z otwartym panelem,
 zoomem 156% i widocznym przyciskiem trybu ręki. Wysokość obszaru nad kanwą i
 samego kontenera kanwy będzie porównywana przed/po pointerze oraz geście.
+
+## Implementacja
+
+### Część A — jawny tryb ręki
+
+- HUD `RegionOverlay` ma stale widoczny przycisk `Przesuwaj kadr`. Przy 1× jest
+  nieaktywny; po zoomie można go włączyć bez skrótu klawiaturowego.
+- Aktywny stan zmienia treść na `Zakończ przesuwanie`, ustawia
+  `aria-pressed="true"`, używa istniejącego wariantu primary i kursora
+  `grab`/`grabbing`. Celownik rysowania jest w tym stanie ukryty.
+- LMB w trybie ręki przechodzi przez tę samą ścieżkę panu i clampu co istniejący
+  środkowy przycisk oraz `Space`+LMB. Nie tworzy draftu. Wyłączenie ręki
+  przywraca niezmieniony gest rysowania.
+- Przełączenie jest wewnątrz chronionego HUD, więc nie uruchamia
+  outside-dismiss. Zaznaczenie, otwarty panel oraz niezapisany nudge pozostają.
+  Reset `1×` kończy tryb ręki i centruje obraz zgodnie z dotychczasowym
+  kontraktem.
+
+### Część B — szerokość obrazu
+
+- Usunięto wyłącznie feature-level
+  `max-height: calc(100dvh - (var(--size-xxl) * 7))` z obrazu w podglądzie.
+  Naturalny `max-width: 100%` komponentu pozwala teraz wykorzystać szerokość do
+  rozdzielczości źródła.
+- Dokowany panel pozostaje następnym wierszem, z dynamicznym budżetem
+  `innerHeight - panel.top` oraz `overflow-y: auto` z FIX1. HUD nadal jest
+  potomkiem kanwy, a panel jej nie zakrywa.
+
+## Pomiary po zmianie
+
+Repozytoryjny Playwright/Chromium, skala 1×, panel otwarty przez rzeczywisty
+klik `page.mouse`/Playwright na przycisku istniejącej anotacji:
+
+| Viewport | Obraz przed | Obraz po | Zmiana szerokości | `panel.bottom` po | `innerHeight` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1280×1000 | 829.266×551.984 | 883.984×588.406 | +6.6% | 999.203 | 1000 |
+| 1440×1000 | 829.266×551.984 | 1043.984×694.906 | +25.9% | 667.703 | 1000 |
+| 1920×1080 | 949.453×631.984 | 1280×852 | +34.8% | 747.797 | 1080 |
+
+W każdym viewportcie panel zaczyna się pod obrazem i spełnia
+`panel.bottom <= innerHeight`. Dla 1440 i 1920 kliknięcie kontrolki anotacji
+naturalnie przewija dokument do celu przed pomiarem — tak samo działa ścieżka
+operatora i istniejąca sonda FIX1. Sam panel wykorzystuje własne przewijanie,
+jeżeli jego naturalna wysokość przekracza aktualny budżet.
+
+## Próby, błędy i korekty sond
+
+1. Dwie nowe sondy komponentu uruchomione przed implementacją dały oczekiwane
+   **2 FAIL**, ponieważ przycisku ręki jeszcze nie było; pozostałe 42 testy
+   `RegionOverlay` przechodziły.
+2. Pierwsza wersja sondy trzech viewportów wymuszała `scrollY=0` już po
+   otwarciu panelu. Przy 1920×1080 cofało to naturalny scroll wywołany kliknięciem
+   do elementu i sztucznie umieszczało panel poniżej zgięcia. Sondę poprawiono:
+   pozycja dokumentu jest zerowana przed zaufanym kliknięciem, a później test
+   mierzy to, co rzeczywiście widzi operator.
+3. Próba uruchomienia Playwrighta bez repozytoryjnego
+   `PLAYWRIGHT_BROWSERS_PATH` trafiła w pusty domyślny cache użytkownika. Ponowne
+   uruchomienie z tą samą ścieżką `D:\DatasetFactory\cache\ms-playwright`, której
+   używają `bootstrap.ps1` i `check.ps1`, korzystało z zainstalowanego Chromium.
+
+## Preflight przed pełną bramką
+
+- Vitest: **40 plików, 613/613 PASS**.
+- Build (`tsc --noEmit` + Vite): PASS; pozostało zastane ostrzeżenie o głównym
+  chunku większym niż 500 kB.
+- Playwright/Chromium: **8/8 PASS** dla pełnego `visual-qa.spec.ts` oraz nowej
+  ścieżki FE-011, w tym wszystkie istniejące sondy `Space` FIX2/FIX3/FIX4.
+- Impeccable detector, zakres `layout`, zmienione pliki UI: `[]`, zero
+  findingów.
+- Screenshot 1440×1000 ograniczony do viewportu, z panelem i aktywnym
+  sterowaniem ręką:
+  `docs/tickets/FE-011/screenshots/annotations-pan-1440.png`; obejrzany w pełnej
+  rozdzielczości. Odświeżony również deterministyczny baseline
+  `docs/tickets/FE-001/screenshots/annotations-1440.png`.
