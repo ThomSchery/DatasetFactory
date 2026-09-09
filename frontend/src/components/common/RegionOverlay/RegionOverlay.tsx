@@ -260,6 +260,7 @@ export function RegionOverlay({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [manipulation, setManipulation] = useState<Manipulation | null>(null);
   const [cursorPoint, setCursorPoint] = useState<SourcePoint | null>(null);
+  const [panMode, setPanMode] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
   const [panning, setPanning] = useState(false);
   const [view, setView] = useState<ViewTransform>(FIT_VIEW);
@@ -276,6 +277,7 @@ export function RegionOverlay({
   }
 
   function resetView(): void {
+    setPanMode(false);
     updateView(FIT_VIEW);
   }
 
@@ -460,7 +462,8 @@ export function RegionOverlay({
     // deduplication marker.
     suppressCapturedClickRef.current = false;
     const wantsSpacePan = event.button === 0 && spacePressedRef.current;
-    const wantsPan = event.button === 1 || wantsSpacePan;
+    const wantsHandPan = event.button === 0 && panMode && viewRef.current.scale > 1;
+    const wantsPan = event.button === 1 || wantsSpacePan || wantsHandPan;
     if (wantsPan) {
       markOverlayPanPointerDown(event.nativeEvent);
       event.preventDefault();
@@ -678,7 +681,7 @@ export function RegionOverlay({
   const surfaceClasses = [
     "df-region-overlay__surface",
     canDraw ? "df-region-overlay__surface--drawable" : null,
-    spacePressed ? "df-region-overlay__surface--pan-ready" : null,
+    spacePressed || panMode ? "df-region-overlay__surface--pan-ready" : null,
     panning ? "df-region-overlay__surface--panning" : null,
   ]
     .filter(Boolean)
@@ -689,6 +692,7 @@ export function RegionOverlay({
       className="df-region-overlay"
       data-disabled={disabled || undefined}
       data-interaction-mode={interactionMode}
+      data-pan-mode={panMode || undefined}
       data-panning={panning || undefined}
       data-zoomed={view.scale > 1 || undefined}
       ref={viewportRef}
@@ -791,7 +795,7 @@ export function RegionOverlay({
               zoom={view.scale}
             />
           ))}
-          {!canGuide || cursorPoint === null ? null : (
+          {!canGuide || panMode || cursorPoint === null ? null : (
             <g
               aria-hidden="true"
               className="df-region-overlay__crosshair"
@@ -856,6 +860,17 @@ export function RegionOverlay({
           <output aria-label="Powiększenie kanwy" className="df-region-overlay__zoom-value">
             {String(Math.round(view.scale * 100))}%
           </output>
+          <Button
+            aria-pressed={panMode}
+            disabled={view.scale === 1}
+            onClick={() => {
+              setPanMode((current) => !current);
+            }}
+            size="sm"
+            variant={panMode ? "primary" : "muted"}
+          >
+            {panMode ? "Zakończ przesuwanie" : "Przesuwaj kadr"}
+          </Button>
           <Button
             aria-label="Dopasuj kanwę do widoku"
             disabled={view.scale === 1}

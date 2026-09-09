@@ -248,6 +248,18 @@
   background: var(--color-background-primary-default);
 }
 
+.df-region-overlay__zoom-controls .df-button[aria-pressed="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable);
+  color: var(--color-text-on-brand);
+}
+
+.df-region-overlay__zoom-controls .df-button[aria-pressed="true"]:hover,
+.df-region-overlay__zoom-controls .df-button[aria-pressed="true"]:active {
+  border-color: var(--color-fill-brand-impeccable-hover);
+  background: var(--color-fill-brand-impeccable-hover);
+}
+
 .df-region-overlay__label {
   --df-overlay-label-top: 0%;
   --df-overlay-label-left: 0%;
