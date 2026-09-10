@@ -130,3 +130,43 @@ Dowód przeglądarkowy używa repozytoryjnego Playwrighta z prawdziwym headless
 Chromium i `page.mouse`, nie in-app Browser. Sonda `blur` sprawdza dokładną
 ścieżkę eventu aplikacji; nie jest dowodem konkretnej kolejności systemowego
 `Alt+Tab`.
+
+## Mapa sprawdzonych granic
+
+Poniższa tabela opisuje dokładnie wykorzystany dowód. Nie jest deklaracją, że
+wylicza wszystkie możliwe stany przyszłego automatu gestów.
+
+| Granica | Dowód w tej bazie |
+| --- | --- |
+| zmiana klatki | wynik re-review: keyed remount `FrameEditor` i reset źródła; pełny aktualny zestaw E2E przechodzi |
+| zamknięcie panelu | wynik re-review: `selectedId → null`; bieżące regresje selekcji przechodzą |
+| usunięcie wybranej anotacji | wynik re-review: sukces mutacji ustawia `selectedId → null`; pełny zestaw przechodzi |
+| remount overlaya | wynik re-review: lokalne state/ref są usuwane razem z DOM; pełny zestaw przechodzi |
+| zmiana `selectedId` / re-selekcja tego samego ID | regresje FIX1 komponentu i ekranu: A→B kończy rękę, A→A ją zachowuje |
+| wejście w draft i jego porzucenie | wynik re-review oraz dziewięć regresji FE-009 w pełnej bramce |
+| reset `1×` | regresje FIX1 komponentu `pointerup`/`pointercancel` i Playwright z nadal trzymanym LMB |
+| normalny `pointerup` | test komponentu emituje synchroniczny `lostpointercapture`, brak wyjątku i dokładnie jedno zwolnienie capture |
+| `pointercancel` | regresje FIX1 przechodzą przez wspólny `finishPanGesture()` |
+| prawdziwy `lostpointercapture` | test komponentu oraz Chromium: potwierdzone capture, natywne `releasePointerCapture`, następny prawdziwy ruch bez zmiany transformu |
+| `window.blur` | test komponentu i Playwright przez dokładny zarejestrowany event path; gest i ręka kończą się, transform stabilny |
+| brak przycisku inicjującego w `buttons` | test komponentu osobno dla pasa bezpieczeństwa; gest kończy się bez zmiany transformu |
+| `Space` | pełne regresje FIX2/FIX3/FIX4: natywna aktywacja bez panu, konsumpcja po panu, brak scrollu nad kanwą i podczas auto-repeat po panie |
+
+## Końcowa pełna bramka
+
+Jedna nieprzerwana bramka `scripts/check.ps1` po wszystkich zmianach zakończyła
+się **PASS 9/9, 0 SKIP**:
+
+1. backend format: PASS, 264 pliki;
+2. backend lint: PASS;
+3. backend mypy: PASS, 99 plików źródłowych;
+4. backend tests: **347/347 PASS**;
+5. frontend typecheck: PASS;
+6. frontend tests: **40 plików, 623/623 PASS**;
+7. frontend build: PASS, wyłącznie zastane ostrzeżenie o chunku ponad 500 kB;
+8. Playwright/Chromium: **13/13 PASS**;
+9. root safety: **2/2 PASS**.
+
+W tym samym przebiegu trzy wymiary obrazu i stress panelu pozostały bez zmian,
+kontrakt `Space` FIX2/FIX3/FIX4 oraz dziewięć zachowań FE-009 przeszły. Nie
+wykonano `push` ani `merge`.
