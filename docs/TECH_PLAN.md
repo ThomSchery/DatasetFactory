@@ -110,6 +110,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /profiles/reference-preview` | `{reference_image_path}` | `201 {asset_id, width, height}` | `400 reference_path_not_absolute`, `404 source_missing`, `502 reference_asset_copy_failed` |
 | `POST /profiles/reference-frame` | `{video_id,timestamp_ms}` | `201 {asset_id,width,height}` | `400/404/409/502/503/504` |
 | `POST /profiles` | `{name, reference_image_path xor reference_asset_id, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing/asset_not_found`, `409 profile_name_exists` |
+| `POST /profiles/{profile_id}/categories` | `{name,kind:character\|game}` | `201 Category` | `400 validation_error`, `404 profile_not_found`, `409 category_name_exists`, `500 category_persistence_failed` |
 | `GET /profiles` | — | lista podsumowań profili z licznikami i `active` | `500` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
 | `POST /profiles/{profile_id}/activate` | — | wybrany `GameProfile` | `404 profile_not_found`, `409 active_run` |
@@ -224,6 +225,14 @@ po `run.profile_id`; `/profiles/current` pozostaje skrótem dla bieżącego prof
 używanym przez pozostałe przepływy. Statyczna trasa `/profiles/current` musi być
 rozwiązywana przed dynamiczną `/{profile_id}`. Brak rekordu zwraca stabilne
 `404 profile_not_found` i nigdy nie powoduje podstawienia bieżącego profilu.
+
+`POST /profiles/{profile_id}/categories` waliduje pojedynczą kategorię tym samym
+silnikiem definicji co tworzenie profilu. Nazwy są unikalne po `strip().casefold()`.
+Repozytorium rozpoczyna `BEGIN IMMEDIATE` przed odczytem i w tej samej transakcji
+nadaje `ordinal = coalesce(max(ordinal), -1) + 1`, a następnie wstawia rekord.
+Blokada zapisu serializuje konkurujące żądania przed wyborem numeru, dlatego nie
+mogą wybrać tego samego `ordinal`; `max + 1` pozostaje poprawne także po usunięciu
+ostatniej lub środkowej kategorii.
 
 Klatka z decyzją review jest zamrożona: `accepted` i `rejected` odpowiadają
 `409 review_locked` na `POST /frames/{id}/annotations`, `PATCH` i `DELETE`.

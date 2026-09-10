@@ -136,3 +136,14 @@ nowy komponent wspólny.
   właściwe moduły wytycznych UI/UX. Bootstrap zakończony kodem 0.
 - 2026-09-10: `rg` nie jest dostępny w środowisku; wyszukiwanie kontynuowane
   przez `Select-String`/`Get-ChildItem`, bez wpływu na zakres ani pliki.
+- 2026-09-10: Visual QA wykonane repozytoryjnym Playwrightem
+  (`frontend/e2e/fe013-visual-qa.spec.ts`, 1440×900), bo in-app Browser był
+  niedostępny. Zrzut `screenshots/create-class-action-1440.png` obejrzany w pełnej
+  rozdzielczości: filtr z nazwą spoza profilu, komunikat „Brak takiej klasy
+  w profilu. Utwórz ją i przypisz poniżej.” oraz osobny przycisk
+  „Utwórz i przypisz klasę „Health””, wyraźnie oddzielony od „Zapisz Enter”.
+  Playwright nie jest dowodem na zachowania okna systemowego.
+- 2026-09-10: pełna bramka `scripts/check.ps1` — 9/9 PASS, bez SKIP:
+  backend format, backend lint, backend typy (99 plików), backend testy
+  (355 passed), frontend typy, frontend testy (41 plików / 639 testów),
+  frontend build, E2E (15 passed), E2E root safety.
