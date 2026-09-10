@@ -147,7 +147,7 @@ describe("AnnotationPopover", () => {
     await user.type(field, "health and armour{Enter}");
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Brak takiej klasy w profilu. Wybierz istniejącą klasę albo porzuć box.",
+      "Brak takiej klasy w profilu. Utwórz ją i przypisz albo porzuć box.",
     );
     expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
