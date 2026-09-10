@@ -58,6 +58,10 @@ class ProfileDefinition:
 class DatasetDefinitionEngine:
     """Validate and normalize the semantic definition of one game profile."""
 
+    def validate_category(self, category: CategoryDefinition) -> CategoryDefinition:
+        """Validate one category with the same rules used by profile creation."""
+        return self._validate_category(category, index=None)
+
     def validate_profile(self, profile: ProfileDefinition) -> ProfileDefinition:
         name = profile.name.strip()
         if not name:
@@ -138,7 +142,7 @@ class DatasetDefinitionEngine:
         return RegionDefinition(name=name, bbox=bbox)
 
     @staticmethod
-    def _validate_category(category: CategoryDefinition, index: int) -> CategoryDefinition:
+    def _validate_category(category: CategoryDefinition, index: int | None) -> CategoryDefinition:
         name = category.name.strip()
         if not name or len(name) > 200:
             raise DefinitionValidationError(

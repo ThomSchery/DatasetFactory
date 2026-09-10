@@ -24,6 +24,8 @@ from backend.app.access.store.repositories.materials import (
 from backend.app.access.store.repositories.profiles import (
     AssetPublication,
     CategoryDraft,
+    CategoryNameExistsError,
+    NewCategoryDraft,
     ProfileAggregateDraft,
     ProfileNameExistsError,
     ProfileNotFoundError,
@@ -361,6 +363,31 @@ class ProfileUseCases:
             return self._profiles.get(profile_id)
         except ProfileNotFoundError as exc:
             raise ProfileUseCaseError("profile_not_found") from exc
+
+    def add_category(self, *, profile_id: str, category: CategoryDefinition) -> CategoryDraft:
+        try:
+            definition = self._engine.validate_category(category)
+        except DefinitionValidationError as exc:
+            details: dict[str, Any] = {"field": exc.field}
+            if exc.index is not None:
+                details["index"] = exc.index
+            raise ProfileUseCaseError(exc.code, details=details) from exc
+
+        try:
+            return self._profiles.add_category(
+                profile_id,
+                NewCategoryDraft(
+                    id=str(uuid4()),
+                    name=definition.name,
+                    kind=definition.kind,
+                ),
+            )
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
+        except CategoryNameExistsError as exc:
+            raise ProfileUseCaseError("category_name_exists") from exc
+        except ProfilePersistenceError as exc:
+            raise ProfileUseCaseError("category_persistence_failed") from exc
 
     def get_reference_asset(self, asset_id: str) -> AssetRecord:
         try:

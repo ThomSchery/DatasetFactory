@@ -27,6 +27,10 @@ class ProfilePersistenceError(RuntimeError):
     pass
 
 
+class CategoryNameExistsError(RuntimeError):
+    pass
+
+
 class ProfileNotFoundError(LookupError):
     pass
 
@@ -62,6 +66,13 @@ class CategoryDraft:
     name: str
     kind: str
     ordinal: int
+
+
+@dataclass(frozen=True)
+class NewCategoryDraft:
+    id: str
+    name: str
+    kind: str
 
 
 @dataclass(frozen=True)
@@ -281,6 +292,46 @@ class ProfileRepository:
             if profile is None:
                 raise ProfileNotFoundError
             return self._record(session, profile)
+
+    def add_category(self, profile_id: str, draft: NewCategoryDraft) -> CategoryDraft:
+        """Append one category while holding SQLite's writer reservation."""
+        try:
+            with self._database.session() as session:
+                # The reservation must precede both reads. Two callers cannot
+                # observe the same maximum ordinal or pass the duplicate check
+                # concurrently and then race at INSERT time.
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                if session.get(GameProfile, profile_id) is None:
+                    raise ProfileNotFoundError
+
+                normalized_name = draft.name.casefold()
+                existing_names = session.scalars(
+                    select(Category.name).where(Category.profile_id == profile_id)
+                )
+                if any(name.strip().casefold() == normalized_name for name in existing_names):
+                    raise CategoryNameExistsError
+
+                current_max = session.scalar(
+                    select(func.max(Category.ordinal)).where(Category.profile_id == profile_id)
+                )
+                ordinal = (current_max if current_max is not None else -1) + 1
+                session.add(
+                    Category(
+                        id=draft.id,
+                        profile_id=profile_id,
+                        name=draft.name,
+                        kind=draft.kind,
+                        ordinal=ordinal,
+                    )
+                )
+                session.flush()
+                return CategoryDraft(draft.id, draft.name, draft.kind, ordinal)
+        except (CategoryNameExistsError, ProfileNotFoundError):
+            raise
+        except IntegrityError as exc:
+            if "UNIQUE constraint failed: categories.profile_id, categories.name" in str(exc.orig):
+                raise CategoryNameExistsError from exc
+            raise ProfilePersistenceError from exc
 
     @staticmethod
     def _record(session: Session, profile: GameProfile) -> ProfileRecord:

@@ -153,6 +153,24 @@ def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse
     return JSONResponse(status_code=status_code, content=envelope.model_dump())
 
 
+def _category_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
+    if error.code == "profile_not_found":
+        status_code = 404
+    elif error.code == "category_name_exists":
+        status_code = 409
+    elif error.code == "category_persistence_failed":
+        status_code = 500
+    else:
+        status_code = 400
+    envelope = error_envelope(
+        request,
+        code=error.code,
+        message="The category could not be created.",
+        details=error.details,
+    )
+    return JSONResponse(status_code=status_code, content=envelope.model_dump())
+
+
 def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRouter:
     router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
 
@@ -285,6 +303,34 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
         except ProfileUseCaseError as error:
             return _profile_error(request, error)
         return _response(record)
+
+    @router.post(
+        "/{profile_id}/categories",
+        response_model=CategoryResponse,
+        status_code=201,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            500: {"model": ErrorEnvelope},
+        },
+    )
+    def create_category(
+        profile_id: str,
+        payload: CategoryRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> CategoryResponse | JSONResponse:
+        # Authorization policy: local-public. Validation and ordering stay in
+        # the domain/use-case and repository layers respectively.
+        try:
+            category = use_cases.add_category(
+                profile_id=profile_id,
+                category=CategoryDefinition(name=payload.name, kind=payload.kind),
+            )
+        except ProfileUseCaseError as error:
+            return _category_error(request, error)
+        return CategoryResponse(id=category.id, name=category.name, kind=category.kind)
 
     @router.get(
         "/{profile_id}",
