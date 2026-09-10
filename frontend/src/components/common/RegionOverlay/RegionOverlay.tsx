@@ -106,6 +106,7 @@ interface ViewTransform {
 }
 
 interface PanGesture {
+  buttonMask: number;
   originClient: SourcePoint;
   originView: ViewTransform;
   pointerId: number;
@@ -284,12 +285,15 @@ export function RegionOverlay({
       setPanning(false);
       return false;
     }
-    if (surfaceRef.current !== null) {
-      capturePointer(surfaceRef.current, gesture.pointerId, false);
-    }
+    // Relinquish ownership before asking the browser to release capture.
+    // `releasePointerCapture` may synchronously emit `lostpointercapture`; that
+    // reentrant handler must observe an already-finished gesture.
     panGestureRef.current = null;
     setPanning(false);
     suppressCapturedClickRef.current = suppressClick;
+    if (surfaceRef.current !== null) {
+      capturePointer(surfaceRef.current, gesture.pointerId, false);
+    }
     return true;
   }
 
@@ -410,7 +414,10 @@ export function RegionOverlay({
         event.preventDefault();
       }
     };
-    const handleBlur = () => releaseSpace();
+    const handleBlur = () => {
+      releaseSpace();
+      invalidatePanInteraction();
+    };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", releaseSpace);
     window.addEventListener("blur", handleBlur);
@@ -501,6 +508,7 @@ export function RegionOverlay({
         spaceUsedForPanRef.current = true;
       }
       panGestureRef.current = {
+        buttonMask: event.button === 1 ? 4 : 1,
         originClient: { x: event.clientX, y: event.clientY },
         originView: viewRef.current,
         pointerId: event.pointerId,
@@ -579,6 +587,13 @@ export function RegionOverlay({
     setCursorPoint(canGuide ? point : null);
     const panGesture = panGestureRef.current;
     if (panGesture !== null && panGesture.pointerId === event.pointerId) {
+      // `buttons` reflects the physical buttons still held during pointermove.
+      // If the initiating button disappeared without an observed end event,
+      // terminate the orphaned epoch rather than trusting stale coordinates.
+      if ((event.buttons & panGesture.buttonMask) === 0) {
+        finishPanGesture(true);
+        return;
+      }
       const viewport = viewportRef.current;
       if (viewport !== null) {
         const pan = clampPan(
@@ -763,6 +778,11 @@ export function RegionOverlay({
             setDraft(null);
             setCursorPoint(null);
             suppressCapturedClickRef.current = false;
+          }}
+          onLostPointerCapture={(event) => {
+            if (panGestureRef.current?.pointerId === event.pointerId) {
+              finishPanGesture(true);
+            }
           }}
           onClickCapture={(event) => {
             if (suppressCapturedClickRef.current) {
