@@ -5,7 +5,7 @@ import struct
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Never
+from typing import Any, Never
 from uuid import uuid4
 
 import pytest
@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from backend.app.access.media.image import ReferenceImageProbe
 from backend.app.access.media.processing import SampledFrame
 from backend.app.access.store.models import (
+    Category,
     GameProfile,
     Project,
     ReferenceAsset,
@@ -600,3 +601,179 @@ def test_category_order_round_trips_deterministically(
         for _ in range(20):
             current = client.get("/api/v1/profiles/current")
             assert [item["name"] for item in current.json()["categories"]] == expected
+
+
+@pytest.mark.parametrize(
+    ("removed_ordinal", "expected_ordinal"),
+    ((1, 3), (2, 2)),
+    ids=("middle-gap-does-not-collide", "trailing-slot-is-reused"),
+)
+def test_added_category_gets_next_free_ordinal_after_deletion(
+    removed_ordinal: int,
+    expected_ordinal: int,
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    payload = _payload(source)
+    payload["categories"] = [
+        {"name": "0", "kind": "character"},
+        {"name": "health", "kind": "game"},
+        {"name": "armour", "kind": "game"},
+    ]
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=payload)
+        assert created.status_code == 201
+        profile_id = created.json()["id"]
+        with composition.database.session() as session:
+            removed = session.scalar(
+                select(Category).where(
+                    Category.profile_id == profile_id,
+                    Category.ordinal == removed_ordinal,
+                )
+            )
+            assert removed is not None
+            session.delete(removed)
+
+        response = client.post(
+            f"/api/v1/profiles/{profile_id}/categories",
+            json={"name": "score", "kind": "game"},
+        )
+
+    assert response.status_code == 201
+    with composition.database.session() as session:
+        added = session.scalar(
+            select(Category).where(
+                Category.profile_id == profile_id,
+                Category.name == "score",
+            )
+        )
+        assert added is not None
+        assert added.ordinal == expected_ordinal
+
+
+def test_added_category_rejects_casefolded_trimmed_duplicate_in_same_profile(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        profile_id = created.json()["id"]
+        response = client.post(
+            f"/api/v1/profiles/{profile_id}/categories",
+            json={"name": "  HeAlTh  ", "kind": "game"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "category_name_exists"
+
+
+def test_same_category_name_can_be_added_to_different_profiles(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    first_source = tmp_path / "first.png"
+    second_source = tmp_path / "second.png"
+    _write_png(first_source)
+    _write_png(second_source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        first_profile = client.post(
+            "/api/v1/profiles", json=_payload(first_source, name="First")
+        ).json()["id"]
+        second_profile = client.post(
+            "/api/v1/profiles", json=_payload(second_source, name="Second")
+        ).json()["id"]
+        responses = [
+            client.post(
+                f"/api/v1/profiles/{profile_id}/categories",
+                json={"name": "score", "kind": "game"},
+            )
+            for profile_id in (first_profile, second_profile)
+        ]
+
+    assert [response.status_code for response in responses] == [201, 201]
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_code"),
+    (
+        ({"name": "score", "kind": "icon"}, "validation_error"),
+        ({"name": "a", "kind": "character"}, "invalid_character_category"),
+    ),
+)
+def test_added_category_rejects_invalid_kind_or_character(
+    payload: dict[str, str],
+    expected_code: str,
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        response = client.post(
+            f"/api/v1/profiles/{created.json()['id']}/categories",
+            json=payload,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == expected_code
+
+
+def test_added_category_rejects_missing_profile(
+    composition: CompositionRoot,
+) -> None:
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/profiles/missing/categories",
+            json={"name": "score", "kind": "game"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "profile_not_found"
+
+
+def test_parallel_category_requests_receive_distinct_ordinals(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        profile_id = created.json()["id"]
+
+        def add(name: str) -> Any:
+            return client.post(
+                f"/api/v1/profiles/{profile_id}/categories",
+                json={"name": name, "kind": "game"},
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(add, ("score", "ammo")))
+
+    assert [response.status_code for response in responses] == [201, 201]
+    with composition.database.session() as session:
+        added = tuple(
+            session.scalars(
+                select(Category)
+                .where(Category.profile_id == profile_id, Category.name.in_(("score", "ammo")))
+                .order_by(Category.ordinal)
+            )
+        )
+    assert [category.ordinal for category in added] == [2, 3]
