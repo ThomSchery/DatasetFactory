@@ -71,6 +71,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+async function drawDraft(): Promise<HTMLElement> {
+  const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+  vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
+    left: 0,
+    top: 0,
+    width: 960,
+    height: 540,
+    right: 960,
+    bottom: 540,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect);
+  fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+  fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+  fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+  return overlay;
+}
+
 describe("annotation review query states", () => {
   it("renders loading while the run query is pending", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
@@ -266,6 +285,11 @@ describe("annotation review query states", () => {
           url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
       ),
     ).toBe(false);
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([, init]) => init?.method !== undefined && init.method !== "GET",
+      ),
+    ).toHaveLength(0);
 
     await user.click(within(popover).getByRole("option", { name: "Timer" }));
     await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
@@ -281,6 +305,138 @@ describe("annotation review query states", () => {
         expected_version: 7,
       });
     });
+  });
+
+  it("creates a character class and then assigns it to the draft in exactly two writes", async () => {
+    const user = userEvent.setup();
+    const mutations: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      mutation: (url, init) => {
+        mutations.push({
+          body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+          method: init?.method ?? "GET",
+          url,
+        });
+        if (url === `/api/v1/profiles/${PROFILE.id}/categories`) {
+          return {
+            status: 201,
+            body: { id: "category-8", kind: "character", name: "8" },
+          };
+        }
+        if (url === "/api/v1/frames/frame-1/annotations") {
+          return {
+            status: 201,
+            body: annotationFixture({ category_id: "category-8", id: "ann-new" }),
+          };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+    await drawDraft();
+
+    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+    );
+
+    await waitFor(() => {
+      expect(mutations).toHaveLength(2);
+    });
+    expect(mutations).toEqual([
+      {
+        body: { kind: "character", name: "8" },
+        method: "POST",
+        url: `/api/v1/profiles/${PROFILE.id}/categories`,
+      },
+      {
+        body: {
+          bbox: { x: 600, y: 500, width: 200, height: 100 },
+          category_id: "category-8",
+          expected_version: 7,
+        },
+        method: "POST",
+        url: "/api/v1/frames/frame-1/annotations",
+      },
+    ]);
+  });
+
+  it("creates a game class and reassigns an existing annotation through its versioned PATCH", async () => {
+    const user = userEvent.setup();
+    const mutations: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      mutation: (url, init) => {
+        mutations.push({
+          body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+          method: init?.method ?? "GET",
+          url,
+        });
+        if (url === `/api/v1/profiles/${PROFILE.id}/categories`) {
+          return { status: 201, body: { id: "score", kind: "game", name: "Score" } };
+        }
+        if (url === "/api/v1/annotations/ann-1") {
+          return { status: 200, body: annotationFixture({ category_id: "score" }) };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "Score");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Score”" }),
+    );
+
+    await waitFor(() => {
+      expect(mutations).toHaveLength(2);
+    });
+    expect(mutations).toEqual([
+      {
+        body: { kind: "game", name: "Score" },
+        method: "POST",
+        url: `/api/v1/profiles/${PROFILE.id}/categories`,
+      },
+      {
+        body: { category_id: "score", expected_version: 3 },
+        method: "PATCH",
+        url: "/api/v1/annotations/ann-1",
+      },
+    ]);
+  });
+
+  it("keeps the typed name and draft box when creating the category fails", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({
+      mutation: (url) => {
+        if (url === `/api/v1/profiles/${PROFILE.id}/categories`) {
+          return { status: 500, body: errorEnvelope("category_persistence_failed") };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+    const overlay = await drawDraft();
+    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.type(filter, "8");
+
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+    );
+
+    expect(await within(popover).findByRole("alert")).toHaveTextContent(
+      "Nie udało się zapisać nowej klasy",
+    );
+    expect(filter).toHaveValue("8");
+    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toBeVisible();
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([, init]) => init?.method !== undefined && init.method !== "GET",
+      ),
+    ).toHaveLength(1);
   });
 
   it("nudges a draft in source pixels without POST before or after Enter", async () => {

@@ -33,6 +33,12 @@ describe("query keys", () => {
 });
 
 describe("invalidation mapping", () => {
+  it("refreshes every profile view after a category is created", () => {
+    expect(invalidationKeys({ type: "profile-category-created", profileId: "p1" })).toEqual([
+      ["profiles"],
+    ]);
+  });
+
   it("invalidates the frame, its run and the dashboard after a review decision", () => {
     // The decision moves the frame between the dashboard's `frame_counts`
     // buckets, which group by `review_status`.

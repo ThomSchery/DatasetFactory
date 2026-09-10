@@ -24,6 +24,7 @@ const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["POST /profiles/reference-preview", "createReferencePreview"],
   ["POST /profiles/reference-frame", "createReferenceFrame"],
   ["POST /profiles", "createProfile"],
+  ["POST /profiles/{profile_id}/categories", "createProfileCategory"],
   ["GET /profiles", "listProfiles"],
   ["GET /profiles/current", "getCurrentProfile"],
   ["POST /profiles/{profile_id}/activate", "activateProfile"],

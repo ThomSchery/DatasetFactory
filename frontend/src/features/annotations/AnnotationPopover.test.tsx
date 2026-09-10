@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Annotation, Category } from "../../api";
+import type { Annotation, Category, CategoryInput } from "../../api";
 import { AnnotationPopover } from "./AnnotationPopover";
 
 const annotation: Annotation = {
@@ -26,15 +26,18 @@ const categories: Category[] = [
 
 interface PopoverOverrides {
   annotation?: Annotation;
+  categoryError?: string | null;
   draft?: boolean;
   hasUnsavedGeometry?: boolean;
   onCategoryChange?: (categoryId: string) => void;
   onClose?: () => void;
+  onCreateCategory?: (category: CategoryInput) => void;
 }
 
 function renderPopover(overrides: PopoverOverrides = {}) {
   const onCategoryChange = overrides.onCategoryChange ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
+  const onCreateCategory = overrides.onCreateCategory ?? vi.fn();
   const tree = (current: PopoverOverrides) => (
     <div>
       {/* The surface the popover floats over, in the shape the overlay gives
@@ -49,11 +52,14 @@ function renderPopover(overrides: PopoverOverrides = {}) {
         annotation={current.annotation ?? annotation}
         busyKey={null}
         categories={categories}
+        categoryError={current.categoryError ?? null}
         disabled={false}
         draft={current.draft}
         hasUnsavedGeometry={current.hasUnsavedGeometry ?? false}
         onCategoryChange={onCategoryChange}
+        onCategoryFilterChange={vi.fn()}
         onClose={onClose}
+        onCreateCategory={onCreateCategory}
         onDelete={vi.fn()}
       />
     </div>
@@ -62,6 +68,7 @@ function renderPopover(overrides: PopoverOverrides = {}) {
   return {
     onCategoryChange,
     onClose,
+    onCreateCategory,
     /** Re-renders with new props, the way an unsaved preview reaches the panel. */
     update: (next: PopoverOverrides) => {
       view.rerender(tree({ ...overrides, ...next }));
@@ -129,9 +136,9 @@ describe("AnnotationPopover", () => {
     expect(screen.queryByText(/Esc/)).not.toBeInTheDocument();
   });
 
-  it("names an unmatched draft class explicitly and cannot save it", async () => {
+  it("offers an explicit create action while keeping filter Enter inert", async () => {
     const user = userEvent.setup();
-    const { onCategoryChange } = renderPopover({
+    const { onCategoryChange, onCreateCategory } = renderPopover({
       annotation: { ...annotation, category_id: "" },
       draft: true,
     });
@@ -144,6 +151,47 @@ describe("AnnotationPopover", () => {
     );
     expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
+    expect(onCreateCategory).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Utwórz i przypisz klasę „health and armour”" }),
+    );
+    expect(onCreateCategory).toHaveBeenCalledWith({
+      kind: "game",
+      name: "health and armour",
+    });
+  });
+
+  it("canonicalises a lowercase character and hides the action for an existing name", async () => {
+    const user = userEvent.setup();
+    renderPopover();
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+
+    await user.type(field, "a");
+    expect(
+      screen.getByRole("button", { name: "Utwórz i przypisz klasę „A”" }),
+    ).toBeVisible();
+
+    await user.clear(field);
+    await user.type(field, "  hEaLtH  ");
+    expect(
+      screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("preserves the filter value while showing a category error", async () => {
+    const user = userEvent.setup();
+    const { update } = renderPopover({
+      annotation: { ...annotation, category_id: "" },
+      draft: true,
+    });
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+    await user.type(field, "8");
+
+    update({ categoryError: "Nie udało się zapisać nowej klasy." });
+
+    expect(field).toHaveValue("8");
+    expect(screen.getByRole("alert")).toHaveTextContent("Nie udało się zapisać nowej klasy.");
   });
 
   describe("without a geometry form", () => {
