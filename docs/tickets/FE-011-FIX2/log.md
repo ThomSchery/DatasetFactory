@@ -78,3 +78,55 @@ interakcji, bez zmian CSS, copy, layoutu, tokenów i hierarchii.
 4. `test(fe-011)`: prawdziwy Chromium z natywnym
    `releasePointerCapture(pointerId)` i dokładną ścieżką `window.blur`.
 5. `docs(fe-011)`: wyniki sond, jawna lista retestów i pełna bramka 9/9.
+
+## Implementacja
+
+- `PanGesture` przechowuje `buttonMask`: `1` dla LMB i `4` dla środkowego
+  przycisku. Maska jest ustalana wyłącznie na `pointerdown`.
+- `finishPanGesture()` zeruje `panGestureRef`, `panning` i ustawia deduplikację
+  clicku przed wywołaniem `releasePointerCapture`. Własny, synchroniczny
+  `lostpointercapture` widzi pusty ref i nie uruchamia drugiego zwolnienia.
+- `onLostPointerCapture` porównuje `pointerId` i kończy tylko pasujący gest.
+  `panMode` pozostaje aktywny, więc operator może rozpocząć kolejny pan.
+- Zarejestrowany handler `window.blur` nadal zwalnia stan `Space`, a następnie
+  woła `invalidatePanInteraction()`: gest i tryb ręki kończą się razem.
+- `handlePointerMove` przed obliczeniem transformu sprawdza obecność zapisanej
+  maski w `event.buttons`. Jej brak kończy gest wspólnym prymitywem i nie
+  aktualizuje transformu. To niezależna obrona na wypadek niezaobserwowanego
+  przyszłego końca epoki.
+
+## Sondy i korekty
+
+1. Przed zmianą produkcyjną nowe testy komponentu dały oczekiwane **3 FAIL / 49
+   PASS**: `lostpointercapture`, `window.blur` i brak maski przycisku. Regresja
+   reentrancy normalnego `pointerup` przechodziła już wcześniej i zabezpiecza
+   kolejność po podłączeniu nowego handlera.
+2. Po implementacji komponent ma **52/52 PASS**, w tym synchroniczny
+   `lostpointercapture` wywołany przez mock `releasePointerCapture` i dokładnie
+   jedno wywołanie zwolnienia.
+3. Pierwsza sonda Chromium oczekiwała zakończenia natychmiast po natywnym
+   `releasePointerCapture`. Chromium pozostawiło zmianę capture jako oczekującą
+   aż do przetworzenia następnego zdarzenia wskaźnika. Asercję przeniesiono za
+   następny prawdziwy `page.mouse.move`: przeglądarka najpierw emituje
+   `lostpointercapture`, komponent zdejmuje `data-panning`, a transform nie
+   zmienia się ani o piksel.
+4. Docelowy Playwright/Chromium: **4/4 PASS**. Przed zwolnieniem potwierdzono
+   `hasPointerCapture(pointerId) === true`; po natywnym zwolnieniu ręka pozostaje
+   włączona, ale gest jest zakończony. Osobny aktywny pan kończy dokładna ścieżka
+   `window.dispatchEvent(new Event("blur"))`; ręka dostaje `aria-pressed=false`,
+   dalszy ruch nie zmienia transformu, mutacji zero.
+
+## Preflight przed pełną bramką
+
+- Vitest frontend: **40 plików, 623/623 PASS**.
+- Typecheck: PASS.
+- Build Vite: PASS; wyłącznie zastane ostrzeżenie o głównym chunku ponad 500 kB.
+- Playwright/Chromium FE-011: **4/4 PASS**; pomiary obrazu pozostają
+  `883.984375×588.40625`, `1043.984375×694.90625` i `1280×852`, a stress panel
+  pozostaje w viewportcie 1280×720.
+- Impeccable detector, zakres `layout`, produkcyjny plik UI: `[]`.
+
+Dowód przeglądarkowy używa repozytoryjnego Playwrighta z prawdziwym headless
+Chromium i `page.mouse`, nie in-app Browser. Sonda `blur` sprawdza dokładną
+ścieżkę eventu aplikacji; nie jest dowodem konkretnej kolejności systemowego
+`Alt+Tab`.
