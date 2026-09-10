@@ -113,6 +113,10 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Profil o tej nazwie już istnieje.",
     action: "Podaj inną nazwę profilu.",
   },
+  category_name_exists: {
+    message: "Klasa o tej nazwie już istnieje w profilu.",
+    action: "Wybierz ją z listy albo podaj inną nazwę.",
+  },
   regions_required: {
     message: "Profil musi mieć przynajmniej jeden region HUD.",
     action: "Zaznacz region na obrazie referencyjnym.",
@@ -215,6 +219,10 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
   },
   profile_persistence_failed: {
     message: "Zapis profilu nie powiódł się i nic nie zostało utrwalone.",
+    action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
+  },
+  category_persistence_failed: {
+    message: "Nie udało się zapisać nowej klasy.",
     action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
   },
 

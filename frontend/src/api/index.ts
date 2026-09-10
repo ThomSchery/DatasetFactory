@@ -2,6 +2,13 @@ export { API_BASE_PATH, apiRequest, buildUrl } from "./client";
 export type { QueryParams, RequestOptions } from "./client";
 
 export {
+  CHARACTER_CLASS_ALPHABET,
+  caseFoldCategoryName,
+  categoryInputFromName,
+  isDuplicateCategoryName,
+} from "./categoryNames";
+
+export {
   ApiError,
   ApiTransportError,
   annotationIdsFromError,

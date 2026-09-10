@@ -104,7 +104,7 @@ export interface Region extends RegionInput {
 export interface Category {
   id: string;
   name: string;
-  kind: string;
+  kind: CategoryKind;
 }
 
 export interface GameProfile {

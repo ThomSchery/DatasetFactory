@@ -1,6 +1,8 @@
 import { apiRequest, buildUrl } from "./client";
 import type {
   Annotation,
+  Category,
+  CategoryInput,
   CopyPreviousAnnotationsRequest,
   CopyPreviousAnnotationsResult,
   CreateAnnotationRequest,
@@ -92,6 +94,17 @@ export function activateProfile(profileId: string): Promise<GameProfile> {
 /** `GET /profiles/{profile_id}` → the exact full profile assigned to a run. */
 export function getProfile(profileId: string, signal?: AbortSignal): Promise<GameProfile> {
   return apiRequest<GameProfile>(`/profiles/${encodeURIComponent(profileId)}`, { signal });
+}
+
+/** `POST /profiles/{profile_id}/categories` → `201` with the new category. */
+export function createProfileCategory(
+  profileId: string,
+  body: CategoryInput,
+): Promise<Category> {
+  return apiRequest<Category>(
+    `/profiles/${encodeURIComponent(profileId)}/categories`,
+    { method: "POST", body },
+  );
 }
 
 /** `GET /assets/references/{asset_id}` — opaque UUID resolved through the DB. */

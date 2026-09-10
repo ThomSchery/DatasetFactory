@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   describeApiError,
+  createProfileCategory,
   describeErrorCode,
   describeFrameStage,
   frameImageUrl,
@@ -14,6 +15,7 @@ import {
   queryKeys,
   type Annotation,
   type BBox,
+  type CategoryInput,
   type CopyPreviousAnnotationsResult,
   type ErrorPresentation,
   type FrameCounts,
@@ -64,7 +66,19 @@ interface FrameEditorProps {
   runId: string;
 }
 
-function busyKey(intent: ReviewMutationIntent | undefined): string | null {
+type CreateCategoryAssignment =
+  | { bbox: BBox; expectedVersion: number; kind: "draft" }
+  | { annotationId: string; expectedVersion: number; kind: "existing" };
+
+interface CreateCategoryIntent {
+  assignment: CreateCategoryAssignment;
+  category: CategoryInput;
+  kind: "create-category";
+}
+
+type EditorMutationIntent = ReviewMutationIntent | CreateCategoryIntent;
+
+function busyKey(intent: EditorMutationIntent | undefined): string | null {
   if (intent === undefined) {
     return null;
   }
@@ -77,6 +91,8 @@ function busyKey(intent: ReviewMutationIntent | undefined): string | null {
       return `delete:${intent.annotationId}`;
     case "create":
       return "create";
+    case "create-category":
+      return "create-category";
     case "copy-previous":
       return "copy-previous";
     case "review":
@@ -235,6 +251,8 @@ function LoadedFrameEditor({
   const [imageError, setImageError] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
+  const [categoryActionError, setCategoryActionError] = useState<ErrorPresentation | null>(null);
+  const createdCategoryRef = useRef(false);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
   // The HUD level is preselected whole, which is the request the panel sent by
   // default before the picker existed.
@@ -276,31 +294,75 @@ function LoadedFrameEditor({
     updateSelectionContext(selectedId);
   }, [selectedId]);
 
-  const mutation = useMutation<void | CopyPreviousAnnotationsResult, unknown, ReviewMutationIntent>({
+  const mutation = useMutation<void | CopyPreviousAnnotationsResult, unknown, EditorMutationIntent>({
     mutationKey: reviewMutationKey(runId),
-    mutationFn: (intent) => executeReviewMutation(frame.id, intent),
+    mutationFn: async (intent) => {
+      createdCategoryRef.current = false;
+      if (intent.kind !== "create-category") {
+        return executeReviewMutation(frame.id, intent);
+      }
+
+      const category = await createProfileCategory(profile.id, intent.category);
+      createdCategoryRef.current = true;
+      if (intent.assignment.kind === "draft") {
+        return executeReviewMutation(frame.id, {
+          bbox: intent.assignment.bbox,
+          categoryId: category.id,
+          expectedVersion: intent.assignment.expectedVersion,
+          kind: "create",
+        });
+      }
+      return executeReviewMutation(frame.id, {
+        annotationId: intent.assignment.annotationId,
+        categoryId: category.id,
+        expectedVersion: intent.assignment.expectedVersion,
+        kind: "category",
+      });
+    },
     onError: async (error, intent) => {
       if (intent.kind === "copy-previous") {
         setCopyFeedback(null);
       }
       const presentation = describeApiError(error);
-      setActionError(presentation);
+      if (
+        intent.kind === "category" ||
+        intent.kind === "create" ||
+        intent.kind === "create-category"
+      ) {
+        setActionError(null);
+        setCategoryActionError(presentation);
+      } else {
+        setActionError(presentation);
+      }
       if (presentation.code === "bbox_invalid") {
         // A newer bbox verdict replaces the whole previous verdict atomically.
         setInvalidIds(presentation.annotationIds);
       }
+      const invalidations: Promise<void>[] = [];
+      if (createdCategoryRef.current || presentation.code === "category_name_exists") {
+        invalidations.push(
+          invalidateFor(queryClient, {
+            type: "profile-category-created",
+            profileId: profile.id,
+          }),
+        );
+      }
       if (isVersionConflict(error)) {
         // Explicit stale-frame reload. `invalidateFor` owns the central key map
         // and waits for the active frame/list refetch; no cache value is patched.
-        await invalidateFor(queryClient, {
-          type: intent.kind === "review" ? "frame-reviewed" : "annotation-changed",
-          frameId: frame.id,
-          runId,
-        });
+        invalidations.push(
+          invalidateFor(queryClient, {
+            type: intent.kind === "review" ? "frame-reviewed" : "annotation-changed",
+            frameId: frame.id,
+            runId,
+          }),
+        );
       }
+      await Promise.all(invalidations);
     },
     onSuccess: async (data, intent) => {
       setActionError(null);
+      setCategoryActionError(null);
       if (intent.kind === "review") {
         setInvalidIds([]);
       } else if (intent.kind === "geometry" || intent.kind === "delete") {
@@ -310,14 +372,27 @@ function LoadedFrameEditor({
         setSelectedId((current) => (current === intent.annotationId ? null : current));
       }
       if (intent.kind === "category") {
+        const annotationId = intent.annotationId;
         setSelectedId((current) =>
-          current === intent.annotationId &&
-          geometryPreview?.annotationId !== intent.annotationId
+          current === annotationId &&
+          geometryPreview?.annotationId !== annotationId
             ? null
             : current,
         );
       }
-      if (intent.kind === "create") {
+      if (intent.kind === "create-category" && intent.assignment.kind === "existing") {
+        const annotationId = intent.assignment.annotationId;
+        setSelectedId((current) =>
+          current === annotationId &&
+          geometryPreview?.annotationId !== annotationId
+            ? null
+            : current,
+        );
+      }
+      if (
+        intent.kind === "create" ||
+        (intent.kind === "create-category" && intent.assignment.kind === "draft")
+      ) {
         setDraftBBox(null);
         updateSelectionContext(null);
         setSelectedId(null);
@@ -329,14 +404,27 @@ function LoadedFrameEditor({
             : `Skopiowano: ${data.copied}. Zastąpiono: ${data.replaced}.`,
         );
       }
-      await invalidateFor(queryClient, {
-        type: intent.kind === "review" ? "frame-reviewed" : "annotation-changed",
-        frameId: frame.id,
-        runId,
-      });
+      await Promise.all([
+        invalidateFor(queryClient, {
+          type: intent.kind === "review" ? "frame-reviewed" : "annotation-changed",
+          frameId: frame.id,
+          runId,
+        }),
+        ...(intent.kind === "create-category"
+          ? [
+              invalidateFor(queryClient, {
+                type: "profile-category-created",
+                profileId: profile.id,
+              }),
+            ]
+          : []),
+      ]);
       if (intent.kind === "geometry") {
         setGeometryPreview(null);
       }
+    },
+    onSettled: () => {
+      createdCategoryRef.current = false;
     },
   });
 
@@ -572,8 +660,9 @@ function LoadedFrameEditor({
     unsavedGeometry,
   ]);
 
-  function submit(intent: ReviewMutationIntent): void {
+  function submit(intent: EditorMutationIntent): void {
     setActionError(null);
+    setCategoryActionError(null);
     mutation.mutate(intent);
   }
 
@@ -680,12 +769,14 @@ function LoadedFrameEditor({
 
   function handleDraw(bbox: BBox): void {
     setActionError(null);
+    setCategoryActionError(null);
     setDraftBBox(toBBox(bbox));
     updateSelectionContext(DRAFT_ANNOTATION_ID);
     setSelectedId(DRAFT_ANNOTATION_ID);
   }
 
   function selectAnnotation(annotationId: string): void {
+    setCategoryActionError(null);
     updateSelectionContext(annotationId);
     if (annotationId !== DRAFT_ANNOTATION_ID) {
       setDraftBBox(null);
@@ -818,6 +909,9 @@ function LoadedFrameEditor({
             annotation={popoverAnnotation}
             busyKey={currentBusyKey}
             categories={profile.categories}
+            categoryError={
+              categoryActionError === null ? null : errorMessage(categoryActionError)
+            }
             disabled={editorDisabled}
             draft={selectedId === DRAFT_ANNOTATION_ID}
             hasUnsavedGeometry={
@@ -843,11 +937,38 @@ function LoadedFrameEditor({
                 kind: "category",
               });
             }}
+            onCategoryFilterChange={() => {
+              setCategoryActionError(null);
+            }}
             onClose={() => {
+              setCategoryActionError(null);
               closeSelectionContext();
               setDraftBBox(null);
               setSelectedId(null);
               setGeometryPreview(null);
+            }}
+            onCreateCategory={(category) => {
+              if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
+                submit({
+                  assignment: {
+                    bbox: draftBBox,
+                    expectedVersion: frame.version,
+                    kind: "draft",
+                  },
+                  category,
+                  kind: "create-category",
+                });
+                return;
+              }
+              submit({
+                assignment: {
+                  annotationId: popoverAnnotation.id,
+                  expectedVersion: popoverAnnotation.version,
+                  kind: "existing",
+                },
+                category,
+                kind: "create-category",
+              });
             }}
             onDelete={() => {
               if (selectedId === DRAFT_ANNOTATION_ID) {

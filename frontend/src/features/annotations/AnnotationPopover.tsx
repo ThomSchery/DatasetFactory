@@ -1,10 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { Annotation, Category } from "../../api";
+import {
+  categoryInputFromName,
+  isDuplicateCategoryName,
+  type Annotation,
+  type Category,
+  type CategoryInput,
+} from "../../api";
 import { Button } from "../../components/common/Button";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { isOverlayPanPointerDown } from "../../components/common/RegionOverlay";
 import { StatusBadge } from "../../components/common/StatusBadge";
+import { InlineError } from "../../components/common/UiStates";
 import { copyOptionGroups } from "./copySelection";
 
 const VIEWPORT_ROOM_PROPERTY = "--df-annotation-popover-viewport-room";
@@ -23,11 +30,14 @@ interface AnnotationPopoverProps {
   annotation: Annotation;
   busyKey: string | null;
   categories: readonly Category[];
+  categoryError: string | null;
   disabled: boolean;
   draft?: boolean;
   hasUnsavedGeometry: boolean;
   onCategoryChange: (categoryId: string) => void;
+  onCategoryFilterChange: () => void;
   onClose: () => void;
+  onCreateCategory: (category: CategoryInput) => void;
   onDelete: () => void;
 }
 
@@ -55,17 +65,28 @@ export function AnnotationPopover({
   annotation,
   busyKey,
   categories,
+  categoryError,
   disabled,
   draft = false,
   hasUnsavedGeometry,
   onCategoryChange,
+  onCategoryFilterChange,
   onClose,
+  onCreateCategory,
   onDelete,
 }: AnnotationPopoverProps) {
   const categoryName = categories.find((category) => category.id === annotation.category_id)?.name ?? annotation.category_id;
   const [form, setForm] = useState<FormState>(() => initialFormState(annotation.category_id));
+  const [categoryQuery, setCategoryQuery] = useState("");
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
+  const proposedCategory = categoryInputFromName(categoryQuery);
+  const canCreateCategory =
+    proposedCategory !== null &&
+    !isDuplicateCategoryName(
+      categories.map((category) => category.name),
+      proposedCategory.name,
+    );
 
   useLayoutEffect(() => {
     const popover = popoverRef.current;
@@ -208,6 +229,28 @@ export function AnnotationPopover({
             : "Brak takiej klasy w profilu. Wybierz istniejącą klasę."
         }
         filterLabel="Klasa"
+        filterMaxLength={200}
+        filterAction={
+          canCreateCategory ? (
+            <Button
+              aria-label={`Utwórz i przypisz klasę „${proposedCategory.name}”`}
+              className="df-annotation-popover__create-class"
+              disabled={disabled}
+              loading={busyKey === "create-category"}
+              loadingLabel="Tworzenie i przypisywanie klasy…"
+              onClick={() => {
+                onCreateCategory(proposedCategory);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              <span>Utwórz i przypisz klasę</span>
+              <span aria-hidden="true" className="df-annotation-popover__create-class-name">
+                „{proposedCategory.name}”
+              </span>
+            </Button>
+          ) : null
+        }
         groups={classGroups}
         key={annotation.id}
         label="Klasy profilu"
@@ -218,8 +261,14 @@ export function AnnotationPopover({
         onConfirm={(selection) => {
           saveCategory(selection[0] ?? "");
         }}
+        onFilterChange={(value) => {
+          setCategoryQuery(value);
+          onCategoryFilterChange();
+        }}
         selectedIds={form.categoryId === "" ? [] : [form.categoryId]}
       />
+
+      {categoryError === null ? null : <InlineError message={categoryError} />}
 
       <div className="df-annotation-popover__actions">
         <Button disabled={disabled} loading={busyKey === `delete:${annotation.id}`} onClick={onDelete} size="sm" variant="muted">

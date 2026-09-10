@@ -270,6 +270,26 @@
   justify-content: flex-end;
 }
 
+.df-annotation-popover__create-class {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.df-annotation-popover__create-class .df-button__content {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  min-width: 0;
+  width: 100%;
+}
+
+.df-annotation-popover__create-class-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .df-annotation-popover__actions kbd,
 .df-annotation-popover__unsaved kbd,
 .df-review-workspace__preview .df-notice kbd {

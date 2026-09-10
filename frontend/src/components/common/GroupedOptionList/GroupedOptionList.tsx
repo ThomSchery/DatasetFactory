@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { TextField } from "../TextField";
 import "./GroupedOptionList.css";
@@ -28,8 +28,11 @@ export interface GroupedOptionListProps {
   disabled?: boolean;
   /** Shown when the filter matches nothing. */
   emptyMessage: string;
+  /** Optional explicit action derived from the current filter value. */
+  filterAction?: ReactNode;
   /** Label of the filter control; it is this component's own text input. */
   filterLabel: string;
+  filterMaxLength?: number;
   groups: readonly GroupedOptionGroup[];
   /** Accessible name of the collection. */
   label: string;
@@ -38,6 +41,7 @@ export interface GroupedOptionListProps {
   onChange: (selectedIds: readonly string[]) => void;
   /** `Enter` on a row, with the selection that keystroke implies. */
   onConfirm?: (selectedIds: readonly string[]) => void;
+  onFilterChange?: (value: string) => void;
   selectedIds: readonly string[];
 }
 
@@ -109,12 +113,15 @@ export function GroupedOptionList({
   autoFocus = false,
   disabled = false,
   emptyMessage,
+  filterAction,
   filterLabel,
+  filterMaxLength,
   groups,
   label,
   mode,
   onChange,
   onConfirm,
+  onFilterChange,
   selectedIds,
 }: GroupedOptionListProps) {
   const [query, setQuery] = useState("");
@@ -283,9 +290,11 @@ export function GroupedOptionList({
         autoFocus={autoFocus}
         disabled={disabled}
         label={filterLabel}
+        maxLength={filterMaxLength}
         onChange={(event) => {
           setQuery(event.target.value);
           setRequestedActiveId(null);
+          onFilterChange?.(event.target.value);
         }}
         onKeyDown={handleFilterKeyDown}
         ref={filterRef}
@@ -354,6 +363,7 @@ export function GroupedOptionList({
           {emptyMessage}
         </p>
       ) : null}
+      {filterAction}
     </div>
   );
 }
