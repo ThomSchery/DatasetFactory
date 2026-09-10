@@ -23,6 +23,10 @@
   overflow-y: auto;
 }
 
+.df-grouped-options__list:empty {
+  display: none;
+}
+
 .df-grouped-options__group {
   display: grid;
   gap: calc(var(--size-xs) / 2);

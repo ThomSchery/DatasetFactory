@@ -225,8 +225,8 @@ export function AnnotationPopover({
         disabled={disabled}
         emptyMessage={
           draft
-            ? "Brak takiej klasy w profilu. Wybierz istniejącą klasę albo porzuć box."
-            : "Brak takiej klasy w profilu. Wybierz istniejącą klasę."
+            ? "Brak takiej klasy w profilu. Utwórz ją i przypisz albo porzuć box."
+            : "Brak takiej klasy w profilu. Utwórz ją i przypisz poniżej."
         }
         filterLabel="Klasa"
         filterMaxLength={200}
