@@ -287,26 +287,6 @@
   line-height: var(--line-height-standard);
 }
 
-.df-annotation-popover__geometry {
-  border-top: var(--border-width-default) solid var(--color-stroke-weak-default);
-}
-
-.df-annotation-popover__geometry > summary {
-  min-height: var(--control-height-sm);
-  padding-block: var(--size-xs);
-  color: var(--color-text-weak-default);
-  cursor: pointer;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-standard);
-}
-
-.df-annotation-popover__geometry-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--size-xs);
-}
-
 .df-review-annotations__item {
   display: grid;
   gap: var(--size-sm);
@@ -390,7 +370,6 @@
 }
 
 .df-review-workspace__preview .df-annotation-popover__header,
-.df-review-workspace__preview .df-annotation-popover__unsaved,
-.df-review-workspace__preview .df-annotation-popover__geometry {
+.df-review-workspace__preview .df-annotation-popover__unsaved {
   grid-column: 1 / -1;
 }

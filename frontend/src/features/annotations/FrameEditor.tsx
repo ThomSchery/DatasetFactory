@@ -30,6 +30,7 @@ import {
 import { Notice } from "../../components/common/Notice";
 import { Panel } from "../../components/common/Panel";
 import {
+  fitsInSource,
   nudgeRect,
   RegionOverlay,
   sourceRectsEqual,
@@ -45,7 +46,6 @@ import {
 import { ClassList } from "./ClassList";
 import { categoryIdsOfKind, copyOptionGroups, copyPreviousTarget } from "./copySelection";
 import { FrameToolbar } from "./FrameToolbar";
-import { geometryDraft, parseGeometryDraft } from "./geometryForm";
 import {
   executeReviewMutation,
   reviewMutationKey,
@@ -167,11 +167,6 @@ interface LoadedFrameEditorProps extends Omit<FrameEditorProps, "frameId"> {
   frame: Awaited<ReturnType<typeof getFrame>>;
 }
 
-interface RedrawMode {
-  annotationId: string;
-  kind: "redraw";
-}
-
 interface GeometryPreview {
   annotationId: string;
   bbox: BBox;
@@ -219,7 +214,6 @@ function LoadedFrameEditor({
   const queryClient = useQueryClient();
   const imageErrorCopy = describeErrorCode("frame_image_not_found");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [redrawMode, setRedrawMode] = useState<RedrawMode | null>(null);
   const [geometryPreview, setGeometryPreview] = useState<GeometryPreview | null>(null);
   const manipulationBaselineRef = useRef<ManipulationBaseline | null>(null);
   const selectionContextRef = useRef<SelectionContext>({ annotationId: null, epoch: 0 });
@@ -298,7 +292,6 @@ function LoadedFrameEditor({
       } else if (intent.kind === "geometry" || intent.kind === "delete") {
         setInvalidIds((current) => current.filter((id) => id !== intent.annotationId));
       }
-      setRedrawMode(null);
       if (intent.kind === "delete") {
         setSelectedId((current) => (current === intent.annotationId ? null : current));
       }
@@ -408,7 +401,7 @@ function LoadedFrameEditor({
   const popoverAnnotation = selectedId === DRAFT_ANNOTATION_ID ? draftAnnotation : selectedAnnotation;
   const stage = describeFrameStage(frame.stage_status);
   const editorDisabled = !capabilities.canEdit || mutation.isPending;
-  const canDirectEdit = capabilities.canEdit && redrawMode === null;
+  const canDirectEdit = capabilities.canEdit;
   const copyTarget = copyPreviousTarget(copySelection, profile.categories);
   const copyDisabled =
     frame.frame_index === 0 ||
@@ -473,12 +466,11 @@ function LoadedFrameEditor({
         } else if (event.key === "Enter") {
           /*
            * `Enter` inside the docked panel belongs to whatever the operator
-           * has focused: "Usuń", "Zapisz klasę", "Przerysuj bbox" — the last of
-           * which advertises `Enter` as its own shortcut. Only `Enter` from
-           * outside the panel commits the preview. The guard this branch shares
-           * with the letter shortcuts excludes fields and the class picker, but
-           * those shortcuts never consumed `Enter`, so buttons were never a
-           * case it had to cover.
+           * has focused: "Usuń" or "Zapisz klasę". Only `Enter` from outside
+           * the panel commits the preview. The guard this branch shares with
+           * the letter shortcuts excludes fields and the class picker, but
+           * those shortcuts never consumed `Enter`, so buttons still need the
+           * explicit panel boundary.
            */
           const insidePanel =
             target instanceof Element &&
@@ -632,11 +624,7 @@ function LoadedFrameEditor({
       setGeometryPreview(null);
       return;
     }
-    const parsed = parseGeometryDraft(geometryDraft(bbox), {
-      width: frame.width,
-      height: frame.height,
-    });
-    if (parsed.bbox === null) {
+    if (!fitsInSource(bbox, { width: frame.width, height: frame.height })) {
       /*
        * The verdict the backend would return for this rectangle, reached
        * without spending a request — and without discarding the move. A box
@@ -653,17 +641,10 @@ function LoadedFrameEditor({
       });
       return;
     }
-    changeAnnotationGeometry(annotation, parsed.bbox);
+    changeAnnotationGeometry(annotation, bbox);
   }
 
   function handleDraw(bbox: BBox): void {
-    if (redrawMode !== null) {
-      const annotation = annotationById(redrawMode.annotationId);
-      if (annotation !== undefined) {
-        changeAnnotationGeometry(annotation, bbox);
-      }
-      return;
-    }
     setActionError(null);
     setDraftBBox(bbox);
     updateSelectionContext(DRAFT_ANNOTATION_ID);
@@ -679,9 +660,6 @@ function LoadedFrameEditor({
     setGeometryPreview((current) =>
       current?.annotationId === annotationId ? current : null,
     );
-    // Selection means inspection. It cancels redraw so a later gesture cannot
-    // silently PATCH the previously armed annotation.
-    setRedrawMode(null);
   }
 
   return (
@@ -808,21 +786,10 @@ function LoadedFrameEditor({
             categories={profile.categories}
             disabled={editorDisabled}
             draft={selectedId === DRAFT_ANNOTATION_ID}
-            drawing={
+            hasUnsavedGeometry={
               selectedId !== DRAFT_ANNOTATION_ID &&
-              redrawMode?.annotationId === popoverAnnotation.id
-            }
-            frameSize={{ height: frame.height, width: frame.width }}
-            geometryPreview={
-              selectedId !== DRAFT_ANNOTATION_ID &&
-              geometryPreview?.annotationId === popoverAnnotation.id
-                ? unsavedGeometry
-                : null
-            }
-            invalid={
-              selectedId === DRAFT_ANNOTATION_ID
-                ? false
-                : invalidSet.has(popoverAnnotation.id)
+              geometryPreview?.annotationId === popoverAnnotation.id &&
+              unsavedGeometry !== null
             }
             key={popoverAnnotation.id}
             onCategoryChange={(categoryId) => {
@@ -847,7 +814,6 @@ function LoadedFrameEditor({
               setDraftBBox(null);
               setSelectedId(null);
               setGeometryPreview(null);
-              setRedrawMode(null);
             }}
             onDelete={() => {
               if (selectedId === DRAFT_ANNOTATION_ID) {
@@ -861,26 +827,6 @@ function LoadedFrameEditor({
                 expectedVersion: popoverAnnotation.version,
                 kind: "delete",
               });
-            }}
-            onGeometryChange={(bbox) => {
-              if (selectedId === DRAFT_ANNOTATION_ID) {
-                setDraftBBox(bbox);
-                return;
-              }
-              changeAnnotationGeometry(popoverAnnotation, bbox);
-            }}
-            onToggleDrawTarget={() => {
-              if (selectedId === DRAFT_ANNOTATION_ID) {
-                setDraftBBox(null);
-                updateSelectionContext(null);
-                setSelectedId(null);
-                return;
-              }
-              setRedrawMode((current) =>
-                current?.annotationId === popoverAnnotation.id
-                  ? null
-                  : { annotationId: popoverAnnotation.id, kind: "redraw" },
-              );
             }}
           />
         )}

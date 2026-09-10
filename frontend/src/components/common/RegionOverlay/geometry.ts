@@ -315,6 +315,10 @@ export function isDrawableRect(rect: SourceRect): boolean {
  */
 export function fitsInSource(rect: SourceRect, source: SourceSize): boolean {
   return (
+    Number.isInteger(rect.x) &&
+    Number.isInteger(rect.y) &&
+    Number.isInteger(rect.width) &&
+    Number.isInteger(rect.height) &&
     rect.x >= 0 &&
     rect.y >= 0 &&
     isDrawableRect(rect) &&

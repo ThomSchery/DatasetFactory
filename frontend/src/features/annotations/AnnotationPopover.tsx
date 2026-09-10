@@ -1,15 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { Annotation, BBox, Category } from "../../api";
+import type { Annotation, Category } from "../../api";
 import { Button } from "../../components/common/Button";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { isOverlayPanPointerDown } from "../../components/common/RegionOverlay";
 import { StatusBadge } from "../../components/common/StatusBadge";
-import { TextField } from "../../components/common/TextField";
 import { copyOptionGroups } from "./copySelection";
-import { geometryDraft, parseGeometryDraft, type GeometryDraft } from "./geometryForm";
 
-const GEOMETRY_FIELDS = ["x", "y", "width", "height"] as const;
 const VIEWPORT_ROOM_PROPERTY = "--df-annotation-popover-viewport-room";
 
 /**
@@ -28,64 +25,29 @@ interface AnnotationPopoverProps {
   categories: readonly Category[];
   disabled: boolean;
   draft?: boolean;
-  drawing: boolean;
-  frameSize: { height: number; width: number };
-  geometryPreview: BBox | null;
-  invalid: boolean;
+  hasUnsavedGeometry: boolean;
   onCategoryChange: (categoryId: string) => void;
   onClose: () => void;
   onDelete: () => void;
-  onGeometryChange: (bbox: BBox) => void;
-  onToggleDrawTarget: () => void;
 }
 
 interface FormState {
   categoryBaselineId: string;
   categoryId: string;
-  draft: GeometryDraft;
-  geometryBaseline: GeometryDraft;
-  geometryError: string | null;
 }
 
-/** The geometry the panel is about: the unsaved preview when one exists. */
-type EffectiveGeometry = Pick<Annotation, "height" | "width" | "x" | "y">;
-
-function initialFormState(categoryId: string, geometry: EffectiveGeometry): FormState {
-  const baseline = geometryDraft(geometry);
+function initialFormState(categoryId: string): FormState {
   return {
     categoryBaselineId: categoryId,
     categoryId,
-    draft: baseline,
-    geometryBaseline: baseline,
-    geometryError: null,
   };
 }
 
-function syncFormState(
-  current: FormState,
-  categoryId: string,
-  geometry: EffectiveGeometry,
-  frameSize: { height: number; width: number },
-): FormState {
-  const nextGeometryBaseline = geometryDraft(geometry);
-  const nextDraft = { ...current.draft };
-
-  for (const field of GEOMETRY_FIELDS) {
-    if (current.draft[field] === current.geometryBaseline[field]) {
-      nextDraft[field] = nextGeometryBaseline[field];
-    }
-  }
-
+function syncFormState(current: FormState, categoryId: string): FormState {
   const categoryClean = current.categoryId === current.categoryBaselineId;
   return {
     categoryBaselineId: categoryId,
     categoryId: categoryClean ? categoryId : current.categoryId,
-    draft: nextDraft,
-    geometryBaseline: nextGeometryBaseline,
-    geometryError:
-      current.geometryError === null
-        ? null
-        : parseGeometryDraft(nextDraft, frameSize).error,
   };
 }
 
@@ -95,29 +57,13 @@ export function AnnotationPopover({
   categories,
   disabled,
   draft = false,
-  drawing,
-  frameSize,
-  geometryPreview,
-  invalid,
+  hasUnsavedGeometry,
   onCategoryChange,
   onClose,
   onDelete,
-  onGeometryChange,
-  onToggleDrawTarget,
 }: AnnotationPopoverProps) {
   const categoryName = categories.find((category) => category.id === annotation.category_id)?.name ?? annotation.category_id;
-  /*
-   * One geometry, three consumers. `geometryPreview` used to exist only between
-   * `onShapeChange` and `onShapeChangeEnd` of a single mouse gesture; keyboard
-   * nudging turned it into a state the operator sits in for as long as they
-   * like. Feeding the baseline, the fields and the save button from the same
-   * value is what removes the split where the panel showed one number and the
-   * PATCH carried another.
-   */
-  const effectiveGeometry: EffectiveGeometry = geometryPreview ?? annotation;
-  const [form, setForm] = useState<FormState>(() =>
-    initialFormState(annotation.category_id, effectiveGeometry),
-  );
+  const [form, setForm] = useState<FormState>(() => initialFormState(annotation.category_id));
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
 
@@ -161,18 +107,8 @@ export function AnnotationPopover({
   }, []);
 
   useEffect(() => {
-    setForm((current) =>
-      syncFormState(current, annotation.category_id, effectiveGeometry, frameSize),
-    );
-  }, [
-    annotation.category_id,
-    effectiveGeometry.height,
-    effectiveGeometry.width,
-    effectiveGeometry.x,
-    effectiveGeometry.y,
-    frameSize.height,
-    frameSize.width,
-  ]);
+    setForm((current) => syncFormState(current, annotation.category_id));
+  }, [annotation.category_id]);
 
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -302,7 +238,7 @@ export function AnnotationPopover({
         </Button>
       </div>
 
-      {geometryPreview === null ? null : (
+      {!hasUnsavedGeometry ? null : (
         <p className="df-annotation-popover__unsaved">
           <StatusBadge srLabel="Stan geometrii:" tone="warning">
             Niezapisane
@@ -312,57 +248,6 @@ export function AnnotationPopover({
           </span>
         </p>
       )}
-
-      <details
-        className="df-annotation-popover__geometry"
-        open={invalid || undefined}
-      >
-        <summary>
-          x {form.draft.x} · y {form.draft.y} · w {form.draft.width} · h {form.draft.height}
-        </summary>
-        <div className="df-annotation-popover__geometry-fields">
-          {GEOMETRY_FIELDS.map((field) => (
-            <TextField
-              disabled={disabled}
-              inputMode="numeric"
-              key={field}
-              label={field}
-              onChange={(event) => {
-                setForm((current) => ({
-                  ...current,
-                  draft: { ...current.draft, [field]: event.target.value },
-                  geometryError: null,
-                }));
-              }}
-              type="number"
-              value={form.draft[field]}
-              width="short"
-            />
-          ))}
-        </div>
-        {invalid ? <p className="df-review-annotations__invalid">Boks poza granicami klatki. Popraw jego geometrię.</p> : null}
-        {form.geometryError === null ? null : <p className="df-review-annotations__invalid" role="alert">{form.geometryError}</p>}
-        <div className="df-annotation-popover__actions">
-          <Button
-            disabled={disabled}
-            loading={busyKey === `geometry:${annotation.id}`}
-            onClick={() => {
-              const parsed = parseGeometryDraft(form.draft, frameSize);
-              setForm((current) => ({ ...current, geometryError: parsed.error }));
-              if (parsed.bbox !== null) {
-                onGeometryChange(parsed.bbox);
-              }
-            }}
-            size="sm"
-            variant="secondary"
-          >
-            Zapisz geometrię
-          </Button>
-          <Button disabled={disabled} onClick={onToggleDrawTarget} size="sm" variant={drawing ? "primary" : "secondary"}>
-            {drawing ? "Anuluj przerysowanie" : "Przerysuj bbox"}
-          </Button>
-        </div>
-      </details>
     </div>
   );
 }
