@@ -336,6 +336,7 @@ describe("the drawing surface", () => {
     });
     fireEvent.pointerMove(surface, {
       button: 0,
+      buttons: 1,
       clientX: 520,
       clientY: 300,
       pointerId: 12,
@@ -389,6 +390,7 @@ describe("the drawing surface", () => {
       });
       fireEvent.pointerMove(surface, {
         button: 0,
+        buttons: 1,
         clientX: 480 + dx,
         clientY: 270 + dy,
         pointerId,
@@ -534,6 +536,7 @@ describe("the drawing surface", () => {
 
       fireEvent.pointerMove(surface, {
         button: 0,
+        buttons: 1,
         clientX: 560,
         clientY: 320,
         pointerId: 31,
@@ -549,6 +552,187 @@ describe("the drawing surface", () => {
       expect(onDraw).not.toHaveBeenCalled();
     },
   );
+
+  it("ends a held pan on lost pointer capture and keeps hand mode armed", async () => {
+    const user = userEvent.setup();
+    const onDraw = vi.fn();
+    renderOverlay({ interactionMode: "draw", onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 41,
+    });
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 41,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    const transformAtCaptureLoss = stage?.getAttribute("style");
+
+    fireEvent.lostPointerCapture(surface, { pointerId: 41 });
+
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 600,
+      clientY: 360,
+      pointerId: 41,
+    });
+    expect(stage?.getAttribute("style")).toBe(transformAtCaptureLoss);
+    expect(onDraw).not.toHaveBeenCalled();
+  });
+
+  it("ends a held pan and disarms hand mode when the window blurs", async () => {
+    const user = userEvent.setup();
+    const onDraw = vi.fn();
+    renderOverlay({ interactionMode: "draw", onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 42,
+    });
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 42,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    const transformAtBlur = stage?.getAttribute("style");
+
+    fireEvent(window, new Event("blur"));
+
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 600,
+      clientY: 360,
+      pointerId: 42,
+    });
+    expect(stage?.getAttribute("style")).toBe(transformAtBlur);
+    expect(onDraw).not.toHaveBeenCalled();
+  });
+
+  it("releases capture once when normal pointerup synchronously reports capture loss", async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    Object.defineProperty(surface, "setPointerCapture", { value: vi.fn() });
+    const releasePointerCapture = vi.fn((pointerId: number) => {
+      fireEvent.lostPointerCapture(surface, { pointerId });
+    });
+    Object.defineProperty(surface, "releasePointerCapture", { value: releasePointerCapture });
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 43,
+    });
+
+    expect(() => {
+      fireEvent.pointerUp(surface, {
+        button: 0,
+        buttons: 0,
+        clientX: 520,
+        clientY: 300,
+        pointerId: 43,
+      });
+    }).not.toThrow();
+    expect(releasePointerCapture).toHaveBeenCalledTimes(1);
+    expect(viewport).not.toHaveAttribute("data-panning");
+  });
+
+  it("ends an orphaned pan when pointermove no longer carries its initiating button", async () => {
+    const user = userEvent.setup();
+    const onDraw = vi.fn();
+    renderOverlay({ interactionMode: "draw", onDraw });
+    const surface = surfaceElement();
+    layOutSurface(surface, 960);
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    fireEvent.wheel(surface, {
+      clientX: 480,
+      clientY: 270,
+      ctrlKey: true,
+      deltaY: -100,
+    });
+    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    fireEvent.pointerDown(surface, {
+      button: 0,
+      buttons: 1,
+      clientX: 480,
+      clientY: 270,
+      pointerId: 44,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "true");
+    const transformBeforeMove = stage?.getAttribute("style");
+
+    fireEvent.pointerMove(surface, {
+      button: 0,
+      buttons: 0,
+      clientX: 560,
+      clientY: 320,
+      pointerId: 44,
+    });
+
+    expect(viewport).not.toHaveAttribute("data-panning");
+    expect(stage?.getAttribute("style")).toBe(transformBeforeMove);
+    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(onDraw).not.toHaveBeenCalled();
+  });
 
   it("leaves an ordinary wheel gesture to the page", () => {
     renderOverlay();
@@ -623,7 +807,13 @@ describe("the drawing surface", () => {
     }
 
     fireEvent.pointerDown(surface, { button, clientX: 480, clientY: 270, pointerId: 7 });
-    fireEvent.pointerMove(surface, { button, clientX: 520, clientY: 300, pointerId: 7 });
+    fireEvent.pointerMove(surface, {
+      button,
+      buttons: button === 1 ? 4 : 1,
+      clientX: 520,
+      clientY: 300,
+      pointerId: 7,
+    });
 
     expect(viewport).toHaveAttribute("data-panning", "true");
     expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
@@ -666,6 +856,7 @@ describe("the drawing surface", () => {
     });
     fireEvent.pointerMove(surface, {
       button: 0,
+      buttons: 1,
       clientX: 520,
       clientY: 300,
       pointerId: 8,
@@ -733,6 +924,7 @@ describe("the drawing surface", () => {
     });
     fireEvent.pointerMove(surface, {
       button: 0,
+      buttons: 1,
       clientX: 520,
       clientY: 300,
       pointerId: 10,
@@ -784,6 +976,7 @@ describe("the drawing surface", () => {
     });
     fireEvent.pointerMove(surface, {
       button: 0,
+      buttons: 1,
       clientX: 520,
       clientY: 300,
       pointerId: 11,
