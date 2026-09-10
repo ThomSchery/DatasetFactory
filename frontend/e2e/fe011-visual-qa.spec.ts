@@ -189,6 +189,96 @@ test("FE-011-FIX1 reset 1x unieważnia nadal trzymany pan", async ({ page }) => 
   ).toEqual([]);
 });
 
+test("FE-011-FIX2 utrata capture i blur kończą aktywną epokę panu", async ({ page }) => {
+  const api = new ApiHarness({ phase: "review" });
+  await api.install(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/annotations/run-1");
+
+  const canvas = page.locator(".df-region-overlay");
+  const surface = page.locator(".df-region-overlay__surface");
+  const zoomStage = page.locator("[data-overlay-zoom-stage]");
+  const handButton = page.locator(".df-region-overlay__zoom-controls button").first();
+  await canvas.scrollIntoViewIfNeeded();
+  const canvasBounds = await canvas.boundingBox();
+  if (canvasBounds === null) {
+    throw new Error("FE-011-FIX2 canvas has no browser geometry");
+  }
+  const center = {
+    x: canvasBounds.x + canvasBounds.width / 2,
+    y: canvasBounds.y + canvasBounds.height / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await handButton.click();
+  await expect(handButton).toHaveAttribute("aria-pressed", "true");
+
+  await surface.evaluate((element) => {
+    element.addEventListener(
+      "pointerdown",
+      (event) => {
+        element.setAttribute("data-fe011-pointer-id", String(event.pointerId));
+      },
+      { once: true },
+    );
+  });
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 48, center.y + 32);
+  await expect(canvas).toHaveAttribute("data-panning", "true");
+  const captureProbe = await surface.evaluate((element) => {
+    const pointerId = Number(element.getAttribute("data-fe011-pointer-id"));
+    return {
+      hasCapture: (element as SVGSVGElement).hasPointerCapture(pointerId),
+      pointerId,
+    };
+  });
+  expect(captureProbe.hasCapture).toBe(true);
+  const transformAtCaptureLoss = await zoomStage.evaluate(
+    (element) => getComputedStyle(element).transform,
+  );
+
+  await surface.evaluate((element, pointerId) => {
+    (element as SVGSVGElement).releasePointerCapture(pointerId);
+  }, captureProbe.pointerId);
+
+  // Chromium applies the pending capture override when it processes the next
+  // pointer event. That move must first emit `lostpointercapture`; it must not
+  // reach the stale pan epoch or alter the transform.
+  await page.mouse.move(center.x + 112, center.y + 80);
+  await expect(canvas).not.toHaveAttribute("data-panning");
+  await expect(handButton).toHaveAttribute("aria-pressed", "true");
+  expect(await zoomStage.evaluate((element) => getComputedStyle(element).transform)).toBe(
+    transformAtCaptureLoss,
+  );
+  await page.mouse.up();
+
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x - 48, center.y - 32);
+  await expect(canvas).toHaveAttribute("data-panning", "true");
+  const transformAtBlur = await zoomStage.evaluate(
+    (element) => getComputedStyle(element).transform,
+  );
+
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+
+  await expect(canvas).not.toHaveAttribute("data-panning");
+  await expect(handButton).toHaveAttribute("aria-pressed", "false");
+  await page.mouse.move(center.x - 112, center.y - 80);
+  expect(await zoomStage.evaluate((element) => getComputedStyle(element).transform)).toBe(
+    transformAtBlur,
+  );
+  await page.mouse.up();
+  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toHaveCount(0);
+  expect(
+    api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
+  ).toEqual([]);
+});
+
 test("FE-011-FIX1 wysoki panel nadal mieści się w viewportcie", async ({ page }) => {
   const api = new ApiHarness({ phase: "review" });
   await api.install(page);
