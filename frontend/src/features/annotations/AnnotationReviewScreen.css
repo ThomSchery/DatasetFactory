@@ -348,14 +348,6 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.df-review-annotations__invalid {
-  margin: var(--size-none);
-  color: var(--color-status-error-default);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-loose);
-}
-
 .df-review-annotations__actions {
   justify-content: flex-end;
 }

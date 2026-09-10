@@ -185,6 +185,20 @@ interface SelectionContext {
 
 const DRAFT_ANNOTATION_ID = "new-annotation-draft";
 
+/**
+ * The four numbers a region is, and nothing a helper happened to spread in.
+ *
+ * `parseGeometryDraft` produced a clean `BBox` as a side effect of parsing the
+ * four form fields, and every geometry request went through it. With the form
+ * gone, gesture helpers hand back `{ ...rect }` of whatever they were given —
+ * an `Annotation` keeps its `id`, `version` and `status` that way — so the
+ * narrowing the parser used to do happens here instead, at the same boundary:
+ * the preview the overlay draws and the body the PATCH carries.
+ */
+function toBBox(rect: BBox): BBox {
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}
+
 function nudgeDirection(key: string): NudgeDirection | null {
   switch (key) {
     case "ArrowUp":
@@ -349,6 +363,25 @@ function LoadedFrameEditor({
     !sourceRectsEqual(previewedAnnotation, geometryPreview.bbox)
       ? geometryPreview.bbox
       : null;
+  /*
+   * A preview the stored annotation has caught up with is no longer a preview.
+   * The form used to keep this true field by field: a field the operator had
+   * not touched followed the server baseline, so a later server move was the
+   * number the panel showed and saved. The overlay has no such per-field
+   * notion, so the preview itself steps aside once it says the same thing as
+   * the annotation — otherwise the next refetch would leave the overlay on a
+   * stale rectangle, flag it as unsaved work nobody did, and let `Enter` push
+   * it back over the newer geometry.
+   */
+  useEffect(() => {
+    if (
+      geometryPreview !== null &&
+      previewedAnnotation !== undefined &&
+      sourceRectsEqual(previewedAnnotation, geometryPreview.bbox)
+    ) {
+      setGeometryPreview(null);
+    }
+  }, [geometryPreview, previewedAnnotation]);
   const shapes: OverlayShape[] = activeAnnotations.map((annotation) => {
     const categoryName = categoryById.get(annotation.category_id) ?? annotation.category_id;
     const confidenceLabel =
@@ -559,10 +592,10 @@ function LoadedFrameEditor({
 
   function previewAnnotationGeometry(annotationId: string, bbox: BBox): void {
     if (annotationId === DRAFT_ANNOTATION_ID) {
-      setDraftBBox(bbox);
+      setDraftBBox(toBBox(bbox));
       return;
     }
-    setGeometryPreview({ annotationId, bbox });
+    setGeometryPreview({ annotationId, bbox: toBBox(bbox) });
   }
 
   function previewManipulationGeometry(annotationId: string, bbox: BBox): void {
@@ -614,7 +647,8 @@ function LoadedFrameEditor({
     }
   }
 
-  function commitAnnotationGeometry(annotationId: string, bbox: BBox): void {
+  function commitAnnotationGeometry(annotationId: string, rect: BBox): void {
+    const bbox = toBBox(rect);
     if (annotationId === DRAFT_ANNOTATION_ID) {
       setDraftBBox(bbox);
       return;
@@ -646,7 +680,7 @@ function LoadedFrameEditor({
 
   function handleDraw(bbox: BBox): void {
     setActionError(null);
-    setDraftBBox(bbox);
+    setDraftBBox(toBBox(bbox));
     updateSelectionContext(DRAFT_ANNOTATION_ID);
     setSelectedId(DRAFT_ANNOTATION_ID);
   }
