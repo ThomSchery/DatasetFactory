@@ -385,4 +385,13 @@ describe("fitsInSource", () => {
   it("rejects a negative origin", () => {
     expect(fitsInSource({ x: -1, y: 0, width: 10, height: 10 }, SOURCE)).toBe(false);
   });
+
+  it.each([
+    { x: 0.5, y: 0, width: 10, height: 10 },
+    { x: 0, y: 0.5, width: 10, height: 10 },
+    { x: 0, y: 0, width: 10.5, height: 10 },
+    { x: 0, y: 0, width: 10, height: 10.5 },
+  ])("rejects fractional source geometry before persistence: %j", (rect) => {
+    expect(fitsInSource(rect, SOURCE)).toBe(false);
+  });
 });

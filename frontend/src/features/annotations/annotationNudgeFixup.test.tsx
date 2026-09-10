@@ -409,8 +409,8 @@ describe("FE-010-FIX2 — Space-pan cannot activate the focused panel button", (
   });
 });
 
-describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {
-  it("saves the nudged value the fields display, not the stale annotation", async () => {
+describe("FE-009-FIX1 — one geometry on the overlay and in the request", () => {
+  it("saves exactly the bbox exposed by the overlay, not the stale annotation", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -418,11 +418,13 @@ describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {
     await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await selectAndNudge(user);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 103 · y 120/));
-    expect(within(dialog).getByLabelText("x")).toHaveValue(103);
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
+    );
+    expect(geometryPatches(fetchSpy)).toHaveLength(0);
 
-    await user.click(within(dialog).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
       expect(geometryPatches(fetchSpy)).toHaveLength(1);
@@ -433,7 +435,7 @@ describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {
     });
   });
 
-  it("sends the number typed after a nudge, never that number appended to it", async () => {
+  it("batches further nudges into the same visible preview until Enter", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -441,30 +443,26 @@ describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {
     await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await selectAndNudge(user);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 103 · y 120/));
-    const xField = within(dialog).getByLabelText("x");
-    await user.clear(xField);
-    await user.type(xField, "555");
+    await user.keyboard("{Shift>}{ArrowRight}{/Shift}{ArrowLeft}");
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 112, y 120, szerokość 40, wysokość 32"),
+    );
+    expect(geometryPatches(fetchSpy)).toHaveLength(0);
 
-    expect(xField).toHaveValue(555);
-    expect(within(dialog).getByText(/^x 555 · y 120/)).toBeVisible();
-
-    await user.click(within(dialog).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
       expect(geometryPatches(fetchSpy)).toHaveLength(1);
     });
     expect(geometryPatches(fetchSpy)[0]?.body).toEqual({
-      bbox: { x: 555, y: 120, width: 40, height: 32 },
+      bbox: { x: 112, y: 120, width: 40, height: 32 },
       expected_version: 3,
     });
-    // 1035 — the preview and the typing concatenated — was the number that
-    // reached the backend while the field still displayed 103.
     expect(JSON.stringify(mutations(fetchSpy))).not.toContain("1035");
   });
 
-  it("keeps a hand-edited field through a further nudge and sends both values", async () => {
+  it("leaves ArrowRight to the remaining class filter without moving the overlay", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -473,27 +471,14 @@ describe("FE-009-FIX1 — one geometry in the panel and in the request", () => {
     await selectAndNudge(user);
 
     const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 103 · y 120/));
-    const heightField = within(dialog).getByLabelText("height");
-    await user.clear(heightField);
-    await user.type(heightField, "50");
-
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
-    classButton.focus();
+    within(dialog).getByRole("textbox", { name: "Klasa" }).focus();
     await user.keyboard("{ArrowRight}");
 
-    expect(within(dialog).getByLabelText("x")).toHaveValue(104);
-    expect(heightField).toHaveValue(50);
-
-    await user.click(within(dialog).getByRole("button", { name: "Zapisz geometrię" }));
-
-    await waitFor(() => {
-      expect(geometryPatches(fetchSpy)).toHaveLength(1);
-    });
-    expect(geometryPatches(fetchSpy)[0]?.body).toEqual({
-      bbox: { x: 104, y: 120, width: 40, height: 50 },
-      expected_version: 3,
-    });
+    expect(overlayShape()).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
+    );
+    expect(geometryPatches(fetchSpy)).toHaveLength(0);
   });
 });
 
@@ -534,7 +519,7 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
   });
 
-  it("arms the redraw when Enter is pressed on Przerysuj bbox", async () => {
+  it("exposes no panel control that can redraw or save geometry", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -543,11 +528,9 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     await selectAndNudge(user, 1);
 
     const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 101 · y 120/));
-    within(dialog).getByRole("button", { name: "Przerysuj bbox" }).focus();
-    await user.keyboard("{Enter}");
-
-    expect(within(dialog).getByRole("button", { name: "Anuluj przerysowanie" })).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Zapisz geometrię" })).not.toBeInTheDocument();
+    expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 101, y 120"));
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
   });
 
@@ -631,9 +614,7 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await selectAndNudge(user);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 103 · y 120/));
-    await user.click(within(dialog).getByRole("button", { name: "Zapisz geometrię" }));
+    await user.keyboard("{Enter}");
 
     expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
     expect(geometryPatches(fetchSpy)).toHaveLength(1);
@@ -642,7 +623,9 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
       expect.stringContaining("x 103, y 120"),
     );
     expect(
-      within(dialog).getByText(/Przesunięcie bboxa nie jest jeszcze zapisane/),
+      within(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).getByText(
+        /Przesunięcie bboxa nie jest jeszcze zapisane/,
+      ),
     ).toBeVisible();
   });
 

@@ -94,7 +94,7 @@ afterEach(() => {
 });
 
 describe("FE-001-F4-FIX1 interaction regressions", () => {
-  it("cancels redraw A when B is selected, so the next gesture never patches A", async () => {
+  it("draws a fresh draft after selecting B and never patches the prior annotation", async () => {
     const user = userEvent.setup();
     const second = annotationFixture({ id: "ann-2", category_id: "category-2", x: 400 });
     const get = reviewGet({
@@ -110,12 +110,9 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
 
     await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    await user.click(screen.getByText(/^x 100 · y 120/));
-    await user.click(screen.getByRole("button", { name: "Przerysuj bbox" }));
-    expect(screen.getByRole("button", { name: "Anuluj przerysowanie" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
-    expect(screen.queryByRole("button", { name: "Anuluj przerysowanie" })).not.toBeInTheDocument();
 
     const surface = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
     layOut(surface);
@@ -126,7 +123,9 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     await waitFor(() => {
       expect(
         fetchSpy.mock.calls.some(
-          ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+          ([url, init]) =>
+            (url === "/api/v1/annotations/ann-1" || url === "/api/v1/annotations/ann-2") &&
+            init?.method === "PATCH",
         ),
       ).toBe(false);
       expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
@@ -171,14 +170,17 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
       expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
     });
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await user.click(classButton);
+    classButton.focus();
+    await user.keyboard("{ArrowRight}{Enter}");
     await waitFor(() => {
       expect(overlayOptions()[0]).not.toHaveClass("df-region-overlay__shape--error");
       expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
     });
 
-    await user.click(screen.getByRole("button", { name: "Zapisz geometrię" }));
+    classButton.focus();
+    await user.keyboard("{ArrowRight}{Enter}");
     expect(await screen.findByText(/Kod: version_conflict/)).toBeInTheDocument();
     expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
   });

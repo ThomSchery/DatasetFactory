@@ -159,7 +159,7 @@ function configuredRuntimeRoot(): string {
 test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny review", async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   expect(fs.existsSync(referenceImage)).toBe(true);
   expect(fs.existsSync(fixtureVideo)).toBe(true);
   const runtimeRoot = configuredRuntimeRoot();
@@ -396,7 +396,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
   const annotationEditor = page.getByRole("dialog", { name: /Edytuj anotację/ });
   await expect(annotationEditor).toBeVisible();
-  await annotationEditor.locator("summary").click();
+  await expect(annotationEditor.getByRole("spinbutton")).toHaveCount(0);
+  await expect(annotationEditor.getByRole("button", { name: "Zapisz geometrię" })).toHaveCount(0);
+  await expect(annotationEditor.getByRole("button", { name: "Przerysuj bbox" })).toHaveCount(0);
   const frameSurface = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   const selectedOption = frameSurface.getByRole("option").first();
   await expect(selectedOption).toHaveAttribute("aria-selected", "true");
@@ -451,14 +453,13 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.move(moveFrom.x, moveFrom.y);
   await page.mouse.down();
   await page.mouse.move(moveTo.x, moveTo.y, { steps: 3 });
-  await expect(annotationEditor.getByLabel("x", { exact: true })).toHaveValue(String(movedBbox.x));
-  await expect(annotationEditor.getByLabel("y", { exact: true })).toHaveValue(String(movedBbox.y));
-  await expect(annotationEditor.getByLabel("width", { exact: true })).toHaveValue(
-    String(movedBbox.width),
+  await expect(selectedOption).toHaveAttribute(
+    "aria-label",
+    new RegExp(
+      `x ${String(movedBbox.x)}, y ${String(movedBbox.y)}, szerokość ${String(movedBbox.width)}, wysokość ${String(movedBbox.height)}`,
+    ),
   );
-  await expect(annotationEditor.getByLabel("height", { exact: true })).toHaveValue(
-    String(movedBbox.height),
-  );
+  await expect(annotationEditor.getByText("Niezapisane")).toBeVisible();
   await page.mouse.up();
 
   await expect.poll(() => geometryBodies.length).toBe(1);
@@ -533,13 +534,11 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.move(resizeFrom.x, resizeFrom.y);
   await page.mouse.down();
   await page.mouse.move(resizeTo.x, resizeTo.y, { steps: 3 });
-  await expect(annotationEditor.getByLabel("x", { exact: true })).toHaveValue(String(resizedBbox.x));
-  await expect(annotationEditor.getByLabel("y", { exact: true })).toHaveValue(String(resizedBbox.y));
-  await expect(annotationEditor.getByLabel("width", { exact: true })).toHaveValue(
-    String(resizedBbox.width),
-  );
-  await expect(annotationEditor.getByLabel("height", { exact: true })).toHaveValue(
-    String(resizedBbox.height),
+  await expect(selectedOption).toHaveAttribute(
+    "aria-label",
+    new RegExp(
+      `x ${String(resizedBbox.x)}, y ${String(resizedBbox.y)}, szerokość ${String(resizedBbox.width)}, wysokość ${String(resizedBbox.height)}`,
+    ),
   );
   await page.mouse.up();
 
@@ -558,21 +557,26 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     })
     .toEqual(resizedBbox);
 
-  await annotationEditor.getByLabel("x", { exact: true }).fill(String(resizedBbox.x + 1));
-  await annotationEditor.getByRole("button", { name: "Zapisz geometrię" }).click();
-  await expect
-    .poll(async () => {
-      const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
-      return frame.annotations[0]?.x;
-    })
-    .toBe(resizedBbox.x + 1);
+  const afterResize = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+  const resizedAnnotation = afterResize.annotations[0];
+  if (resizedAnnotation === undefined) {
+    throw new Error("Resized annotation missing before keyboard nudge");
+  }
+  const nudgedBbox = { ...resizedBbox, x: resizedBbox.x + 3 };
+  const classChip = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
+  await classChip.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(selectedOption).toHaveAttribute(
+    "aria-label",
+    new RegExp(
+      `x ${String(nudgedBbox.x)}, y ${String(nudgedBbox.y)}, szerokość ${String(nudgedBbox.width)}, wysokość ${String(nudgedBbox.height)}`,
+    ),
+  );
+  expect(geometryBodies).toHaveLength(2);
+  await expect(annotationEditor.getByText("Niezapisane")).toBeVisible();
 
-  const edgeX = frameAfterResume.width - resizedBbox.width;
-  await annotationEditor.getByLabel("x", { exact: true }).fill(String(edgeX));
-  await annotationEditor.getByRole("button", { name: "Zapisz geometrię" }).click();
-  await expect
-    .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).annotations[0]?.x)
-    .toBe(edgeX);
   const frameImageBounds = await page
     .getByRole("img", { name: `Klatka 0 runu ${runId}` })
     .boundingBox();
@@ -585,6 +589,35 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   expect(dockedPopoverBounds.y).toBeGreaterThanOrEqual(
     frameImageBounds.y + frameImageBounds.height,
   );
+  await testInfo.attach("fe-012-panel-unsaved", {
+    body: await annotationEditor.screenshot(),
+    contentType: "image/png",
+  });
+  await testInfo.attach("fe-012-layout-metrics", {
+    body: JSON.stringify({
+      canvasHeight: frameImageBounds.height,
+      canvasWidth: frameImageBounds.width,
+      panelHeight: dockedPopoverBounds.height,
+      panelWidth: dockedPopoverBounds.width,
+    }),
+    contentType: "application/json",
+  });
+
+  await page.keyboard.press("Enter");
+  await expect.poll(() => geometryBodies.length).toBe(3);
+  expect(geometryBodies[2]).toEqual({
+    bbox: nudgedBbox,
+    expected_version: resizedAnnotation.version,
+  });
+  await expect
+    .poll(async () => {
+      const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+      const annotation = frame.annotations[0];
+      return annotation === undefined
+        ? null
+        : { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
+    })
+    .toEqual(nudgedBbox);
 
   await annotationEditor.getByRole("button", { name: "Usuń" }).click();
   await expect(page.getByText("Ta klatka nie ma aktywnych anotacji.")).toBeVisible();

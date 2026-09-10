@@ -304,7 +304,14 @@ describe("annotation review query states", () => {
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
 
-    screen.getByText(/^x 600 · y 500/).focus();
+    /*
+     * The draft has no class chip to park focus on, and the overlay's own
+     * options answer arrows with roving focus. The geometry summary used to be
+     * the third place focus could sit; with it gone, this is the state the
+     * operator is in after clicking anything that is not a control — panel
+     * blurred, nothing else focused.
+     */
+    (document.activeElement as HTMLElement | null)?.blur();
     await user.keyboard("{ArrowRight}{Shift>}{ArrowDown}{/Shift}");
 
     expect(
@@ -330,9 +337,9 @@ describe("annotation review query states", () => {
 
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 103, y 120"),
+      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
     );
-    expect(screen.getByText(/^x 103 · y 120/)).toBeVisible();
+    expect(screen.getByText("Niezapisane")).toBeVisible();
     expect(
       fetchSpy.mock.calls.filter(
         ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
@@ -376,18 +383,22 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi({ frame: frameDetailFixture({ annotations: [edge] }) });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
     fireEvent.click(classButton);
     classButton.focus();
 
     expect(fireEvent.keyDown(classButton, { key: "ArrowRight" })).toBe(true);
-    expect(screen.getByText(/^x 1880 · y 120/)).toBeVisible();
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 1880, y 120, szerokość 40, wysokość 32"),
+    );
+    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
     fireEvent.keyDown(classButton, { key: "Enter" });
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
   });
 
-  it("leaves ArrowRight to the x field while it owns focus", async () => {
+  it("leaves ArrowRight to the class filter while it owns focus", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -395,8 +406,7 @@ describe("annotation review query states", () => {
     const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 100 · y 120/));
-    within(dialog).getByLabelText("x").focus();
+    within(dialog).getByRole("textbox", { name: "Klasa" }).focus();
     await user.keyboard("{ArrowRight}");
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
@@ -600,7 +610,7 @@ describe("annotation review query states", () => {
     ).toBe(false);
   });
 
-  it("updates geometry fields live and saves the dragged bbox through the existing PATCH", async () => {
+  it("updates the overlay live and saves the dragged bbox through the existing PATCH", async () => {
     const user = userEvent.setup();
     const updated = annotationFixture({ x: 300, y: 220, width: 40, height: 32, version: 4 });
     const fetchSpy = reviewApi({
@@ -621,8 +631,6 @@ describe("annotation review query states", () => {
       toJSON: () => ({}),
     } as DOMRect);
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.click(within(dialog).getByText(/^x 100 · y 120/));
     const fill = within(overlay)
       .getByRole("option")
       .querySelector(".df-region-overlay__shape-fill");
@@ -633,10 +641,11 @@ describe("annotation review query states", () => {
     fireEvent.pointerDown(fill as Element, { clientX: 55, clientY: 65, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 155, clientY: 115, pointerId: 1 });
 
-    expect(within(dialog).getByLabelText("x")).toHaveValue(300);
-    expect(within(dialog).getByLabelText("y")).toHaveValue(220);
-    expect(within(dialog).getByLabelText("width")).toHaveValue(40);
-    expect(within(dialog).getByLabelText("height")).toHaveValue(32);
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 300, y 220, szerokość 40, wysokość 32"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
 
     fireEvent.pointerUp(overlay, { clientX: 155, clientY: 115, pointerId: 1 });
 
@@ -651,7 +660,7 @@ describe("annotation review query states", () => {
     });
   });
 
-  it("resets dirty class and geometry when keyboard selection moves from annotation A to B", async () => {
+  it("resets dirty class and the scoped geometry preview when selection moves from A to B", async () => {
     const user = userEvent.setup();
     const first = annotationFixture();
     const second = annotationFixture({
@@ -665,25 +674,22 @@ describe("annotation review query states", () => {
     });
     const fetchSpy = reviewApi({
       frame: frameDetailFixture({ annotations: [first, second] }),
-      mutation: (url, init) => {
-        if (url === "/api/v1/annotations/ann-2" && init?.method === "PATCH") {
-          return { status: 200, body: { ...second, version: second.version + 1 } };
-        }
-        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
-      },
       profile: RICH_PROFILE,
     });
     renderApp(["/annotations/run-1"]);
     const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const firstClassButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await user.click(firstClassButton);
     const firstDialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.type(within(firstDialog).getByLabelText("Klasa"), "sco");
     await user.click(within(firstDialog).getByRole("option", { name: "Score" }));
-    await user.click(within(firstDialog).getByText(/^x 100 · y 120/));
-    const dirtyX = within(firstDialog).getByLabelText("x");
-    await user.clear(dirtyX);
-    await user.type(dirtyX, "999");
+    firstClassButton.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(within(overlay).getAllByRole("option")[0]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 101, y 120"),
+    );
 
     const overlayOptions = within(overlay).getAllByRole("option");
     overlayOptions[0]?.focus();
@@ -699,21 +705,12 @@ describe("annotation review query states", () => {
       "aria-selected",
       "false",
     );
-    expect(within(secondDialog).getByLabelText("x")).toHaveValue(500);
-    expect(within(secondDialog).getByLabelText("y")).toHaveValue(320);
-
-    await user.click(within(secondDialog).getByText(/^x 500 · y 320/));
-    await user.click(within(secondDialog).getByRole("button", { name: "Zapisz geometrię" }));
-
-    await waitFor(() => {
-      const patches = fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH");
-      expect(patches).toHaveLength(1);
-      expect(patches[0]?.[0]).toBe("/api/v1/annotations/ann-2");
-      expect(JSON.parse(String(patches[0]?.[1]?.body))).toEqual({
-        bbox: { height: 48, width: 60, x: 500, y: 320 },
-        expected_version: 3,
-      });
-    });
+    expect(within(overlay).getAllByRole("option")[1]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 500, y 320, szerokość 60, wysokość 48"),
+    );
+    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
   });
 
   it("renders the selected-frame error state with retry", async () => {
@@ -1243,8 +1240,24 @@ describe("review filters and mutations", () => {
     const secondOption = screen.getByRole("option", { name: /^health, źródło OCR:/ });
     expect(firstOption).not.toHaveClass("df-region-overlay__shape--error");
     expect(secondOption).toHaveClass("df-region-overlay__shape--error");
+    /*
+     * Selecting the flagged box used to open a panel that repeated the verdict
+     * in its geometry section. That section is gone, so the reason has one
+     * place left — the frame-level alert — and the mapping to the annotation
+     * has one carrier left: the tone of its overlay option, which selection
+     * must not move onto the healthy box.
+     */
     fireEvent.click(secondOption.querySelector(".df-region-overlay__shape-fill") as Element);
-    expect(await screen.findByText("Boks poza granicami klatki. Popraw jego geometrię.")).toBeVisible();
+    expect(await screen.findByRole("dialog", { name: "Edytuj anotację health" })).toBeVisible();
+    expect(screen.getByRole("option", { name: /^health, źródło OCR:/ })).toHaveClass(
+      "df-region-overlay__shape--error",
+    );
+    expect(screen.getByRole("option", { name: /^7, źródło OCR:/ })).not.toHaveClass(
+      "df-region-overlay__shape--error",
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Kod: bbox_invalid");
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   });
 
   it("shows frame_not_reviewable as a Polish domain message rather than an app crash", async () => {
@@ -1325,7 +1338,7 @@ describe("review filters and mutations", () => {
 });
 
 describe("keyboard-complete annotation list", () => {
-  it("exposes selection, class, delete, geometry and draft confirmation as native controls", async () => {
+  it("keeps class, delete and draft controls native while geometry stays on the overlay", async () => {
     const user = userEvent.setup();
     const requests: { method: string; url: string }[] = [];
     reviewApi({
@@ -1345,19 +1358,19 @@ describe("keyboard-complete annotation list", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(saveClass).toBeEnabled());
-    await user.click(screen.getByText(/^x 100 · y 120/));
-    const xField = screen.getByLabelText("x");
-    await user.clear(xField);
-    await user.type(xField, "101");
-    const saveGeometry = screen.getByRole("button", { name: "Zapisz geometrię" });
-    saveGeometry.focus();
+    expect(screen.queryByRole("button", { name: "Zapisz geometrię" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    classButton.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 101, y 120"),
+    );
     await user.keyboard("{Enter}");
-
-    await waitFor(() => expect(saveGeometry).toBeEnabled());
-    const drawGeometry = screen.getByRole("button", { name: "Przerysuj bbox" });
-    drawGeometry.focus();
-    await user.keyboard("{Enter}");
-    expect(screen.getByRole("button", { name: "Anuluj przerysowanie" })).toHaveFocus();
+    await waitFor(() => {
+      expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(2);
+    });
 
     const deleteButton = screen.getByRole("button", { name: "Usuń" });
     deleteButton.focus();
