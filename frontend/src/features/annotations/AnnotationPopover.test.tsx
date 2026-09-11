@@ -26,6 +26,7 @@ const categories: Category[] = [
 
 interface PopoverOverrides {
   annotation?: Annotation;
+  categoryConflict?: Pick<Category, "id" | "name"> | null;
   categoryError?: string | null;
   draft?: boolean;
   hasUnsavedGeometry?: boolean;
@@ -52,6 +53,7 @@ function renderPopover(overrides: PopoverOverrides = {}) {
         annotation={current.annotation ?? annotation}
         busyKey={null}
         categories={categories}
+        categoryConflict={current.categoryConflict ?? null}
         categoryError={current.categoryError ?? null}
         disabled={false}
         draft={current.draft}
@@ -192,6 +194,26 @@ describe("AnnotationPopover", () => {
 
     expect(field).toHaveValue("8");
     expect(screen.getByRole("alert")).toHaveTextContent("Nie udało się zapisać nowej klasy.");
+  });
+
+  it("reveals and selects the backend-authoritative class after a name conflict", async () => {
+    const user = userEvent.setup();
+    const { onCategoryChange, update } = renderPopover();
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+    await user.type(field, "s");
+
+    update({
+      categoryConflict: { id: "health", name: "Health" },
+      categoryError: "Klasa już istnieje. Zapisz przypisanie.",
+    });
+
+    expect(field).toHaveValue("Health");
+    expect(screen.getByRole("option", { name: "Health" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 
   describe("without a geometry form", () => {

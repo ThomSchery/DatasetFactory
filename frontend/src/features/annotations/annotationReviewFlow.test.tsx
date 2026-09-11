@@ -439,6 +439,87 @@ describe("annotation review query states", () => {
     ).toHaveLength(1);
   });
 
+  it.each([
+    { existingId: "long-s", existingName: "ſ", proposedName: "S", typed: "s" },
+    { existingId: "ligature-ff", existingName: "ﬀ", proposedName: "ff", typed: "ff" },
+  ])(
+    "reveals and selects $existingName after the backend rejects $typed as its duplicate",
+    async ({ existingId, existingName, proposedName, typed }) => {
+      const user = userEvent.setup();
+      const conflictProfile = profileFixture({
+        categories: [
+          ...PROFILE.categories,
+          { id: existingId, kind: "game", name: existingName },
+        ],
+      });
+      const writes: Array<{ body: unknown; method: string; url: string }> = [];
+      const fetchSpy = reviewApi({
+        profile: conflictProfile,
+        mutation: (url, init) => {
+          writes.push({
+            body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+            method: init?.method ?? "GET",
+            url,
+          });
+          if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+            return {
+              status: 409,
+              body: errorEnvelope("category_name_exists", "Duplicate category.", {
+                category_id: existingId,
+                category_name: existingName,
+              }),
+            };
+          }
+          if (url === "/api/v1/annotations/ann-1") {
+            return {
+              status: 200,
+              body: annotationFixture({ category_id: existingId }),
+            };
+          }
+          throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+        },
+      });
+      renderApp(["/annotations/run-1"]);
+
+      await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+      const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+      const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+      await user.type(filter, typed);
+      await user.click(
+        within(popover).getByRole("button", {
+          name: `Utwórz i przypisz klasę „${proposedName}”`,
+        }),
+      );
+
+      const recoveredOption = await within(popover).findByRole("option", {
+        name: existingName,
+      });
+      expect(filter).toHaveValue(existingName);
+      expect(recoveredOption).toHaveAttribute("aria-selected", "true");
+      expect(within(popover).getByRole("alert")).toHaveTextContent(
+        "Lista została odświeżona, a istniejąca klasa wybrana",
+      );
+      expect(writes).toHaveLength(1);
+      expect(
+        fetchSpy.mock.calls.filter(
+          ([url, init]) =>
+            url === `/api/v1/profiles/${conflictProfile.id}` &&
+            (init?.method === undefined || init.method === "GET"),
+        ).length,
+      ).toBeGreaterThanOrEqual(2);
+
+      await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+      await waitFor(() => {
+        expect(writes).toHaveLength(2);
+      });
+      expect(writes[1]).toEqual({
+        body: { category_id: existingId, expected_version: 3 },
+        method: "PATCH",
+        url: "/api/v1/annotations/ann-1",
+      });
+    },
+  );
+
   it("nudges a draft in source pixels without POST before or after Enter", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();

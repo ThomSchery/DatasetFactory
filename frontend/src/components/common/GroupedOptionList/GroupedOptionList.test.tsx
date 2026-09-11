@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -255,5 +255,30 @@ describe("GroupedOptionList boundaries", () => {
     for (const row of screen.getAllByRole("checkbox")) {
       expect(row).toHaveAttribute("tabindex", "-1");
     }
+  });
+
+  it("limits filter text by Unicode code points rather than UTF-16 units", () => {
+    const onFilterChange = vi.fn();
+    render(
+      <GroupedOptionList
+        emptyMessage="Nic nie pasuje."
+        filterLabel="Filtruj klasy"
+        filterMaxCodePoints={200}
+        groups={GROUPS}
+        label="Klasy profilu"
+        mode="single"
+        onChange={vi.fn()}
+        onFilterChange={onFilterChange}
+        selectedIds={[]}
+      />,
+    );
+    const filter = screen.getByLabelText("Filtruj klasy");
+
+    fireEvent.change(filter, { target: { value: "🧩".repeat(101) } });
+    expect(filter).toHaveValue("🧩".repeat(101));
+
+    fireEvent.change(filter, { target: { value: "🧩".repeat(201) } });
+    expect(filter).toHaveValue("🧩".repeat(200));
+    expect(onFilterChange).toHaveBeenLastCalledWith("🧩".repeat(200));
   });
 });
