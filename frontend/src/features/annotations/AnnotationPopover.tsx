@@ -33,12 +33,13 @@ export const ANNOTATION_POPOVER_SCOPE_ATTRIBUTE = "data-annotation-popover";
  * name, so the picker can reveal and select exactly that row. `unidentified`
  * is the honest state for a backend that rejects without `details` and whose
  * casefold the browser cannot reproduce: the winner is unknown, so the panel
- * selects nothing, says so, and shows the whole refreshed list instead
- * (FE-013-FIX2).
+ * selects nothing, says so, and shows the whole refreshed list instead. It
+ * also remembers the normalized name that was rejected, so filtering away and
+ * back cannot offer the same doomed create action again (FE-013-FIX2/FIX3).
  */
 export type CategoryConflictRecovery =
   | { category: Pick<Category, "id" | "name">; kind: "identified" }
-  | { kind: "unidentified" };
+  | { kind: "unidentified"; rejectedName: string };
 
 interface AnnotationPopoverProps {
   annotation: Annotation;
@@ -97,12 +98,16 @@ export function AnnotationPopover({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
   const proposedCategory = categoryInputFromName(categoryQuery);
+  const repeatsUnidentifiedConflict =
+    proposedCategory !== null &&
+    categoryConflict?.kind === "unidentified" &&
+    proposedCategory.name === categoryConflict.rejectedName;
   const canCreateCategory =
     proposedCategory !== null &&
-    // An unidentified conflict means this name is already taken by a class the
-    // browser cannot point at. Offering to create it again only buys another
-    // `409`, so the action stays away until the operator types something else.
-    categoryConflict?.kind !== "unidentified" &&
+    // The rejected normalized name is already taken by a class the browser
+    // cannot point at. A different normalized proposal is a new intent, but
+    // returning to this one must not buy another `409`.
+    !repeatsUnidentifiedConflict &&
     !looksLikeDuplicateCategoryName(
       categories.map((category) => category.name),
       proposedCategory.name,

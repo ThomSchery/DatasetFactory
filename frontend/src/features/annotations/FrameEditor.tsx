@@ -375,7 +375,7 @@ function LoadedFrameEditor({
         const winner = authoritativeConflict ?? exactConflict;
         setCategoryConflict(
           winner === undefined || winner === null
-            ? { kind: "unidentified" }
+            ? { kind: "unidentified", rejectedName: intent.category.name }
             : { category: winner, kind: "identified" },
         );
       }
@@ -962,7 +962,13 @@ function LoadedFrameEditor({
             }}
             onCategoryFilterChange={() => {
               setCategoryActionError(null);
-              setCategoryConflict(null);
+              // Keep the rejected normalized name as a local deny-list entry.
+              // AnnotationPopover compares it with the current proposal, so a
+              // genuinely different intent is available immediately while
+              // filtering away and back cannot restart the same `409` loop.
+              setCategoryConflict((current) =>
+                current?.kind === "unidentified" ? current : null,
+              );
             }}
             onClose={() => {
               setCategoryActionError(null);
