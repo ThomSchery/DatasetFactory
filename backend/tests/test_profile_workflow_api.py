@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 import struct
 import zlib
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +13,8 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from backend.app.access.media.image import ReferenceImageProbe
 from backend.app.access.media.processing import SampledFrame
@@ -669,6 +672,43 @@ def test_added_category_rejects_casefolded_trimmed_duplicate_in_same_profile(
         response = client.post(
             f"/api/v1/profiles/{profile_id}/categories",
             json={"name": "  HeAlTh  ", "kind": "game"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "category_name_exists"
+    assert response.json()["error"]["details"] == {
+        "category_id": created.json()["categories"][1]["id"],
+        "category_name": "health",
+    }
+
+
+def test_category_unique_integrity_fallback_maps_to_conflict_response(
+    composition: CompositionRoot,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        profile_id = created.json()["id"]
+
+        def fail_with_category_unique_constraint(_: Session, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+            raise IntegrityError(
+                "INSERT INTO categories (...) VALUES (...)",
+                {},
+                sqlite3.IntegrityError(
+                    "UNIQUE constraint failed: categories.profile_id, categories.name"
+                ),
+            )
+
+        monkeypatch.setattr(Session, "flush", fail_with_category_unique_constraint)
+        response = client.post(
+            f"/api/v1/profiles/{profile_id}/categories",
+            json={"name": "score", "kind": "game"},
         )
 
     assert response.status_code == 409
