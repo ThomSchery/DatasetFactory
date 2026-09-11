@@ -243,6 +243,14 @@
   --df-annotation-popover-viewport-room: 100dvh;
 
   display: grid;
+  /*
+   * One track that can never grow past the panel. The docked variant used to
+   * add an `auto` second column for the action row; any long text auto-placed
+   * beside it — a conflict alert, for instance — then took that column, starved
+   * the `1fr` one and pushed the buttons outside the panel's left edge, where a
+   * plain mouse click hit the dialog instead of the button (FE-013-FIX2).
+   */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--size-xs);
   width: 100%;
   max-height: var(--df-annotation-popover-viewport-room);
@@ -268,6 +276,20 @@
 
 .df-annotation-popover__actions {
   justify-content: flex-end;
+}
+
+/*
+ * A class name is operator input, so the conflict alert can carry one long
+ * unbreakable token. Breaking it inside the alert keeps the single track at
+ * panel width instead of letting min-content widen the row the buttons share.
+ */
+.df-annotation-popover .df-ui-state--inline-error {
+  min-width: 0;
+}
+
+.df-annotation-popover .df-ui-state--inline-error > span:not(.df-ui-state__marker) {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .df-annotation-popover__create-class {
@@ -375,13 +397,4 @@
 .df-review-workspace .df-region-overlay {
   margin-block: var(--size-none);
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
-}
-
-.df-review-workspace__preview .df-annotation-popover {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.df-review-workspace__preview .df-annotation-popover__header,
-.df-review-workspace__preview .df-annotation-popover__unsaved {
-  grid-column: 1 / -1;
 }
