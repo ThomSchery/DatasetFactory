@@ -256,3 +256,86 @@ Moduły/ID UI/UX (te same istniejące prymitywy, bez nowych wartości CSS):
   testów), frontend build, E2E (15 passed), E2E root safety (2 passed).
   Istniejąca sonda FE-013 w 1440×900 oraz regresje kanwy/pan/Space przeszły;
   FIX1 nie zmienił geometrii ani stylu panelu.
+
+## FE-013-FIX2 — plan po re-review
+
+Re-review potwierdził mechanizm backendu, współbieżność, regresję
+`IntegrityError`, oba przepływy i kontrolowany picker. Zakres FIX2 obejmuje
+wyłącznie geometrię panelu po alercie oraz uczciwy fallback starszego `409`
+bez `details`.
+
+### Decyzje
+
+1. `CategoryConflictRecovery` będzie stanem rozłącznym:
+   `identified(category)` albo `unidentified`. Nie da się więc jednocześnie
+   twierdzić, że klasa została wybrana, i nie mieć jej identyfikatora.
+2. `identified` zachowuje FIX1: filtr przyjmuje autorytatywną nazwę, a picker
+   zaznacza ID zwycięzcy. `unidentified` czyści filtr i wybór formularza,
+   pokazuje wszystkie klasy po refetchu, wyłącza „Zapisz” do czasu ręcznego
+   wskazania i ukrywa akcję tworzenia, aby nie wejść w pętlę `409`.
+3. Copy `category_name_exists` jest prawdziwe w obu wariantach: „Lista została
+   odświeżona. Wskaż istniejącą klasę na liście i zapisz przypisanie albo podaj
+   inną nazwę”. Jedno zdanie dla obu stanów, bo `messages.ts` tłumaczy kod
+   błędu, a nie stan ekranu (`react-coding-standards.md` §3); dla identified
+   zaznaczenie widać w pickerze, ale komunikat nie przypisuje sobie sukcesu,
+   którego backend anotacji jeszcze nie potwierdził.
+4. `AnnotationPopover` dostaje jedną kolumnę `minmax(0, 1fr)` zamiast
+   dokowanego wariantu `minmax(0, 1fr) auto`. Rozpinanie pojedynczych dzieci
+   przez `grid-column: 1 / -1` naprawiłoby tylko dzisiejszy alert — każdy
+   następny element auto-placementu znów trafiłby do kolumny `auto` obok
+   przycisków. Alert dostaje dodatkowo `min-width: 0` i `overflow-wrap:
+   anywhere`, bo niesie nazwę pisaną przez operatora, więc może zawierać jeden
+   nierozdzielny token.
+
+### Design Plan FIX2
+
+Tryb: **Operate / hardening**. Zachowujemy baseline i istniejące komponenty.
+
+Elementy interfejsu:
+
+1. `GroupedOptionList` / `TextField` „Klasa” — pełny wiersz panelu; w fallbacku
+   unknown pokazuje pusty filtr i całą odświeżoną listę.
+2. Wiersze `role=option` — przy winner identified jeden ma `aria-selected=true`;
+   przy unknown żaden nie jest zaznaczony do ręcznego kliknięcia.
+3. `Button` „Utwórz i przypisz klasę” — ukryty w unknown niezależnie od
+   heurystyki; nie ma pętli ponownego `409`.
+4. `InlineError` — osobny pełny wiersz, zawijanie dowolnie długiego copy bez
+   wpływu na geometrię przycisków.
+5. Kontener akcji z `Porzuć/Usuń` i `Zapisz klasę` — osobny pełny wiersz;
+   hit-target „Zapisz” musi w całości pozostać wewnątrz dialogu.
+6. `RegionOverlay`, draft i istniejąca anotacja — bez zmian; konflikt nie
+   zapisuje automatycznie anotacji ani geometrii.
+
+Moduły/ID UI/UX:
+
+- [x] Layout/Siatka: pełne wiersze oraz `min-width: 0`, istniejący gap
+  `--size-xs`, **GRID-01/02/05/08/10, SPACING-01/03/04/08/13**.
+- [x] Typografia: bez zmiany skali i wag; alert się zawija,
+  **TYPO-01/02/06/07/08/11, FONTSIZE-02/06/08/09/10,
+  LHEIGHT-10/12, LSPACE-02, CASING-01/02**.
+- [x] Kolory: istniejący `InlineError`, Button i selection,
+  **COLOR-01/07/08/09/10**.
+- [x] Obramowania/promienie: bez zmian,
+  **BORDER-02/03/05/06, BWIDTH-03/06/10/11/12/13,
+  RADIUS-02/03/04/05**.
+- [x] Cienie: bez zmian i nowych warstw, **SHADOW-01/03/05**.
+- [x] Interakcje: mysz, hit-test, focus, Enter/Space, disabled i loading;
+  **COLOR-07, BORDER-06, OPACITY-01/02**.
+- [x] Komponenty: `GroupedOptionList`, `TextField`, `Button`, `InlineError`,
+  `RegionOverlay`; brak nowego common i brak inline `<button>`.
+- [x] Hardening/a11y: najdłuższy komunikat, containment i hit-test,
+  `ſ/S`, `ﬀ/ff`, no-details exact i non-exact, brak fałszywego wyboru,
+  brak create affordance w unknown, zachowane roving tabindex i shortcut scope.
+
+### Testy FIX2
+
+- Playwright dla obu par Unicode: geometria dialogu/przycisku, `elementFromPoint`
+  trafia w przycisk, prawdziwy klik myszy wysyła PATCH z ID i
+  `expected_version: 3`.
+- Playwright z nadmiarowo długim alertem: te same pomiary przed kliknięciem.
+- Integracja no-details non-exact: pusty filtr, pełna lista, brak zaznaczenia,
+  disabled save i brak akcji create; ręczny wybór umożliwia PATCH.
+- Integracja no-details exact po refetchu: automatyczne wskazanie nadal działa.
+- Retest nawigacji `GroupedOptionList`, pustego/białego Enter, obu przepływów,
+  geometrii FE-012, Space FE-010, współbieżności i `IntegrityError`.
+- Finalnie jeden `scripts/check.ps1`: 9/9 PASS, zero SKIP.
