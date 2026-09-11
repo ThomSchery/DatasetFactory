@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Annotation, Category, CategoryInput } from "../../api";
-import { AnnotationPopover } from "./AnnotationPopover";
+import { AnnotationPopover, type CategoryConflictRecovery } from "./AnnotationPopover";
 
 const annotation: Annotation = {
   category_id: "digit-7",
@@ -26,7 +26,7 @@ const categories: Category[] = [
 
 interface PopoverOverrides {
   annotation?: Annotation;
-  categoryConflict?: Pick<Category, "id" | "name"> | null;
+  categoryConflict?: CategoryConflictRecovery | null;
   categoryError?: string | null;
   draft?: boolean;
   hasUnsavedGeometry?: boolean;
@@ -203,7 +203,7 @@ describe("AnnotationPopover", () => {
     await user.type(field, "s");
 
     update({
-      categoryConflict: { id: "health", name: "Health" },
+      categoryConflict: { category: { id: "health", name: "Health" }, kind: "identified" },
       categoryError: "Klasa już istnieje. Zapisz przypisanie.",
     });
 
@@ -214,6 +214,50 @@ describe("AnnotationPopover", () => {
     );
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
     expect(onCategoryChange).toHaveBeenCalledWith("health");
+  });
+
+  it("claims no selection when the conflict winner stays unknown", async () => {
+    const user = userEvent.setup();
+    const { onCategoryChange, update } = renderPopover();
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+    await user.type(field, "s");
+
+    update({
+      categoryConflict: { kind: "unidentified" },
+      categoryError: "Klasa o tej nazwie już istnieje w profilu.",
+    });
+
+    // Filter relaxed, so the class blocking the name is reachable at all.
+    expect(field).toHaveValue("");
+    for (const option of screen.getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-selected", "false");
+    }
+    expect(screen.getByRole("option", { name: "Health" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "7" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(onCategoryChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("option", { name: "Health" }));
+    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    expect(onCategoryChange).toHaveBeenCalledWith("health");
+  });
+
+  it("keeps the create action away while the conflict winner is unknown", async () => {
+    const user = userEvent.setup();
+    const { update } = renderPopover();
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+    await user.type(field, "s");
+    expect(screen.getByRole("button", { name: "Utwórz i przypisz klasę „S”" })).toBeVisible();
+
+    update({ categoryConflict: { kind: "unidentified" } });
+    await user.type(field, "s");
+
+    // The gate holds for as long as the parent keeps the unidentified state;
+    // retyping alone never brings the action back, so there is no `409` loop.
+    expect(field).toHaveValue("s");
+    expect(
+      screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+    ).not.toBeInTheDocument();
   });
 
   describe("without a geometry form", () => {

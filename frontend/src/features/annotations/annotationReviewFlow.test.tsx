@@ -497,7 +497,7 @@ describe("annotation review query states", () => {
       expect(filter).toHaveValue(existingName);
       expect(recoveredOption).toHaveAttribute("aria-selected", "true");
       expect(within(popover).getByRole("alert")).toHaveTextContent(
-        "Lista została odświeżona, a istniejąca klasa wybrana",
+        "Klasa o tej nazwie już istnieje w profilu.",
       );
       expect(writes).toHaveLength(1);
       expect(
@@ -519,6 +519,122 @@ describe("annotation review query states", () => {
       });
     },
   );
+
+  it("says the winner is unknown when an older backend rejects without details", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
+    });
+    const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      profile: conflictProfile,
+      mutation: (url, init) => {
+        writes.push({
+          body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+          method: init?.method ?? "GET",
+          url,
+        });
+        if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+          // A backend that casefolds `ſ` to `s` but answers without `details`.
+          return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        if (url === "/api/v1/annotations/ann-1") {
+          return { status: 200, body: annotationFixture({ category_id: "long-s" }) };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.type(filter, "s");
+    await user.click(within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }));
+
+    const alert = await within(popover).findByRole("alert");
+    expect(alert).toHaveTextContent("Klasa o tej nazwie już istnieje w profilu.");
+    expect(alert).toHaveTextContent("Wskaż istniejącą klasę na liście");
+    expect(alert).not.toHaveTextContent("wybrana");
+    await waitFor(() => {
+      expect(filter).toHaveValue("");
+    });
+    // The blocking class is a duplicate under the backend's casefold only, so
+    // it is unreachable under the typed query and has to be listed again.
+    const blocking = within(popover).getByRole("option", { name: "ſ" });
+    expect(blocking).toHaveAttribute("aria-selected", "false");
+    for (const option of within(popover).getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-selected", "false");
+    }
+    expect(within(popover).getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(
+      within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+    ).not.toBeInTheDocument();
+    expect(writes).toHaveLength(1);
+
+    await user.click(blocking);
+    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+    await waitFor(() => {
+      expect(writes).toHaveLength(2);
+    });
+    expect(writes[1]).toEqual({
+      body: { category_id: "long-s", expected_version: 3 },
+      method: "PATCH",
+      url: "/api/v1/annotations/ann-1",
+    });
+  });
+
+  it("still selects the exact name after a detail-less rejection", async () => {
+    const user = userEvent.setup();
+    const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });
+    const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      profile: evolvingProfile,
+      mutation: (url, init) => {
+        writes.push({
+          body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+          method: init?.method ?? "GET",
+          url,
+        });
+        if (url === `/api/v1/profiles/${evolvingProfile.id}/categories`) {
+          // The race the operator lost: the class exists by the time the
+          // profile is read back, under the very name that was typed.
+          evolvingProfile.categories = [
+            ...evolvingProfile.categories,
+            { id: "score", kind: "game", name: "Score" },
+          ];
+          return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        if (url === "/api/v1/annotations/ann-1") {
+          return { status: 200, body: annotationFixture({ category_id: "score" }) };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.type(filter, "Score");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Score”" }),
+    );
+
+    const recovered = await within(popover).findByRole("option", { name: "Score" });
+    expect(filter).toHaveValue("Score");
+    expect(recovered).toHaveAttribute("aria-selected", "true");
+
+    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+    await waitFor(() => {
+      expect(writes).toHaveLength(2);
+    });
+    expect(writes[1]).toEqual({
+      body: { category_id: "score", expected_version: 3 },
+      method: "PATCH",
+      url: "/api/v1/annotations/ann-1",
+    });
+  });
 
   it("nudges a draft in source pixels without POST before or after Enter", async () => {
     const user = userEvent.setup();

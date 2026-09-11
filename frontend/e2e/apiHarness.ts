@@ -1,7 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 import path from "node:path";
 
-import type { Dashboard, Export, FrameDetail, PipelineRun } from "../src/api/types";
+import type { Category, Dashboard, Export, FrameDetail, PipelineRun } from "../src/api/types";
 import {
   dashboardFixture,
   emptyDashboard,
@@ -31,6 +31,17 @@ export interface CapturedRequest {
   body: unknown;
   method: string;
   pathname: string;
+}
+
+/**
+ * A class the profile already holds, which the backend will name as the winner
+ * of any create attempt. `detail: "none"` is the older backend that rejects
+ * with `category_name_exists` and no `details` — the path the panel cannot
+ * resolve on its own, because the duplicate holds only under Unicode casefold.
+ */
+export interface CategoryConflictFixture {
+  detail: "details" | "none";
+  winner: Category;
 }
 
 const fixtureImage = path.resolve(
@@ -87,10 +98,15 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ body: JSON.stringify(body), contentType: "application/json", status });
 }
 
-function apiError(route: Route, code: string, status: number) {
+function apiError(
+  route: Route,
+  code: string,
+  status: number,
+  details: Record<string, unknown> = {},
+) {
   return json(
     route,
-    { error: { code, details: {}, message: "Fixture API error.", request_id: "e2e-request" } },
+    { error: { code, details, message: "Fixture API error.", request_id: "e2e-request" } },
     status,
   );
 }
@@ -99,11 +115,27 @@ export class ApiHarness {
   readonly requests: CapturedRequest[] = [];
   dashboardMode: DashboardMode;
   phase: HarnessPhase;
+  private readonly categoryConflict: CategoryConflictFixture | null;
   private exportReads = 0;
 
-  constructor(options: { dashboardMode?: DashboardMode; phase?: HarnessPhase } = {}) {
+  constructor(
+    options: {
+      categoryConflict?: CategoryConflictFixture;
+      dashboardMode?: DashboardMode;
+      phase?: HarnessPhase;
+    } = {},
+  ) {
+    this.categoryConflict = options.categoryConflict ?? null;
     this.dashboardMode = options.dashboardMode ?? "normal";
     this.phase = options.phase ?? "empty";
+  }
+
+  /** The profile as the API answers it, including any pre-existing winner. */
+  private profileBody() {
+    const conflict = this.categoryConflict;
+    return conflict === null
+      ? profile
+      : { ...profile, categories: [...profile.categories, conflict.winner] };
   }
 
   async install(page: Page): Promise<void> {
@@ -180,11 +212,30 @@ export class ApiHarness {
       return;
     }
     if (pathname === "/profiles/current" && method === "GET") {
-      await json(route, this.phase === "empty" ? null : profile);
+      await json(route, this.phase === "empty" ? null : this.profileBody());
       return;
     }
     if (pathname === "/profiles/profile-1" && method === "GET") {
-      await json(route, profile);
+      await json(route, this.profileBody());
+      return;
+    }
+    if (pathname === "/profiles/profile-1/categories" && method === "POST") {
+      const conflict = this.categoryConflict;
+      if (conflict === null) {
+        const name = typeof body === "object" && body !== null && "name" in body
+          ? String((body as { name: unknown }).name)
+          : "";
+        await json(route, { id: "category-new", kind: "game", name }, 201);
+        return;
+      }
+      await apiError(
+        route,
+        "category_name_exists",
+        409,
+        conflict.detail === "none"
+          ? {}
+          : { category_id: conflict.winner.id, category_name: conflict.winner.name },
+      );
       return;
     }
     if (pathname.startsWith("/assets/references/") && method === "GET") {
@@ -246,6 +297,14 @@ export class ApiHarness {
     }
     if (pathname === "/frames/frame-1/image" && method === "GET") {
       await route.fulfill({ contentType: "image/png", path: fixtureImage, status: 200 });
+      return;
+    }
+    if (pathname.startsWith("/annotations/") && method === "PATCH") {
+      const current = pendingFrame.annotations[0]!;
+      const categoryId = typeof body === "object" && body !== null && "category_id" in body
+        ? String((body as { category_id: unknown }).category_id)
+        : current.category_id;
+      await json(route, { ...current, category_id: categoryId, version: current.version + 1 });
       return;
     }
     if (pathname === "/frames/frame-1/review" && method === "POST") {
