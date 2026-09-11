@@ -584,6 +584,82 @@ describe("annotation review query states", () => {
     });
   });
 
+  it("keeps the rejected normalized name blocked until the real parent sees another intent", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
+    });
+    const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      profile: conflictProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        writes.push({ body, method: init?.method ?? "GET", url });
+        if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+          if ((body as { name?: unknown } | undefined)?.name === "Mana") {
+            return { status: 201, body: { id: "mana", kind: "game", name: "Mana" } };
+          }
+          return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        if (url === "/api/v1/annotations/ann-1") {
+          return { status: 200, body: annotationFixture({ category_id: "mana" }) };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.type(filter, "s");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+    await within(popover).findByRole("alert");
+    await waitFor(() => {
+      expect(filter).toHaveValue("");
+    });
+    expect(writes).toHaveLength(1);
+
+    // This input crosses the real AnnotationPopover -> FrameEditor callback
+    // boundary. With the FIX2 parent it erased `unidentified` and exposed a
+    // second create action for the same normalized proposal.
+    await user.type(filter, "s");
+    expect(filter).toHaveValue("s");
+    expect(
+      within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+    ).not.toBeInTheDocument();
+    expect(writes).toHaveLength(1);
+
+    await user.clear(filter);
+    await user.type(filter, "Mana");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Mana”" }),
+    );
+
+    await waitFor(() => {
+      expect(writes).toHaveLength(3);
+    });
+    expect(writes).toEqual([
+      {
+        body: { kind: "character", name: "S" },
+        method: "POST",
+        url: `/api/v1/profiles/${conflictProfile.id}/categories`,
+      },
+      {
+        body: { kind: "game", name: "Mana" },
+        method: "POST",
+        url: `/api/v1/profiles/${conflictProfile.id}/categories`,
+      },
+      {
+        body: { category_id: "mana", expected_version: 3 },
+        method: "PATCH",
+        url: "/api/v1/annotations/ann-1",
+      },
+    ]);
+  });
+
   it("still selects the exact name after a detail-less rejection", async () => {
     const user = userEvent.setup();
     const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });

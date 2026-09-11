@@ -223,7 +223,7 @@ describe("AnnotationPopover", () => {
     await user.type(field, "s");
 
     update({
-      categoryConflict: { kind: "unidentified" },
+      categoryConflict: { kind: "unidentified", rejectedName: "S" },
       categoryError: "Klasa o tej nazwie już istnieje w profilu.",
     });
 
@@ -249,12 +249,24 @@ describe("AnnotationPopover", () => {
     await user.type(field, "s");
     expect(screen.getByRole("button", { name: "Utwórz i przypisz klasę „S”" })).toBeVisible();
 
-    update({ categoryConflict: { kind: "unidentified" } });
+    update({ categoryConflict: { kind: "unidentified", rejectedName: "S" } });
     await user.type(field, "s");
 
-    // The gate holds for as long as the parent keeps the unidentified state;
-    // retyping alone never brings the action back, so there is no `409` loop.
+    // This local test proves the name comparison in the popover. The integration
+    // suite owns the parent wiring that keeps the rejection memory alive.
     expect(field).toHaveValue("s");
+    expect(
+      screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+    ).not.toBeInTheDocument();
+
+    await user.clear(field);
+    await user.type(field, "Mana");
+    expect(
+      screen.getByRole("button", { name: "Utwórz i przypisz klasę „Mana”" }),
+    ).toBeVisible();
+
+    await user.clear(field);
+    await user.type(field, "s");
     expect(
       screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
     ).not.toBeInTheDocument();
