@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  categoryNameConflictFromError,
   describeApiError,
   createProfileCategory,
   describeErrorCode,
@@ -16,6 +17,7 @@ import {
   type Annotation,
   type BBox,
   type CategoryInput,
+  type CategoryNameConflict,
   type CopyPreviousAnnotationsResult,
   type ErrorPresentation,
   type FrameCounts,
@@ -252,6 +254,7 @@ function LoadedFrameEditor({
   const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
   const [categoryActionError, setCategoryActionError] = useState<ErrorPresentation | null>(null);
+  const [categoryConflict, setCategoryConflict] = useState<CategoryNameConflict | null>(null);
   const createdCategoryRef = useRef(false);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
   // The HUD level is preselected whole, which is the request the panel sent by
@@ -324,6 +327,7 @@ function LoadedFrameEditor({
         setCopyFeedback(null);
       }
       const presentation = describeApiError(error);
+      const authoritativeConflict = categoryNameConflictFromError(error);
       if (
         intent.kind === "category" ||
         intent.kind === "create" ||
@@ -359,10 +363,18 @@ function LoadedFrameEditor({
         );
       }
       await Promise.all(invalidations);
+      if (intent.kind === "create-category" && presentation.code === "category_name_exists") {
+        const refreshedProfile = queryClient.getQueryData<GameProfile>(queryKeys.profile(profile.id));
+        const exactConflict = refreshedProfile?.categories.find(
+          (category) => category.name === intent.category.name,
+        );
+        setCategoryConflict(authoritativeConflict ?? exactConflict ?? null);
+      }
     },
     onSuccess: async (data, intent) => {
       setActionError(null);
       setCategoryActionError(null);
+      setCategoryConflict(null);
       if (intent.kind === "review") {
         setInvalidIds([]);
       } else if (intent.kind === "geometry" || intent.kind === "delete") {
@@ -663,6 +675,7 @@ function LoadedFrameEditor({
   function submit(intent: EditorMutationIntent): void {
     setActionError(null);
     setCategoryActionError(null);
+    setCategoryConflict(null);
     mutation.mutate(intent);
   }
 
@@ -909,6 +922,7 @@ function LoadedFrameEditor({
             annotation={popoverAnnotation}
             busyKey={currentBusyKey}
             categories={profile.categories}
+            categoryConflict={categoryConflict}
             categoryError={
               categoryActionError === null ? null : errorMessage(categoryActionError)
             }
@@ -939,9 +953,11 @@ function LoadedFrameEditor({
             }}
             onCategoryFilterChange={() => {
               setCategoryActionError(null);
+              setCategoryConflict(null);
             }}
             onClose={() => {
               setCategoryActionError(null);
+              setCategoryConflict(null);
               closeSelectionContext();
               setDraftBBox(null);
               setSelectedId(null);

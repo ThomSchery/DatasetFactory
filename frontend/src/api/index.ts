@@ -3,9 +3,9 @@ export type { QueryParams, RequestOptions } from "./client";
 
 export {
   CHARACTER_CLASS_ALPHABET,
-  caseFoldCategoryName,
+  categoryNameDuplicateHintKey,
   categoryInputFromName,
-  isDuplicateCategoryName,
+  looksLikeDuplicateCategoryName,
 } from "./categoryNames";
 
 export {
@@ -13,11 +13,12 @@ export {
   ApiTransportError,
   annotationIdsFromError,
   apiErrorFromBody,
+  categoryNameConflictFromError,
   isApiError,
   isApiTransportError,
   isVersionConflict,
 } from "./errors";
-export type { ErrorDetails } from "./errors";
+export type { CategoryNameConflict, ErrorDetails } from "./errors";
 
 export * from "./endpoints";
 

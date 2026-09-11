@@ -32,7 +32,11 @@ export interface GroupedOptionListProps {
   filterAction?: ReactNode;
   /** Label of the filter control; it is this component's own text input. */
   filterLabel: string;
+  /** Maximum Unicode code points; unlike native maxLength, astral characters count once. */
+  filterMaxCodePoints?: number;
   filterMaxLength?: number;
+  /** Makes the filter controlled when recovery needs to reveal a server-selected option. */
+  filterValue?: string;
   groups: readonly GroupedOptionGroup[];
   /** Accessible name of the collection. */
   label: string;
@@ -70,6 +74,10 @@ const GROUP_ROW_PREFIX = "group:";
 
 function normalize(value: string): string {
   return value.trim().toLocaleLowerCase("pl");
+}
+
+function limitCodePoints(value: string, maximum: number | undefined): string {
+  return maximum === undefined ? value : [...value].slice(0, maximum).join("");
 }
 
 function visibleGroups(
@@ -115,7 +123,9 @@ export function GroupedOptionList({
   emptyMessage,
   filterAction,
   filterLabel,
+  filterMaxCodePoints,
   filterMaxLength,
+  filterValue,
   groups,
   label,
   mode,
@@ -124,11 +134,12 @@ export function GroupedOptionList({
   onFilterChange,
   selectedIds,
 }: GroupedOptionListProps) {
-  const [query, setQuery] = useState("");
+  const [uncontrolledQuery, setUncontrolledQuery] = useState("");
   const [requestedActiveId, setRequestedActiveId] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const filterRef = useRef<HTMLInputElement | null>(null);
 
+  const query = filterValue ?? uncontrolledQuery;
   const shown = useMemo(() => visibleGroups(groups, query), [groups, query]);
   const rows = useMemo(() => {
     const collected: Row[] = [];
@@ -292,9 +303,12 @@ export function GroupedOptionList({
         label={filterLabel}
         maxLength={filterMaxLength}
         onChange={(event) => {
-          setQuery(event.target.value);
+          const nextQuery = limitCodePoints(event.target.value, filterMaxCodePoints);
+          if (filterValue === undefined) {
+            setUncontrolledQuery(nextQuery);
+          }
           setRequestedActiveId(null);
-          onFilterChange?.(event.target.value);
+          onFilterChange?.(nextQuery);
         }}
         onKeyDown={handleFilterKeyDown}
         ref={filterRef}

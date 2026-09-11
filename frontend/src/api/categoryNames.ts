@@ -8,20 +8,22 @@ export const CHARACTER_CLASS_ALPHABET: readonly string[] = [
 const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 
 /**
- * The closest browser-side equivalent of Python's `str.casefold()` used by
- * `_require_unique`. JavaScript has no complete Unicode case-folding API, so
- * the backend remains authoritative for uncommon scripts.
+ * A cheap hint for deciding whether the create affordance is useful.
+ *
+ * This is deliberately not Python `str.casefold()`: browsers expose no
+ * equivalent Unicode table. The backend owns duplicate detection and a 409
+ * returns the authoritative existing category to the picker.
  */
-export function caseFoldCategoryName(value: string): string {
-  return value.trim().toLowerCase().replaceAll("ß", "ss").replaceAll("ς", "σ");
+export function categoryNameDuplicateHintKey(value: string): string {
+  return value.trim().toLocaleLowerCase("pl");
 }
 
-export function isDuplicateCategoryName(
+export function looksLikeDuplicateCategoryName(
   existing: readonly string[],
   candidate: string,
 ): boolean {
-  const foldedCandidate = caseFoldCategoryName(candidate);
-  return existing.some((name) => caseFoldCategoryName(name) === foldedCandidate);
+  const candidateHint = categoryNameDuplicateHintKey(candidate);
+  return existing.some((name) => categoryNameDuplicateHintKey(name) === candidateHint);
 }
 
 /**
@@ -32,13 +34,16 @@ export function isDuplicateCategoryName(
  */
 export function categoryInputFromName(value: string): CategoryInput | null {
   const name = value.trim();
-  if (name === "" || name.length > 200) {
+  const codePoints = [...name];
+  if (name === "" || codePoints.length > 200) {
     return null;
   }
 
-  const uppercase = name.toLocaleUpperCase("en-US");
-  if ([...name].length === 1 && [...uppercase].length === 1 && CHARACTER_CLASSES.has(uppercase)) {
-    return { kind: "character", name: uppercase };
+  // The accepted domain decision is intentionally ASCII-only. Unicode
+  // uppercasing would silently turn ſ into S and ı into I.
+  const canonicalName = /^[a-z]$/.test(name) ? name.toUpperCase() : name;
+  if (codePoints.length === 1 && CHARACTER_CLASSES.has(canonicalName)) {
+    return { kind: "character", name: canonicalName };
   }
   return { kind: "game", name };
 }

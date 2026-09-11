@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   categoryInputFromName,
-  isDuplicateCategoryName,
+  looksLikeDuplicateCategoryName,
   type Annotation,
   type Category,
   type CategoryInput,
@@ -30,6 +30,7 @@ interface AnnotationPopoverProps {
   annotation: Annotation;
   busyKey: string | null;
   categories: readonly Category[];
+  categoryConflict: Pick<Category, "id" | "name"> | null;
   categoryError: string | null;
   disabled: boolean;
   draft?: boolean;
@@ -65,6 +66,7 @@ export function AnnotationPopover({
   annotation,
   busyKey,
   categories,
+  categoryConflict,
   categoryError,
   disabled,
   draft = false,
@@ -83,7 +85,7 @@ export function AnnotationPopover({
   const proposedCategory = categoryInputFromName(categoryQuery);
   const canCreateCategory =
     proposedCategory !== null &&
-    !isDuplicateCategoryName(
+    !looksLikeDuplicateCategoryName(
       categories.map((category) => category.name),
       proposedCategory.name,
     );
@@ -130,6 +132,14 @@ export function AnnotationPopover({
   useEffect(() => {
     setForm((current) => syncFormState(current, annotation.category_id));
   }, [annotation.category_id]);
+
+  useEffect(() => {
+    if (categoryConflict === null) {
+      return;
+    }
+    setCategoryQuery(categoryConflict.name);
+    setForm((current) => ({ ...current, categoryId: categoryConflict.id }));
+  }, [categoryConflict]);
 
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -229,7 +239,8 @@ export function AnnotationPopover({
             : "Brak takiej klasy w profilu. Utwórz ją i przypisz poniżej."
         }
         filterLabel="Klasa"
-        filterMaxLength={200}
+        filterMaxCodePoints={200}
+        filterValue={categoryQuery}
         filterAction={
           canCreateCategory ? (
             <Button

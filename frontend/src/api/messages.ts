@@ -115,7 +115,7 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
   },
   category_name_exists: {
     message: "Klasa o tej nazwie już istnieje w profilu.",
-    action: "Wybierz ją z listy albo podaj inną nazwę.",
+    action: "Lista została odświeżona, a istniejąca klasa wybrana. Zapisz przypisanie albo podaj inną nazwę.",
   },
   regions_required: {
     message: "Profil musi mieć przynajmniej jeden region HUD.",

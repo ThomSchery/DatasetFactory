@@ -99,3 +99,20 @@ export function annotationIdsFromError(error: unknown): string[] {
   }
   return ids.filter((id): id is string => typeof id === "string");
 }
+
+export interface CategoryNameConflict {
+  id: string;
+  name: string;
+}
+
+/** The backend-authoritative category that caused a create-name conflict. */
+export function categoryNameConflictFromError(error: unknown): CategoryNameConflict | null {
+  if (!isApiError(error) || error.code !== "category_name_exists") {
+    return null;
+  }
+  const id = error.details.category_id;
+  const name = error.details.category_name;
+  return typeof id === "string" && id !== "" && typeof name === "string" && name !== ""
+    ? { id, name }
+    : null;
+}
