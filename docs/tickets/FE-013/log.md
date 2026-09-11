@@ -457,3 +457,31 @@ Moduły/ID UI/UX:
 - Retest wariantu `details`, ręcznego odzyskania, exact-name bez `details`, resetów
   kontekstu, geometrii FIX-A i pozostałych niezmienników wskazanych w tickecie.
 - Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP.
+
+### Wynik FIX3
+
+`unidentified` przechowuje teraz `rejectedName` dokładnie z odrzuconego
+`CategoryInput`. `AnnotationPopover` porównuje z nim każdą bieżącą propozycję po
+`categoryInputFromName`: ponowne `s → S` nie pokazuje akcji tworzenia, `Mana`
+pokazuje ją i przechodzi przez zwykły POST kategorii oraz PATCH anotacji z
+`expected_version: 3`. Rodzic nie kasuje pamięci `unidentified` przy edycji
+filtra, więc także powrót do odrzuconej nazwy pozostaje zablokowany; pamięć jest
+usuwana przez dotychczasowe resety kontekstu i sukces mutacji. Wariant
+`identified` zachowuje dotychczasowe zachowanie.
+
+Nowa regresja jest **integracyjna** w
+`frontend/src/features/annotations/annotationReviewFlow.test.tsx`. Renderuje
+prawdziwą trasę aplikacji, `FrameEditor` i `AnnotationPopover`, a mockuje dopiero
+odpowiedzi HTTP. Wpisanie filtra wykonuje więc produkcyjny
+`onCategoryFilterChange` rodzica — dokładnie tę granicę, którą test komponentowy
+z `vi.fn()` omijał. Falsyfikowalność potwierdzona: po tymczasowym przywróceniu
+samego `setCategoryConflict(null)` test znalazł przycisk „Utwórz… S” i upadł;
+po odtworzeniu poprawki przeszedł. Tymczasowa zmiana została cofnięta bit-for-bit.
+
+Wąski zestaw: 2 pliki / **69 testów PASS** oraz frontend typecheck PASS.
+Jeden nieprzerwany `scripts/check.ps1`: **9/9 PASS, zero SKIP** — backend format,
+lint, mypy (99 plików), **356 testów**; frontend typy, **650 testów w 41
+plikach**, build; Playwright **18/18**, E2E root safety **2/2**. Geometria FIX-A
+pozostała identyczna dla obu konfliktów: panel `left=337`, przycisk zapisu
+`left=1252,83`, hit-test i klik myszy przeszły. E2E nie wytworzył zmian w
+zrzutach ani innych plikach.
