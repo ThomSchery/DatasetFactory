@@ -28,7 +28,15 @@ class ProfilePersistenceError(RuntimeError):
 
 
 class CategoryNameExistsError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        *,
+        category_id: str | None = None,
+        category_name: str | None = None,
+    ) -> None:
+        super().__init__(category_name)
+        self.category_id = category_id
+        self.category_name = category_name
 
 
 class ProfileNotFoundError(LookupError):
@@ -305,11 +313,22 @@ class ProfileRepository:
                     raise ProfileNotFoundError
 
                 normalized_name = draft.name.casefold()
-                existing_names = session.scalars(
-                    select(Category.name).where(Category.profile_id == profile_id)
+                existing_categories = session.scalars(
+                    select(Category).where(Category.profile_id == profile_id)
                 )
-                if any(name.strip().casefold() == normalized_name for name in existing_names):
-                    raise CategoryNameExistsError
+                duplicate = next(
+                    (
+                        category
+                        for category in existing_categories
+                        if category.name.strip().casefold() == normalized_name
+                    ),
+                    None,
+                )
+                if duplicate is not None:
+                    raise CategoryNameExistsError(
+                        category_id=duplicate.id,
+                        category_name=duplicate.name,
+                    )
 
                 current_max = session.scalar(
                     select(func.max(Category.ordinal)).where(Category.profile_id == profile_id)

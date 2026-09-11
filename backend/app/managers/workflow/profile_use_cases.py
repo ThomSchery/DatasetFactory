@@ -385,7 +385,13 @@ class ProfileUseCases:
         except ProfileNotFoundError as exc:
             raise ProfileUseCaseError("profile_not_found") from exc
         except CategoryNameExistsError as exc:
-            raise ProfileUseCaseError("category_name_exists") from exc
+            details = {}
+            if exc.category_id is not None and exc.category_name is not None:
+                details = {
+                    "category_id": exc.category_id,
+                    "category_name": exc.category_name,
+                }
+            raise ProfileUseCaseError("category_name_exists", details=details) from exc
         except ProfilePersistenceError as exc:
             raise ProfileUseCaseError("category_persistence_failed") from exc
 
