@@ -113,9 +113,12 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Profil o tej nazwie już istnieje.",
     action: "Podaj inną nazwę profilu.",
   },
+  // One wording for both recoveries. The panel selects the existing class only
+  // when the backend names it; claiming a selection here would be a lie on the
+  // path where the winner stays unknown (FE-013-FIX2).
   category_name_exists: {
     message: "Klasa o tej nazwie już istnieje w profilu.",
-    action: "Lista została odświeżona, a istniejąca klasa wybrana. Zapisz przypisanie albo podaj inną nazwę.",
+    action: "Lista została odświeżona. Wskaż istniejącą klasę na liście i zapisz przypisanie albo podaj inną nazwę.",
   },
   regions_required: {
     message: "Profil musi mieć przynajmniej jeden region HUD.",

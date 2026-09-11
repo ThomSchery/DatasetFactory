@@ -17,7 +17,6 @@ import {
   type Annotation,
   type BBox,
   type CategoryInput,
-  type CategoryNameConflict,
   type CopyPreviousAnnotationsResult,
   type ErrorPresentation,
   type FrameCounts,
@@ -46,6 +45,7 @@ import { FatalError, InlineError, Loading } from "../../components/common/UiStat
 import {
   ANNOTATION_POPOVER_SCOPE_ATTRIBUTE,
   AnnotationPopover,
+  type CategoryConflictRecovery,
 } from "./AnnotationPopover";
 import { ClassList } from "./ClassList";
 import { categoryIdsOfKind, copyOptionGroups, copyPreviousTarget } from "./copySelection";
@@ -254,7 +254,7 @@ function LoadedFrameEditor({
   const [imageAttempt, setImageAttempt] = useState(0);
   const [actionError, setActionError] = useState<ErrorPresentation | null>(null);
   const [categoryActionError, setCategoryActionError] = useState<ErrorPresentation | null>(null);
-  const [categoryConflict, setCategoryConflict] = useState<CategoryNameConflict | null>(null);
+  const [categoryConflict, setCategoryConflict] = useState<CategoryConflictRecovery | null>(null);
   const createdCategoryRef = useRef(false);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
   // The HUD level is preselected whole, which is the request the panel sent by
@@ -368,7 +368,16 @@ function LoadedFrameEditor({
         const exactConflict = refreshedProfile?.categories.find(
           (category) => category.name === intent.category.name,
         );
-        setCategoryConflict(authoritativeConflict ?? exactConflict ?? null);
+        // `details` names the winner authoritatively; the exact-name match is
+        // the best a backend without them allows. Neither one hitting means
+        // the winner is genuinely unknown — the panel says that rather than
+        // selecting something the backend never confirmed.
+        const winner = authoritativeConflict ?? exactConflict;
+        setCategoryConflict(
+          winner === undefined || winner === null
+            ? { kind: "unidentified" }
+            : { category: winner, kind: "identified" },
+        );
       }
     },
     onSuccess: async (data, intent) => {

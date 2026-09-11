@@ -26,11 +26,25 @@ const VIEWPORT_ROOM_PROPERTY = "--df-annotation-popover-viewport-room";
  */
 export const ANNOTATION_POPOVER_SCOPE_ATTRIBUTE = "data-annotation-popover";
 
+/**
+ * What the panel is allowed to claim after `category_name_exists`.
+ *
+ * `identified` carries the category the backend named as the winner of the
+ * name, so the picker can reveal and select exactly that row. `unidentified`
+ * is the honest state for a backend that rejects without `details` and whose
+ * casefold the browser cannot reproduce: the winner is unknown, so the panel
+ * selects nothing, says so, and shows the whole refreshed list instead
+ * (FE-013-FIX2).
+ */
+export type CategoryConflictRecovery =
+  | { category: Pick<Category, "id" | "name">; kind: "identified" }
+  | { kind: "unidentified" };
+
 interface AnnotationPopoverProps {
   annotation: Annotation;
   busyKey: string | null;
   categories: readonly Category[];
-  categoryConflict: Pick<Category, "id" | "name"> | null;
+  categoryConflict: CategoryConflictRecovery | null;
   categoryError: string | null;
   disabled: boolean;
   draft?: boolean;
@@ -85,6 +99,10 @@ export function AnnotationPopover({
   const proposedCategory = categoryInputFromName(categoryQuery);
   const canCreateCategory =
     proposedCategory !== null &&
+    // An unidentified conflict means this name is already taken by a class the
+    // browser cannot point at. Offering to create it again only buys another
+    // `409`, so the action stays away until the operator types something else.
+    categoryConflict?.kind !== "unidentified" &&
     !looksLikeDuplicateCategoryName(
       categories.map((category) => category.name),
       proposedCategory.name,
@@ -137,8 +155,19 @@ export function AnnotationPopover({
     if (categoryConflict === null) {
       return;
     }
-    setCategoryQuery(categoryConflict.name);
-    setForm((current) => ({ ...current, categoryId: categoryConflict.id }));
+    if (categoryConflict.kind === "identified") {
+      setCategoryQuery(categoryConflict.category.name);
+      setForm((current) => ({ ...current, categoryId: categoryConflict.category.id }));
+      return;
+    }
+    /*
+     * The winner is unknown, so nothing here may look chosen. Clearing the
+     * filter is the only way the blocking class is reachable at all: it is a
+     * duplicate under the backend's casefold, not under the typed query, so
+     * the query hides it.
+     */
+    setCategoryQuery("");
+    setForm((current) => ({ ...current, categoryId: "" }));
   }, [categoryConflict]);
 
   const closeRef = useRef(onClose);
