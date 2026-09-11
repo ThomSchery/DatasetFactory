@@ -388,3 +388,72 @@ w 41 plikach, build; E2E 18 passed (15 dotychczasowych plus trzy nowe), E2E
 root safety 2/2. Oficjalny E2E odświeżył pięć zrzutów zawierających panel
 anotacji — jednokolumnowy układ jest w nich widoczny i zostały zacommitowane
 razem z tym wpisem.
+
+## FE-013-FIX3 — plan po re-review
+
+Re-review wykazał, że `unidentified` znika przy pierwszym zdarzeniu filtra,
+ponieważ prawdziwy rodzic bezwarunkowo kasuje `categoryConflict`. Zakres FIX3
+obejmuje wyłącznie pamięć odrzuconej propozycji, warunek bramy i regresję na
+poziomie ćwiczącym `FrameEditor`.
+
+### Decyzje
+
+1. `unidentified` przechowuje `rejectedName`: nazwę po tej samej normalizacji,
+   z którą wysłano odrzucony POST (`categoryInputFromName`, m.in. `s → S`).
+2. Pamięć odrzucenia pozostaje do resetu kontekstu (zamknięcie panelu, zmiana
+   anotacji/klatki albo udana mutacja). Akcja tworzenia jest ukryta tylko wtedy,
+   gdy bieżąca znormalizowana propozycja równa się `rejectedName`; inna propozycja
+   jest nową intencją i od razu przywraca akcję. Pozostawienie pamięci oznacza,
+   że także powrót do odrzuconej nazwy nie otwiera kolejnej pętli `409`.
+3. Edycja filtra nadal czyści widoczny błąd poprzedniej próby, ale nie niszczy
+   pamięci `unidentified`. Wariant `identified` zachowuje dotychczasowy reset po
+   nowej edycji filtra.
+4. Regresja trafia do integracyjnego `annotationReviewFlow.test.tsx`: renderuje
+   prawdziwą trasę, `FrameEditor` i `AnnotationPopover`, a zastępuje dopiero API.
+   Dzięki temu wykonuje callback rodzica, którego komponentowy stub
+   `onCategoryFilterChange={vi.fn()}` nie obejmował.
+
+### Design Plan FIX3
+
+Tryb: **Operate / hardening**. Bez zmiany układu FIX-A, stylów, copy, tokenów ani
+komponentów; zmienia się wyłącznie logika dostępności istniejącej akcji.
+
+Elementy interfejsu:
+
+1. `GroupedOptionList` / `TextField` „Klasa” — ta sama kontrolowana wartość i
+   normalizacja propozycji; wpisanie odrzuconej nazwy nie kasuje jej pamięci.
+2. `Button` „Utwórz i przypisz klasę” — ukryty dla zapamiętanej propozycji,
+   widoczny dla innej prawidłowej propozycji; istniejące stany disabled/loading
+   bez zmian.
+3. `InlineError` — dotychczasowy komunikat konfliktu i dotychczasowe czyszczenie
+   po edycji; bez zmiany copy i geometrii.
+4. Wiersze `role=option` i `Button` „Zapisz klasę” — bez zmian; ręczny wybór po
+   konflikcie nadal działa zwykłą ścieżką przypisania.
+5. `RegionOverlay`, draft, istniejąca anotacja i kontener akcji — bez zmian.
+
+Moduły/ID UI/UX:
+
+- [x] Layout/Siatka: bez zmian CSS i tokenów; zachowany jednokolumnowy panel,
+  **GRID-01/02/05/08/10, SPACING-01/03/04/08/13**.
+- [x] Typografia, kolory, obramowania i cienie: bez zmian,
+  **TYPO-01/02/06/07/08/11, FONTSIZE-02/06/08/09/10, LHEIGHT-10/12,
+  LSPACE-02, CASING-01/02, COLOR-01/07/08/09/10, BORDER-02/03/05/06,
+  BWIDTH-03/06/10/11/12/13, RADIUS-02/03/04/05, SHADOW-01/03/05**.
+- [x] Interakcje: jawna różnica między tą samą i inną znormalizowaną intencją,
+  zachowane focus/keyboard/disabled/loading, **COLOR-07, BORDER-06,
+  OPACITY-01/02**.
+- [x] Komponenty: istniejące `GroupedOptionList`, `TextField`, `Button`,
+  `InlineError`, `RegionOverlay`; brak nowego common i brak inline `<button>`.
+- [x] Hardening: ta sama propozycja po `409` nie daje drugiego POST-a; inna
+  propozycja przywraca akcję i wysyła POST; wariant `details` bez regresji.
+
+### Testy FIX3
+
+- Integracja prawdziwego rodzica: `409` bez `details`, ponowne wpisanie `s → S`,
+  brak akcji i brak drugiego POST-a; inna nazwa przywraca akcję i przechodzi
+  przez zwykły POST kategorii oraz wersjonowany PATCH anotacji.
+- Test komponentowy pozostaje testem lokalnego renderowania bramy, ale nie jest
+  dowodem na okablowanie rodzica.
+- Retest wariantu `details`, ręcznego odzyskania, exact-name bez `details`, resetów
+  kontekstu, geometrii FIX-A i pozostałych niezmienników wskazanych w tickecie.
+- Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP.
