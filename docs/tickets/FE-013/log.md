@@ -339,3 +339,52 @@ Moduły/ID UI/UX:
 - Retest nawigacji `GroupedOptionList`, pustego/białego Enter, obu przepływów,
   geometrii FE-012, Space FE-010, współbieżności i `IntegrityError`.
 - Finalnie jeden `scripts/check.ps1`: 9/9 PASS, zero SKIP.
+
+### Wynik FIX2
+
+**FIX-A — pomiary.** `frontend/e2e/fe013-conflict-geometry.spec.ts`, Chromium
+1440×1000, oba warianty `ſ/S` i `ﬀ/ff` dały identyczną geometrię:
+
+| Prostokąt | left | right | top | bottom |
+| --- | --- | --- | --- | --- |
+| dialog | 337 | 1383 | 321,70 | 674,70 |
+| „Zapisz” | 1252,83 | 1366 | 625,70 | 657,70 |
+
+Przycisk mieści się w panelu w obu osiach, `document.elementFromPoint` na jego
+środku trafia w element wewnątrz `[aria-label="Zapisz klasę"]`, a zwykły klik
+myszą wysyła dokładnie jeden `PATCH /annotations/ann-1` z
+`{category_id: <zwycięzca>, expected_version: 3}`.
+
+Test faktycznie łapie usterkę: po tymczasowym przywróceniu reguły
+`grid-template-columns: minmax(0, 1fr) auto` pomiar odtworzył liczbę z
+re-review — `save.left = 320` przy `panel.left = 337`, czyli 17 px poza lewą
+krawędzią. Poza bieżącym komunikatem test mierzy też alert zastąpiony tekstem
+1800 znaków oraz jednym nierozdzielnym tokenem 400 znaków; w obu przypadkach
+prostokąt przycisku się nie zmienia.
+
+**FIX-B — co widzi operator bez `details`.** Profil ma `ſ`, operator wpisuje
+`s`, akcja proponuje `S`, backend odrzuca `409 category_name_exists` bez
+szczegółów, a przeglądarka nie potrafi odtworzyć `casefold`:
+
+1. alert: „Klasa o tej nazwie już istnieje w profilu. Lista została odświeżona.
+   Wskaż istniejącą klasę na liście i zapisz przypisanie albo podaj inną nazwę.
+   Kod: category_name_exists.” — żadnego zdania o dokonanym wyborze;
+2. filtr pusty, więc odświeżona lista pokazuje wszystkie klasy profilu wraz
+   z `ſ`, niewidocznym pod zapytaniem `s`;
+3. żaden wiersz nie ma `aria-selected="true"`;
+4. „Zapisz” jest `disabled` do czasu ręcznego wskazania klasy;
+5. akcji „Utwórz i przypisz klasę” nie ma, więc nie da się wejść w pętlę
+   kolejnych `409`; wraca dopiero po zmianie treści filtra, czyli po nowej
+   intencji operatora;
+6. po kliknięciu `ſ` i „Zapisz” idzie zwykły wersjonowany `PATCH`
+   (`expected_version: 3`).
+
+Ścieżka bez `details` z dokładną nazwą (`Score` utworzone równolegle) nadal
+odzyskuje zwycięzcę z odświeżonego profilu i zaznacza go automatycznie.
+
+**Bramka.** Jeden nieprzerwany `scripts/check.ps1`: **9/9 PASS, zero SKIP** —
+backend format, lint, mypy (99 plików), 356 testów; frontend typy, 649 testów
+w 41 plikach, build; E2E 18 passed (15 dotychczasowych plus trzy nowe), E2E
+root safety 2/2. Oficjalny E2E odświeżył pięć zrzutów zawierających panel
+anotacji — jednokolumnowy układ jest w nich widoczny i zostały zacommitowane
+razem z tym wpisem.
