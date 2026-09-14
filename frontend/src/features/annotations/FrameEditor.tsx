@@ -684,7 +684,6 @@ function LoadedFrameEditor({
   function submit(intent: EditorMutationIntent): void {
     setActionError(null);
     setCategoryActionError(null);
-    setCategoryConflict(null);
     mutation.mutate(intent);
   }
 
