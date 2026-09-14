@@ -753,3 +753,93 @@ Moduły/ID UI/UX:
   regresji FIX4 (`Timer → 500`, geometria `422`) oraz sukcesu copy.
 - Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP,
   włącznie z pełnym Playwright E2E.
+
+## FE-013-FIX6 — plan po finalnym re-review
+
+Re-review FIX5 ujawnił brak uzgodnienia lokalnego wyboru z odpowiedzią serwera:
+copy obejmujące klasę zaznaczonej anotacji soft-delete'uje stare ID i tworzy
+nowe, więc panel znika, lecz `selectedId`, `categoryConflict` i preview geometrii
+pozostają w tym samym `LoadedFrameEditor`. FIX6 zamyka ten kontekst po
+stwierdzeniu nieobecności starego ID w odebranych aktywnych anotacjach. Predykat
+`successfulMutationClearsCategoryConflict`, w tym `copy-previous → false`,
+pozostaje bez zmian. P3 Unicode nadal jest poza zakresem.
+
+### Decyzje
+
+1. Dodać efekt uzgadniający po istniejącej mutacji. Efekt działa tylko wtedy,
+   gdy `selectedId` jest zwykłym ID serwerowym, zapytanie ramki nie jest w trakcie
+   odświeżenia, mutacja nie jest `pending`, a ID nie występuje w
+   `activeAnnotations`. Osłony na `frameQuery.isFetching` i
+   `mutation.isPending` wiążą decyzję z zakończoną odpowiedzią zamiast z
+   przejściowym stanem refetcha.
+2. Po stwierdzeniu nieobecności efekt wywoła `closeSelectionContext()`, wyczyści
+   `selectedId` i `categoryConflict`, a `geometryPreview` usunie wyłącznie wtedy,
+   gdy należy do brakującego ID. To ta sama granica życia kontekstu co jawne
+   `onClose`, łącznie z epoką zaznaczenia i `manipulationBaselineRef`.
+3. `DRAFT_ANNOTATION_ID` jest jawnym wyjątkiem: szkic jest lokalny i z definicji
+   nigdy nie występuje w `activeAnnotations`, więc dowolny refetch nie może go
+   zamknąć ani zmienić `draftBBox`.
+4. Testy pozostają integracyjne w `annotationReviewFlow.test.tsx`: renderują
+   prawdziwy `FrameEditor → AnnotationPopover` i mockują dopiero HTTP. Helper
+   testowy dostanie możliwość zwracania aktualnej wersji ramki przy każdym GET,
+   żeby odtworzyć nową odpowiedź bez starego ID, zamiast deklarować `replaced: 1`
+   przy niezmiennych danych.
+
+### Design Plan FIX6
+
+Tryb: **Operate / hardening**. Brak zmian CSS, tekstów, układu, komponentów,
+kontraktów zapisu, geometrii i copy. Zmienia się wyłącznie czas życia lokalnego
+kontekstu po tym, gdy źródło prawdy przestaje zawierać zaznaczoną anotację.
+
+Elementy interfejsu:
+
+1. `RegionOverlay` i jego wiersz `role=option` — po odpowiedzi bez starego ID
+   znika stary kształt i zaznaczenie; lokalny szkic pozostaje.
+2. `AnnotationPopover` / panel „Edytuj anotację” — zamyka się dla brakującego ID,
+   a panel nowego UUID otwiera się bez odziedziczonej bramy konfliktu.
+3. `GroupedOptionList` i `TextField` „Klasa” — dla copy zachowującego ID filtr i
+   blokada `S` pozostają; dla zastąpionego ID nowy panel zaczyna czysty.
+4. `Button` „Utwórz i przypisz klasę” oraz `InlineError` — akcja pozostaje ukryta
+   w tym samym kontekście, lecz wraca w panelu nowej anotacji; komunikat starego
+   kontekstu nie przecieka.
+5. Sekcja i `GroupedOptionList` „Powtórz z poprzedniej klatki” oraz jej przycisk
+   `Button` — zakres `character` uruchamia wariant zastępujący, zakres
+   niezawierający wybranej klasy zachowuje dotychczasowy kontekst.
+6. Draft bbox i panel „Wybierz klasę dla nowego bbox” — przeżywają refetch bez
+   zmiany wymiarów, fokusu i możliwości przypisania klasy.
+7. Przyciski review, zapis/usunięcie anotacji, nudge klawiaturą oraz komunikat
+   niezapisanej geometrii — zachowanie FIX3/FIX4/FIX5 pozostaje bez zmian.
+
+Moduły/ID UI/UX:
+
+- [x] Layout/siatka: bez zmian CSS i struktury,
+  **GRID-01/02/05/08/10, SPACING-01/03/04/08/13**.
+- [x] Typografia i copy: bez zmian,
+  **TYPO-01/02/06/07/08/11, FONTSIZE-02/06/08/09/10, LHEIGHT-10/12,
+  LSPACE-02, CASING-01/02**.
+- [x] Kolory, obramowania, promienie i cienie: istniejące stany bez zmian,
+  **COLOR-01/07/08/09/10, BORDER-02/03/05/06, BWIDTH-03/06/10/11/12/13,
+  RADIUS-02/03/04/05, SHADOW-01/03/05**.
+- [x] Interakcje: zachowane hover/focus/disabled/loading, Enter/Space, `R`,
+  nudge, roving tabindex i `data-shortcut-scope`,
+  **COLOR-07, BORDER-06, OPACITY-01/02**.
+- [x] Komponenty: istniejące `RegionOverlay`, `AnnotationPopover`,
+  `GroupedOptionList`, `TextField`, `Button`, `InlineError`; bez nowego common i
+  bez surowych kontrolek HTML.
+- [x] Hardening/a11y: panel nie znika podczas pending/refetch, szkic przeżywa,
+  soft-deleted ID zamyka pełny kontekst, a etykiety, role i focus pozostają
+  zgodne z istniejącym przepływem.
+
+### Testy FIX6
+
+- Copy zakresu `character`, odpowiedź ramki bez starego ID i z nowym UUID:
+  stary panel znika, nowy panel pokazuje akcję utworzenia `S`.
+- Copy zachowujące stare ID: panel i blokada `S` pozostają.
+- Lokalny draft podczas refetcha: panel oraz `draftBBox` pozostają.
+- Retest `S → 409` po `Timer → 500`, PATCH geometrii `422` i PATCH geometrii
+  `200`; we wszystkich brama pozostaje.
+- Dwie kontrole negatywne odtworzone bit w bit: brak uzgodnienia musi wywrócić
+  wariant zastępujący, a zbyt szerokie uzgodnienie musi wywrócić wariant
+  zachowujący ID.
+- Finalnie jeden nieprzerwany przebieg absolutnego `scripts/check.ps1`: 9/9 PASS,
+  zero SKIP, włącznie z pełnym Playwright E2E i bez zmiany zrzutów.
