@@ -172,6 +172,7 @@ export function FrameEditor({
       disabled={disabled}
       filter={filter}
       frame={frameQuery.data}
+      frameRefreshing={frameQuery.isFetching}
       frames={frames}
       onFilterChange={onFilterChange}
       onSelect={onSelect}
@@ -183,6 +184,7 @@ export function FrameEditor({
 
 interface LoadedFrameEditorProps extends Omit<FrameEditorProps, "frameId"> {
   frame: Awaited<ReturnType<typeof getFrame>>;
+  frameRefreshing: boolean;
 }
 
 interface GeometryPreview {
@@ -259,6 +261,7 @@ function LoadedFrameEditor({
   disabled,
   filter,
   frame,
+  frameRefreshing,
   frames,
   onFilterChange,
   onSelect,
@@ -472,6 +475,25 @@ function LoadedFrameEditor({
       createdCategoryRef.current = false;
     },
   });
+
+  useEffect(() => {
+    if (
+      frameRefreshing ||
+      mutation.isPending ||
+      selectedId === null ||
+      selectedId === DRAFT_ANNOTATION_ID ||
+      activeAnnotations.some((annotation) => annotation.id === selectedId)
+    ) {
+      return;
+    }
+
+    closeSelectionContext();
+    setSelectedId(null);
+    setCategoryConflict(null);
+    setGeometryPreview((current) =>
+      current?.annotationId === selectedId ? null : current,
+    );
+  }, [activeAnnotations, frameRefreshing, mutation.isPending, selectedId]);
 
   const currentBusyKey = mutation.isPending ? busyKey(mutation.variables) : null;
   const invalidSet = useMemo(() => new Set(invalidIds), [invalidIds]);
