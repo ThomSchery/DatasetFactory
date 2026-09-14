@@ -498,14 +498,15 @@ zakresem zgodnie z ticketem.
 
 ### Decyzje
 
-1. `submit()` wyczyści `categoryConflict` tylko dla
-   `intent.kind === "create-category"`. Nowa jawna próba tworzenia klasy
-   zastępuje pamięć poprzedniej propozycji, natomiast mutacje review, geometrii,
-   usunięcia, przypisania oraz kopiowania nie dotykają bramy.
-2. Reset pozostaje przed `mutate()` dla `create-category`: każda nowa próba
-   zaczyna z czystym wynikiem poprzedniego konfliktu, a istniejący `onError`
-   zapisuje nowy `identified` albo `unidentified`. Sukces dowolnej mutacji nadal
-   korzysta z dotychczasowego resetu w `onSuccess`.
+1. `submit()` przestaje czyścić `categoryConflict`. Wynik nowej próby tworzenia
+   klasy rozstrzygają istniejące callbacki mutacji: `onError` dla
+   `category_name_exists` zastępuje pamięć nowym `identified` albo
+   `unidentified`, a `onSuccess` czyści ją po sukcesie. Zwykły błąd innej próby
+   (`500`) zachowuje wcześniejszą bramę.
+2. To rozdzielenie po wyniku jest konieczne, ponieważ sam warunek
+   `intent.kind === "create-category"` nadal kasowałby pamięć `S` przed
+   nieudanym POST-em `Timer`. Mutacje review, geometrii, usunięcia, przypisania
+   oraz kopiowania także nie dotykają bramy przed poznaniem wyniku.
 3. Testy pozostają integracyjne w `annotationReviewFlow.test.tsx`, ponieważ
    renderują prawdziwe połączenie `FrameEditor` → `AnnotationPopover`, wykonują
    wspólny `submit()` i mockują dopiero granicę HTTP. To poziom, na którym da się
@@ -566,3 +567,45 @@ Moduły/ID UI/UX:
   regresji.
 - Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP,
   włącznie z pełnym Playwright E2E.
+
+### Próba odrzucona
+
+Pierwsza implementacja obwarowała reset w `submit()` warunkiem
+`intent.kind === "create-category"`. Sonda 1 od razu ją sfalsyfikowała: POST
+`Timer` również ma ten rodzaj intencji, więc przed odpowiedzią `500` pamięć `S`
+znikała, a akcja „Utwórz… S” wracała. Test zakończył się 1 fail / 53 pass.
+Implementacja została zastąpiona rozstrzyganiem wyłącznie w istniejących
+`onError`/`onSuccess`; niepowiązany błąd nie jest sygnałem do resetu.
+
+### Wynik FIX4
+
+`submit()` nie czyści już `categoryConflict`. Wybrana droga opiera reset na
+wyniku mutacji: istniejąca gałąź `onError` dla `category_name_exists` zapisuje
+nowego zwycięzcę albo nową odrzuconą propozycję, a wspólny `onSuccess` usuwa
+pamięć po powodzeniu. Dzięki temu błąd innej klasy albo geometrii nie kasuje
+bramy, a udane utworzenie i przypisanie nadal ją czyści.
+
+Obie sondy integracyjne renderują prawdziwy `FrameEditor` i mockują dopiero
+HTTP:
+
+1. `S` → `409` bez `details`, potem `Timer` → `500`, potem ponowne `s`:
+   dokładnie **2 zapisy**, oba POST (`S`, `Timer`); przycisk „Utwórz… S” jest
+   nieobecny, więc trzeci POST nie może zostać wysłany.
+2. `S` → `409` bez `details`, potem `ArrowRight` + `Enter` →
+   `422 bbox_invalid`, potem ponowne `s`: dokładnie **2 zapisy** — POST `S` oraz
+   PATCH `/annotations/ann-1` z `expected_version: 3`; przycisk „Utwórz… S”
+   pozostaje nieobecny.
+
+Falsyfikowalność sprawdzona wspólnie dla obu testów: tymczasowe przywrócenie
+starego bezwarunkowego `setCategoryConflict(null)` dało **2 fail / 52 skip**, w
+obu przypadkach na ponownie widocznym przycisku „Utwórz… S”. Po odtworzeniu
+poprawki oba testy przeszły. Pełny plik integracyjny: **54/54 PASS**;
+frontend typecheck PASS.
+
+Jeden właściwy, nieprzerwany `scripts/check.ps1`: **9/9 PASS, zero SKIP** —
+backend format, lint, mypy (99 plików), **356/356 testów**; frontend typecheck,
+**652/652 testy w 41 plikach**, build; Playwright **18/18**; E2E root safety
+**2/2**. Bramka nie zmieniła zrzutów ani innych plików. Pierwsze wywołanie
+powłoki zakończyło się przed wejściem do bramki z powodu utraty backslashy w
+argumencie `-File`; pełny przebieg został następnie uruchomiony raz z absolutną
+ścieżką i zakończony bez restartu.
