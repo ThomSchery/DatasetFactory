@@ -106,4 +106,117 @@ klatki” → kontrolki kanwy. Otwarcie dialogu nadal jawnie przenosi fokus do p
   ignorowany `.env`, bez zmiany plików śledzonych.
 - Druga próba zatrzymała się w preflight Playwright: port 8000 był zajęty przez
   aplikację operatora. Procesu nie zatrzymano; konflikt zgłoszono koordynatorowi.
+- Obejście pomiarowe: `ApiHarness` mockuje API w przeglądarce, więc do pomiaru i
+  do specyfikacji wizualnych wystarczy sam serwer deweloperski. Uruchomiono
+  własny `vite --port 5399 --strictPort` oraz nieśledzone konfiguracje
+  Playwrighta (`playwright.measure.config.ts`, `playwright.e2e-alt.config.ts`,
+  katalog `e2e-measure/`). Po pomiarach usunięto je z repozytorium; procesów
+  operatora na 8000 i 5173 nie tknięto.
+
+## 2026-09-14 — Pomiar, korekta wysokości kolumny i wymiana asercji
+
+### Zmierzona geometria (dialog „Anotacja" otwarty)
+
+| viewport | szerokość obrazu | różnica wobec 1279 px | lewa krawędź obrazu | prawa krawędź panelu |
+|---|---|---|---|---|
+| 1280×1000 | 571,98 px | −707,02 px | 650 px | 600 px |
+| 1440×1000 | 731,98 px | −547,02 px | 650 px | 600 px |
+| 1920×1080 | **1211,98 px** | **−67,02 px** | 650 px | 600 px |
+
+Twarda granica 940 px dotyczy 1920×1080: **1211,98 px, zapas 271,98 px** — próg
+nie został przekroczony, więc praca szła dalej bez pytania operatora. Przy
+1920×1080 obraz jest ograniczony wysokością (806,73 px), nie szerokością toru
+podglądu (1264 px) — stąd koszt kolumny jest tam znacznie mniejszy niż pełne
+312 px. Przy 1280 i 1440 ogranicza szerokość i kolumna kosztuje pełne 312 px.
+
+Poziomego przepełnienia nie ma na żadnym z trzech viewportów.
+
+### Korekta: kadr wysokości panelu inspektora
+
+Pierwszy pomiar pokazał defekt układu: przy naturalnej wysokości inspektora
+(633,19 px) dialog „Anotacja" zaczynał się na y = 831,98 px i był docinany do
+dolnej krawędzi ekranu (168 px przy 1000 px wysokości). Wiersz akcji
+„Usuń / Zapisz" schodził poza kadr — dokładnie ten błąd, który FE-010-FIX1
+przepuścił przez zrzut `fullPage`.
+
+Dodano `max-height: calc(var(--size-xxl) * 5)` (320 px) i `overflow-y: auto` na
+inspektorze wewnątrz kolumny. Po korekcie dialog ma naturalne 285 px, zaczyna
+się na y = 518,80 px i kończy na 803,80 px — mieści się w całości na wszystkich
+trzech viewportach. Cena: drugorzędne kontrolki „Powtórz z poprzedniej klatki"
+wymagają przewinięcia wewnątrz panelu. Panel „Dane klatki" kończy się na
+1156,80 px, czyli poniżej zgięcia — to metadane, dostępne przewinięciem strony.
+
+### Wymienione asercje
+
+| plik:linia | stara asercja | nowa |
+|---|---|---|
+| `fe011-visual-qa.spec.ts:51` | `panel.top >= image.bottom` | `panel.right <= image.left` |
+| `fe011-visual-qa.spec.ts:80-82` | `> 860` / `> 1000` / `>= 1279` | `> 560` / `> 710` / `>= 1180` |
+| `fe012-visual-qa.spec.ts:74` | `panel.y >= image.bottom` | `panel.right <= image.left` |
+| `visual-qa.spec.ts:45` | dialog pod obrazem | `dialog.right <= image.left` |
+| `visual-qa.spec.ts:113-131` | podgląd szeroki jak toolbar; inspektor i dane pod kanwą | podgląd = toolbar − 312 px, prawe krawędzie równe; oba panele na lewo od kanwy |
+| `visual-qa.spec.ts:462-464` | `> 800`; oba panele pod obrazem | `> 710`; oba panele na lewo od obrazu |
+| `fe013-visual-qa.spec.ts:45` | `action.width > 320` | `>= panel.width − 34` |
+
+Progi szerokości obrazu są wyliczone z pomiaru: wartość zmierzona minus 2% na
+dryf metryk czcionek, zaokrąglona w dół do 10 px (571,98 → 560; 731,98 → 710;
+1211,98 → 1180). Nie są dopasowane do wyniku jednego przebiegu.
+
+Asercje „panel mieści się w viewporcie" (`fe011:53`, `fe012:76`) **zostają**.
+Test naprężeniowy `fe011:294` potwierdza je w najostrzejszym przypadku: przy
+wysokości 720 px panel ma `clientHeight` 199 px przy `scrollHeight` 1491 px i
+nadal kończy się na 719,80 px.
+
+Dwa testy kontraktu `Space` (`visual-qa.spec.ts:748` i `:803`) dostały warunek
+wstępny `makeDocumentScrollable`. Po skróceniu kolumny strona przy 1440×1000 nie
+przepełnia już viewportu, więc końcowa asercja „Space poza kanwą nadal przewija
+dokument" przechodziłaby także wtedy, gdyby `Space` był globalnie tłumiony.
+Helper zmniejsza viewport do 1440×600, sprawdza, że dokument faktycznie się
+przewija, i dopiero wtedy pozwala na asercję.
+
+### Falsyfikowalność asercji położenia
+
+Cofnięto układ do jednej kolumny (`grid-template-areas: "toolbar" "side-column"
+"preview"`). Testy padły dokładnie na spodziewanych asercjach:
+
+- `fe011-visual-qa.spec.ts:51` — „panel must remain left of the image",
+  `1248 <= 338` fałszywe;
+- `fe012-visual-qa.spec.ts:74` — „panel must remain left of the canvas",
+  `1408 <= 338`;
+- `visual-qa.spec.ts` — „should sit left of the canvas" oraz próg zgięcia
+  `708,80 < 600`.
+
+Plik przywrócono bit w bit: `sha256` przed i po zmianie to
+`d1b17e7f4ed4240816de7bf5d5baf5da2354de1688711fe4203f6ecba4993ead`.
+
+### Granica „poza panelem" — decyzja
+
+„Wnętrze" to wyłącznie dialog `AnnotationPopover` (`data-annotation-popover`).
+Kanwa i reszta lewej kolumny — w tym „Dane klatki" — są na zewnątrz. Kliknięcie
+w „Dane klatki" kończy kontekst edycji i porzuca niezapisane przesunięcie, tak
+samo jak wcześniejsze kliknięcie poza dokowanym dialogiem. Alternatywa
+(cała kolumna jako wnętrze) zostawiałaby zamknięty semantycznie dialog przy
+żywym stanie geometrii — czyli siódmy wyciek stanu między kontekstami.
+Regresja `annotationNudgeFixup.test.tsx` pilnuje tej granicy: klik w „Dane
+klatki" zamyka dialog, cofa podgląd do `x 100, y 120` i nie wysyła PATCH-a.
+
+### Kolejność Tab
+
+Kolejność DOM = kolejność wizualna, bez `order` i `row-reverse`. Po toolbarze:
+kontrolki „Anotacje na klatce" → kontrolki otwartego dialogu „Anotacja" →
+ewentualny retry w „Dane klatki" → kontrolki kanwy. Otwarcie dialogu nadal jawnie
+przenosi fokus na pole „Klasa" (`autoFocus`).
+
+### Stan bramek
+
+- `npm run typecheck` — PASS.
+- `npm test` — 41 plików, 659 testów, PASS.
+- `npm run build` — PASS.
+- Specyfikacje wizualne (`fe011`, `fe012`, `fe013-visual`, `visual-qa`) — 13/13
+  PASS na własnym serwerze deweloperskim na porcie 5399.
+- Pełna bramka `scripts/check.ps1` — **niewykonana**: porty 8000 i 5173 nadal
+  zajmuje aplikacja deweloperska operatora (`python` pid 17056, `node` pid
+  15820), a `playwright.config.ts` ma `reuseExistingServer: false` i
+  `strictPort`. Procesów nie zatrzymano.
+
 
