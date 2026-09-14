@@ -190,6 +190,28 @@ interface GeometryPreview {
   bbox: BBox;
 }
 
+function successfulMutationClearsCategoryConflict(
+  intent: EditorMutationIntent,
+  selectedId: string | null,
+  geometryPreview: GeometryPreview | null,
+): boolean {
+  switch (intent.kind) {
+    case "create-category":
+    case "create":
+      return true;
+    case "delete":
+      return selectedId === intent.annotationId;
+    case "category":
+      return (
+        selectedId === intent.annotationId && geometryPreview?.annotationId !== intent.annotationId
+      );
+    case "copy-previous":
+    case "geometry":
+    case "review":
+      return false;
+  }
+}
+
 interface ManipulationBaseline {
   annotationId: string;
   preview: GeometryPreview | null;
@@ -383,7 +405,9 @@ function LoadedFrameEditor({
     onSuccess: async (data, intent) => {
       setActionError(null);
       setCategoryActionError(null);
-      setCategoryConflict(null);
+      if (successfulMutationClearsCategoryConflict(intent, selectedId, geometryPreview)) {
+        setCategoryConflict(null);
+      }
       if (intent.kind === "review") {
         setInvalidIds([]);
       } else if (intent.kind === "geometry" || intent.kind === "delete") {
