@@ -1,8 +1,8 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { FrameDetail, Page, FrameSummary } from "../../api";
+import { queryKeys, type FrameDetail, type Page, type FrameSummary } from "../../api";
 import {
   annotationFixture,
   dashboardFixture,
@@ -34,19 +34,22 @@ const RICH_PROFILE = profileFixture({
 });
 
 interface ReviewApiOptions {
-  frame?: FrameDetail;
+  frame?: FrameDetail | (() => FrameDetail);
   frames?: Page<FrameSummary>;
   mutation?: (url: string, init: RequestInit | undefined) => StubbedResponse;
   profile?: typeof PROFILE;
 }
 
 function reviewApi(options: ReviewApiOptions = {}) {
-  const frame = options.frame ?? frameDetailFixture();
+  const frameSource = options.frame ?? frameDetailFixture();
+  const currentFrame = () =>
+    typeof frameSource === "function" ? frameSource() : frameSource;
+  const initialFrame = currentFrame();
   const frames = options.frames ?? framePageFixture();
   const profile = options.profile ?? PROFILE;
   return stubFetch((url, init) => {
     if (init?.method !== undefined && init.method !== "GET") {
-      return options.mutation?.(url, init) ?? { status: 200, body: frame };
+      return options.mutation?.(url, init) ?? { status: 200, body: currentFrame() };
     }
     if (url === "/api/v1/runs/run-1") {
       return { status: 200, body: runFixture({ id: "run-1", profile_id: profile.id }) };
@@ -57,8 +60,8 @@ function reviewApi(options: ReviewApiOptions = {}) {
     if (url.startsWith("/api/v1/runs/run-1/frames?")) {
       return { status: 200, body: frames };
     }
-    if (url === `/api/v1/frames/${frame.id}`) {
-      return { status: 200, body: frame };
+    if (url === `/api/v1/frames/${initialFrame.id}`) {
+      return { status: 200, body: currentFrame() };
     }
     if (url === "/api/v1/dashboard") {
       return { status: 200, body: dashboardFixture({ profile }) };
@@ -857,14 +860,15 @@ describe("annotation review query states", () => {
     expect(writes).toHaveLength(2);
   });
 
-  it("keeps a rejected category blocked after copy succeeds in the same frame", async () => {
+  it("clears a rejected category after copy replaces the selected annotation id", async () => {
     const user = userEvent.setup();
     const conflictProfile = profileFixture({
       categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
     });
     const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    let currentFrame = frameDetailFixture({ frame_index: 1 });
     reviewApi({
-      frame: frameDetailFixture({ frame_index: 1 }),
+      frame: () => currentFrame,
       profile: conflictProfile,
       mutation: (url, init) => {
         const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
@@ -873,7 +877,81 @@ describe("annotation review query states", () => {
           return { status: 409, body: errorEnvelope("category_name_exists") };
         }
         if (url.endsWith("/copy-previous")) {
+          currentFrame = frameDetailFixture({
+            annotations: [annotationFixture({ id: "ann-copied", version: 1 })],
+            frame_index: 1,
+            version: 8,
+          });
           return { status: 200, body: { copied: 1, replaced: 1, frame_version: 8 } };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
+    await user.click(screen.getByRole("checkbox", { name: "Znaki" }));
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const oldPopover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const oldFilter = within(oldPopover).getByRole("textbox", { name: "Klasa" });
+    await user.type(oldFilter, "s");
+    await user.click(
+      within(oldPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+    await within(oldPopover).findByRole("alert");
+    await waitFor(() => {
+      expect(oldFilter).toHaveValue("");
+    });
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.keyboard("r");
+    await waitFor(() => {
+      expect(writes).toHaveLength(2);
+    });
+    expect(writes[1]).toEqual({
+      body: { scope: "character", expected_version: 7 },
+      method: "POST",
+      url: "/api/v1/frames/frame-1/annotations/copy-previous",
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const copiedPopover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.type(within(copiedPopover).getByRole("textbox", { name: "Klasa" }), "s");
+    expect(
+      within(copiedPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    ).toBeInTheDocument();
+    expect(writes).toHaveLength(2);
+  });
+
+  it("keeps a rejected category blocked after copy preserves the selected annotation id", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
+    });
+    const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    let currentFrame = frameDetailFixture({ frame_index: 1 });
+    reviewApi({
+      frame: () => currentFrame,
+      profile: conflictProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        writes.push({ body, method: init?.method ?? "GET", url });
+        if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+          return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        if (url.endsWith("/copy-previous")) {
+          currentFrame = frameDetailFixture({
+            annotations: [
+              annotationFixture(),
+              annotationFixture({ category_id: "category-2", id: "ann-health", version: 1 }),
+            ],
+            frame_index: 1,
+            version: 8,
+          });
+          return { status: 200, body: { copied: 1, replaced: 0, frame_version: 8 } };
         }
         throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
       },
@@ -898,7 +976,7 @@ describe("annotation review query states", () => {
       expect(writes).toHaveLength(2);
     });
     expect(writes[1]).toMatchObject({
-      body: { expected_version: 7 },
+      body: { scope: "game", expected_version: 7 },
       method: "POST",
       url: "/api/v1/frames/frame-1/annotations/copy-previous",
     });
@@ -909,6 +987,38 @@ describe("annotation review query states", () => {
       within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(2);
+  });
+
+  it("keeps the local draft and its bbox through a frame refetch", async () => {
+    const fetchSpy = reviewApi({ frame: frameDetailFixture({ frame_index: 1 }) });
+    const { queryClient } = renderApp(["/annotations/run-1"]);
+    const overlay = await drawDraft();
+    const draftOption = within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ });
+    const draftLabel = draftOption.getAttribute("aria-label");
+    const frameGetsBefore = fetchSpy.mock.calls.filter(
+      ([input, init]) =>
+        String(input) === "/api/v1/frames/frame-1" &&
+        (init?.method === undefined || init.method === "GET"),
+    ).length;
+
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.frame("frame-1") });
+    });
+
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([input, init]) =>
+          String(input) === "/api/v1/frames/frame-1" &&
+          (init?.method === undefined || init.method === "GET"),
+      ),
+    ).toHaveLength(frameGetsBefore + 1);
+    expect(
+      screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" }),
+    ).toBeInTheDocument();
+    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toHaveAttribute(
+      "aria-label",
+      draftLabel,
+    );
   });
 
   it("replaces the rejected proposal when another category name also conflicts", async () => {
