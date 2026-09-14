@@ -485,3 +485,84 @@ plikach**, build; Playwright **18/18**, E2E root safety **2/2**. Geometria FIX-A
 pozostała identyczna dla obu konfliktów: panel `left=337`, przycisk zapisu
 `left=1252,83`, hit-test i klik myszy przeszły. E2E nie wytworzył zmian w
 zrzutach ani innych plikach.
+
+## FE-013-FIX4 — plan po re-review
+
+Re-review wykazał drugi, niezależny reset pamięci `unidentified`: wspólny
+`submit()` kasuje `categoryConflict` przed każdą mutacją. W efekcie nieudany
+POST innej klasy albo nieudany PATCH geometrii otwiera ponownie pętlę dla
+wcześniej odrzuconej propozycji. Zakres FIX4 obejmuje wyłącznie warunek tego
+resetu i dwie regresje integracyjne odtwarzające sondy recenzenta. Znana luka
+aliasów Unicode w heurystyce `looksLikeDuplicateCategoryName` pozostaje poza
+zakresem zgodnie z ticketem.
+
+### Decyzje
+
+1. `submit()` wyczyści `categoryConflict` tylko dla
+   `intent.kind === "create-category"`. Nowa jawna próba tworzenia klasy
+   zastępuje pamięć poprzedniej propozycji, natomiast mutacje review, geometrii,
+   usunięcia, przypisania oraz kopiowania nie dotykają bramy.
+2. Reset pozostaje przed `mutate()` dla `create-category`: każda nowa próba
+   zaczyna z czystym wynikiem poprzedniego konfliktu, a istniejący `onError`
+   zapisuje nowy `identified` albo `unidentified`. Sukces dowolnej mutacji nadal
+   korzysta z dotychczasowego resetu w `onSuccess`.
+3. Testy pozostają integracyjne w `annotationReviewFlow.test.tsx`, ponieważ
+   renderują prawdziwe połączenie `FrameEditor` → `AnnotationPopover`, wykonują
+   wspólny `submit()` i mockują dopiero granicę HTTP. To poziom, na którym da się
+   wykazać przeciek między dwoma różnymi rodzajami mutacji.
+
+### Design Plan FIX4
+
+Tryb: **Operate / hardening**. Brak zmian CSS, copy, układu FIX-A, tokenów i
+komponentów. Zmienia się wyłącznie trwałość pamięci odrzuconej propozycji po
+nieudanej, niezwiązanej mutacji.
+
+Elementy interfejsu:
+
+1. `GroupedOptionList` i jego `TextField` „Klasa” — ponowne wpisanie
+   zapamiętanej znormalizowanej nazwy nadal nie pokazuje akcji tworzenia.
+2. `Button` „Utwórz i przypisz klasę” — dostępny od razu dla innej prawidłowej
+   propozycji; jej nieudany POST nie usuwa pamięci wcześniejszej nazwy.
+3. `InlineError` — pokazuje błąd bieżącej mutacji bez zmiany copy i geometrii;
+   jego zniknięcie przy edycji nie oznacza usunięcia bramy.
+4. `RegionOverlay` i obsługa nudge + `Enter` — nieudany PATCH geometrii nie
+   zmienia pamięci konfliktu klasy.
+5. Wiersze `role=option`, `Button` „Zapisz klasę”, przyciski review/usunięcia/
+   kopiowania, draft i istniejąca anotacja — renderowanie i kontrakty bez zmian;
+   sukces mutacji zachowuje dotychczasowy reset.
+
+Moduły/ID UI/UX:
+
+- [x] Layout/Siatka: bez zmian CSS; zachowane tokeny `--size-*`, pełne wiersze i
+  `min-width: 0`, **GRID-01/02/05/08/10, SPACING-01/03/04/08/13**.
+- [x] Typografia: bez zmian skali, wagi i copy,
+  **TYPO-01/02/06/07/08/11, FONTSIZE-02/06/08/09/10, LHEIGHT-10/12,
+  LSPACE-02, CASING-01/02**.
+- [x] Kolory: istniejące stany `InlineError`, wyboru i przycisków,
+  **COLOR-01/07/08/09/10**.
+- [x] Obramowania/promienie: bez zmian,
+  **BORDER-02/03/05/06, BWIDTH-03/06/10/11/12/13,
+  RADIUS-02/03/04/05**.
+- [x] Cienie: bez zmian i nowych warstw, **SHADOW-01/03/05**.
+- [x] Interakcje: zachowane hover/focus/disabled/loading, roving tabindex,
+  `data-shortcut-scope`, Enter/Space i obsługa klawiatury,
+  **COLOR-07, BORDER-06, OPACITY-01/02**.
+- [x] Komponenty: istniejące `GroupedOptionList`, `TextField`, `Button`,
+  `InlineError`, `RegionOverlay`; brak nowego komponentu common i brak inline
+  `<button>`.
+- [x] Hardening/a11y: brama przeżywa błędy `500` innej klasy i
+  `422 bbox_invalid`, odrzucona nazwa nie wysyła kolejnego POST-a, inna nazwa
+  pozostaje dostępna, focus i komunikaty dynamiczne bez zmian.
+
+### Testy FIX4
+
+- Integracja sondy 1: `S` odrzucone bez `details` → POST `Timer` kończy się
+  `500` → ponowne `s` nie pokazuje akcji i liczba zapisów pozostaje równa 2.
+- Integracja sondy 2: `S` odrzucone bez `details` → nudge + `Enter`, PATCH
+  kończy się `422 bbox_invalid` → ponowne `s` nie pokazuje akcji i liczba
+  zapisów pozostaje równa 2.
+- Retest istniejącej ścieżki: inna klasa może zostać utworzona i przypisana,
+  sukces czyści pamięć, warianty normalizacji/prefiksu i resety kontekstu bez
+  regresji.
+- Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP,
+  włącznie z pełnym Playwright E2E.
