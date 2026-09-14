@@ -609,3 +609,97 @@ backend format, lint, mypy (99 plików), **356/356 testów**; frontend typecheck
 powłoki zakończyło się przed wejściem do bramki z powodu utraty backslashy w
 argumencie `-File`; pełny przebieg został następnie uruchomiony raz z absolutną
 ścieżką i zakończony bez restartu.
+
+## FE-013-FIX5 — plan po re-review
+
+Re-review FIX4 wykazał, że wspólny początek `onSuccess` nadal kasuje
+`categoryConflict` po każdej udanej mutacji. Udany PATCH geometrii zostawia ten
+sam panel, anotację i profil, więc reset ponownie otwiera pętlę dla odrzuconej
+propozycji. Zakres FIX5 obejmuje wyłącznie granicę resetu w callbacku sukcesu i
+integracyjne testy jej obu stron. Luka Unicode w heurystyce pozostaje poza
+zakresem.
+
+### Decyzje
+
+1. Usunąć wspólny reset i zastosować predykat oparty na faktycznym końcu
+   kontekstu:
+   - `create-category` — zawsze czyści po sukcesie, ponieważ nowa klasa została
+     trwale utworzona i przypisana;
+   - `create` — czyści, bo sukces usuwa draft i ustawia `selectedId` na `null`;
+   - `delete` — czyści tylko dla aktualnie wybranej, usuniętej anotacji, czyli
+     gdy istniejąca gałąź także ustawia `selectedId` na `null`;
+   - `category` — czyści tylko dla aktualnie wybranej anotacji bez aktywnego
+     preview jej geometrii, dokładnie gdy istniejąca gałąź zamyka panel;
+   - `geometry`, `copy-previous` i `review` — nie czyszczą w callbacku; jeśli
+     sukces review zmieni klatkę, remount `FrameEditor` resetuje stan sam.
+2. Jawne `onClose` pozostaje osobnym resetem, a zmiana klatki nadal niszczy
+   lokalny stan przez `key={selectedId}` na poziomie ekranu. Zmiana anotacji w
+   tej samej klatce celowo zachowuje pamięć, bo konflikt jest profile-scoped.
+3. Predykat będzie nazwaną funkcją w `FrameEditor.tsx`, aby granica była
+   widoczna przy dodawaniu następnego rodzaju mutacji; bez nowego automatu i bez
+   przenoszenia stanu do `AnnotationPopover`.
+4. Regresje pozostają integracyjne w `annotationReviewFlow.test.tsx`: wykonują
+   prawdziwy `FrameEditor → AnnotationPopover`, w tym produkcyjny `onSuccess`, i
+   mockują dopiero HTTP.
+
+### Design Plan FIX5
+
+Tryb: **Operate / hardening**. Brak zmian CSS, copy, układu FIX-A, tokenów,
+komponentów oraz geometrii. Zmienia się wyłącznie czas życia niewidocznej bramy
+konfliktu po sukcesach mutacji.
+
+Elementy interfejsu:
+
+1. `GroupedOptionList` i `TextField` „Klasa” — powrót do odrzuconej
+   znormalizowanej nazwy pozostaje zablokowany po udanej geometrii i copy.
+2. `Button` „Utwórz i przypisz klasę” — nie wraca dla zapamiętanej propozycji;
+   udane utworzenie innej klasy czyści pamięć i zamyka bieżący przepływ.
+3. `InlineError` — komunikat konfliktu może zostać wyczyszczony po sukcesie,
+   lecz niewidoczna pamięć propozycji pozostaje, dopóki kontekst trwa.
+4. `RegionOverlay` — nudge `ArrowRight` + `Enter` może zakończyć się `200` bez
+   zmiany bramy; preview nadal zeruje się po zapisaniu geometrii.
+5. `Button` „Zapisz klasę”, `Button` „Usuń” i zapis draftu — sukcesy, które
+   programowo zamykają panel, czyszczą bramę w tej samej granicy co
+   `selectedId`/draft.
+6. Przyciski review i `GroupedOptionList` „Powtórz z poprzedniej klatki” —
+   zachowują bramę w tym samym komponencie; zmiana klatki resetuje ją przez
+   remount.
+7. Wiersze `role=option`, panel anotacji, draft i istniejąca anotacja —
+   renderowanie, focus, nawigacja i kontrakty zapisu bez zmian.
+
+Moduły/ID UI/UX:
+
+- [x] Layout/Siatka: bez zmian CSS; zachowane pełne wiersze, `min-width: 0` i
+  tokeny `--size-*`, **GRID-01/02/05/08/10, SPACING-01/03/04/08/13**.
+- [x] Typografia: bez zmian skali, wagi i copy,
+  **TYPO-01/02/06/07/08/11, FONTSIZE-02/06/08/09/10, LHEIGHT-10/12,
+  LSPACE-02, CASING-01/02**.
+- [x] Kolory: istniejące stany błędu, wyboru i przycisków,
+  **COLOR-01/07/08/09/10**.
+- [x] Obramowania/promienie: bez zmian,
+  **BORDER-02/03/05/06, BWIDTH-03/06/10/11/12/13,
+  RADIUS-02/03/04/05**.
+- [x] Cienie: bez zmian i nowych warstw, **SHADOW-01/03/05**.
+- [x] Interakcje: zachowane hover/focus/disabled/loading, Enter/Space, nudge,
+  roving tabindex i `data-shortcut-scope`,
+  **COLOR-07, BORDER-06, OPACITY-01/02**.
+- [x] Komponenty: istniejące `GroupedOptionList`, `TextField`, `Button`,
+  `InlineError`, `RegionOverlay`; brak nowego common i brak inline `<button>`.
+- [x] Hardening/a11y: brama przeżywa sukces i błąd geometrii oraz copy, znika
+  przy udanym utworzeniu klasy i rzeczywistym zamknięciu panelu; komunikaty i
+  focus bez zmian.
+
+### Testy FIX5
+
+- Nowa regresja: `POST S → 409` bez `details`, udany wersjonowany PATCH
+  geometrii, powrót do `s` — dokładnie dwa zapisy i brak akcji tworzenia.
+- Falsyfikacja: czasowe przywrócenie wspólnego resetu w `onSuccess` musi
+  przywrócić akcję „Utwórz… S” i wywrócić nowy test.
+- Sukces programowo zamykający panel: po wcześniejszym konflikcie udany zapis
+  istniejącej klasy zamyka dialog; ponowne otwarcie nie dziedziczy starej bramy.
+- Udany `create-category` + przypisanie: panel zamknięty, pamięć wyczyszczona po
+  ponownym otwarciu.
+- Kolejny `category_name_exists` zastępuje wcześniejszą propozycję; retest obu
+  regresji FIX4 (`Timer → 500`, geometria `422`) oraz sukcesu copy.
+- Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP,
+  włącznie z pełnym Playwright E2E.
