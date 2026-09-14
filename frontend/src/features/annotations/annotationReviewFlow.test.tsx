@@ -660,6 +660,133 @@ describe("annotation review query states", () => {
     ]);
   });
 
+  it("keeps a rejected category blocked after another category creation fails", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
+    });
+    const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      profile: conflictProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        writes.push({ body, method: init?.method ?? "GET", url });
+        if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+          return (body as { name?: unknown } | undefined)?.name === "S"
+            ? { status: 409, body: errorEnvelope("category_name_exists") }
+            : { status: 500, body: errorEnvelope("internal_error") };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+
+    await user.type(filter, "s");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+    await within(popover).findByRole("alert");
+    await waitFor(() => {
+      expect(filter).toHaveValue("");
+    });
+
+    await user.type(filter, "Timer");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Timer”" }),
+    );
+    await waitFor(() => {
+      expect(writes).toHaveLength(2);
+    });
+    expect(writes).toEqual([
+      {
+        body: { kind: "character", name: "S" },
+        method: "POST",
+        url: `/api/v1/profiles/${conflictProfile.id}/categories`,
+      },
+      {
+        body: { kind: "game", name: "Timer" },
+        method: "POST",
+        url: `/api/v1/profiles/${conflictProfile.id}/categories`,
+      },
+    ]);
+
+    await user.clear(filter);
+    await user.type(filter, "s");
+    expect(filter).toHaveValue("s");
+    expect(
+      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    ).not.toBeInTheDocument();
+    expect(writes).toHaveLength(2);
+  });
+
+  it("keeps a rejected category blocked after a geometry nudge fails", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
+    });
+    const writes: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      profile: conflictProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        writes.push({ body, method: init?.method ?? "GET", url });
+        if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+          return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        if (url === "/api/v1/annotations/ann-1") {
+          return {
+            status: 422,
+            body: errorEnvelope("bbox_invalid", "Niepoprawny bbox.", {
+              annotation_ids: ["ann-1"],
+            }),
+          };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+
+    await user.type(filter, "s");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+    await within(popover).findByRole("alert");
+    await waitFor(() => {
+      expect(filter).toHaveValue("");
+    });
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.keyboard("{ArrowRight}{Enter}");
+    await waitFor(() => {
+      expect(writes).toHaveLength(2);
+    });
+    expect(writes[0]).toEqual({
+      body: { kind: "character", name: "S" },
+      method: "POST",
+      url: `/api/v1/profiles/${conflictProfile.id}/categories`,
+    });
+    expect(writes[1]).toMatchObject({
+      body: { expected_version: 3 },
+      method: "PATCH",
+      url: "/api/v1/annotations/ann-1",
+    });
+
+    await user.type(filter, "s");
+    expect(filter).toHaveValue("s");
+    expect(
+      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    ).not.toBeInTheDocument();
+    expect(writes).toHaveLength(2);
+  });
+
   it("still selects the exact name after a detail-less rejection", async () => {
     const user = userEvent.setup();
     const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });
