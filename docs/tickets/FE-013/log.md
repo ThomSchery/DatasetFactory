@@ -843,3 +843,67 @@ Moduły/ID UI/UX:
   zachowujący ID.
 - Finalnie jeden nieprzerwany przebieg absolutnego `scripts/check.ps1`: 9/9 PASS,
   zero SKIP, włącznie z pełnym Playwright E2E i bez zmiany zrzutów.
+
+### Wynik FIX6
+
+Granica uzgodnienia jest następująca:
+
+```text
+!frameRefreshing
+&& !mutation.isPending
+&& selectedId !== null
+&& selectedId !== DRAFT_ANNOTATION_ID
+&& !activeAnnotations.some(annotation => annotation.id === selectedId)
+```
+
+`frameRefreshing` pochodzi z `frameQuery.isFetching`, więc brak ID nie jest
+interpretowany podczas trwającego refetcha; `mutation.isPending` obejmuje także
+asynchroniczne invalidacje wykonywane przez callback mutacji. Dopiero zakończona
+odpowiedź bez aktywnego `selectedId` wywołuje `closeSelectionContext()`, czyści
+`selectedId` i `categoryConflict` oraz usuwa `geometryPreview` wyłącznie dla tego
+ID. `activeAnnotations` powstaje przez `isActiveAnnotation`, więc soft-deleted ID
+jest nieobecne. Draft ma jawny wyjątek. `successfulMutationClearsCategoryConflict`
+pozostał bit w bit bez zmian, w tym `copy-previous → false`.
+
+Sondy integracyjne na prawdziwej trasie `FrameEditor → AnnotationPopover`, z
+mockiem dopiero na HTTP:
+
+1. Copy zastępujące wybór: `POST S → 409`, następnie copy zakresu `character`
+   z `expected_version: 7`; GET zwrócił wersję 8 bez `ann-1` i z `ann-copied`.
+   Dokładnie **2 zapisy** (POST klasy + POST copy). Stary panel zniknął, a po
+   otwarciu nowego UUID akcja „Utwórz… S” była widoczna.
+2. Copy zachowujące wybór: `POST S → 409`, następnie copy zakresu `game` z
+   `expected_version: 7`; GET zwrócił wersję 8 nadal zawierającą `ann-1` oraz
+   nową `ann-health`. Dokładnie **2 zapisy**. Panel pozostał otwarty, a akcja
+   „Utwórz… S” nie wróciła.
+3. Draft: jawna invalidacja query wykonała dokładnie **1 dodatkowy GET ramki** i
+   **0 zapisów**. Panel „Wybierz klasę dla nowego bbox” pozostał otwarty, a
+   dostępna etykieta bboxa z koordynatami była identyczna przed i po refetchu.
+4. Retesty FIX3/FIX4/FIX5: `Timer → 500` wykonał **2 POST-y**; geometria `422`
+   wykonała **1 POST + 1 PATCH**; geometria `200` wykonała **1 POST + 1 PATCH**.
+   We wszystkich trzech przypadkach brama `S` pozostała. Zestaw sześciu sond:
+   **6/6 PASS**; cały plik integracyjny: **60/60 PASS**.
+
+Falsyfikowalność i odtworzenie bit w bit:
+
+- usunięcie efektu uzgadniającego dało **1 fail / 59 skip** w sondzie 1,
+  dokładnie na brakującej akcji „Utwórz i przypisz klasę „S”” w nowym panelu;
+- samo usunięcie efektu słusznie nie psuje sondy 2, bo zachowanie ID było zdrowe
+  już przed FIX6. Kontrola z celowo zbyt szerokim uzgodnieniem po odpowiedzi
+  wersji 8 dała **1 fail / 59 skip** dokładnie na zniknięciu dialogu, który miał
+  pozostać otwarty;
+- po każdej kontroli `FrameEditor.tsx` odtworzono z kopii. SHA-256 przed i po:
+  `911495E5C4923043108B9C523154D56F6DE2EF1B780A4FBDEDE4537625B12F30`;
+  `git diff --exit-code` potwierdził identyczność z commitem produkcyjnym.
+
+Pierwsza wersja sondy draftu użyła kliknięcia przycisku „Powtórz” jako bodźca.
+Kliknięcie poza panelem uruchamia istniejącą jawną ścieżkę zamknięcia, więc test
+padł na braku dialogu i nie mierzył neutralnego refetcha. Sondę poprawiono na
+invalidację właściwego `queryKeys.frame("frame-1")`; licznik wywołań HTTP
+potwierdza, że dotarła nowa odpowiedź GET, bez pobocznego działania UI.
+
+Jeden nieprzerwany przebieg absolutnego `scripts/check.ps1`: **9/9 PASS, zero
+SKIP** — backend format, lint, mypy (99 plików), **356/356 testów**; frontend
+typecheck, **658/658 testów w 41 plikach**, build; Playwright **18/18**; E2E root
+safety **2/2**. E2E nie zmienił zrzutów ani innych plików; worktree przed wpisem
+wyniku był czysty.
