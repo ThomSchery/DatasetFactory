@@ -5,12 +5,13 @@
 }
 
 .df-review-workspace {
+  --df-review-side-column-width: calc(var(--size-xxl) * 4 + var(--size-lg));
+
   display: grid;
   grid-template-areas:
     "toolbar toolbar"
-    "preview preview"
-    "inspector details";
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+    "side-column preview";
+  grid-template-columns: var(--df-review-side-column-width) minmax(0, 1fr);
   align-items: start;
   gap: var(--size-md);
   min-width: 0;
@@ -27,7 +28,7 @@
 }
 
 .df-review-workspace__query-state {
-  grid-area: preview;
+  grid-column: 1 / -1;
 }
 
 .df-review-workspace__all-state {
@@ -47,15 +48,28 @@
   line-height: var(--line-height-standard);
 }
 
-.df-review-workspace__inspector {
-  grid-area: inspector;
+.df-review-workspace__side-column {
+  display: grid;
+  grid-area: side-column;
+  align-content: start;
+  gap: var(--size-md);
+  min-width: 0;
 }
 
-.df-review-workspace__details {
-  grid-area: details;
+/*
+ * The narrow column stacks three panels, so the inspector's natural height
+ * decides where the annotation dialog starts. Left unbounded it pushed the
+ * dialog's action row past the bottom of the viewport, which is the failure
+ * FE-010-FIX1 let through. Capping the inspector and scrolling its secondary
+ * controls keeps the dialog whole on the shortest supported viewport.
+ */
+.df-review-workspace__side-column > .df-review-workspace__inspector {
+  max-height: calc(var(--size-xxl) * 5);
+  overflow-y: auto;
 }
 
 .df-review-workspace__preview,
+.df-review-workspace__side-column,
 .df-review-workspace__inspector,
 .df-review-workspace__details {
   min-width: 0;
@@ -314,7 +328,7 @@
 
 .df-annotation-popover__actions kbd,
 .df-annotation-popover__unsaved kbd,
-.df-review-workspace__preview .df-notice kbd {
+.df-review-workspace__details .df-notice kbd {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
 }
@@ -384,10 +398,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--size-xs) var(--size-sm);
-}
-
-.df-review-workspace__inspector .df-review-annotations__geometry {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .df-review-annotations__actions {

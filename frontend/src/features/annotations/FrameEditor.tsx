@@ -922,54 +922,67 @@ function LoadedFrameEditor({
         selectedId={frame.id}
       />
 
-      <section
-        aria-label={`Podgląd klatki ${frame.frame_index}`}
-        className="df-review-workspace__preview"
+      <aside
+        aria-label="Panele bieżącej klatki"
+        className="df-review-workspace__side-column"
       >
-
-        <RegionOverlay
-          cornerLabel={`Klatka ${String(frame.frame_index)}`}
-          disabled={editorDisabled}
-          imageAlt={`Klatka ${frame.frame_index} runu ${runId}`}
-          imageUrl={frameImageUrl(frame.id, imageAttempt === 0 ? undefined : imageAttempt)}
-          interactionMode="draw"
-          key={`frame-image-${String(imageAttempt)}`}
-          label="Bbox anotacji na klatce"
-          onDraw={capabilities.canEdit ? handleDraw : undefined}
-          onImageError={() => {
-            setImageError(true);
-          }}
-          onSourceResolved={() => {
-            setImageError(false);
-          }}
-          onRemove={
-            capabilities.canEdit
-              ? (annotationId) => {
-                  if (annotationId === DRAFT_ANNOTATION_ID) {
-                    setDraftBBox(null);
-                    updateSelectionContext(null);
-                    setSelectedId(null);
-                    return;
-                  }
-                  const annotation = annotationById(annotationId);
-                  if (annotation !== undefined) {
-                    submit({
-                      annotationId,
-                      expectedVersion: annotation.version,
-                      kind: "delete",
-                    });
-                  }
-                }
-              : undefined
+        <Panel
+          aside={
+            <StatusBadge srLabel="Aktywne anotacje:" tone="neutral">
+              {activeAnnotations.length}
+            </StatusBadge>
           }
-          onSelect={selectAnnotation}
-          onShapeChange={canDirectEdit ? previewManipulationGeometry : undefined}
-          onShapeChangeCancel={canDirectEdit ? cancelManipulationGeometry : undefined}
-          onShapeChangeEnd={canDirectEdit ? commitManipulationGeometry : undefined}
-          selectedId={selectedId}
-          shapes={shapes}
-          source={{ width: frame.width, height: frame.height }}
-        />
+          className="df-review-workspace__inspector"
+          description="Kliknij klasę, aby zaznaczyć jej bbox; kolejne kliknięcia przechodzą między wystąpieniami."
+          eyebrow="Bieżąca klatka"
+          title="Anotacje na klatce"
+        >
+          <ClassList
+            annotations={activeAnnotations}
+            categories={profile.categories}
+            disabled={editorDisabled}
+            onSelect={selectAnnotation}
+            selectedId={selectedId}
+          />
+          <section aria-labelledby="copy-previous-heading" className="df-review-copy">
+            <div>
+              <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
+              <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
+            </div>
+            <GroupedOptionList
+              disabled={!capabilities.canEdit || mutation.isPending || frame.frame_index === 0}
+              emptyMessage="Żadna klasa profilu nie pasuje do wpisanego tekstu."
+              filterLabel="Filtruj klasy"
+              groups={copyOptionGroups(profile.categories)}
+              label="Grupa anotacji"
+              mode="multiple"
+              onChange={(selection) => {
+                setCopySelection(selection);
+                setCopyFeedback(null);
+              }}
+              selectedIds={copySelection}
+            />
+            <Button
+              disabled={copyDisabled}
+              loading={currentBusyKey === "copy-previous"}
+              onClick={copyPrevious}
+              size="sm"
+              title="Skrót: R"
+              variant="secondary"
+            >
+              Powtórz <kbd>R</kbd>
+            </Button>
+            <p aria-live="polite" className="df-review-copy__status">
+              {frame.frame_index === 0
+                ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
+                : !capabilities.canEdit
+                  ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
+                  : copyTarget === null
+                    ? "Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia."
+                    : copyFeedback}
+            </p>
+          </section>
+        </Panel>
 
         {popoverAnnotation === undefined ? null : (
           <AnnotationPopover
@@ -1062,125 +1075,115 @@ function LoadedFrameEditor({
           />
         )}
 
-      </section>
-
-      <Panel
-        aside={
-          <StatusBadge srLabel="Aktywne anotacje:" tone="neutral">
-            {activeAnnotations.length}
-          </StatusBadge>
-        }
-        className="df-review-workspace__inspector"
-        description="Kliknij klasę, aby zaznaczyć jej bbox; kolejne kliknięcia przechodzą między wystąpieniami."
-        eyebrow="Bieżąca klatka"
-        title="Anotacje na klatce"
-      >
-        <ClassList
-          annotations={activeAnnotations}
-          categories={profile.categories}
-          disabled={editorDisabled}
-          onSelect={selectAnnotation}
-          selectedId={selectedId}
-        />
-        <section aria-labelledby="copy-previous-heading" className="df-review-copy">
-          <div>
-            <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
-            <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
-          </div>
-          <GroupedOptionList
-            disabled={!capabilities.canEdit || mutation.isPending || frame.frame_index === 0}
-            emptyMessage="Żadna klasa profilu nie pasuje do wpisanego tekstu."
-            filterLabel="Filtruj klasy"
-            groups={copyOptionGroups(profile.categories)}
-            label="Grupa anotacji"
-            mode="multiple"
-            onChange={(selection) => {
-              setCopySelection(selection);
-              setCopyFeedback(null);
-            }}
-            selectedIds={copySelection}
+        <Panel className="df-review-workspace__details" title="Dane klatki">
+          <DataList
+            items={[
+              { label: "Timestamp", value: `${(frame.timestamp_ms / 1000).toFixed(3)} s` },
+              { label: "Wymiary", value: `${frame.width} × ${frame.height} px` },
+              {
+                label: "Etap",
+                value: (
+                  <StatusBadge srLabel="Etap:" tone={stage.tone}>
+                    {stage.label}
+                  </StatusBadge>
+                ),
+              },
+              { label: "Wersja klatki", value: frame.version },
+            ]}
+            layout="columns"
           />
-          <Button
-            disabled={copyDisabled}
-            loading={currentBusyKey === "copy-previous"}
-            onClick={copyPrevious}
-            size="sm"
-            title="Skrót: R"
-            variant="secondary"
-          >
-            Powtórz <kbd>R</kbd>
-          </Button>
-          <p aria-live="polite" className="df-review-copy__status">
-            {frame.frame_index === 0
-              ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
-              : !capabilities.canEdit
-                ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
-                : copyTarget === null
-                  ? "Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia."
-                  : copyFeedback}
-          </p>
-        </section>
-      </Panel>
+          {capabilities.terminal ? (
+            <Notice title="Klatka zaakceptowana" tone="info">
+              Zaakceptowana klatka jest terminalna i pozostaje zamrożona dla trwałości snapshotu eksportu.
+            </Notice>
+          ) : null}
+          {capabilities.canReopen ? (
+            <Notice title="Klatka odrzucona" tone="warning">
+              Edycja jest zamrożona. Użyj „Otwórz ponownie”, aby wrócić do statusu oczekującego.
+            </Notice>
+          ) : null}
+          {!capabilities.canEdit && !capabilities.frozen ? (
+            <Notice title="OCR jeszcze trwa" tone="warning">
+              Edytor odblokuje się dopiero po osiągnięciu etapu gotowego do weryfikacji.
+            </Notice>
+          ) : null}
+          {unsavedGeometry === null ? null : (
+            <Notice title="Niezapisane przesunięcie bboxa" tone="warning">
+              Zaznacz ten bbox i naciśnij <kbd>Enter</kbd>, aby zapisać przesunięcie, albo kliknij
+              poza panelem, aby je porzucić. Akceptacja klatki jest zablokowana, dopóki przesunięcie
+              nie zostanie rozstrzygnięte — zaakceptowana klatka jest terminalna.
+            </Notice>
+          )}
+          {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
+          {imageError ? (
+            <div className="df-review-image-error">
+              <InlineError
+                message={`${imageErrorCopy.message} ${imageErrorCopy.action} Kod: frame_image_not_found.`}
+              />
+              <Button
+                disabled={mutation.isPending}
+                onClick={() => {
+                  setImageAttempt((current) => current + 1);
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                Spróbuj ponownie załadować obraz
+              </Button>
+            </div>
+          ) : null}
+        </Panel>
+      </aside>
 
-      <Panel className="df-review-workspace__details" title="Dane klatki">
-        <DataList
-          items={[
-            { label: "Timestamp", value: `${(frame.timestamp_ms / 1000).toFixed(3)} s` },
-            { label: "Wymiary", value: `${frame.width} × ${frame.height} px` },
-            {
-              label: "Etap",
-              value: (
-                <StatusBadge srLabel="Etap:" tone={stage.tone}>
-                  {stage.label}
-                </StatusBadge>
-              ),
-            },
-            { label: "Wersja klatki", value: frame.version },
-          ]}
-          layout="columns"
+      <section
+        aria-label={`Podgląd klatki ${frame.frame_index}`}
+        className="df-review-workspace__preview"
+      >
+
+        <RegionOverlay
+          cornerLabel={`Klatka ${String(frame.frame_index)}`}
+          disabled={editorDisabled}
+          imageAlt={`Klatka ${frame.frame_index} runu ${runId}`}
+          imageUrl={frameImageUrl(frame.id, imageAttempt === 0 ? undefined : imageAttempt)}
+          interactionMode="draw"
+          key={`frame-image-${String(imageAttempt)}`}
+          label="Bbox anotacji na klatce"
+          onDraw={capabilities.canEdit ? handleDraw : undefined}
+          onImageError={() => {
+            setImageError(true);
+          }}
+          onSourceResolved={() => {
+            setImageError(false);
+          }}
+          onRemove={
+            capabilities.canEdit
+              ? (annotationId) => {
+                  if (annotationId === DRAFT_ANNOTATION_ID) {
+                    setDraftBBox(null);
+                    updateSelectionContext(null);
+                    setSelectedId(null);
+                    return;
+                  }
+                  const annotation = annotationById(annotationId);
+                  if (annotation !== undefined) {
+                    submit({
+                      annotationId,
+                      expectedVersion: annotation.version,
+                      kind: "delete",
+                    });
+                  }
+                }
+              : undefined
+          }
+          onSelect={selectAnnotation}
+          onShapeChange={canDirectEdit ? previewManipulationGeometry : undefined}
+          onShapeChangeCancel={canDirectEdit ? cancelManipulationGeometry : undefined}
+          onShapeChangeEnd={canDirectEdit ? commitManipulationGeometry : undefined}
+          selectedId={selectedId}
+          shapes={shapes}
+          source={{ width: frame.width, height: frame.height }}
         />
-        {capabilities.terminal ? (
-          <Notice title="Klatka zaakceptowana" tone="info">
-            Zaakceptowana klatka jest terminalna i pozostaje zamrożona dla trwałości snapshotu eksportu.
-          </Notice>
-        ) : null}
-        {capabilities.canReopen ? (
-          <Notice title="Klatka odrzucona" tone="warning">
-            Edycja jest zamrożona. Użyj „Otwórz ponownie”, aby wrócić do statusu oczekującego.
-          </Notice>
-        ) : null}
-        {!capabilities.canEdit && !capabilities.frozen ? (
-          <Notice title="OCR jeszcze trwa" tone="warning">
-            Edytor odblokuje się dopiero po osiągnięciu etapu gotowego do weryfikacji.
-          </Notice>
-        ) : null}
-        {unsavedGeometry === null ? null : (
-          <Notice title="Niezapisane przesunięcie bboxa" tone="warning">
-            Zaznacz ten bbox i naciśnij <kbd>Enter</kbd>, aby zapisać przesunięcie, albo kliknij
-            poza panelem, aby je porzucić. Akceptacja klatki jest zablokowana, dopóki przesunięcie
-            nie zostanie rozstrzygnięte — zaakceptowana klatka jest terminalna.
-          </Notice>
-        )}
-        {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
-        {imageError ? (
-          <div className="df-review-image-error">
-            <InlineError
-              message={`${imageErrorCopy.message} ${imageErrorCopy.action} Kod: frame_image_not_found.`}
-            />
-            <Button
-              disabled={mutation.isPending}
-              onClick={() => {
-                setImageAttempt((current) => current + 1);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              Spróbuj ponownie załadować obraz
-            </Button>
-          </div>
-        ) : null}
-      </Panel>
-
+      </section>
     </>
   );
 }

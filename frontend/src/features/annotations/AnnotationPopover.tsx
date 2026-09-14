@@ -134,15 +134,15 @@ export function AnnotationPopover({
     window.addEventListener("resize", updateViewportRoom);
     window.addEventListener("scroll", updateViewportRoom, { passive: true });
 
-    // The panel follows RegionOverlay in the preview grid. Its available room
-    // therefore changes when the responsive canvas changes size; observing the
-    // canvas (never the constrained panel itself) keeps the measurement
+    // The panel follows the inspector in the side column. Its available room
+    // therefore changes when that preceding panel changes height; observing
+    // the inspector (never the constrained panel itself) keeps the measurement
     // current without creating a resize feedback loop.
-    const overlay = popover.previousElementSibling;
+    const layoutAnchor = popover.previousElementSibling;
     const observer =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateViewportRoom);
-    if (observer !== null && overlay instanceof Element) {
-      observer.observe(overlay);
+    if (observer !== null && layoutAnchor instanceof Element) {
+      observer.observe(layoutAnchor);
     }
 
     return () => {
