@@ -553,6 +553,22 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
       expected_version: 3,
     });
   });
+
+  it("treats frame details as outside the annotation panel and discards the preview", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await selectAndNudge(user);
+
+    await user.click(screen.getByRole("region", { name: "Dane klatki" }));
+
+    expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
+    expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 100, y 120"));
+    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(geometryPatches(fetchSpy)).toHaveLength(0);
+  });
 });
 
 describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", () => {

@@ -151,7 +151,7 @@ describe("annotation review query states", () => {
     expect(screen.getByText("7 · 91%")).toBeInTheDocument();
   });
 
-  it("orders the full-width canvas before inspector, metadata and notices", async () => {
+  it("orders the side column before the canvas and keeps metadata notices in the column", async () => {
     reviewApi({
       frame: frameDetailFixture({ review_status: "accepted" }),
     });
@@ -159,13 +159,22 @@ describe("annotation review query states", () => {
 
     const preview = await screen.findByRole("region", { name: "Podgląd klatki 17" });
     const overlay = within(preview).getByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const sideColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
     const inspector = screen.getByRole("region", { name: "Anotacje na klatce" });
-    const details = screen.getByText("Timestamp").closest(".df-review-workspace__details");
+    const details = screen
+      .getByText("Timestamp")
+      .closest<HTMLElement>(".df-review-workspace__details");
     const terminalNotice = screen.getByRole("status", { name: "Klatka zaakceptowana" });
 
     expect(details).not.toBeNull();
-    expect(preview.compareDocumentPosition(inspector) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(preview.compareDocumentPosition(details as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sideColumn).toContainElement(inspector);
+    expect(sideColumn).toContainElement(details);
+    expect(
+      inspector.compareDocumentPosition(details as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      sideColumn.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(preview).not.toContainElement(terminalNotice);
     expect(details).toContainElement(terminalNotice);
     expect(overlay.closest(".df-region-overlay")).toContainElement(
@@ -192,10 +201,15 @@ describe("annotation review query states", () => {
     const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     expect(dialog).toBeVisible();
     const preview = screen.getByRole("region", { name: "Podgląd klatki 17" });
+    const sideColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
+    const inspector = screen.getByRole("region", { name: "Anotacje na klatce" });
+    const details = screen.getByRole("region", { name: "Dane klatki" });
     const overlayRoot = overlay.closest(".df-region-overlay");
     expect(overlayRoot).not.toBeNull();
-    expect(dialog.parentElement).toBe(preview);
-    expect(dialog.previousElementSibling).toBe(overlayRoot);
+    expect(dialog.parentElement).toBe(sideColumn);
+    expect(dialog.previousElementSibling).toBe(inspector);
+    expect(dialog.nextElementSibling).toBe(details);
+    expect(sideColumn.nextElementSibling).toBe(preview);
     expect(overlayRoot).not.toContainElement(dialog);
 
     await user.click(classHealth);

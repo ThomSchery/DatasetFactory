@@ -12,8 +12,8 @@ const screenshotDirectory = path.resolve(
 );
 
 interface ViewportMetrics {
-  image: { height: number; width: number };
-  panel: { bottom: number; top: number };
+  image: { height: number; left: number; width: number };
+  panel: { bottom: number; right: number; top: number };
   viewport: { height: number; width: number };
 }
 
@@ -38,12 +38,18 @@ async function openEditedFrame(
   }
 
   const metrics = {
-    image: { height: imageBounds.height, width: imageBounds.width },
-    panel: { bottom: panelBounds.y + panelBounds.height, top: panelBounds.y },
+    image: { height: imageBounds.height, left: imageBounds.x, width: imageBounds.width },
+    panel: {
+      bottom: panelBounds.y + panelBounds.height,
+      right: panelBounds.x + panelBounds.width,
+      top: panelBounds.y,
+    },
     viewport,
   };
-  expect(metrics.panel.top, "panel must remain below the image").toBeGreaterThanOrEqual(
-    imageBounds.y + imageBounds.height,
+  // FE-014 moved the panel out from under the canvas into the side column, so
+  // the invariant is horizontal now: the panel ends before the image begins.
+  expect(metrics.panel.right, "panel must remain left of the image").toBeLessThanOrEqual(
+    metrics.image.left,
   );
   expect(metrics.panel.bottom, "panel must fit in the viewport").toBeLessThanOrEqual(
     viewport.height + 0.5,
@@ -71,9 +77,15 @@ test("FE-011 daje obrazowi szerokość viewportu i pokazuje pan bez skrótów", 
       await openEditedFrame(page, viewport);
   }
 
-  expect(measurements["1280x1000"]?.image.width).toBeGreaterThan(860);
-  expect(measurements["1440x1000"]?.image.width).toBeGreaterThan(1000);
-  expect(measurements["1920x1080"]?.image.width).toBeGreaterThanOrEqual(1279);
+  /*
+   * FE-014 pays a fixed 312 px (288 px column + 24 px gap) out of the preview
+   * track. The thresholds are the widths measured after that move — 571.98,
+   * 731.98 and 1211.98 px — less 2% for font-metric drift, floored to 10 px.
+   * They are floors on what the operator gets, not a record of one run.
+   */
+  expect(measurements["1280x1000"]?.image.width).toBeGreaterThan(560);
+  expect(measurements["1440x1000"]?.image.width).toBeGreaterThan(710);
+  expect(measurements["1920x1080"]?.image.width).toBeGreaterThanOrEqual(1180);
 
   await openEditedFrame(page, { width: 1440, height: 1000 });
   const canvas = page.locator(".df-region-overlay");

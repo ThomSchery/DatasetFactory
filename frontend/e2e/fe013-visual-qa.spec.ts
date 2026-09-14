@@ -42,7 +42,13 @@ test("FE-013 pokazuje jawną akcję utworzenia klasy bez efektu pustego Enter", 
   }
   expect(panelBounds.x + panelBounds.width).toBeLessThanOrEqual(1440.5);
   expect(panelBounds.y + panelBounds.height).toBeLessThanOrEqual(900.5);
-  expect(actionBounds.width).toBeGreaterThan(320);
+  /*
+   * FE-013-FIX2: the create action owns the panel's whole content track. The
+   * old absolute floor of 320 px encoded the panel's pre-FE-014 width; in the
+   * 288 px side column the same invariant is the panel width less its padding
+   * (2 × 16 px) and border (2 × 1 px).
+   */
+  expect(actionBounds.width).toBeGreaterThanOrEqual(panelBounds.width - 34);
 
   await mkdir(screenshotDirectory, { recursive: true });
   await writeFile(

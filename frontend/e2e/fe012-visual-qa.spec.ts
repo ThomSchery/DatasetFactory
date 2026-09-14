@@ -70,8 +70,9 @@ test("FE-012 panel bez sekcji geometrii nadal pokazuje niezapisane przesunięcie
     };
   });
 
-  expect(panelBounds.y, "panel must remain below the canvas").toBeGreaterThanOrEqual(
-    imageBounds.y + imageBounds.height,
+  // FE-014 docks the panel in the side column, left of the canvas.
+  expect(panelBounds.x + panelBounds.width, "panel must remain left of the canvas").toBeLessThanOrEqual(
+    imageBounds.x,
   );
   expect(panelBounds.y + panelBounds.height, "panel must fit in the viewport").toBeLessThanOrEqual(
     1000.5,

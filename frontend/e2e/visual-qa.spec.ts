@@ -42,9 +42,11 @@ async function assertAnnotationPopoverIsDocked(page: Page): Promise<AnnotationVi
   if (popoverBounds === null || imageBounds === null) {
     throw new Error("Annotation panel or frame image has no browser geometry");
   }
-  expect(popoverBounds.y, "annotation panel must start below the frame image").toBeGreaterThanOrEqual(
-    imageBounds.y + imageBounds.height,
-  );
+  // FE-014 docks the panel in the side column, so "docked" is now horizontal.
+  expect(
+    popoverBounds.x + popoverBounds.width,
+    "annotation panel must end left of the frame image",
+  ).toBeLessThanOrEqual(imageBounds.x);
   const metrics = {
     image: { height: imageBounds.height, width: imageBounds.width },
     panel: { bottom: popoverBounds.y + popoverBounds.height, top: popoverBounds.y },
@@ -110,20 +112,28 @@ async function assertCompactReviewLayout(page: Page): Promise<void> {
     throw new Error("Review toolbar, canvas or supporting content has no browser geometry");
   }
   expect(overlayBounds.y, "review image should remain above the fold at 1000 px").toBeLessThan(600);
+  // FE-014: the canvas keeps the toolbar's right edge but yields the side
+  // column's fixed 288 px plus the 24 px gap on the left.
   expect(
     previewBounds.width,
-    "canvas row should span the same workspace width as the toolbar",
-  ).toBeGreaterThanOrEqual(toolbarBounds.width - 1);
+    "canvas row should span the workspace minus the side column",
+  ).toBeGreaterThanOrEqual(toolbarBounds.width - 312 - 1);
+  expect(
+    previewBounds.x + previewBounds.width,
+    "canvas row should end with the toolbar",
+  ).toBeGreaterThanOrEqual(toolbarBounds.x + toolbarBounds.width - 1);
   expect(
     overlayBounds.width,
     "review image should be wider than either supporting column",
   ).toBeGreaterThan(inspectorBounds.width);
-  expect(inspectorBounds.y, "class inspector should sit below the canvas").toBeGreaterThanOrEqual(
-    overlayBounds.y + overlayBounds.height,
-  );
-  expect(detailsBounds.y, "frame details should sit below the canvas").toBeGreaterThanOrEqual(
-    overlayBounds.y + overlayBounds.height,
-  );
+  expect(
+    inspectorBounds.x + inspectorBounds.width,
+    "class inspector should sit left of the canvas",
+  ).toBeLessThanOrEqual(overlayBounds.x);
+  expect(
+    detailsBounds.x + detailsBounds.width,
+    "frame details should sit left of the canvas",
+  ).toBeLessThanOrEqual(overlayBounds.x);
   expect(toolbarBounds.y + toolbarBounds.height, "toolbar should precede the canvas").toBeLessThanOrEqual(
     overlayBounds.y,
   );
@@ -447,11 +457,12 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
     throw new Error("FE-010 layout has no browser geometry");
   }
   // This fixture is 1280×852, so the viewport-height cap binds before the
-  // available full row does. The real 16:9 frame used for visual QA exceeds
-  // 980 px; this less-wide fixture should still clear 800 px.
-  expect(imageBounds.width).toBeGreaterThan(800);
-  expect(inspectorBounds.y).toBeGreaterThanOrEqual(imageBounds.y + imageBounds.height);
-  expect(detailsBounds.y).toBeGreaterThanOrEqual(imageBounds.y + imageBounds.height);
+  // available row does. After FE-014 took 312 px for the side column, the
+  // measured width at 1440×1000 is 731.98 px; the floor is that less 2% for
+  // font-metric drift, rounded down to 10 px.
+  expect(imageBounds.width).toBeGreaterThan(710);
+  expect(inspectorBounds.x + inspectorBounds.width).toBeLessThanOrEqual(imageBounds.x);
+  expect(detailsBounds.x + detailsBounds.width).toBeLessThanOrEqual(imageBounds.x);
 
   const center = {
     x: initial.x + initial.width / 2,
@@ -716,6 +727,24 @@ test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({
   expect(deletesAfterNativeReset).toHaveLength(0);
 });
 
+/*
+ * FE-014 capped the side column, so the review screen at 1440×1000 no longer
+ * overflows the viewport. "Space away from the canvas still scrolls" would
+ * then pass with Space fully suppressed, because there is nothing to scroll.
+ * Shrink the viewport until the document really does overflow, and fail here
+ * rather than let the contract assertion go vacuous.
+ */
+async function makeDocumentScrollable(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight))
+    .toBeGreaterThan(0);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+}
+
 test("Space nad kanwą nie przewija dokumentu przy naturalnym fokusie body", async ({ page }) => {
   const api = new ApiHarness({ phase: "review" });
   await api.install(page);
@@ -761,7 +790,7 @@ test("Space nad kanwą nie przewija dokumentu przy naturalnym fokusie body", asy
   ).toHaveLength(0);
 
   await page.mouse.move(8, 8);
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await makeDocumentScrollable(page);
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
   await page.keyboard.press("Space");
   await page.waitForTimeout(100);
@@ -824,7 +853,7 @@ test("wciąż trzymany Space nie przewija dokumentu po zakończeniu panu poza ka
   ).toHaveLength(0);
 
   // No pan this hold: a held, repeating Space outside the canvas still scrolls.
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await makeDocumentScrollable(page);
   await page.keyboard.down("Space");
   await page.keyboard.down("Space");
   await page.waitForTimeout(100);
