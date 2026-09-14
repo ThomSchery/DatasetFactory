@@ -568,6 +568,56 @@ Moduły/ID UI/UX:
 - Finalnie jeden nieprzerwany `scripts/check.ps1`: 9/9 PASS, zero SKIP,
   włącznie z pełnym Playwright E2E.
 
+### Wynik FIX5
+
+Wspólny `onSuccess` nie czyści już bezwarunkowo `categoryConflict`. Nazwany
+predykat `successfulMutationClearsCategoryConflict(intent, selectedId,
+geometryPreview)` zwraca `true` dokładnie dla:
+
+- każdego udanego `create-category`;
+- udanego `create` draftu;
+- udanego `delete`, gdy `selectedId === intent.annotationId`;
+- udanego `category`, gdy `selectedId === intent.annotationId` i nie istnieje
+  preview geometrii tej anotacji — to ten sam warunek, przy którym istniejąca
+  gałąź ustawia `selectedId` na `null`.
+
+Dla `geometry`, `copy-previous` i `review` predykat zwraca `false`. Jawne
+`onClose` nadal czyści konflikt, a zmiana klatki nadal resetuje go przez remount.
+Nie zmieniono `AnnotationPopover`, backendu, CSS, copy ani heurystyki Unicode.
+
+Sondy integracyjne na prawdziwym `FrameEditor → AnnotationPopover`, z mockiem
+dopiero na HTTP:
+
+1. Nowy reproduktor: `POST S → 409` bez `details`, udany PATCH geometrii `200`,
+   powrót do `s` — dokładnie **2 zapisy** (POST + PATCH z
+   `expected_version: 3`), dialog pozostaje otwarty, akcja „Utwórz… S” nie
+   wraca.
+2. Copy w tej samej klatce: `POST S → 409`, udany POST `copy-previous`, powrót
+   do `s` — dokładnie **2 zapisy**, dialog pozostaje otwarty i brama trzyma.
+3. Zastąpienie konfliktu: `S → 409`, `Timer → 409` — dokładnie **2 POST-y**;
+   `Timer` jest blokowany, a wcześniejsze `S` staje się ponownie inną dostępną
+   propozycją.
+4. Sukces zamykający kontekst: `S → 409`, zapis istniejącej klasy `health →
+   PATCH 200` — dokładnie **2 zapisy**; dialog znika, po ponownym otwarciu `S`
+   nie dziedziczy starej bramy.
+5. Udany `create-category`: `S → 409`, `Mana → 201`, przypisanie `PATCH 200` —
+   dokładnie **3 zapisy**; dialog znika, po ponownym otwarciu stara brama `S`
+   jest wyczyszczona.
+6. Obie regresje FIX4 pozostały zielone: `S → 409`, `Timer → 500` daje
+   **2 POST-y**; `S → 409`, geometria `422` daje **1 POST + 1 PATCH**. W obu
+   przypadkach brak kolejnego POST-a `S`.
+
+Falsyfikowalność nowej regresji potwierdzona: czasowe przywrócenie starego
+wspólnego `setCategoryConflict(null)` na początku `onSuccess` dało
+**1 fail / 57 skip**, dokładnie na ponownie widocznym przycisku „Utwórz… S”. Po
+odtworzeniu kodu bit-for-bit test przeszedł. Pełny plik integracyjny:
+**58/58 PASS**; frontend typecheck PASS.
+
+Jeden nieprzerwany `scripts/check.ps1`: **9/9 PASS, zero SKIP** — backend
+format, lint, mypy (99 plików), **356/356 testów**; frontend typecheck,
+**656/656 testów w 41 plikach**, build; Playwright **18/18**; E2E root safety
+**2/2**. E2E nie zmienił zrzutów ani innych plików.
+
 ### Próba odrzucona
 
 Pierwsza implementacja obwarowała reset w `submit()` warunkiem
