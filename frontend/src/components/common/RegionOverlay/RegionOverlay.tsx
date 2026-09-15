@@ -4,7 +4,9 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -103,6 +105,12 @@ interface ViewTransform {
   scale: number;
   x: number;
   y: number;
+}
+
+interface ShapeContextMenu {
+  left: number;
+  shapeId: string;
+  top: number;
 }
 
 interface PanGesture {
@@ -251,6 +259,7 @@ export function RegionOverlay({
   source,
 }: RegionOverlayProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<SVGSVGElement | null>(null);
   const optionRefs = useRef(new Map<string, SVGGElement>());
   const suppressCapturedClickRef = useRef(false);
@@ -267,6 +276,7 @@ export function RegionOverlay({
   const [spacePressed, setSpacePressed] = useState(false);
   const [panning, setPanning] = useState(false);
   const [view, setView] = useState<ViewTransform>(FIT_VIEW);
+  const [contextMenu, setContextMenu] = useState<ShapeContextMenu | null>(null);
 
   const canDraw = onDraw !== undefined && !disabled && source !== null;
   const canInteract = !disabled;
@@ -307,6 +317,48 @@ export function RegionOverlay({
     updateView(FIT_VIEW);
   }
 
+  function zoomAtViewportCenter(direction: "in" | "out"): void {
+    const viewport = viewportRef.current;
+    if (viewport === null) {
+      return;
+    }
+    const bounds = viewport.getBoundingClientRect();
+    applyZoom(
+      direction === "in" ? viewRef.current.scale * ZOOM_STEP : viewRef.current.scale / ZOOM_STEP,
+      { x: bounds.width / 2, y: bounds.height / 2 },
+      bounds,
+    );
+  }
+
+  function applyZoom(
+    requestedScale: number,
+    anchor: SourcePoint,
+    bounds: { width: number; height: number },
+  ): void {
+    const current = viewRef.current;
+    const scale = rounded(Math.min(MAX_ZOOM, Math.max(1, requestedScale)));
+    if (scale === current.scale) {
+      return;
+    }
+    if (scale === 1) {
+      resetView();
+      return;
+    }
+    const contentPoint = {
+      x: (anchor.x - current.x) / current.scale,
+      y: (anchor.y - current.y) / current.scale,
+    };
+    const pan = clampPan(
+      {
+        x: anchor.x - contentPoint.x * scale,
+        y: anchor.y - contentPoint.y * scale,
+      },
+      scale,
+      bounds,
+    );
+    updateView({ scale, ...pan });
+  }
+
   useLayoutEffect(() => {
     if (previousSelectedIdRef.current === selectedId) {
       return;
@@ -333,45 +385,73 @@ export function RegionOverlay({
         return;
       }
       const bounds = viewport.getBoundingClientRect();
-      const current = viewRef.current;
       const requested =
         event.deltaY < 0
-          ? current.scale * ZOOM_STEP
+          ? viewRef.current.scale * ZOOM_STEP
           : event.deltaY > 0
-            ? current.scale / ZOOM_STEP
-            : current.scale;
+            ? viewRef.current.scale / ZOOM_STEP
+            : viewRef.current.scale;
       const scale = rounded(Math.min(MAX_ZOOM, Math.max(1, requested)));
-      if (scale === current.scale) {
+      if (scale === viewRef.current.scale) {
         return;
       }
       event.preventDefault();
-      if (scale === 1) {
-        resetView();
-        return;
-      }
       const anchor = {
         x: event.clientX - bounds.left,
         y: event.clientY - bounds.top,
       };
-      const contentPoint = {
-        x: (anchor.x - current.x) / current.scale,
-        y: (anchor.y - current.y) / current.scale,
-      };
-      const pan = clampPan(
-        {
-          x: anchor.x - contentPoint.x * scale,
-          y: anchor.y - contentPoint.y * scale,
-        },
-        scale,
-        bounds,
-      );
-      updateView({ scale, ...pan });
+      applyZoom(scale, anchor, bounds);
     };
     surface.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       surface.removeEventListener("wheel", handleWheel);
     };
   }, [source]);
+
+  useLayoutEffect(() => {
+    const menu = contextMenuRef.current;
+    const viewport = viewportRef.current;
+    if (contextMenu === null || menu === null || viewport === null) {
+      return;
+    }
+    const menuBounds = menu.getBoundingClientRect();
+    const viewportBounds = viewport.getBoundingClientRect();
+    const left = Math.max(0, Math.min(contextMenu.left, viewportBounds.width - menuBounds.width));
+    const top = Math.max(0, Math.min(contextMenu.top, viewportBounds.height - menuBounds.height));
+    if (left !== contextMenu.left || top !== contextMenu.top) {
+      setContextMenu({ ...contextMenu, left, top });
+      return;
+    }
+    menu.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (contextMenu === null) {
+      return;
+    }
+    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !contextMenuRef.current?.contains(event.target)) {
+        setContextMenu(null);
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setContextMenu(null);
+      }
+    };
+    const closeOnBlur = () => {
+      setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("blur", closeOnBlur);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("blur", closeOnBlur);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -676,6 +756,34 @@ export function RegionOverlay({
     optionRefs.current.get(shape.id)?.focus?.();
   }
 
+  function openShapeContextMenu(shapeId: string, clientX: number, clientY: number): void {
+    const viewport = viewportRef.current;
+    if (viewport === null || onRemove === undefined || !canInteract) {
+      return;
+    }
+    const bounds = viewport.getBoundingClientRect();
+    setContextMenu({
+      left: Math.max(0, clientX - bounds.left),
+      shapeId,
+      top: Math.max(0, clientY - bounds.top),
+    });
+  }
+
+  function handleShapeContextMenu(event: MouseEvent<SVGGElement>, shape: OverlayShape): void {
+    if (onRemove === undefined || !canInteract) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    openShapeContextMenu(shape.id, event.clientX, event.clientY);
+  }
+
+  function closeContextMenuOnFocusExit(event: FocusEvent<HTMLDivElement>): void {
+    if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+      setContextMenu(null);
+    }
+  }
+
   function handleKeyDown(event: KeyboardEvent<SVGGElement>, shape: OverlayShape, index: number) {
     if (!canInteract) {
       return;
@@ -710,6 +818,15 @@ export function RegionOverlay({
         onRemove?.(shape.id);
         return;
       default:
+        if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+          event.preventDefault();
+          const bounds = event.currentTarget.getBoundingClientRect();
+          openShapeContextMenu(
+            shape.id,
+            bounds.left + bounds.width / 2,
+            bounds.top + bounds.height / 2,
+          );
+        }
     }
   }
 
@@ -826,6 +943,7 @@ export function RegionOverlay({
               editable={canEditShapes && shape.id === selectedId}
               index={index}
               key={shape.id}
+              onContextMenu={handleShapeContextMenu}
               onKeyDown={handleKeyDown}
               refCallback={(element) => {
                 if (element === null) {
@@ -902,9 +1020,31 @@ export function RegionOverlay({
       )}
       {source === null ? null : (
         <div className="df-region-overlay__zoom-controls" data-preserve-annotation-preview="true">
+          <Button
+            aria-label="Pomniejsz kanwę"
+            disabled={view.scale <= 1}
+            onClick={() => {
+              zoomAtViewportCenter("out");
+            }}
+            size="sm"
+            variant="muted"
+          >
+            −
+          </Button>
           <output aria-label="Powiększenie kanwy" className="df-region-overlay__zoom-value">
             {String(Math.round(view.scale * 100))}%
           </output>
+          <Button
+            aria-label="Powiększ kanwę"
+            disabled={view.scale >= MAX_ZOOM}
+            onClick={() => {
+              zoomAtViewportCenter("in");
+            }}
+            size="sm"
+            variant="muted"
+          >
+            +
+          </Button>
           <Button
             aria-pressed={panMode}
             disabled={view.scale === 1}
@@ -923,7 +1063,31 @@ export function RegionOverlay({
             size="sm"
             variant="muted"
           >
-            1×
+            RESET
+          </Button>
+        </div>
+      )}
+      {contextMenu === null ? null : (
+        <div
+          aria-label="Akcje bboxa"
+          className="df-region-overlay__context-menu"
+          data-preserve-annotation-preview="true"
+          onBlur={closeContextMenuOnFocusExit}
+          ref={contextMenuRef}
+          role="menu"
+          style={{ left: contextMenu.left, top: contextMenu.top }}
+        >
+          <Button
+            onClick={() => {
+              const shapeId = contextMenu.shapeId;
+              setContextMenu(null);
+              onRemove?.(shapeId);
+            }}
+            role="menuitem"
+            size="sm"
+            variant="muted"
+          >
+            Usuń
           </Button>
         </div>
       )}
@@ -935,6 +1099,7 @@ interface ShapeOptionProps {
   editable: boolean;
   index: number;
   onKeyDown: (event: KeyboardEvent<SVGGElement>, shape: OverlayShape, index: number) => void;
+  onContextMenu: (event: MouseEvent<SVGGElement>, shape: OverlayShape) => void;
   refCallback: (element: SVGGElement | null) => void;
   selected: boolean;
   shape: OverlayShape;
@@ -952,6 +1117,7 @@ function ShapeOption({
   editable,
   index,
   onKeyDown,
+  onContextMenu,
   refCallback,
   selected,
   shape,
@@ -972,6 +1138,9 @@ function ShapeOption({
       data-editable={editable || undefined}
       data-overlay-shape-id={shape.id}
       data-selected={selected || undefined}
+      onContextMenu={(event) => {
+        onContextMenu(event, shape);
+      }}
       onKeyDown={(event) => {
         onKeyDown(event, shape, index);
       }}

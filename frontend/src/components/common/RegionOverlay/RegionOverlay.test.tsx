@@ -73,6 +73,7 @@ interface HarnessProps {
   initialSelectedId?: string | null;
   interactionMode?: "select" | "draw";
   onDraw?: (rect: SourceRect) => void;
+  onRemove?: (id: string) => void;
   onSelect?: (id: string) => void;
   onShapeChange?: (id: string, rect: SourceRect) => void;
   onShapeChangeEnd?: (id: string, rect: SourceRect) => void;
@@ -87,6 +88,7 @@ function Harness({
   initialSelectedId = null,
   interactionMode = "select",
   onDraw,
+  onRemove,
   onSelect,
   onShapeChange,
   onShapeChangeEnd,
@@ -119,6 +121,7 @@ function Harness({
         readOnly
           ? undefined
           : (id) => {
+              onRemove?.(id);
               setShapes((current) => current.filter((shape) => shape.id !== id));
               setSelectedId((current) => (current === id ? null : current));
             }
@@ -171,6 +174,67 @@ function shapeGeometry(option: Element): SourceRect {
 }
 
 describe("the drawing surface", () => {
+  it("opens bbox removal only over a shape and uses the same remove callback", async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    renderOverlay({
+      initialShapes: [{ id: "region-1", label: "Region 1", x: 100, y: 120, width: 40, height: 32 }],
+      onRemove,
+    });
+    const surface = surfaceElement();
+    const option = screen.getByRole("option", { name: /Region 1:/ });
+    const fill = option.querySelector(".df-region-overlay__shape-fill");
+
+    expect(fireEvent.contextMenu(surface)).toBe(true);
+    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(fireEvent.contextMenu(fill as Element, { clientX: 120, clientY: 140 })).toBe(false);
+    const menu = screen.getByRole("menu", { name: "Akcje bboxa" });
+    expect(within(menu).getByRole("menuitem", { name: "Usuń" })).toHaveFocus();
+
+    await user.click(within(menu).getByRole("menuitem", { name: "Usuń" }));
+    expect(onRemove).toHaveBeenCalledOnce();
+    expect(onRemove).toHaveBeenCalledWith("region-1");
+  });
+
+  it("opens the bbox menu from the keyboard and dismisses it with Escape", () => {
+    renderOverlay({
+      initialShapes: [{ id: "region-1", label: "Region 1", x: 100, y: 120, width: 40, height: 32 }],
+    });
+    const option = screen.getByRole("option", { name: /Region 1:/ });
+    option.focus();
+
+    expect(fireEvent.keyDown(option, { key: "F10", shiftKey: true })).toBe(false);
+    expect(screen.getByRole("menu", { name: "Akcje bboxa" })).toBeInTheDocument();
+    expect(fireEvent.keyDown(document, { key: "Escape" })).toBe(false);
+    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+  });
+
+  it("zooms from visible controls around the viewport centre and disables the limits", async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    const surface = surfaceElement();
+    const viewport = layOutViewport(surface, 960);
+    const stage = viewport.querySelector("[data-overlay-zoom-stage]");
+    const zoomOut = screen.getByRole("button", { name: "Pomniejsz kanwę" });
+    const zoomIn = screen.getByRole("button", { name: "Powiększ kanwę" });
+
+    expect(zoomOut).toBeDisabled();
+    await user.click(zoomIn);
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("125%");
+    expect(stage).toHaveStyle({ transform: "translate(-120px, -67.5px) scale(1.25)" });
+    expect(zoomOut).toBeEnabled();
+
+    for (let step = 0; step < 12; step += 1) {
+      await user.click(zoomIn);
+    }
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("800%");
+    expect(zoomIn).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
+    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1)" });
+  });
+
   it("waits for the natural dimensions before offering a coordinate system", () => {
     render(<Harness />);
 

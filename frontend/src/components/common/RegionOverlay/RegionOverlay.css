@@ -260,6 +260,33 @@
   background: var(--color-fill-brand-impeccable-hover);
 }
 
+.df-region-overlay__context-menu {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  min-width: calc(var(--size-xxl) * 2);
+  padding: calc(var(--size-xs) / 2);
+  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  box-shadow: var(--shadow-elevation-high);
+}
+
+.df-region-overlay__context-menu .df-button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: var(--control-height-sm);
+  border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+  color: var(--color-status-error-default);
+}
+
+.df-region-overlay__context-menu .df-button:hover,
+.df-region-overlay__context-menu .df-button:active {
+  border-color: var(--color-surface-transparent);
+  background: var(--color-surface-neutral-hover);
+}
+
 .df-region-overlay__label {
   --df-overlay-label-top: 0%;
   --df-overlay-label-left: 0%;
