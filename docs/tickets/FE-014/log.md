@@ -257,3 +257,32 @@ układu: `FE-001/annotations-1440.png`, `FE-001/error-1440.png`,
 `FE-011/annotations-pan-1440.png`, `FE-012/panel-without-geometry-1440.png`,
 `FE-012/review-1440.png` i `FE-013/create-class-action-1440.png`.
 
+## 2026-09-15 — bramka końcowa
+
+Przed pełną bramką poprawiony `vertical-flow.spec.ts` przeszedł osobno 1/1 na
+realnej trasie z restartem backendu. Następnie uruchomiono jeden nieprzerwany
+przebieg z absolutnej ścieżki:
+
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\t.wisniewski\.traycer\worktrees\thomschery__datasetfactory\feat-fe-014-side-column-layout\scripts\check.ps1`
+
+Wynik: **9/9 PASS, zero SKIP**.
+
+- backend format: PASS (267 plików);
+- backend lint: PASS;
+- backend typy: PASS (99 plików);
+- backend testy: PASS (356/356);
+- frontend typy: PASS;
+- frontend testy: PASS (41 plików, 659/659);
+- frontend build: PASS;
+- E2E: PASS (18/18), w tym `fe013-conflict-geometry`, `negative-flow` i
+  poprawiony `vertical-flow`;
+- E2E root safety: PASS (2/2).
+
+Po bramce `FE-001/screenshots/error-1440.png` ponownie wykazał dokładnie ten sam
+dryf 9 pikseli względem `HEAD`: ten sam prostokąt x = 312..314, y = 95..100,
+0,000625% obrazu i maksymalna różnica kanału 1. Plik ponownie przywrócono z
+`HEAD`. `FE-013/screenshots/create-class-action-1440.png` nie zmienił się po
+jawnym odświeżeniu do wariantu 288×286. Porty 8000, 5173 i 5399 były wolne po
+zakończeniu przebiegu. Końcowy skan mechaniczny layoutu `impeccable` dla
+`FrameEditor.tsx`, `AnnotationReviewScreen.css` i `AnnotationPopover.tsx`
+zwrócił `[]`.
