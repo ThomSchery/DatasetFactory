@@ -554,7 +554,7 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     });
   });
 
-  it("treats frame details as outside the annotation panel and discards the preview", async () => {
+  it("treats the frame inspector as outside the annotation panel and discards the preview", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
@@ -562,7 +562,13 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     await selectAndNudge(user);
 
-    await user.click(screen.getByRole("region", { name: "Dane klatki" }));
+    /*
+     * FE-015 C1 removed the "Dane klatki" panel this used to click. The
+     * inspector heading replaces it: still in the side column, still outside
+     * `AnnotationPopover`, so the FE-014 boundary is asserted with the same
+     * force — a click there must both close the panel and drop the preview.
+     */
+    await user.click(screen.getByRole("heading", { name: "Anotacje na klatce" }));
 
     expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
     expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 100, y 120"));

@@ -42,7 +42,7 @@ export type CategoryConflictRecovery =
   | { kind: "unidentified"; rejectedName: string };
 
 interface AnnotationPopoverProps {
-  annotation: Annotation;
+  annotation?: Annotation;
   busyKey: string | null;
   categories: readonly Category[];
   categoryConflict: CategoryConflictRecovery | null;
@@ -92,8 +92,12 @@ export function AnnotationPopover({
   onCreateCategory,
   onDelete,
 }: AnnotationPopoverProps) {
-  const categoryName = categories.find((category) => category.id === annotation.category_id)?.name ?? annotation.category_id;
-  const [form, setForm] = useState<FormState>(() => initialFormState(annotation.category_id));
+  const categoryId = annotation?.category_id ?? "";
+  const categoryName =
+    annotation === undefined
+      ? ""
+      : categories.find((category) => category.id === categoryId)?.name ?? categoryId;
+  const [form, setForm] = useState<FormState>(() => initialFormState(categoryId));
   const [categoryQuery, setCategoryQuery] = useState("");
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const classGroups = useMemo(() => copyOptionGroups(categories), [categories]);
@@ -153,8 +157,8 @@ export function AnnotationPopover({
   }, []);
 
   useEffect(() => {
-    setForm((current) => syncFormState(current, annotation.category_id));
-  }, [annotation.category_id]);
+    setForm((current) => syncFormState(current, categoryId));
+  }, [categoryId]);
 
   useEffect(() => {
     if (categoryConflict === null) {
@@ -179,6 +183,10 @@ export function AnnotationPopover({
   closeRef.current = onClose;
 
   useEffect(() => {
+    if (annotation === undefined) {
+      return;
+    }
+    const annotationId = annotation.id;
     function handleOutsidePointerDown(event: Event): void {
       const popover = popoverRef.current;
       const target = event.target;
@@ -200,7 +208,7 @@ export function AnnotationPopover({
       if (
         target instanceof Element &&
         target.closest("[data-overlay-shape-id]")?.getAttribute("data-overlay-shape-id") ===
-          annotation.id
+          annotationId
       ) {
         return;
       }
@@ -208,7 +216,7 @@ export function AnnotationPopover({
         target instanceof Element &&
         (target
           .closest("[data-annotation-selection-target]")
-          ?.getAttribute("data-annotation-selection-target") === annotation.id ||
+          ?.getAttribute("data-annotation-selection-target") === annotationId ||
           target.closest("[data-preserve-annotation-preview]") !== null)
       ) {
         return;
@@ -229,10 +237,10 @@ export function AnnotationPopover({
     return () => {
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
     };
-  }, [annotation.id]);
+  }, [annotation]);
 
   function saveCategory(categoryId: string): void {
-    if (categoryId === "") {
+    if (annotation === undefined || categoryId === "") {
       return;
     }
     if (!draft && categoryId === annotation.category_id) {
@@ -244,28 +252,36 @@ export function AnnotationPopover({
 
   return (
     <div
-      aria-label={draft ? "Wybierz klasę dla nowego bbox" : `Edytuj anotację ${categoryName}`}
+      aria-label={
+        annotation === undefined
+          ? "Anotacja bez zaznaczenia"
+          : draft
+            ? "Wybierz klasę dla nowego bbox"
+            : `Edytuj anotację ${categoryName}`
+      }
       className="df-annotation-popover"
       data-annotation-popover="panel"
       ref={popoverRef}
-      role="dialog"
+      role={annotation === undefined ? "region" : "dialog"}
     >
       <header className="df-annotation-popover__header">
         <strong>{draft ? "Nowa anotacja · box" : "Anotacja"}</strong>
-        <span className="df-annotation-popover__badges">
-          <StatusBadge srLabel="Źródło:" tone={annotation.source === "ocr" ? "brand" : "success"}>
-            {annotation.source === "ocr" ? "OCR" : "Ręczna"}
-          </StatusBadge>
-          {annotation.source === "ocr" && annotation.confidence !== null ? (
-            <StatusBadge srLabel="Confidence OCR:" tone="neutral">
-              {Math.round(annotation.confidence * 100)}%
+        {annotation === undefined ? null : (
+          <span className="df-annotation-popover__badges">
+            <StatusBadge srLabel="Źródło:" tone={annotation.source === "ocr" ? "brand" : "success"}>
+              {annotation.source === "ocr" ? "OCR" : "Ręczna"}
             </StatusBadge>
-          ) : null}
-        </span>
+            {annotation.source === "ocr" && annotation.confidence !== null ? (
+              <StatusBadge srLabel="Confidence OCR:" tone="neutral">
+                {Math.round(annotation.confidence * 100)}%
+              </StatusBadge>
+            ) : null}
+          </span>
+        )}
       </header>
 
       <GroupedOptionList
-        autoFocus
+        autoFocus={annotation !== undefined}
         disabled={disabled}
         emptyMessage={
           draft
@@ -276,7 +292,7 @@ export function AnnotationPopover({
         filterMaxCodePoints={200}
         filterValue={categoryQuery}
         filterAction={
-          canCreateCategory ? (
+          annotation !== undefined && canCreateCategory ? (
             <Button
               aria-label={`Utwórz i przypisz klasę „${proposedCategory.name}”`}
               className="df-annotation-popover__create-class"
@@ -297,7 +313,7 @@ export function AnnotationPopover({
           ) : null
         }
         groups={classGroups}
-        key={annotation.id}
+        key={annotation?.id ?? "empty"}
         label="Klasy profilu"
         mode="single"
         onChange={(selection) => {
@@ -316,19 +332,28 @@ export function AnnotationPopover({
       {categoryError === null ? null : <InlineError message={categoryError} />}
 
       <div className="df-annotation-popover__actions">
-        <Button disabled={disabled} loading={busyKey === `delete:${annotation.id}`} onClick={onDelete} size="sm" variant="muted">
+        <Button
+          disabled={disabled || annotation === undefined}
+          loading={annotation !== undefined && busyKey === `delete:${annotation.id}`}
+          onClick={onDelete}
+          size="sm"
+          variant="muted"
+        >
           {draft ? "Porzuć box" : "Usuń"}
         </Button>
         <Button
           aria-label="Zapisz klasę"
-          disabled={disabled || form.categoryId === ""}
-          loading={draft ? busyKey === "create" : busyKey === `category:${annotation.id}`}
+          disabled={disabled || annotation === undefined || form.categoryId === ""}
+          loading={
+            annotation !== undefined &&
+            (draft ? busyKey === "create" : busyKey === `category:${annotation.id}`)
+          }
           onClick={() => {
             saveCategory(form.categoryId);
           }}
           size="sm"
         >
-          Zapisz <kbd>Enter</kbd>
+          Zapisz
         </Button>
       </div>
 

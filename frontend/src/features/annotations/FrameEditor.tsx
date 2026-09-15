@@ -6,7 +6,6 @@ import {
   describeApiError,
   createProfileCategory,
   describeErrorCode,
-  describeFrameStage,
   frameImageUrl,
   frameReviewCapabilities,
   getFrame,
@@ -25,7 +24,6 @@ import {
   type ReviewStatusFilter,
 } from "../../api";
 import { Button } from "../../components/common/Button";
-import { DataList } from "../../components/common/DataList";
 import {
   GroupedOptionList,
   SHORTCUT_SCOPE_ATTRIBUTE,
@@ -587,7 +585,6 @@ function LoadedFrameEditor({
           version: 0,
         };
   const popoverAnnotation = selectedId === DRAFT_ANNOTATION_ID ? draftAnnotation : selectedAnnotation;
-  const stage = describeFrameStage(frame.stage_status);
   const editorDisabled = !capabilities.canEdit || mutation.isPending;
   const canDirectEdit = capabilities.canEdit;
   const copyTarget = copyPreviousTarget(copySelection, profile.categories);
@@ -610,8 +607,15 @@ function LoadedFrameEditor({
     });
   }
 
+  /*
+   * FE-015 A3 retired the review shortcuts `A`, `X` and `R`. What is left here
+   * is not a shortcut in that sense: the arrows edit a live preview and `Enter`
+   * commits the edit they built. Removing `Enter` too would leave the arrows
+   * with no keyboard way to reach the API, so it survives — unadvertised on the
+   * button, but still the commit for a geometry preview.
+   */
   useEffect(() => {
-    function handleReviewShortcut(event: globalThis.KeyboardEvent): void {
+    function handleGeometryKey(event: globalThis.KeyboardEvent): void {
       const target = event.target;
       if (
         event.defaultPrevented ||
@@ -655,10 +659,9 @@ function LoadedFrameEditor({
           /*
            * `Enter` inside the docked panel belongs to whatever the operator
            * has focused: "Usuń" or "Zapisz klasę". Only `Enter` from outside
-           * the panel commits the preview. The guard this branch shares with
-           * the letter shortcuts excludes fields and the class picker, but
-           * those shortcuts never consumed `Enter`, so buttons still need the
-           * explicit panel boundary.
+           * the panel commits the preview. The guard above excludes fields and
+           * the class picker, but buttons still need the explicit panel
+           * boundary.
            */
           const insidePanel =
             target instanceof Element &&
@@ -670,61 +673,21 @@ function LoadedFrameEditor({
           }
         }
       }
-      const key = event.key.toLocaleLowerCase("pl");
-      if (
-        key === "a" &&
-        capabilities.canAccept &&
-        activeAnnotations.length > 0 &&
-        // An accepted frame is terminal, so losing a nudge to it is
-        // irreversible. The panel says why the shortcut does nothing.
-        unsavedGeometry === null &&
-        !mutation.isPending
-      ) {
-        event.preventDefault();
-        setActionError(null);
-        mutation.mutate({ decision: "accept", expectedVersion: frame.version, kind: "review" });
-      } else if (key === "x" && capabilities.canReject && !mutation.isPending) {
-        event.preventDefault();
-        setActionError(null);
-        mutation.mutate({ decision: "reject", expectedVersion: frame.version, kind: "review" });
-      } else if (key === "r" && !copyDisabled) {
-        const target = copyPreviousTarget(copySelection, profile.categories);
-        if (target === null) {
-          return;
-        }
-        event.preventDefault();
-        setActionError(null);
-        setCopyFeedback(null);
-        mutation.mutate({
-          expectedVersion: frame.version,
-          kind: "copy-previous",
-          target,
-        });
-      }
     }
 
-    window.addEventListener("keydown", handleReviewShortcut);
+    window.addEventListener("keydown", handleGeometryKey);
     return () => {
-      window.removeEventListener("keydown", handleReviewShortcut);
+      window.removeEventListener("keydown", handleGeometryKey);
     };
   }, [
-    activeAnnotations.length,
     canDirectEdit,
-    capabilities.canAccept,
-    capabilities.canReject,
-    copyDisabled,
-    copySelection,
     draftBBox,
     editorDisabled,
     frame.height,
-    frame.version,
     frame.width,
     geometryPreview,
-    mutation,
-    profile.categories,
     selectedAnnotation,
     selectedId,
-    unsavedGeometry,
   ]);
 
   function submit(intent: EditorMutationIntent): void {
@@ -837,6 +800,7 @@ function LoadedFrameEditor({
   function handleDraw(bbox: BBox): void {
     setActionError(null);
     setCategoryActionError(null);
+    setCategoryConflict(null);
     setDraftBBox(toBBox(bbox));
     updateSelectionContext(DRAFT_ANNOTATION_ID);
     setSelectedId(DRAFT_ANNOTATION_ID);
@@ -844,6 +808,9 @@ function LoadedFrameEditor({
 
   function selectAnnotation(annotationId: string): void {
     setCategoryActionError(null);
+    if (annotationId !== selectionContextRef.current.annotationId) {
+      setCategoryConflict(null);
+    }
     updateSelectionContext(annotationId);
     if (annotationId !== DRAFT_ANNOTATION_ID) {
       setDraftBBox(null);
@@ -852,6 +819,23 @@ function LoadedFrameEditor({
     setGeometryPreview((current) =>
       current?.annotationId === annotationId ? current : null,
     );
+  }
+
+  function removeAnnotation(annotationId: string): void {
+    if (annotationId === DRAFT_ANNOTATION_ID) {
+      setDraftBBox(null);
+      updateSelectionContext(null);
+      setSelectedId(null);
+      return;
+    }
+    const annotation = annotationById(annotationId);
+    if (annotation !== undefined) {
+      submit({
+        annotationId,
+        expectedVersion: annotation.version,
+        kind: "delete",
+      });
+    }
   }
 
   return (
@@ -878,10 +862,10 @@ function LoadedFrameEditor({
                     ? "Najpierw zapisz albo porzuć niezapisane przesunięcie bboxa"
                     : activeAnnotations.length === 0
                       ? "Akceptacja wymaga aktywnej anotacji"
-                      : "Skrót: A"
+                      : undefined
                 }
               >
-                Zaakceptuj <kbd>A</kbd>
+                Zaakceptuj
               </Button>
             ) : null}
             {capabilities.canReject ? (
@@ -893,10 +877,9 @@ function LoadedFrameEditor({
                   submit({ decision: "reject", expectedVersion: frame.version, kind: "review" });
                 }}
                 size="sm"
-                title="Skrót: X"
                 variant="secondary"
               >
-                Odrzuć <kbd>X</kbd>
+                Odrzuć
               </Button>
             ) : null}
             {capabilities.canReopen ? (
@@ -933,7 +916,6 @@ function LoadedFrameEditor({
             </StatusBadge>
           }
           className="df-review-workspace__inspector"
-          description="Kliknij klasę, aby zaznaczyć jej bbox; kolejne kliknięcia przechodzą między wystąpieniami."
           eyebrow="Bieżąca klatka"
           title="Anotacje na klatce"
         >
@@ -967,10 +949,9 @@ function LoadedFrameEditor({
               loading={currentBusyKey === "copy-previous"}
               onClick={copyPrevious}
               size="sm"
-              title="Skrót: R"
               variant="secondary"
             >
-              Powtórz <kbd>R</kbd>
+              Powtórz
             </Button>
             <p aria-live="polite" className="df-review-copy__status">
               {frame.frame_index === 0
@@ -982,116 +963,6 @@ function LoadedFrameEditor({
                     : copyFeedback}
             </p>
           </section>
-        </Panel>
-
-        {popoverAnnotation === undefined ? null : (
-          <AnnotationPopover
-            annotation={popoverAnnotation}
-            busyKey={currentBusyKey}
-            categories={profile.categories}
-            categoryConflict={categoryConflict}
-            categoryError={
-              categoryActionError === null ? null : errorMessage(categoryActionError)
-            }
-            disabled={editorDisabled}
-            draft={selectedId === DRAFT_ANNOTATION_ID}
-            hasUnsavedGeometry={
-              selectedId !== DRAFT_ANNOTATION_ID &&
-              geometryPreview?.annotationId === popoverAnnotation.id &&
-              unsavedGeometry !== null
-            }
-            key={popoverAnnotation.id}
-            onCategoryChange={(categoryId) => {
-              if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
-                submit({
-                  bbox: draftBBox,
-                  categoryId,
-                  expectedVersion: frame.version,
-                  kind: "create",
-                });
-                return;
-              }
-              submit({
-                annotationId: popoverAnnotation.id,
-                categoryId,
-                expectedVersion: popoverAnnotation.version,
-                kind: "category",
-              });
-            }}
-            onCategoryFilterChange={() => {
-              setCategoryActionError(null);
-              // Keep the rejected normalized name as a local deny-list entry.
-              // AnnotationPopover compares it with the current proposal, so a
-              // genuinely different intent is available immediately while
-              // filtering away and back cannot restart the same `409` loop.
-              setCategoryConflict((current) =>
-                current?.kind === "unidentified" ? current : null,
-              );
-            }}
-            onClose={() => {
-              setCategoryActionError(null);
-              setCategoryConflict(null);
-              closeSelectionContext();
-              setDraftBBox(null);
-              setSelectedId(null);
-              setGeometryPreview(null);
-            }}
-            onCreateCategory={(category) => {
-              if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
-                submit({
-                  assignment: {
-                    bbox: draftBBox,
-                    expectedVersion: frame.version,
-                    kind: "draft",
-                  },
-                  category,
-                  kind: "create-category",
-                });
-                return;
-              }
-              submit({
-                assignment: {
-                  annotationId: popoverAnnotation.id,
-                  expectedVersion: popoverAnnotation.version,
-                  kind: "existing",
-                },
-                category,
-                kind: "create-category",
-              });
-            }}
-            onDelete={() => {
-              if (selectedId === DRAFT_ANNOTATION_ID) {
-                setDraftBBox(null);
-                updateSelectionContext(null);
-                setSelectedId(null);
-                return;
-              }
-              submit({
-                annotationId: popoverAnnotation.id,
-                expectedVersion: popoverAnnotation.version,
-                kind: "delete",
-              });
-            }}
-          />
-        )}
-
-        <Panel className="df-review-workspace__details" title="Dane klatki">
-          <DataList
-            items={[
-              { label: "Timestamp", value: `${(frame.timestamp_ms / 1000).toFixed(3)} s` },
-              { label: "Wymiary", value: `${frame.width} × ${frame.height} px` },
-              {
-                label: "Etap",
-                value: (
-                  <StatusBadge srLabel="Etap:" tone={stage.tone}>
-                    {stage.label}
-                  </StatusBadge>
-                ),
-              },
-              { label: "Wersja klatki", value: frame.version },
-            ]}
-            layout="columns"
-          />
           {capabilities.terminal ? (
             <Notice title="Klatka zaakceptowana" tone="info">
               Zaakceptowana klatka jest terminalna i pozostaje zamrożona dla trwałości snapshotu eksportu.
@@ -1133,6 +1004,91 @@ function LoadedFrameEditor({
             </div>
           ) : null}
         </Panel>
+
+        <AnnotationPopover
+          annotation={popoverAnnotation}
+          busyKey={currentBusyKey}
+          categories={profile.categories}
+          categoryConflict={categoryConflict}
+          categoryError={categoryActionError === null ? null : errorMessage(categoryActionError)}
+          disabled={editorDisabled}
+          draft={selectedId === DRAFT_ANNOTATION_ID}
+          hasUnsavedGeometry={
+            popoverAnnotation !== undefined &&
+            selectedId !== DRAFT_ANNOTATION_ID &&
+            geometryPreview?.annotationId === popoverAnnotation.id &&
+            unsavedGeometry !== null
+          }
+          key={popoverAnnotation?.id ?? "empty"}
+          onCategoryChange={(categoryId) => {
+            if (popoverAnnotation === undefined) {
+              return;
+            }
+            if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
+              submit({
+                bbox: draftBBox,
+                categoryId,
+                expectedVersion: frame.version,
+                kind: "create",
+              });
+              return;
+            }
+            submit({
+              annotationId: popoverAnnotation.id,
+              categoryId,
+              expectedVersion: popoverAnnotation.version,
+              kind: "category",
+            });
+          }}
+          onCategoryFilterChange={() => {
+            setCategoryActionError(null);
+            // Keep the rejected normalized name as a local deny-list entry.
+            // AnnotationPopover compares it with the current proposal, so a
+            // genuinely different intent is available immediately while
+            // filtering away and back cannot restart the same `409` loop.
+            setCategoryConflict((current) => (current?.kind === "unidentified" ? current : null));
+          }}
+          onClose={() => {
+            setCategoryActionError(null);
+            setCategoryConflict(null);
+            closeSelectionContext();
+            setDraftBBox(null);
+            setSelectedId(null);
+            setGeometryPreview(null);
+          }}
+          onCreateCategory={(category) => {
+            if (popoverAnnotation === undefined) {
+              return;
+            }
+            if (selectedId === DRAFT_ANNOTATION_ID && draftBBox !== null) {
+              submit({
+                assignment: {
+                  bbox: draftBBox,
+                  expectedVersion: frame.version,
+                  kind: "draft",
+                },
+                category,
+                kind: "create-category",
+              });
+              return;
+            }
+            submit({
+              assignment: {
+                annotationId: popoverAnnotation.id,
+                expectedVersion: popoverAnnotation.version,
+                kind: "existing",
+              },
+              category,
+              kind: "create-category",
+            });
+          }}
+          onDelete={() => {
+            if (popoverAnnotation === undefined) {
+              return;
+            }
+            removeAnnotation(popoverAnnotation.id);
+          }}
+        />
       </aside>
 
       <section
@@ -1155,26 +1111,7 @@ function LoadedFrameEditor({
           onSourceResolved={() => {
             setImageError(false);
           }}
-          onRemove={
-            capabilities.canEdit
-              ? (annotationId) => {
-                  if (annotationId === DRAFT_ANNOTATION_ID) {
-                    setDraftBBox(null);
-                    updateSelectionContext(null);
-                    setSelectedId(null);
-                    return;
-                  }
-                  const annotation = annotationById(annotationId);
-                  if (annotation !== undefined) {
-                    submit({
-                      annotationId,
-                      expectedVersion: annotation.version,
-                      kind: "delete",
-                    });
-                  }
-                }
-              : undefined
-          }
+          onRemove={capabilities.canEdit ? removeAnnotation : undefined}
           onSelect={selectAnnotation}
           onShapeChange={canDirectEdit ? previewManipulationGeometry : undefined}
           onShapeChangeCancel={canDirectEdit ? cancelManipulationGeometry : undefined}
