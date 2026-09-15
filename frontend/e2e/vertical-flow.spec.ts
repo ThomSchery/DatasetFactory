@@ -586,8 +586,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   if (frameImageBounds === null || dockedPopoverBounds === null) {
     throw new Error("Frame image or docked annotation panel has no browser geometry");
   }
-  expect(dockedPopoverBounds.y).toBeGreaterThanOrEqual(
-    frameImageBounds.y + frameImageBounds.height,
+  expect(dockedPopoverBounds.x + dockedPopoverBounds.width).toBeLessThanOrEqual(
+    frameImageBounds.x,
   );
   await testInfo.attach("fe-012-panel-unsaved", {
     body: await annotationEditor.screenshot(),
