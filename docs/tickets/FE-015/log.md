@@ -246,8 +246,73 @@ maskuje klawiatury i odwrotnie.
 
 - `npx tsc --noEmit` — czysto.
 - `npx vitest run` — **667/667 zielone**, 0 pominiętych.
-- Pełna bramka (`scripts\check.ps1`, 9/9) i Visual QA: **oczekują na zwolnienie
-  portów 8000 i 5173**, zajętych przez aplikację deweloperską operatora.
-  Playwright ma `reuseExistingServer: false` i porty zaszyte na sztywno, więc
-  bramka nie ruszy wcześniej; cudzych procesów nie ubijam.
+- Porty 8000 i 5173 zostały zwolnione przez właściciela ticketu przed bramką.
 
+## 2026-09-15 — Pierwszy pełny przebieg bramki i naprawa kotwic E2E
+
+Po skopiowaniu ignorowanego `.env` z głównego checkoutu uruchomiono jednym
+nieprzerwanym przebiegiem i ścieżką absolutną:
+
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+C:\Users\t.wisniewski\.traycer\worktrees\thomschery__datasetfactory\feat-fe-015-editor-controls-and-polish\scripts\check.ps1`
+
+Wynik: siedem pierwszych etapów PASS, frontend **667/667**, E2E **15/18**,
+ostatni etap SKIP wskutek fail-fast. Trzy awarie były przestarzałymi kotwicami:
+
+- `FE-011-FIX2` wybierał pierwszy przycisk pozycyjnie w kontenerze zoomu; po
+  dołożeniu `−` / `+` trafiał w „Pomniejsz kanwę”. Selektor wiąże się teraz z
+  jedynym przyciskiem semantycznie przełącznym: `button[aria-pressed]`.
+- Dwa testy `visual-qa.spec.ts` nadal mierzyły celowo usunięty region „Dane
+  klatki”. Teraz jawnie wymagają `Dane klatki = 0`, mierzą stały panel
+  „Anotacja bez zaznaczenia” i zachowują asercję `panel.right <= image.left`.
+
+Rerun dokładnie tych trzech przypadków: **3/3 PASS**.
+
+### Dodatkowa sonda FE-011-FIX2
+
+Żeby wykluczyć, że naprawiony selektor tylko „zieleni” test, wyłączono wyłącznie
+`invalidatePanInteraction()` w handlerze `window.blur`. Test padł na pierwszym
+niezmienniku mechanizmu: `.df-region-overlay` zachował `data-panning="true"` po
+`blur`. To dowodzi, że nadal pilnuje unieważnienia aktywnej epoki panoramowania,
+a nie tylko odnalezienia przycisku.
+
+Po sondzie plik przywrócono z HEAD. `core.autocrlf=true` zmienił surowe bajty
+LF/CRLF, więc nie zapisuję fałszywego twierdzenia o identycznym SHA256; zgodność
+treści Git jest dokładna: `git hash-object` worktree i `HEAD` dają ten sam blob
+`f347a6237c7b92c0df044203960e032d090d6ecf`, a plik nie figuruje w `git status`.
+
+## 2026-09-15 — Visual QA FE-015
+
+Nowy scenariusz `fe015-visual-qa.spec.ts` przeszedł **1/1** i zapisuje bez
+`fullPage` po dwa kadry dla każdego wymaganego viewportu:
+
+- `editor-no-selection-1440x1000.png`
+- `editor-context-menu-1440x1000.png`
+- `editor-no-selection-1920x1080.png`
+- `editor-context-menu-1920x1080.png`
+
+Fixture ma 18 klas, więc lista jest rzeczywiście przewijalna; przed screenshotem
+jest częściowo przewinięta i ma fokus kursora. Test wymaga
+`scrollHeight > clientHeight` oraz promienia thumb równego `--radius-pill`.
+Sprawdza też stały pusty panel i nieaktywne mutacje, brak opisu i „Danych
+klatki”, kontrolki `−` / `+` / `RESET`, menu z fokusem na „Usuń”, natywny tag
+`SELECT`, `appearance: none`, niezerowy chevron `::after` i granicę
+`panel.right <= image.left`. Oględziny wszystkich czterech PNG potwierdziły brak
+kolizji menu/zoomu, poprawną kolumnę i pełne zmieszczenie kadru.
+
+## 2026-09-15 — Rozstrzygnięcie odświeżeń starszych screenshotów (RGB)
+
+Porównanie wykonano po konwersji obu stron do RGB. `getbbox()` nie pracował na
+kanale alpha.
+
+| Plik | Zmienione piksele | RGB bbox różnicy | Decyzja i powód |
+|---|---:|---|---|
+| `FE-001/annotations-1440.png` | 62 449 / 1 440 000 (4,337%) | `(312, 97)–(1408, 1000)` | realne: stały panel, usunięte dane/opis, nowe zoom controls |
+| `FE-011/annotations-pan-1440.png` | 93 672 / 1 440 000 (6,505%) | `(312, 102)–(1408, 1000)` | realne: nowe kontrolki w HUD i uporządkowana kolumna podczas panu |
+| `FE-012/panel-without-geometry-1440.png` | 2 318 / 114 048 (2,032%) | `(84, 237)–(271, 269)` | realne: copy podpowiedzi Enter po usunięciu oznaczeń przycisków |
+| `FE-012/review-1440.png` | 62 458 / 1 440 000 (4,337%) | `(312, 102)–(1408, 1000)` | realne: stały panel, kolumna bez „Danych klatki”, widoczny zoom |
+| `FE-013/create-class-action-1440.png` | 2 409 / 82 368 (2,925%) | `(13, 78)–(275, 269)` | realne: stały panel i oczyszczone oznaczenia akcji |
+| `FE-001/error-1440.png` | 9 / 1 440 000 (0,001%) | `(312, 95)–(315, 101)` | znany dryf FE-014: maks. delta kanału 1; przywrócono z HEAD |
+
+Pięć realnych odświeżeń jest commitowanych jawnie; znany dziewięciopikselowy
+dryf nie trafia do historii.
