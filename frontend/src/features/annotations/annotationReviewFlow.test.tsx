@@ -1080,11 +1080,17 @@ describe("annotation review query states", () => {
   });
 
   /*
-   * FE-015 A1 keeps `AnnotationPopover` mounted for the life of the screen, so
-   * the FE-013 conflict gate is no longer torn down with the panel. These two
-   * watch the ends of its life that used to come for free: a frame change and a
-   * lost selection both have to reset it, or a rejected name stays blocked on
-   * an annotation that never rejected it.
+   * FE-015 A1 keeps `AnnotationPopover` mounted for the life of the *editor*,
+   * which is not the life of the screen: `AnnotationReviewScreen` renders
+   * `FrameEditor` with `key={selectedId}`, so a frame change replaces the
+   * whole editor, panel included. The two regressions below therefore watch
+   * two different mechanisms, and each one asserts the mechanism it names —
+   * FE-015-FIX1 found them both crediting the FE-013-FIX6 reconciliation,
+   * which a frame change never reaches at all.
+   *
+   * That reconciliation is exercised where it really runs, inside one frame,
+   * by "clears a rejected category after copy replaces the selected
+   * annotation id".
    */
   function conflictGateApi(writes: Array<{ method: string; url: string }>) {
     const conflictProfile = profileFixture({
@@ -1151,7 +1157,7 @@ describe("annotation review query states", () => {
     ).not.toBeInTheDocument();
   }
 
-  it("drops the conflict gate when the frame changes under the mounted panel", async () => {
+  it("builds a new editor on a frame change, so no gate crosses the boundary", async () => {
     const user = userEvent.setup();
     const writes: Array<{ method: string; url: string }> = [];
     conflictGateApi(writes);
@@ -1159,13 +1165,26 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
     await rejectCategoryOnSelected(user);
+    const column = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
 
     await user.click(screen.getByRole("button", { name: "Następna klatka" }));
     await screen.findByRole("img", { name: "Klatka 18 runu run-1" });
 
-    // The panel survives the frame change, so its state has to be reset by
-    // something other than unmounting: no target, no filter text, no gate.
-    const empty = screen.getByRole("region", { name: "Anotacja bez zaznaczenia" });
+    /*
+     * Nothing scoped to the previous frame reaches this one, because the
+     * editor holding it is gone: `key={selectedId}` on `FrameEditor` and the
+     * pending frame query each replace it on their own. The panel here is a
+     * new one with no target, not the previous one reconciled — a probe that
+     * removes the key *and* adds `keepPreviousData` fails on the assertion
+     * below, which is the realistic way this invariant would be lost.
+     *
+     * Asserted on the side column: the panel itself is keyed by its target
+     * and would be a new node either way.
+     */
+    const nextColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
+    expect(column).not.toBeInTheDocument();
+    expect(nextColumn).not.toBe(column);
+    const empty = within(nextColumn).getByRole("region", { name: "Anotacja bez zaznaczenia" });
     expect(within(empty).getByRole("textbox", { name: "Klasa" })).toHaveValue("");
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
@@ -1188,10 +1207,17 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
     await rejectCategoryOnSelected(user);
+    const column = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
 
     await user.click(screen.getByRole("heading", { name: "Anotacje na klatce" }));
 
-    const empty = screen.getByRole("region", { name: "Anotacja bez zaznaczenia" });
+    /*
+     * Same editor, same column: the click landed outside the dialog, so the
+     * FE-014 boundary closed the selection and took the gate with it. Nothing
+     * was unmounted to make that happen — which is exactly what A1 changed.
+     */
+    expect(screen.getByRole("complementary", { name: "Panele bieżącej klatki" })).toBe(column);
+    const empty = within(column).getByRole("region", { name: "Anotacja bez zaznaczenia" });
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
