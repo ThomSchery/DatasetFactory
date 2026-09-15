@@ -89,23 +89,25 @@ async function assertFrameFilterCountsFit(page: Page): Promise<void> {
 async function assertCompactReviewLayout(page: Page): Promise<void> {
   const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
   const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+  const annotationPanel = page.getByRole("region", { name: "Anotacja bez zaznaczenia" });
   const details = page.getByRole("region", { name: "Dane klatki" });
   const toolbar = page.locator(".df-review-toolbar");
   const preview = page.locator(".df-review-workspace__preview");
   const overlayBounds = await overlay.boundingBox();
   const inspectorBounds = await inspector.boundingBox();
-  const detailsBounds = await details.boundingBox();
+  const annotationPanelBounds = await annotationPanel.boundingBox();
   const toolbarBounds = await toolbar.boundingBox();
   const previewBounds = await preview.boundingBox();
   expect(overlayBounds).not.toBeNull();
   expect(inspectorBounds).not.toBeNull();
-  expect(detailsBounds).not.toBeNull();
+  expect(annotationPanelBounds).not.toBeNull();
   expect(toolbarBounds).not.toBeNull();
   expect(previewBounds).not.toBeNull();
+  await expect(details).toHaveCount(0);
   if (
     overlayBounds === null ||
     inspectorBounds === null ||
-    detailsBounds === null ||
+    annotationPanelBounds === null ||
     toolbarBounds === null ||
     previewBounds === null
   ) {
@@ -131,8 +133,8 @@ async function assertCompactReviewLayout(page: Page): Promise<void> {
     "class inspector should sit left of the canvas",
   ).toBeLessThanOrEqual(overlayBounds.x);
   expect(
-    detailsBounds.x + detailsBounds.width,
-    "frame details should sit left of the canvas",
+    annotationPanelBounds.x + annotationPanelBounds.width,
+    "always-mounted annotation panel should sit left of the canvas",
   ).toBeLessThanOrEqual(overlayBounds.x);
   expect(toolbarBounds.y + toolbarBounds.height, "toolbar should precede the canvas").toBeLessThanOrEqual(
     overlayBounds.y,
@@ -436,23 +438,25 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
   const image = page.getByRole("img", { name: /Klatka .* runu/ });
   const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+  const annotationPanel = page.getByRole("region", { name: "Anotacja bez zaznaczenia" });
   const details = page.getByRole("region", { name: "Dane klatki" });
   await expect(overlay).toBeVisible();
   const initial = await overlay.boundingBox();
   const initialCanvas = await canvas.boundingBox();
   const imageBounds = await image.boundingBox();
   const inspectorBounds = await inspector.boundingBox();
-  const detailsBounds = await details.boundingBox();
+  const annotationPanelBounds = await annotationPanel.boundingBox();
   expect(initial).not.toBeNull();
   expect(imageBounds).not.toBeNull();
   expect(inspectorBounds).not.toBeNull();
-  expect(detailsBounds).not.toBeNull();
+  expect(annotationPanelBounds).not.toBeNull();
+  await expect(details).toHaveCount(0);
   if (
     initial === null ||
     initialCanvas === null ||
     imageBounds === null ||
     inspectorBounds === null ||
-    detailsBounds === null
+    annotationPanelBounds === null
   ) {
     throw new Error("FE-010 layout has no browser geometry");
   }
@@ -462,7 +466,7 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   // font-metric drift, rounded down to 10 px.
   expect(imageBounds.width).toBeGreaterThan(710);
   expect(inspectorBounds.x + inspectorBounds.width).toBeLessThanOrEqual(imageBounds.x);
-  expect(detailsBounds.x + detailsBounds.width).toBeLessThanOrEqual(imageBounds.x);
+  expect(annotationPanelBounds.x + annotationPanelBounds.width).toBeLessThanOrEqual(imageBounds.x);
 
   const center = {
     x: initial.x + initial.width / 2,

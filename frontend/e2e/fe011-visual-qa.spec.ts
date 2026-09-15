@@ -210,7 +210,9 @@ test("FE-011-FIX2 utrata capture i blur kończą aktywną epokę panu", async ({
   const canvas = page.locator(".df-region-overlay");
   const surface = page.locator(".df-region-overlay__surface");
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
-  const handButton = page.locator(".df-region-overlay__zoom-controls button").first();
+  const handButton = page.locator(
+    ".df-region-overlay__zoom-controls button[aria-pressed]",
+  );
   await canvas.scrollIntoViewIfNeeded();
   const canvasBounds = await canvas.boundingBox();
   if (canvasBounds === null) {
