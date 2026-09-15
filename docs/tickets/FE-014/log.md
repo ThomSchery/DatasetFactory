@@ -145,6 +145,11 @@ się na y = 518,80 px i kończy na 803,80 px — mieści się w całości na wsz
 trzech viewportach. Cena: drugorzędne kontrolki „Powtórz z poprzedniej klatki"
 wymagają przewinięcia wewnątrz panelu. Panel „Dane klatki" kończy się na
 1156,80 px, czyli poniżej zgięcia — to metadane, dostępne przewinięciem strony.
+Naturalna wysokość inspektora bez limitu to 633,19 px, więc limit ukrywa pod
+przewijaniem dokładnie 313,19 px treści. W pierwszym widoku pozostają lista
+klas oraz nagłówek i opis sekcji „Powtórz z poprzedniej klatki"; poniżej
+zgięcia panelu schodzą filtr, lista klas do powtórzenia, przycisk
+„Powtórz R" i linia statusu.
 
 ### Wymienione asercje
 
@@ -157,6 +162,7 @@ wymagają przewinięcia wewnątrz panelu. Panel „Dane klatki" kończy się na
 | `visual-qa.spec.ts:113-131` | podgląd szeroki jak toolbar; inspektor i dane pod kanwą | podgląd = toolbar − 312 px, prawe krawędzie równe; oba panele na lewo od kanwy |
 | `visual-qa.spec.ts:462-464` | `> 800`; oba panele pod obrazem | `> 710`; oba panele na lewo od obrazu |
 | `fe013-visual-qa.spec.ts:45` | `action.width > 320` | `>= panel.width − 34` |
+| `vertical-flow.spec.ts:589` | dialog pod obrazem | `dialog.right <= image.left` |
 
 Progi szerokości obrazu są wyliczone z pomiaru: wartość zmierzona minus 2% na
 dryf metryk czcionek, zaokrąglona w dół do 10 px (571,98 → 560; 731,98 → 710;
@@ -219,4 +225,35 @@ przenosi fokus na pole „Klasa" (`autoFocus`).
   15820), a `playwright.config.ts` ma `reuseExistingServer: false` i
   `strictPort`. Procesów nie zatrzymano.
 
+## 2026-09-14 — pierwszy pełny przebieg i znalezisko w zrzutach
+
+Po zwolnieniu portów pierwszy nieprzerwany przebieg `scripts/check.ps1`
+przeszedł siedem pierwszych bramek, a E2E zakończył wynikiem 17/18. Jedyny
+FAIL ujawnił ósmą asercję starego układu w `vertical-flow.spec.ts:589`:
+`panel.y >= image.bottom`. Została zastąpiona poziomym odpowiednikiem
+`panel.right <= image.left`, tak samo jak siedem wcześniej zinwentaryzowanych
+kontraktów. `fe013-conflict-geometry` (3/3) i `negative-flow` przeszły w tym
+przebiegu; ostatnia bramka została pominięta po FAIL E2E.
+
+Normalny przebieg E2E ponownie zapisał dwa starsze zrzuty. Dla
+`FE-001/screenshots/error-1440.png` wersja robocza i `HEAD` miały identyczne
+wymiary 1440×1000 i identyczny rozmiar 41 865 bajtów, ale porównanie RGB
+wykazało 9 różnych pikseli (0,000625%) w prostokącie x = 312..314,
+y = 95..100; każda różnica kanału wynosiła 1. Pierwsza sonda przez
+`ImageChops.getbbox()` na obrazie RGBA dała fałszywie negatywny wynik, ponieważ
+kanał alfa różnicy był wszędzie zerowy; ponowiono porównanie po konwersji do
+RGB, a następnie wyliczono różnice piksel po pikselu. Najbardziej prawdopodobne
+źródło to minimalny szum rasteryzacji w przeglądarce. Zrzut przywrócono z
+`HEAD`; naprawa odtwarzalności screenshotów jest poza zakresem FE-014.
+
+`FE-013/screenshots/create-class-action-1440.png` jest natomiast rzeczywistą
+zmianą układu: screenshot dialogu zmienił wymiary z 1096×268 na 288×286
+(−808 px szerokości, +18 px wysokości), bo dialog przeszedł z pełnego toru
+pod kadrem do stałej kolumny 288 px. Pozostaje jako świadomy refresh
+dokumentacyjny FE-014.
+
+Sześć starszych zrzutów odświeżonych przez ich własne specyfikacje po zmianie
+układu: `FE-001/annotations-1440.png`, `FE-001/error-1440.png`,
+`FE-011/annotations-pan-1440.png`, `FE-012/panel-without-geometry-1440.png`,
+`FE-012/review-1440.png` i `FE-013/create-class-action-1440.png`.
 
