@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -196,7 +196,7 @@ describe("the drawing surface", () => {
     expect(onRemove).toHaveBeenCalledWith("region-1");
   });
 
-  it("opens the bbox menu from the keyboard and dismisses it with Escape", () => {
+  it("opens the bbox menu from the keyboard and gives focus back on Escape", () => {
     renderOverlay({
       initialShapes: [{ id: "region-1", label: "Region 1", x: 100, y: 120, width: 40, height: 32 }],
     });
@@ -204,9 +204,61 @@ describe("the drawing surface", () => {
     option.focus();
 
     expect(fireEvent.keyDown(option, { key: "F10", shiftKey: true })).toBe(false);
-    expect(screen.getByRole("menu", { name: "Akcje bboxa" })).toBeInTheDocument();
+    const menu = screen.getByRole("menu", { name: "Akcje bboxa" });
+    expect(within(menu).getByRole("menuitem", { name: "Usuń" })).toHaveFocus();
+
     expect(fireEvent.keyDown(document, { key: "Escape" })).toBe(false);
     expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    // Without this the keyboard operator lands on `body` and tabs in from the
+    // start of the document to reach the bbox they were already on.
+    expect(option).toHaveFocus();
+  });
+
+  it("gives focus back to the bbox when a pointer outside dismisses the menu", () => {
+    renderOverlay({
+      initialShapes: [{ id: "region-1", label: "Region 1", x: 100, y: 120, width: 40, height: 32 }],
+    });
+    const option = screen.getByRole("option", { name: /Region 1:/ });
+    option.focus();
+    fireEvent.keyDown(option, { key: "F10", shiftKey: true });
+
+    fireEvent.pointerDown(document.body);
+
+    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    /*
+     * The handoff, not the final resting place: a browser follows this
+     * `pointerdown` with a `mousedown` whose default action focuses whatever
+     * was clicked, and that overrules us. What must not happen is the menu
+     * dropping focus on the floor when the click lands on something that
+     * takes no focus at all — the canvas, most of the time.
+     */
+    expect(option).toHaveFocus();
+  });
+
+  it("leaves focus where the operator moved it when the menu closes behind them", () => {
+    renderOverlay({
+      initialShapes: [{ id: "region-1", label: "Region 1", x: 100, y: 120, width: 40, height: 32 }],
+    });
+    const option = screen.getByRole("option", { name: /Region 1:/ });
+    option.focus();
+    fireEvent.keyDown(option, { key: "F10", shiftKey: true });
+
+    /*
+     * Asserted on the call, not on `document.activeElement`: jsdom dispatches
+     * `focusout` before it writes the new active element, so it would record
+     * the zoom button either way and the assertion would pass against a menu
+     * that grabs focus back unconditionally. The spy is the behaviour — the
+     * menu does not reach for a bbox the operator has already left.
+     */
+    const handBack = vi.spyOn(option, "focus");
+    const zoomIn = screen.getByRole("button", { name: "Powiększ kanwę" });
+    act(() => {
+      zoomIn.focus();
+    });
+
+    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(handBack).not.toHaveBeenCalled();
+    expect(zoomIn).toHaveFocus();
   });
 
   it("zooms from visible controls around the viewport centre and disables the limits", async () => {

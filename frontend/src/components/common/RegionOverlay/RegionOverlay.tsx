@@ -429,19 +429,20 @@ export function RegionOverlay({
     if (contextMenu === null) {
       return;
     }
+    const shapeId = contextMenu.shapeId;
     const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
       if (event.target instanceof Node && !contextMenuRef.current?.contains(event.target)) {
-        setContextMenu(null);
+        closeShapeContextMenu(shapeId);
       }
     };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        setContextMenu(null);
+        closeShapeContextMenu(shapeId);
       }
     };
     const closeOnBlur = () => {
-      setContextMenu(null);
+      closeShapeContextMenu(shapeId);
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     document.addEventListener("keydown", closeOnEscape);
@@ -778,9 +779,35 @@ export function RegionOverlay({
     openShapeContextMenu(shape.id, event.clientX, event.clientY);
   }
 
-  function closeContextMenuOnFocusExit(event: FocusEvent<HTMLDivElement>): void {
+  /**
+   * Closes the menu and hands focus back to the bbox it was opened from.
+   *
+   * The rule is ownership, not the route: the menu gives focus back exactly
+   * when it still holds it at close time, and never takes focus away from an
+   * element the operator has already moved to. `Escape`, the menu item itself
+   * and a window blur are all the first case — the menu is where focus is, and
+   * dropping it on `body` would cost a keyboard operator their place in the
+   * document. Tabbing out is the second: focus has a destination the operator
+   * chose, and closing behind them is the whole of the job.
+   *
+   * A pointer outside is the first case too, and the browser overrules the
+   * handoff a moment later: the `mousedown` that follows this `pointerdown`
+   * focuses whatever was clicked. Handing focus back first still matters,
+   * because the usual thing under that pointer is the canvas, which takes no
+   * focus at all and would leave the operator with none.
+   */
+  function closeShapeContextMenu(shapeId: string): void {
+    const menu = contextMenuRef.current;
+    const ownsFocus = menu !== null && menu.contains(document.activeElement);
+    setContextMenu(null);
+    if (ownsFocus) {
+      optionRefs.current.get(shapeId)?.focus?.();
+    }
+  }
+
+  function closeContextMenuOnFocusExit(event: FocusEvent<HTMLDivElement>, shapeId: string): void {
     if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
-      setContextMenu(null);
+      closeShapeContextMenu(shapeId);
     }
   }
 
@@ -1072,7 +1099,9 @@ export function RegionOverlay({
           aria-label="Akcje bboxa"
           className="df-region-overlay__context-menu"
           data-preserve-annotation-preview="true"
-          onBlur={closeContextMenuOnFocusExit}
+          onBlur={(event) => {
+            closeContextMenuOnFocusExit(event, contextMenu.shapeId);
+          }}
           ref={contextMenuRef}
           role="menu"
           style={{ left: contextMenu.left, top: contextMenu.top }}
@@ -1080,7 +1109,7 @@ export function RegionOverlay({
           <Button
             onClick={() => {
               const shapeId = contextMenu.shapeId;
-              setContextMenu(null);
+              closeShapeContextMenu(shapeId);
               onRemove?.(shapeId);
             }}
             role="menuitem"
