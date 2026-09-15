@@ -179,6 +179,10 @@ operator zakreślił na czerwono. Zero wartości wpisanych na sztywno.
 
 ### `key={frame.id}` — usunięte
 
+> **Uzasadnienie w tym akapicie było nieprawdziwe. Sprostowane w sekcji
+> FE-015-FIX1 (P1) niżej — czytaj tamtą wersję.** Zostawione w oryginalnym
+> brzmieniu, bo dwie nowe regresje powstały właśnie z tego błędnego modelu.
+
 Pierwsza wersja wymuszała remount `LoadedFrameEditor` przy zmianie klatki, żeby
 bramę konfliktu z FE-013 wyzerować „za darmo”. Usunięte: remount kasował przy
 okazji skalę i przesunięcie kadru między klatkami, czyli ruszał mechanikę zoomu
@@ -339,3 +343,136 @@ Po bramce ponownie pojawił się wyłącznie znany dryf
 `FE-001/screenshots/error-1440.png`: RGB 9 pikseli, bbox `(312, 95)–(315, 101)`,
 maksymalna delta kanału 1. Plik przywrócono z HEAD. Porty 8000, 5173 i 5174 są
 bez nasłuchu.
+
+## 2026-09-15 — FE-015-FIX1: zewnętrzny klucz, wyciek alertu, fokus po `Escape`
+
+Cold review: `CHANGES REQUESTED`, 1×P1 i 2×P2, wszystkie z reprodukcją.
+
+### P1 — sprostowanie: bramę czyści remount, nie efekt uzgadniający
+
+`AnnotationReviewScreen.tsx:233` renderuje `FrameEditor` z `key={selectedId}`,
+gdzie `selectedId` to identyfikator aktywnej klatki. **Zmiana klatki odmontowuje
+cały edytor razem z panelem.** Zoom i przesunięcie kadru resetują się przy
+zmianie klatki od zawsze i niezależnie od FE-015.
+
+Wynika z tego, że akapit „`key={frame.id}` — usunięte” wyżej opiera się na
+błędnym modelu. Dodanie drugiego klucza na `LoadedFrameEditor` niczego by nie
+zepsuło, bo zewnętrzny klucz i tak remountuje — ale argument, że jego usunięcie
+**ratuje** zoom z FE-011, był nieprawdziwy. Pierwsza analiza przeczytała
+`FrameEditor.tsx` bez miejsca wywołania: efekt uzgadniający istnieje i faktycznie
+zeruje bramę, więc pasował do obserwacji, a nikt nie sprawdził, czy przy zmianie
+klatki w ogóle jest wykonywany. Nie jest — komponent, w którym żyje, przestaje
+istnieć.
+
+Zmiany produkcyjnej nie ma: `key={selectedId}` zostaje, persystencja zoomu między
+klatkami byłaby zmianą zachowania spoza zakresu FE-015.
+
+Poprawione są dwie regresje, które dowodziły innego mechanizmu, niż deklarowały:
+
+| Test | Deklarował | Dowodzi teraz |
+|---|---|---|
+| `builds a new editor on a frame change, so no gate crosses the boundary` (było: `drops the conflict gate when the frame changes under the mounted panel`) | efekt uzgadniający zeruje bramę przy trwale zamontowanym panelu | kolumna `Panele bieżącej klatki` to **inny węzeł** i poprzedni zniknął z dokumentu — edytor jest budowany od zera, więc nic scoped do poprzedniej klatki nie przechodzi |
+| `drops the conflict gate when the selection is lost under the mounted panel` | jw. | kolumna to **ten sam węzeł** (`toBe`), a brama znika przez `onClose` z granicy FE-014 — dopiero to jest dowód na A1 |
+
+Prawdziwy test ścieżki efektu uzgadniającego z FE-013-FIX6 istnieje i nie był
+ruszany: `clears a rejected category after copy replaces the selected annotation
+id` (`annotationReviewFlow.test.tsx`) — copy-previous podmienia zaznaczone
+`annotationId` **w obrębie tej samej klatki**, więc efekt jest jedyną rzeczą,
+która może bramę wyczyścić. Od FIX1 drugim testem tej ścieżki jest `takes the
+class conflict away with the draft it belonged to`.
+
+### P2 — alert przeżywał porzucenie boxa
+
+Po `409 category_name_exists` „Porzuć box” usuwał szkic, ale `categoryActionError`
+i `categoryConflict` zostawały; pusty panel pokazywał alert nieistniejącego
+szkicu, a następny narysowany box dostawał zablokowaną tę samą nazwę.
+
+Poprawka nie dokłada `setX(null)` w handlerze. Reconciliation z FE-013-FIX6
+dostaje pełną definicję „panel stracił cel”:
+
+```
+selectedId !== null && (selectedId === DRAFT ? draftBBox === null : …dotychczasowy warunek…)
+```
+
+Szkic jest stanem lokalnym, więc gałąź draftu nie czeka na `frameRefreshing` ani
+`mutation.isPending` — te gwarancje dotyczą prawdy serwera i tylko jej. Samo
+`removeAnnotation(DRAFT)` **upuszcza cel i nic więcej**; selekcję, kontekst,
+bramę i alert sprząta reconciliation. `categoryActionError` dołączył tam obok
+`categoryConflict`, bo należy do tej samej klasy.
+
+**Audyt ósmego przypadku.** A1 zmienił cykl życia dokładnie jednego komponentu —
+`AnnotationPopover`. Stany, które dotąd sprzątało jego odmontowanie, to zbiór
+domknięty: własności, które panel renderuje. Wyliczone z miejsca wywołania
+(`FrameEditor.tsx`):
+
+| Własność | Skąd | Status |
+|---|---|---|
+| `annotation`, `draft`, `disabled`, `busyKey`, `hasUnsavedGeometry` | wyliczane z `popoverAnnotation` / mutacji | bez celu są puste albo wyłączone z definicji |
+| `categoryConflict` | stan `FrameEditor` | sprzątane przez reconciliation |
+| `categoryError` ← `categoryActionError` | stan `FrameEditor` | **doszło w FIX1** |
+| `form`, `categoryQuery` (stan wewnętrzny panelu) | `AnnotationPopover` | zerowane przez `key={popoverAnnotation?.id ?? "empty"}` |
+
+`actionError` i `invalidIds` sprawdzone i **świadomie zostawione**: renderuje je
+inspektor, który był zamontowany na stałe również przed FE-015, więc nigdy nie
+należały do cyklu życia panelu. Czyszczenie ich przy utracie zaznaczenia kasowałoby
+komunikat o klatce, a nie o anotacji.
+
+### P2 — fokus po zamknięciu menu bboxa
+
+Było: `Shift+F10`, `Escape` — fokus na `body`, operator traci miejsce w
+dokumencie. Jest: menu oddaje fokus bboxowi, z którego je otwarto.
+
+Reguła jest jedna i nie wylicza dróg zamknięcia: **menu oddaje fokus dokładnie
+wtedy, gdy w chwili zamknięcia nadal go trzyma** (`menu.contains(document
+.activeElement)`).
+
+| Droga zamknięcia | Oddaje fokus | Dlaczego |
+|---|---|---|
+| `Escape` | tak | fokus jest w menu; `body` kosztowałby operatora klawiatury miejsce w dokumencie |
+| pozycja „Usuń” | tak | ta sama sytuacja; przy nieudanym albo jeszcze trwającym `DELETE` bbox nadal istnieje i jest właściwym miejscem powrotu |
+| `pointerdown` poza menu | tak, ale przeglądarka zaraz to nadpisze | to przekazanie, nie miejsce docelowe: następujący `mousedown` ustawia fokus na tym, w co kliknięto. Oddanie fokusu i tak jest potrzebne, bo pod tym kursorem zwykle jest kanwa, która fokusu nie przyjmuje — bez tego operator zostaje bez fokusu |
+| `blur` okna | tak | `document.activeElement` się nie zmienia, więc `focus()` jest niewidoczny teraz, a po powrocie do okna fokus jest na bboxie zamiast na nieistniejącej pozycji menu |
+| wyjście fokusem (Tab) | **nie** | fokus ma cel wybrany przez operatora; zamknięcie za nim jest całą robotą, przeciąganie go z powrotem — regresją |
+
+Trzy nowe regresje w `RegionOverlay.test.tsx` pilnują trzech gałęzi tej reguły:
+`…gives focus back on Escape`, `gives focus back to the bbox when a pointer
+outside dismisses the menu`, `leaves focus where the operator moved it when the
+menu closes behind them`. Trzecia potrzebuje `act()` wokół `focus()` — `focusout`
+leci natychmiast, ale wywołane przez niego `setState` bez `act` nie zostaje
+wypłukane i menu „nie zamyka się” tylko w teście.
+
+Sonda A2 (klawiatura) z tabeli sond FE-015 wskazuje test pod starą nazwą —
+po zmianie nazwy to `opens the bbox menu from the keyboard and gives focus back
+on Escape`, ta sama gałąź `Shift+F10`.
+
+### Sondy falsyfikowalności FIX1
+
+Każda sonda: kopia pliku przez `Copy-Item` (nie `git restore` — przy
+`core.autocrlf=true` normalizuje końce linii), cięcie, przebieg testu,
+przywrócenie kopii, porównanie `SHA256`.
+
+| Sonda | Cięcie | Test | Padło na |
+|---|---|---|---|
+| P1-a | usunięte `key={selectedId}` z `AnnotationReviewScreen.tsx` | `builds a new editor on a frame change…` | **przeszedł** — patrz niżej |
+| P1-b | usunięte `key={selectedId}` **oraz** `placeholderData: keepPreviousData` w `frameQuery` | jw. | `expect(element).not.toBeInTheDocument()` — kolumna poprzedniej klatki zostaje w dokumencie (`annotationReviewFlow.test.tsx:1232`) |
+| P2-a | usunięte `setCategoryActionError(null)` z reconciliation | `takes the class conflict away with the draft it belonged to` | `expect(element).not.toBeInTheDocument()` na alercie w pustym panelu (`:562`) |
+| P2-b | gałąź draftu w `selectionTargetMissing` zamieniona na `false` | jw. | to samo miejsce — reconciliation ślepa na draft zostawia alert i bramę |
+| P2-c | `ownsFocus` wymuszone na `false` | `…gives focus back on Escape`, `gives focus back to the bbox when a pointer outside…` | `expect(element).toHaveFocus()` — fokus na `body` (`:214`, `:235`) |
+| P2-d | `ownsFocus` wymuszone na `true` | `leaves focus where the operator moved it…` | `expected "focus" to not be called at all, but actually been called 1 times` (`:260`) |
+
+**P1-a to znalezisko, nie porażka sondy.** Sam zewnętrzny klucz nie jest jedyną
+rzeczą, która wymienia edytor przy zmianie klatki: `frameQuery` dla nowego
+`frameId` startuje jako `isPending`, więc `FrameEditor` renderuje gałąź ładowania
+i `LoadedFrameEditor` **i tak** znika razem ze swoim stanem. Dwa niezależne
+mechanizmy dają ten sam skutek, więc test wymaga wyłączenia obu — i dokładnie tak
+wygląda realna zmiana, która mogłaby ten niezmiennik zabrać: ktoś dokłada
+`keepPreviousData`, żeby usunąć mignięcie „Ładowanie…”, i brama zaczyna
+przechodzić między klatkami. Komentarz przy teście nazywa oba mechanizmy i tę
+sondę.
+
+**P2-d to drugie znalezisko tej klasy, we własnym teście.** Pierwsza wersja testu
+o wyjściu fokusem asertowała `expect(zoomIn).toHaveFocus()` i przechodziła
+również wtedy, gdy menu odbierało fokus bezwarunkowo: jsdom wysyła `focusout`
+zanim zapisze nowy `activeElement`, więc nasze `focus()` jest zaraz nadpisywane
+przez samo jsdom. Asercja mierzyła kolejność zdarzeń w jsdom, nie regułę. Test
+sprawdza teraz `vi.spyOn(option, "focus")` — czyli zachowanie, które deklaruje.
