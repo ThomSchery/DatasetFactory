@@ -21,6 +21,27 @@
   border-radius: var(--radius-md);
   background: var(--color-background-primary-default);
   overflow-y: auto;
+  scrollbar-color: var(--color-stroke-strong-default) var(--color-background-primary-default);
+  scrollbar-width: thin;
+}
+
+.df-grouped-options__list::-webkit-scrollbar {
+  width: var(--size-xs);
+}
+
+.df-grouped-options__list::-webkit-scrollbar-track {
+  border-radius: var(--radius-pill);
+  background: var(--color-background-primary-default);
+}
+
+.df-grouped-options__list::-webkit-scrollbar-thumb {
+  border: calc(var(--border-width-default) * 2) solid var(--color-background-primary-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-stroke-strong-default);
+}
+
+.df-grouped-options__list::-webkit-scrollbar-button {
+  display: none;
 }
 
 .df-grouped-options__list:empty {

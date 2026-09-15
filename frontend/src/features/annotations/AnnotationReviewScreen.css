@@ -57,7 +57,7 @@
 }
 
 /*
- * The narrow column stacks three panels, so the inspector's natural height
+ * The narrow column stacks its inspector and the persistent annotation panel,
  * decides where the annotation dialog starts. Left unbounded it pushed the
  * dialog's action row past the bottom of the viewport, which is the failure
  * FE-010-FIX1 let through. Capping the inspector and scrolling its secondary
@@ -70,8 +70,7 @@
 
 .df-review-workspace__preview,
 .df-review-workspace__side-column,
-.df-review-workspace__inspector,
-.df-review-workspace__details {
+.df-review-workspace__inspector {
   min-width: 0;
 }
 
@@ -110,11 +109,6 @@
 
 .df-review-toolbar__decisions {
   justify-content: flex-end;
-}
-
-.df-review-toolbar kbd {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
 }
 
 .df-review-frame-filters {
@@ -163,7 +157,26 @@
   min-height: var(--control-height-sm);
   margin-top: var(--size-none);
   padding-block: calc(var(--size-xs) / 2);
+  padding-inline-end: var(--size-xl);
+  appearance: none;
   text-overflow: ellipsis;
+}
+
+.df-review-toolbar__frame-select .df-field {
+  position: relative;
+}
+
+.df-review-toolbar__frame-select .df-field::after {
+  position: absolute;
+  right: var(--size-sm);
+  top: calc(50% - var(--size-xs) / 2);
+  width: calc(var(--size-xs) / 2);
+  height: calc(var(--size-xs) / 2);
+  border-right: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border-bottom: var(--border-width-default) solid var(--color-stroke-strong-default);
+  content: "";
+  pointer-events: none;
+  transform: rotate(45deg);
 }
 
 .df-review-toolbar__frame-select .df-field__error {
@@ -188,6 +201,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--size-xs);
+  width: 100%;
 }
 
 .df-review-classes__item .df-button {
@@ -210,6 +224,7 @@
 }
 
 .df-review-classes__count {
+  margin-inline-start: auto;
   font-family: var(--font-family-mono);
   font-variant-numeric: tabular-nums;
 }
@@ -217,6 +232,7 @@
 .df-review-classes__sources {
   display: flex;
   gap: var(--size-xs);
+  justify-self: end;
 }
 
 .df-review-copy {
@@ -246,11 +262,6 @@
 
 .df-review-copy .df-button {
   justify-self: start;
-}
-
-.df-review-copy kbd {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
 }
 
 .df-annotation-popover {
@@ -326,9 +337,13 @@
   white-space: nowrap;
 }
 
-.df-annotation-popover__actions kbd,
+/*
+ * The only `kbd` left on this screen. FE-015 A3 took the shortcut markings off
+ * the review buttons; `Enter` stayed as the commit for a geometry preview, so
+ * the two places that explain that gesture still name the key.
+ */
 .df-annotation-popover__unsaved kbd,
-.df-review-workspace__details .df-notice kbd {
+.df-review-workspace__inspector .df-notice kbd {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
 }
@@ -341,6 +356,35 @@
   color: var(--color-text-weak-default);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-standard);
+}
+
+.df-review-workspace__inspector,
+.df-annotation-popover {
+  scrollbar-color: var(--color-stroke-strong-default) var(--color-background-primary-default);
+  scrollbar-width: thin;
+}
+
+.df-review-workspace__inspector::-webkit-scrollbar,
+.df-annotation-popover::-webkit-scrollbar {
+  width: var(--size-xs);
+}
+
+.df-review-workspace__inspector::-webkit-scrollbar-track,
+.df-annotation-popover::-webkit-scrollbar-track {
+  border-radius: var(--radius-pill);
+  background: var(--color-background-primary-default);
+}
+
+.df-review-workspace__inspector::-webkit-scrollbar-thumb,
+.df-annotation-popover::-webkit-scrollbar-thumb {
+  border: calc(var(--border-width-default) * 2) solid var(--color-background-primary-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-stroke-strong-default);
+}
+
+.df-review-workspace__inspector::-webkit-scrollbar-button,
+.df-annotation-popover::-webkit-scrollbar-button {
+  display: none;
 }
 
 .df-review-annotations__item {
