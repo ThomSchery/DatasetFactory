@@ -476,3 +476,32 @@ również wtedy, gdy menu odbierało fokus bezwarunkowo: jsdom wysyła `focusout
 zanim zapisze nowy `activeElement`, więc nasze `focus()` jest zaraz nadpisywane
 przez samo jsdom. Asercja mierzyła kolejność zdarzeń w jsdom, nie regułę. Test
 sprawdza teraz `vi.spyOn(option, "focus")` — czyli zachowanie, które deklaruje.
+
+### Bramka po FIX1 — 9/9
+
+Jeden nieprzerwany przebieg `scripts\check.ps1` ścieżką absolutną, uruchomiony na
+`52a1534` (cztery commity FIX1). Wynik: **9/9 PASS, zero SKIP**, kod wyjścia 0.
+
+| Etap | Wynik | Czas / liczba |
+|---|---|---|
+| backend format | PASS | 0,3 s |
+| backend lint | PASS | 0,1 s |
+| backend typy | PASS | 2,3 s; 99 plików |
+| backend testy | PASS | 343 s; 356/356 |
+| frontend typy | PASS | 1,5 s |
+| frontend testy | PASS | 57,7 s; 670/670 |
+| frontend build | PASS | 3,1 s |
+| E2E | PASS | 111,6 s; 19/19 |
+| E2E root safety | PASS | 1 s; 2/2 |
+
+670 testów jednostkowych to baza 667 plus trzy z FIX1: porzucenie szkicu oraz dwie
+gałęzie reguły fokusu menu. Dwie przepisane regresje bramy nie zmieniły liczby.
+
+`ECONNREFUSED 127.0.0.1:8000` w logu E2E pochodzi z `vertical-flow.spec.ts`, który
+**celowo** restartuje backend w trakcie OCR; test kończy się PASS.
+
+Po bramce brudny był jeden plik: `docs/tickets/FE-001/screenshots/error-1440.png`.
+Pomiar RGB względem `HEAD`: 9 pikseli z 1 440 000, bbox `(312, 95)–(315, 101)`,
+maksymalna delta kanału 1 — co do wartości ten sam dryf, który FE-014 ustalił jako
+znany. Plik przywrócony z `HEAD`. Drzewo czyste, porty 8000, 5173 i 5174 bez
+nasłuchu, bez push i merge.
