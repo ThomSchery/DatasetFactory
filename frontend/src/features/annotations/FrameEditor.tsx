@@ -474,24 +474,45 @@ function LoadedFrameEditor({
     },
   });
 
+  /*
+   * The panel has a target or it has nothing, and everything raised for that
+   * target goes when the target does. A draft lives in `draftBBox` and a saved
+   * annotation lives in the frame, so "abandoned" and "gone from the refetched
+   * frame" are one event here rather than two call sites to keep in step —
+   * enumerating the ways a context can end is what failed six times in this
+   * epic.
+   *
+   * FE-015 A1 made this the only cleanup there is. The panel used to be
+   * unmounted along with the selection, which took the class conflict and its
+   * alert away for free; a permanently mounted panel keeps whatever it is
+   * handed, so `categoryActionError` belongs here next to `categoryConflict`.
+   *
+   * The two guards are about server truth and apply only to the half that has
+   * any: an annotation missing from a frame that is mid-refetch, or mid-write,
+   * is not yet known to be gone. A draft is local state, so its absence is
+   * never in doubt.
+   */
+  const selectionTargetMissing =
+    selectedId !== null &&
+    (selectedId === DRAFT_ANNOTATION_ID
+      ? draftBBox === null
+      : !frameRefreshing &&
+        !mutation.isPending &&
+        !activeAnnotations.some((annotation) => annotation.id === selectedId));
+
   useEffect(() => {
-    if (
-      frameRefreshing ||
-      mutation.isPending ||
-      selectedId === null ||
-      selectedId === DRAFT_ANNOTATION_ID ||
-      activeAnnotations.some((annotation) => annotation.id === selectedId)
-    ) {
+    if (!selectionTargetMissing) {
       return;
     }
 
     closeSelectionContext();
     setSelectedId(null);
+    setCategoryActionError(null);
     setCategoryConflict(null);
     setGeometryPreview((current) =>
       current?.annotationId === selectedId ? null : current,
     );
-  }, [activeAnnotations, frameRefreshing, mutation.isPending, selectedId]);
+  }, [selectedId, selectionTargetMissing]);
 
   const currentBusyKey = mutation.isPending ? busyKey(mutation.variables) : null;
   const invalidSet = useMemo(() => new Set(invalidIds), [invalidIds]);
@@ -823,9 +844,10 @@ function LoadedFrameEditor({
 
   function removeAnnotation(annotationId: string): void {
     if (annotationId === DRAFT_ANNOTATION_ID) {
+      // Abandoning the box is the end of its context, not a list of things to
+      // reset: dropping the target is all this does, and the reconciliation
+      // above owns the selection and everything scoped to it.
       setDraftBBox(null);
-      updateSelectionContext(null);
-      setSelectedId(null);
       return;
     }
     const annotation = annotationById(annotationId);

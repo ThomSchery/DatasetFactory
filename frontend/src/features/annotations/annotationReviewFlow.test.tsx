@@ -524,6 +524,57 @@ describe("annotation review query states", () => {
     ).toHaveLength(1);
   });
 
+  /*
+   * A1 removed the unmount that used to take the panel's class state away with
+   * the selection, so abandoning the box has to be a real closing of the
+   * context rather than a panel that happens to disappear. The alert and the
+   * gate belong to the draft that earned the `409`; the next box is a new
+   * intent and gets the same proposal back.
+   */
+  it("takes the class conflict away with the draft it belonged to", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
+    });
+    const writes: Array<{ method: string; url: string }> = [];
+    reviewApi({
+      profile: conflictProfile,
+      mutation: (url, init) => {
+        writes.push({ method: init?.method ?? "GET", url });
+        if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
+          return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+    const overlay = await drawDraft();
+    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+    await within(popover).findByRole("alert");
+
+    await user.click(within(popover).getByRole("button", { name: "Porzuć box" }));
+
+    const empty = await screen.findByRole("region", { name: "Anotacja bez zaznaczenia" });
+    expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      within(overlay).queryByRole("option", { name: /^Box — wybierz klasę:/ }),
+    ).not.toBeInTheDocument();
+
+    await drawDraft();
+    const nextPopover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await user.type(within(nextPopover).getByRole("textbox", { name: "Klasa" }), "s");
+    expect(
+      within(nextPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    ).toBeInTheDocument();
+    expect(writes).toEqual([
+      { method: "POST", url: `/api/v1/profiles/${conflictProfile.id}/categories` },
+    ]);
+  });
+
   it.each([
     { existingId: "long-s", existingName: "ſ", proposedName: "S", typed: "s" },
     { existingId: "ligature-ff", existingName: "ﬀ", proposedName: "ff", typed: "ff" },
@@ -1090,7 +1141,8 @@ describe("annotation review query states", () => {
    *
    * That reconciliation is exercised where it really runs, inside one frame,
    * by "clears a rejected category after copy replaces the selected
-   * annotation id".
+   * annotation id" and by "takes the class conflict away with the draft it
+   * belonged to".
    */
   function conflictGateApi(writes: Array<{ method: string; url: string }>) {
     const conflictProfile = profileFixture({
