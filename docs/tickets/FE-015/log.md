@@ -316,3 +316,26 @@ kanale alpha.
 
 Pięć realnych odświeżeń jest commitowanych jawnie; znany dziewięciopikselowy
 dryf nie trafia do historii.
+
+## 2026-09-15 — Końcowa bramka 9/9
+
+Po commitach implementacji, regresji i materiału Visual QA uruchomiono ponownie
+pełną ścieżkę jednym nieprzerwanym procesem, z absolutną ścieżką do
+`scripts\check.ps1`. Wynik: **9/9 PASS, zero SKIP**.
+
+| Etap | Wynik | Czas / liczba |
+|---|---|---|
+| backend format | PASS | 0,9 s |
+| backend lint | PASS | 0,4 s |
+| backend typy | PASS | 5,2 s |
+| backend testy | PASS | 338,6 s; 356/356 |
+| frontend typy | PASS | 1,8 s |
+| frontend testy | PASS | 70,3 s; 667/667 |
+| frontend build | PASS | 3,0 s |
+| E2E | PASS | 93,5 s; 19/19 |
+| E2E root safety | PASS | 0,8 s; 2/2 |
+
+Po bramce ponownie pojawił się wyłącznie znany dryf
+`FE-001/screenshots/error-1440.png`: RGB 9 pikseli, bbox `(312, 95)–(315, 101)`,
+maksymalna delta kanału 1. Plik przywrócono z HEAD. Porty 8000, 5173 i 5174 są
+bez nasłuchu.
