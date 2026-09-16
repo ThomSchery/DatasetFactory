@@ -184,6 +184,7 @@ describe("the drawing surface", () => {
     const surface = surfaceElement();
     const option = screen.getByRole("option", { name: /Region 1:/ });
     const fill = option.querySelector(".df-region-overlay__shape-fill");
+    const focusSurface = vi.spyOn(surface, "focus");
 
     expect(fireEvent.contextMenu(surface)).toBe(true);
     expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
@@ -194,6 +195,31 @@ describe("the drawing surface", () => {
     await user.click(within(menu).getByRole("menuitem", { name: "Usuń" }));
     expect(onRemove).toHaveBeenCalledOnce();
     expect(onRemove).toHaveBeenCalledWith("region-1");
+    expect(focusSurface).toHaveBeenCalledOnce();
+    expect(surface).toHaveFocus();
+  });
+
+  it("moves focus to the next bbox when context-menu removal leaves one", async () => {
+    const user = userEvent.setup();
+    renderOverlay({
+      initialShapes: [
+        { id: "region-1", label: "Region 1", x: 100, y: 120, width: 40, height: 32 },
+        { id: "region-2", label: "Region 2", x: 200, y: 220, width: 50, height: 42 },
+      ],
+    });
+    const removed = screen.getByRole("option", { name: /Region 1:/ });
+    const survivor = screen.getByRole("option", { name: /Region 2:/ });
+    const focusSurvivor = vi.spyOn(survivor, "focus");
+    fireEvent.contextMenu(removed.querySelector(".df-region-overlay__shape-fill") as Element, {
+      clientX: 120,
+      clientY: 140,
+    });
+
+    await user.click(screen.getByRole("menuitem", { name: "Usuń" }));
+
+    expect(removed).not.toBeInTheDocument();
+    expect(focusSurvivor).toHaveBeenCalledOnce();
+    expect(survivor).toHaveFocus();
   });
 
   it("opens the bbox menu from the keyboard and gives focus back on Escape", () => {

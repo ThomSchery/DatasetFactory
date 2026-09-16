@@ -805,6 +805,24 @@ export function RegionOverlay({
     }
   }
 
+  /**
+   * Removes the menu's bbox and leaves keyboard focus on surviving document UI.
+   * Prefer the next bbox in reading order, then the previous one. When the
+   * deleted bbox was the only option, the listbox itself is the stable place
+   * from which the operator can draw another box or continue to later controls.
+   */
+  function removeShapeFromContextMenu(shapeId: string): void {
+    const removedIndex = shapes.findIndex((shape) => shape.id === shapeId);
+    const survivor = shapes[removedIndex + 1] ?? shapes[removedIndex - 1];
+    setContextMenu(null);
+    onRemove?.(shapeId);
+    if (survivor === undefined) {
+      surfaceRef.current?.focus();
+      return;
+    }
+    optionRefs.current.get(survivor.id)?.focus();
+  }
+
   function closeContextMenuOnFocusExit(event: FocusEvent<HTMLDivElement>, shapeId: string): void {
     if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
       closeShapeContextMenu(shapeId);
@@ -963,6 +981,7 @@ export function RegionOverlay({
           preserveAspectRatio="none"
           ref={surfaceRef}
           role="listbox"
+          tabIndex={-1}
           viewBox={sourceViewBox(source)}
         >
           {renderedShapes.map((shape, index) => (
@@ -1109,8 +1128,7 @@ export function RegionOverlay({
           <Button
             onClick={() => {
               const shapeId = contextMenu.shapeId;
-              closeShapeContextMenu(shapeId);
-              onRemove?.(shapeId);
+              removeShapeFromContextMenu(shapeId);
             }}
             role="menuitem"
             size="sm"
