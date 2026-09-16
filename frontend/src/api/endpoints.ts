@@ -26,6 +26,7 @@ import type {
   ReferenceFrameRequest,
   ReferencePreview,
   ReferencePreviewRequest,
+  RenameCategoryRequest,
   RunSummary,
   ReviewFrameRequest,
   UpdateAnnotationRequest,
@@ -104,6 +105,18 @@ export function createProfileCategory(
   return apiRequest<Category>(
     `/profiles/${encodeURIComponent(profileId)}/categories`,
     { method: "POST", body },
+  );
+}
+
+/** `PATCH /profiles/{profile_id}/categories/{category_id}` → updated profile. */
+export function renameProfileCategory(
+  profileId: string,
+  categoryId: string,
+  body: RenameCategoryRequest,
+): Promise<GameProfile> {
+  return apiRequest<GameProfile>(
+    `/profiles/${encodeURIComponent(profileId)}/categories/${encodeURIComponent(categoryId)}`,
+    { method: "PATCH", body },
   );
 }
 

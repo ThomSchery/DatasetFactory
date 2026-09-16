@@ -1,20 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   activateProfile,
+  categoryInputFromName,
+  categoryNameConflictFromError,
   describeApiError,
   getProfile,
   invalidateFor,
+  isVersionConflict,
   listProfiles,
   queryKeys,
   referenceAssetUrl,
+  renameProfileCategory,
 } from "../../api";
+import type { Category, RenameCategoryRequest } from "../../api";
 import { Button } from "../../components/common/Button";
 import { DataList } from "../../components/common/DataList";
+import { Notice } from "../../components/common/Notice";
 import { Panel } from "../../components/common/Panel";
 import { RegionOverlay } from "../../components/common/RegionOverlay";
 import { StatusBadge } from "../../components/common/StatusBadge";
+import { TextField } from "../../components/common/TextField";
 import { Empty, FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { ProfileCreateScreen } from "./ProfileCreateScreen";
 import "./ProfilesScreen.css";
@@ -25,10 +32,29 @@ function formatCreatedAt(value: string): string {
   );
 }
 
+function categoryGroupLabel(kind: Category["kind"]): string {
+  return kind === "character" ? "Znaki (OCR)" : "Pola HUD (gra)";
+}
+
+function renameFailureMessage(error: unknown): string {
+  const conflict = categoryNameConflictFromError(error);
+  if (conflict !== null) {
+    return `Klasa „${conflict.name}” już istnieje w tym profilu. Podaj inną nazwę.`;
+  }
+  if (isVersionConflict(error)) {
+    return "Profil zmienił się w innej karcie. Odśwież widok i spróbuj ponownie.";
+  }
+  const failure = describeApiError(error);
+  return `${failure.message} ${failure.action}`;
+}
+
 export function ProfilesScreen({ initialCreate = false }: { initialCreate?: boolean }) {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(initialCreate);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renameValidation, setRenameValidation] = useState<string | null>(null);
 
   const profiles = useQuery({
     queryKey: queryKeys.profiles(),
@@ -50,6 +76,64 @@ export function ProfilesScreen({ initialCreate = false }: { initialCreate?: bool
     },
   });
   const selectionFailure = selection.isError ? describeApiError(selection.error) : null;
+  const rename = useMutation({
+    mutationFn: ({
+      categoryId,
+      profileId,
+      request,
+    }: {
+      categoryId: string;
+      profileId: string;
+      request: RenameCategoryRequest;
+    }) => renameProfileCategory(profileId, categoryId, request),
+    onSuccess: async (profile) => {
+      setEditingCategoryId(null);
+      setRenameDraft("");
+      setRenameValidation(null);
+      await invalidateFor(queryClient, { type: "profile-category-renamed", profileId: profile.id });
+    },
+  });
+
+  useEffect(() => {
+    setEditingCategoryId(null);
+    setRenameDraft("");
+    setRenameValidation(null);
+    rename.reset();
+    // `rename` changes identity on each render. The selected profile is the
+    // deliberate boundary that closes an open row editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  function beginRename(category: Category) {
+    rename.reset();
+    setEditingCategoryId(category.id);
+    setRenameDraft(category.name);
+    setRenameValidation(null);
+  }
+
+  function cancelRename() {
+    rename.reset();
+    setEditingCategoryId(null);
+    setRenameDraft("");
+    setRenameValidation(null);
+  }
+
+  function saveRename(category: Category) {
+    if (detail.data === undefined) {
+      return;
+    }
+    const categoryInput = categoryInputFromName(renameDraft);
+    if (categoryInput === null) {
+      setRenameValidation("Podaj nazwę klasy od 1 do 200 znaków.");
+      return;
+    }
+    setRenameValidation(null);
+    rename.mutate({
+      categoryId: category.id,
+      profileId: detail.data.id,
+      request: { ...categoryInput, expected_version: detail.data.version },
+    });
+  }
 
   if (creating) {
     return <ProfileCreateScreen onCancel={() => setCreating(false)} />;
@@ -131,7 +215,7 @@ export function ProfilesScreen({ initialCreate = false }: { initialCreate?: bool
 
       {selectedId === null ? null : (
         <Panel
-          description="Podgląd zapisanej definicji jest tylko do odczytu; profile nie mają wersjonowanej edycji."
+          description="Geometria profilu pozostaje tylko do odczytu. Nazwy klas możesz porządkować bez zmiany istniejących anotacji."
           eyebrow="Definicja profilu"
           title={detail.data?.name ?? "Podgląd profilu"}
         >
@@ -170,15 +254,104 @@ export function ProfilesScreen({ initialCreate = false }: { initialCreate?: bool
                 }))}
                 source={{ width: detail.data.source_width, height: detail.data.source_height }}
               />
+              <Notice title="Ukończone eksporty pozostają niezmienne">
+                Zmiana nazwy klasy pojawi się w przyszłych eksportach. Nie modyfikuje paczek już
+                zapisanych w workspace.
+              </Notice>
               <ul aria-label="Klasy profilu" className="df-profile-collection__categories">
-                {detail.data.categories.map((category) => (
-                  <li key={category.id}>
-                    <span>{category.name}</span>
-                    <StatusBadge tone="neutral">
-                      {category.kind === "character" ? "OCR" : "Gra"}
-                    </StatusBadge>
-                  </li>
-                ))}
+                {detail.data.categories.map((category) => {
+                  const target = categoryInputFromName(renameDraft);
+                  const editing = editingCategoryId === category.id;
+                  const unchanged =
+                    target !== null &&
+                    target.name === category.name &&
+                    target.kind === category.kind;
+                  return (
+                    <li
+                      className={
+                        editing
+                          ? "df-profile-collection__category df-profile-collection__category--editing"
+                          : "df-profile-collection__category"
+                      }
+                      key={category.id}
+                    >
+                      {editing ? (
+                        <div className="df-profile-collection__category-editor">
+                          <TextField
+                            autoFocus
+                            disabled={rename.isPending}
+                            error={
+                              renameValidation ??
+                              (rename.isError ? renameFailureMessage(rename.error) : undefined)
+                            }
+                            label={`Nowa nazwa klasy ${category.name}`}
+                            maxLength={200}
+                            onChange={(event) => {
+                              setRenameDraft(event.target.value);
+                              setRenameValidation(null);
+                              rename.reset();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                saveRename(category);
+                              }
+                              if (event.key === "Escape") {
+                                cancelRename();
+                              }
+                            }}
+                            value={renameDraft}
+                          />
+                          {target !== null && target.kind !== category.kind ? (
+                            <Notice title="Klasa zmieni grupę" tone="warning">
+                              Po zapisaniu klasa przejdzie z „{categoryGroupLabel(category.kind)}”
+                              do „{categoryGroupLabel(target.kind)}”.
+                            </Notice>
+                          ) : null}
+                          <div className="df-profile-collection__category-actions">
+                            <Button
+                              disabled={rename.isPending || target === null || unchanged}
+                              loading={rename.isPending}
+                              loadingLabel="Zapisywanie nazwy…"
+                              onClick={() => saveRename(category)}
+                              size="sm"
+                            >
+                              Zapisz nazwę
+                            </Button>
+                            <Button
+                              disabled={rename.isPending}
+                              onClick={cancelRename}
+                              size="sm"
+                              variant="secondary"
+                            >
+                              Anuluj
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="df-profile-collection__category-name">
+                            {category.name}
+                          </span>
+                          <div className="df-profile-collection__category-actions">
+                            <StatusBadge tone="neutral">
+                              {category.kind === "character" ? "OCR" : "Gra"}
+                            </StatusBadge>
+                            <Button
+                              aria-label={`Zmień nazwę klasy ${category.name}`}
+                              disabled={rename.isPending}
+                              onClick={() => beginRename(category)}
+                              size="sm"
+                              variant="secondary"
+                            >
+                              Zmień nazwę
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}

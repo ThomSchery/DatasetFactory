@@ -45,6 +45,7 @@ export const queryKeys = {
 export type MutationEvent =
   | { type: "profile-created" }
   | { type: "profile-category-created"; profileId: string }
+  | { type: "profile-category-renamed"; profileId: string }
   | { type: "profile-selected" }
   | { type: "material-imported" }
   | { type: "run-created" }
@@ -59,6 +60,7 @@ function keysFor(event: MutationEvent): readonly (readonly unknown[])[] {
     case "profile-created":
       return [queryKeys.profiles(), queryKeys.dashboard()];
     case "profile-category-created":
+    case "profile-category-renamed":
       // The base key is a deliberate prefix for the list, current shortcut
       // and every historical detail. One invalidation refreshes whichever of
       // those views are mounted without scheduling duplicate detail refetches.

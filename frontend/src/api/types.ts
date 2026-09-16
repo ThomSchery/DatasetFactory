@@ -74,6 +74,10 @@ export interface CategoryInput {
   kind: CategoryKind;
 }
 
+export interface RenameCategoryRequest extends CategoryInput {
+  expected_version: number;
+}
+
 export interface CreateProfileRequest {
   name: string;
   reference_image_path?: string;
@@ -386,22 +390,44 @@ export interface Dashboard {
 
 export type ExportStatus = "running" | "completed" | "failed";
 
+export type ExportFormat = "coco" | "roboflow_coco";
+
+export interface ExportSplitRatios {
+  train: number;
+  valid: number;
+  test: number;
+}
+
+export interface ExportSplitManifest {
+  annotation_count: number;
+  annotations: string;
+  frame_count: number;
+  images: string;
+}
+
 export interface ExportManifest {
   annotation_sources: {
     manual: number;
     ocr: number;
   };
-  annotations: string;
+  annotations?: string;
   exported_at: string;
-  images: string;
+  format?: "roboflow_coco";
+  images?: string;
   input_revision: number;
   profile_id: string;
   run_id: string;
   schema: string;
+  seed?: number;
+  split_ratios?: ExportSplitRatios;
+  splits?: Record<"train" | "valid" | "test", ExportSplitManifest>;
 }
 
 export interface CreateExportRequest {
   run_id: string;
+  format?: ExportFormat;
+  split?: ExportSplitRatios;
+  seed?: number;
 }
 
 export interface Export {

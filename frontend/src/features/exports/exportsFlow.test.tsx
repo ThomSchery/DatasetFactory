@@ -66,7 +66,7 @@ describe("export query states", () => {
       if (status === "completed") {
         expect(screen.getByRole("region", { name: "Wynik eksportu COCO" })).toBeInTheDocument();
       } else {
-        expect(screen.getByText("Eksport COCO jest przygotowywany…")).toBeInTheDocument();
+        expect(screen.getByText("Eksport jest przygotowywany…")).toBeInTheDocument();
       }
       expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/dashboard"))).toBe(false);
       expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
@@ -168,10 +168,10 @@ describe("export query states", () => {
       });
       renderApp(["/exports"]);
 
-      await user.click(await screen.findByRole("button", { name: "Uruchom eksport COCO" }));
+      await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
       const alert = await screen.findByRole("alert");
       expect(alert).toHaveTextContent(`Kod: ${code}.`);
-      expect(screen.getByRole("button", { name: "Uruchom eksport COCO" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Uruchom eksport" })).toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "Bieżący eksport" })).toBeNull();
     },
   );
@@ -204,7 +204,7 @@ describe("export query states", () => {
     }));
     renderApp(["/exports"]);
 
-    const start = await screen.findByRole("button", { name: "Uruchom eksport COCO" });
+    const start = await screen.findByRole("button", { name: "Uruchom eksport" });
     await user.click(start);
     expect(start).toBeDisabled();
     expect(start).toHaveAttribute("aria-busy", "true");
@@ -235,11 +235,123 @@ describe("export query states", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport COCO" }));
+    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
 
     const failure = await screen.findByRole("alert");
     expect(failure).toHaveTextContent("Nie udało się wczytać statusu eksportu");
     expect(within(failure).getByRole("button", { name: "Spróbuj ponownie" })).toBeEnabled();
+  });
+
+  it("sends Roboflow split settings and renders the split manifest", async () => {
+    const user = userEvent.setup();
+    let requestBody: unknown = null;
+    const roboflow = exportFixture({
+      manifest: {
+        annotation_sources: { ocr: 12, manual: 3 },
+        exported_at: "2026-08-24T12:00:00+00:00",
+        format: "roboflow_coco",
+        input_revision: 7,
+        profile_id: "profile-1",
+        run_id: "run-1",
+        schema: "datasetfactory-roboflow-coco-export-v1",
+        seed: 42,
+        split_ratios: { train: 0.7, valid: 0.2, test: 0.1 },
+        splits: {
+          train: {
+            annotation_count: 12,
+            annotations: "train/_annotations.coco.json",
+            frame_count: 7,
+            images: "train",
+          },
+          valid: {
+            annotation_count: 2,
+            annotations: "valid/_annotations.coco.json",
+            frame_count: 2,
+            images: "valid",
+          },
+          test: {
+            annotation_count: 1,
+            annotations: "test/_annotations.coco.json",
+            frame_count: 1,
+            images: "test",
+          },
+        },
+      },
+    });
+    stubFetch((url, init) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
+      if (url.endsWith("/api/v1/exports") && init?.method === "POST") {
+        requestBody = JSON.parse(String(init.body));
+        return { status: 202, body: roboflow };
+      }
+      if (url.endsWith("/api/v1/exports/export-1")) {
+        return { status: 200, body: roboflow };
+      }
+      if (url.endsWith("/api/v1/runs/run-1")) {
+        return { status: 200, body: reviewRun() };
+      }
+      return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
+    });
+
+    renderApp(["/exports"]);
+    await user.selectOptions(
+      await screen.findByRole("combobox", { name: "Wariant eksportu" }),
+      "roboflow_coco",
+    );
+    const train = screen.getByRole("spinbutton", { name: "Train (%)" });
+    const valid = screen.getByRole("spinbutton", { name: "Valid (%)" });
+    const seed = screen.getByRole("spinbutton", { name: "Ziarno podziału" });
+    await user.clear(train);
+    await user.type(train, "70");
+    await user.clear(valid);
+    await user.type(valid, "20");
+    await user.clear(seed);
+    await user.type(seed, "42");
+    await user.click(screen.getByRole("button", { name: "Uruchom eksport" }));
+
+    await waitFor(() => {
+      expect(requestBody).toEqual({
+        run_id: "run-1",
+        format: "roboflow_coco",
+        seed: 42,
+        split: { train: 0.7, valid: 0.2, test: 0.1 },
+      });
+    });
+    const result = await screen.findByRole("region", {
+      name: "Wynik eksportu Roboflow COCO",
+    });
+    expect(within(result).getByText("Podział datasetu")).toBeInTheDocument();
+    expect(result).toHaveTextContent("train/_annotations.coco.json");
+    expect(result).toHaveTextContent("42");
+  });
+
+  it("rejects Roboflow percentages that do not add up to 100 before POST", async () => {
+    const user = userEvent.setup();
+    const spy = stubFetch((url) => {
+      if (isLatestLookup(url)) {
+        return { status: 200, body: null };
+      }
+      return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
+    });
+    renderApp(["/exports"]);
+
+    await user.selectOptions(
+      await screen.findByRole("combobox", { name: "Wariant eksportu" }),
+      "roboflow_coco",
+    );
+    const train = screen.getByRole("spinbutton", { name: "Train (%)" });
+    await user.clear(train);
+    await user.type(train, "79");
+    await user.click(screen.getByRole("button", { name: "Uruchom eksport" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("razem dawać 100%");
+    expect(
+      spy.mock.calls.some(
+        ([url, init]) => String(url).endsWith("/api/v1/exports") && init?.method === "POST",
+      ),
+    ).toBe(false);
   });
 });
 
@@ -285,11 +397,11 @@ describe("export lifecycle", () => {
 
     renderApp(["/exports"]);
     await tick();
-    fireEvent.click(screen.getByRole("button", { name: "Uruchom eksport COCO" }));
+    fireEvent.click(screen.getByRole("button", { name: "Uruchom eksport" }));
     await tick();
     expect(exportGets).toBe(1);
     await tick();
-    expect(screen.getByText("Eksport COCO jest przygotowywany…")).toBeInTheDocument();
+    expect(screen.getByText("Eksport jest przygotowywany…")).toBeInTheDocument();
 
     await tick(RUN_POLL_INTERVAL_MS);
     expect(exportGets).toBe(2);
@@ -338,9 +450,9 @@ describe("completed and failed exports", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport COCO" }));
+    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
 
-    expect(await screen.findByRole("button", { name: "Uruchom nowy eksport" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Skonfiguruj nowy eksport" })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(`Kod: ${code}.`);
   });
 
@@ -363,7 +475,7 @@ describe("completed and failed exports", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport COCO" }));
+    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("bezpiecznej relatywnej ścieżki");
@@ -412,7 +524,7 @@ describe("explicit run completion", () => {
     vi.stubGlobal("fetch", spy);
 
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport COCO" }));
+    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
     const complete = await screen.findByRole("button", { name: "Zamknij run" });
     await user.click(complete);
 
@@ -457,7 +569,7 @@ describe("explicit run completion", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    const start = await screen.findByRole("button", { name: "Uruchom eksport COCO" });
+    const start = await screen.findByRole("button", { name: "Uruchom eksport" });
     start.focus();
     await user.keyboard("{Enter}");
 

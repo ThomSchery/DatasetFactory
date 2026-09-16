@@ -52,6 +52,23 @@
   gap: var(--size-sm);
 }
 
+.df-exports__split-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--size-sm);
+  align-items: start;
+}
+
+.df-exports__split-fields > [role="alert"] {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 960px) {
+  .df-exports__split-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .df-exports__path {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);

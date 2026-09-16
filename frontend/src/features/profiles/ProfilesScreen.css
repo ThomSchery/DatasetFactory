@@ -57,6 +57,34 @@
   gap: var(--size-xs);
 }
 
+.df-profile-collection__category {
+  min-width: 0;
+}
+
+.df-profile-collection__category--editing {
+  align-items: stretch;
+}
+
+.df-profile-collection__category-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.df-profile-collection__category-editor {
+  display: grid;
+  flex: 1;
+  gap: var(--size-sm);
+  min-width: 0;
+}
+
+.df-profile-collection__category-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--size-xs);
+}
+
 @media (max-width: 720px) {
   .df-profile-collection__row {
     align-items: stretch;
@@ -64,6 +92,15 @@
   }
 
   .df-profile-collection__actions {
+    justify-content: flex-start;
+  }
+
+  .df-profile-collection__category {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .df-profile-collection__category-actions {
     justify-content: flex-start;
   }
 }

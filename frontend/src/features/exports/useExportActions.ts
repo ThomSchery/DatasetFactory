@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { completeRun, createExport, invalidateFor } from "../../api";
-import type { Export, PipelineRun } from "../../api";
+import type { CreateExportRequest, Export, PipelineRun } from "../../api";
 
 export function useCreateExport(onCreated: (created: Export) => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (runId: string) => createExport({ run_id: runId }),
+    mutationFn: (request: CreateExportRequest) => createExport(request),
     onSuccess: async (created) => {
       onCreated(created);
       await invalidateFor(queryClient, { type: "export-started" });

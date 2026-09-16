@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { profileFixture, profileSummaryFixture } from "../../test/fixtures";
+import { errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
 import { renderApp, stubFetch } from "../../test/harness";
 
 afterEach(() => {
@@ -85,5 +85,90 @@ describe("profile collection and explicit selection", () => {
 
     expect(screen.getByRole("region", { name: "Obraz referencyjny" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Wróć do profili" })).toBeInTheDocument();
+  });
+
+  it("previews a kind change and sends the current profile version when renaming", async () => {
+    const user = userEvent.setup();
+    let current = profileFixture({
+      name: "Quake Champions",
+      categories: [{ id: "category-1", name: "7", kind: "character" }],
+      version: 1,
+    });
+    let requestBody: unknown = null;
+    stubFetch((url, init) => {
+      if (url.endsWith("/profiles")) {
+        return { status: 200, body: [profileSummaryFixture({ name: current.name })] };
+      }
+      if (url.endsWith("/profiles/profile-1/categories/category-1") && init?.method === "PATCH") {
+        requestBody = JSON.parse(String(init.body));
+        current = {
+          ...current,
+          version: 2,
+          categories: [{ id: "category-1", name: "osiem", kind: "game" }],
+        };
+        return { status: 200, body: current };
+      }
+      if (url.endsWith("/profiles/profile-1")) {
+        return { status: 200, body: current };
+      }
+      return { status: 500, body: errorEnvelope("unexpected_request") };
+    });
+
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zmień nazwę klasy 7" }));
+    const input = screen.getByRole("textbox", { name: "Nowa nazwa klasy 7" });
+    await user.clear(input);
+    await user.type(input, "osiem");
+
+    const warning = screen.getByText("Klasa zmieni grupę").closest("div");
+    expect(warning).not.toBeNull();
+    expect(warning).toHaveTextContent("Znaki (OCR)");
+    expect(warning).toHaveTextContent("Pola HUD (gra)");
+    expect(screen.getByText("Ukończone eksporty pozostają niezmienne")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Zapisz nazwę" }));
+    await waitFor(() => {
+      expect(requestBody).toEqual({ name: "osiem", kind: "game", expected_version: 1 });
+    });
+    expect(await screen.findByText("osiem")).toBeInTheDocument();
+    expect(screen.getByText("Gra")).toBeInTheDocument();
+  });
+
+  it("keeps the editor open and explains a backend category-name conflict", async () => {
+    const user = userEvent.setup();
+    const current = profileFixture({
+      categories: [
+        { id: "category-1", name: "7", kind: "character" },
+        { id: "category-2", name: "health", kind: "game" },
+      ],
+    });
+    stubFetch((url, init) => {
+      if (url.endsWith("/profiles")) {
+        return { status: 200, body: [profileSummaryFixture({ category_count: 2 })] };
+      }
+      if (url.endsWith("/profiles/profile-1/categories/category-1") && init?.method === "PATCH") {
+        return {
+          status: 409,
+          body: errorEnvelope("category_name_exists", "Nazwa klasy jest zajęta.", {
+            category_id: "category-2",
+            category_name: "health",
+          }),
+        };
+      }
+      if (url.endsWith("/profiles/profile-1")) {
+        return { status: 200, body: current };
+      }
+      return { status: 500, body: errorEnvelope("unexpected_request") };
+    });
+
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zmień nazwę klasy 7" }));
+    const input = screen.getByRole("textbox", { name: "Nowa nazwa klasy 7" });
+    await user.clear(input);
+    await user.type(input, "HEALTH");
+    await user.click(screen.getByRole("button", { name: "Zapisz nazwę" }));
+
+    expect(await screen.findByText(/Klasa „health” już istnieje/)).toBeInTheDocument();
+    expect(input).toHaveValue("HEALTH");
   });
 });
