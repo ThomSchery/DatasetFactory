@@ -150,7 +150,9 @@ Bramka odświeżyła dwa zrzuty FE-001. Pomiar RGB wobec HEAD:
 | `error-1440.png` | 9 | `(312,95)–(315,101)` | 1 | znany dryf |
 | `exports-1440.png` | 3639 | `(918,292)–(1229,340)` | 216 | realna zmiana: akcja nazywa się teraz „Skonfiguruj nowy eksport”, a zrzut FE-001 pokazuje „Uruchom nowy eksport” |
 
-Oba pliki odtworzono przez `Copy-Item` z kopii blobów HEAD; odświeżeń nie commitujemy. Nieaktualny zrzut FE-001 zostaje jako dług dokumentacyjny do rozstrzygnięcia poza tym ticketem.
+`error-1440.png` odtworzono przez `Copy-Item` z blobu HEAD — dryfu nie commitujemy.
+
+`exports-1440.png` odświeżono jawnym commitem dokumentacyjnym `b71e515`, wzorem `83d60ec` (FE-012) i `d50d407` (FE-015): zmiana etykiety jest skutkiem FE-016, więc zrzut starszego ticketu przestałby odpowiadać interfejsowi. Region zweryfikowano wzrokowo — przycisk pokazuje „Skonfiguruj nowy eksport”.
 
 ### Uwaga poza zakresem FE-016
 
