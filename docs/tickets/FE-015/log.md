@@ -505,3 +505,101 @@ Pomiar RGB względem `HEAD`: 9 pikseli z 1 440 000, bbox `(312, 95)–(315, 101)
 maksymalna delta kanału 1 — co do wartości ten sam dryf, który FE-014 ustalił jako
 znany. Plik przywrócony z `HEAD`. Drzewo czyste, porty 8000, 5173 i 5174 bez
 nasłuchu, bez push i merge.
+
+## 2026-09-16 — FE-015-FIX2: Design Plan przed zmianą UI
+
+Zakres interfejsu jest wyłącznie behawioralny; FIX2 nie dodaje ani nie
+przestylowuje kontrolek. Dotknięte elementy to: stale zamontowany panel
+`AnnotationPopover` (pusty region, żywy dialog, alert i brama konfliktu), bbox
+`role="option"`, jego menu `role="menu"` z pozycją `Usuń`, sąsiednie bboxy oraz
+kanwa `RegionOverlay` o roli `listbox`, która będzie programowym celem fokusa po
+usunięciu jedynego boxa. Obowiązują moduły **Obramowanie** (`BORDER-01..09`,
+zwłaszcza `BORDER-06`) i **Szerokość Obramowania** (`BWIDTH-01..14`, zwłaszcza
+`BWIDTH-09..13`) oraz istniejące tokeny `--color-stroke-strong-default`,
+`--focus-ring-width` i `--focus-ring-offset`; FIX2 zachowuje już istniejący,
+widoczny styl fokusa zamiast definiować nowe wartości.
+
+- [x] Layout/Siatka: bez zmian; `GRID-01/02` i tokeny spacing pozostają nietknięte.
+- [x] Typografia: bez zmian; nie powstaje nowy tekst ani styl typograficzny.
+- [x] Kolory: bez zmian; istniejący semantyczny focus ring pozostaje źródłem
+  informacji.
+- [x] Obramowania: `BORDER-06` oraz `BWIDTH-09..13`; przejęcie fokusa ma
+  kończyć się na elemencie z istniejącym `Stroke-Strong`, bez skoku layoutu.
+- [x] Cienie: bez zmian; menu zachowuje dotychczasową elewację.
+- [x] Interakcje: spóźniona odpowiedź zapisuje stan panelu tylko przy zgodnej
+  parze `annotationId + epoch`; po usunięciu fokus idzie do następnego bboxa,
+  potem poprzedniego, a przy pustej liście do kanwy.
+- [x] Komponenty: wyłącznie istniejące `RegionOverlay`, `Button` i
+  `AnnotationPopover`; nie powstaje nowy element inline ani komponent `common/`.
+
+Kryteria testowe: realna trasa `FrameEditor → AnnotationPopover` z HTTP jako
+jedynym mockiem sprawdza obie strony granicy martwy/żywy kontekst. Testy fokusa
+sprawdzają konkretny trwały cel po usunięciu, nie samą kolejność zdarzeń
+jsdom i nie tylko warunek `activeElement !== body`.
+
+## 2026-09-16 — FE-015-FIX2: implementacja i sondy
+
+Każda mutacja edytora dostaje teraz niezmienny snapshot kontekstu selekcji
+`{ annotationId, epoch }` obok swojego intentu. `onError` zapisuje
+`categoryActionError` i konflikt `category_name_exists` tylko wtedy, gdy snapshot
+nadal jest bieżącym kontekstem. Warunek jest sprawdzany ponownie po asynchronicznym
+odświeżeniu profilu, bez wyliczania rodzajów kontekstu. `onSuccess` używa tej samej
+reguły do czyszczenia stanu prezentacji, więc stary sukces nie może wyczyścić
+bramy nowszego kontekstu o tym samym ID. `onSettled` zeruje wyłącznie techniczny
+`createdCategoryRef` i nie zapisuje nic do panelu.
+
+Pierwsza wersja snapshotu korzystała z callbacka React Query `onMutate`. Pełna
+suita celowo ją odrzuciła testem architektury „`registers no onMutate handler
+anywhere`”, który chroni zakaz optymistycznych aktualizacji danych. Snapshot jest
+więc częścią zmiennej mutacji `{ intent, selectionContext }`; nie zmienia body
+HTTP i respektuje bramkę architektury.
+
+Menu usuwania nie oddaje już fokusa openerowi, który za chwilę znika. Wybiera
+następny bbox w kolejności dokumentu, a gdy go nie ma — poprzedni. Po usunięciu
+jedynego bboxa fokus przechodzi na trwale istniejącą kanwę `listbox`, która ma
+`tabIndex={-1}`: jest programowym punktem kontynuacji, ale nie dokłada nowego
+przystanku do zwykłej kolejności Tab. Reguła FIX1 dla `Escape`, kliknięcia poza
+menu, `blur` i wyjścia Tabem pozostaje nietknięta.
+
+Sondy wykonano przez `Copy-Item`, po czym kopię przywrócono i porównano SHA256:
+
+| Finding | Cięcie | Wynik |
+|---|---|---|
+| spóźniona odpowiedź | predykat własności kontekstu wymuszony na `true` | martwy kontekst padł na alercie w pustym panelu (`annotationReviewFlow.test.tsx:625`), a żywy kontekst pozostał zielony |
+| fokus po usunięciu | przywrócony zwrot fokusa do usuwanego bboxa | oba testy padły na bezpośrednich szpiegach `focus`: zero wywołań dla trwałego sąsiada i kanwy |
+
+SHA256 po przywróceniu, zgodne z kopią sprzed cięcia:
+
+- `FrameEditor.tsx` — `64E4409767CFE20F8E2FA41F7DE657932ABCBBDB1A8E0AFCC955E253774815F0`
+- `RegionOverlay.tsx` — `35B85F809DCD03EA48D805A6EDEFACE0ABF273D8DFFE540FFFBDC694C7F39720`
+
+Regresje mierzą regułę, nie przypadkową kolejność jsdom: testy usunięcia
+szpiegują `focus()` na konkretnym trwałym celu i dodatkowo potwierdzają końcowy
+`activeElement`. Test asynchroniczny czeka na drugie pobranie profilu, więc nie
+może przejść przed zakończeniem `onError` i późnym zapisem konfliktu.
+
+## 2026-09-16 — FE-015-FIX2: pełna bramka
+
+Po dwóch commitach produkcyjnych FIX2 uruchomiono jednym nieprzerwanym procesem,
+z absolutną ścieżką do `scripts\check.ps1`. Wynik: **9/9 PASS, zero SKIP**.
+
+| Etap | Wynik | Czas / liczba |
+|---|---|---|
+| backend format | PASS | 1,3 s |
+| backend lint | PASS | 0,1 s |
+| backend typy | PASS | 10,8 s; 99 plików |
+| backend testy | PASS | 342,1 s; 356/356 |
+| frontend typy | PASS | 1,4 s |
+| frontend testy | PASS | 35,4 s; 673/673 |
+| frontend build | PASS | 4,0 s |
+| E2E | PASS | 97,5 s; 19/19 |
+| E2E root safety | PASS | 0,8 s; 2/2 |
+
+`ECONNREFUSED 127.0.0.1:8000` wystąpił wyłącznie w przechodzącym teście
+`vertical-flow.spec.ts`, który celowo restartuje backend podczas OCR.
+
+Po bramce ponownie zmienił się tylko
+`docs/tickets/FE-001/screenshots/error-1440.png`. Pomiar RGB względem `HEAD`:
+9 pikseli, bbox `(312, 95)–(315, 101)`, maksymalna delta kanału 1 — identyczny
+znany dryf FE-014/FIX1, bez związku z FIX2. Plik przywrócono z `HEAD`. Porty
+8000, 5173 i 5174 pozostały bez nasłuchu.
