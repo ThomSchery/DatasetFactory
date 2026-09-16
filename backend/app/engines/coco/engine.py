@@ -63,21 +63,7 @@ class CocoExportEngine:
         }
         image_by_frame = {item.frame_id: item for item in sorted_images}
 
-        for image in sorted_images:
-            if image.frame_index < 0 or image.width <= 0 or image.height <= 0:
-                raise CocoValidationError("invalid_image")
-            path_parts = image.file_name.split("/")
-            if (
-                not image.file_name
-                or image.file_name.startswith(("/", "\\"))
-                or "\\" in image.file_name
-                or ":" in image.file_name
-                or any(part in {"", ".", ".."} for part in path_parts)
-            ):
-                raise CocoValidationError("invalid_image_path")
-        for category in sorted_categories:
-            if category.ordinal < 0 or not category.name:
-                raise CocoValidationError("invalid_category")
+        self._validate_inputs(sorted_images, sorted_categories)
 
         def annotation_key(item: CocoAnnotationInput) -> tuple[int, int, int, int, str]:
             image_id = image_ids.get(item.frame_id)
@@ -132,6 +118,115 @@ class CocoExportEngine:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
+
+    def build_roboflow(
+        self,
+        *,
+        images: tuple[CocoImageInput, ...],
+        categories: tuple[CocoCategoryInput, ...],
+        annotations: tuple[CocoAnnotationInput, ...],
+    ) -> bytes:
+        """Build the subset of Roboflow COCO that DatasetFactory can state truthfully."""
+        sorted_images = tuple(sorted(images, key=lambda item: (item.frame_index, item.frame_id)))
+        sorted_categories = tuple(
+            sorted(categories, key=lambda item: (item.ordinal, item.category_id))
+        )
+        self._require_unique((item.frame_id for item in sorted_images), "duplicate_frame")
+        self._require_unique((item.category_id for item in sorted_categories), "duplicate_category")
+        self._require_unique((item.annotation_id for item in annotations), "duplicate_annotation")
+        self._validate_inputs(sorted_images, sorted_categories)
+
+        image_ids = {item.frame_id: index for index, item in enumerate(sorted_images)}
+        category_ids = {
+            item.category_id: index for index, item in enumerate(sorted_categories, start=1)
+        }
+        image_by_frame = {item.frame_id: item for item in sorted_images}
+
+        def annotation_key(item: CocoAnnotationInput) -> tuple[int, int, int, int, str]:
+            image_id = image_ids.get(item.frame_id)
+            category_id = category_ids.get(item.category_id)
+            if image_id is None:
+                raise CocoValidationError("annotation_image_missing")
+            if category_id is None:
+                raise CocoValidationError("annotation_category_missing")
+            return image_id, category_id, item.x, item.y, item.annotation_id
+
+        annotation_documents: list[dict[str, Any]] = []
+        for annotation_id, annotation in enumerate(
+            sorted(annotations, key=annotation_key), start=1
+        ):
+            image = image_by_frame[annotation.frame_id]
+            self._validate_bbox(annotation, image)
+            annotation_documents.append(
+                {
+                    "area": annotation.width * annotation.height,
+                    "bbox": [
+                        annotation.x,
+                        annotation.y,
+                        annotation.width,
+                        annotation.height,
+                    ],
+                    "category_id": category_ids[annotation.category_id],
+                    "id": annotation_id,
+                    "image_id": image_ids[annotation.frame_id],
+                    "iscrowd": 0,
+                    "segmentation": [],
+                }
+            )
+
+        document: dict[str, Any] = {
+            "annotations": annotation_documents,
+            "categories": [
+                {"id": 0, "name": "object", "supercategory": "none"},
+                *(
+                    {
+                        "id": category_ids[item.category_id],
+                        "name": item.name,
+                        "supercategory": "object",
+                    }
+                    for item in sorted_categories
+                ),
+            ],
+            "images": [
+                {
+                    "file_name": item.file_name,
+                    "height": item.height,
+                    "id": image_ids[item.frame_id],
+                    "license": 0,
+                    "width": item.width,
+                }
+                for item in sorted_images
+            ],
+            "info": {"description": "DatasetFactory Roboflow-compatible COCO export"},
+            "licenses": [],
+        }
+        self._validate_document(document)
+        return json.dumps(
+            document,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+
+    @staticmethod
+    def _validate_inputs(
+        images: tuple[CocoImageInput, ...], categories: tuple[CocoCategoryInput, ...]
+    ) -> None:
+        for image in images:
+            if image.frame_index < 0 or image.width <= 0 or image.height <= 0:
+                raise CocoValidationError("invalid_image")
+            path_parts = image.file_name.split("/")
+            if (
+                not image.file_name
+                or image.file_name.startswith(("/", "\\"))
+                or "\\" in image.file_name
+                or ":" in image.file_name
+                or any(part in {"", ".", ".."} for part in path_parts)
+            ):
+                raise CocoValidationError("invalid_image_path")
+        for category in categories:
+            if category.ordinal < 0 or not category.name:
+                raise CocoValidationError("invalid_category")
 
     @staticmethod
     def _validate_bbox(annotation: CocoAnnotationInput, image: CocoImageInput) -> None:

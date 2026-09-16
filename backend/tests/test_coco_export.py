@@ -27,7 +27,7 @@ from backend.app.access.store.models import (
     StageCheckpoint,
     VideoAsset,
 )
-from backend.app.access.store.repositories.exports import ExportRepository
+from backend.app.access.store.repositories.exports import ExportRepository, StoredExportFrame
 from backend.app.composition import CompositionRoot
 from backend.app.engines.coco import (
     CocoAnnotationInput,
@@ -37,7 +37,7 @@ from backend.app.engines.coco import (
     CocoValidationError,
 )
 from backend.app.main import create_app
-from backend.app.managers.workflow.export_use_cases import ExportUseCases
+from backend.app.managers.workflow.export_use_cases import ExportSplitRatios, ExportUseCases
 from backend.tests.coco_validation import CocoComplianceError, validate_coco_document
 
 
@@ -326,6 +326,28 @@ def _wait_for_export(
     pytest.fail(f"export {export_id} did not reach {expected}")
 
 
+def _accept_all_seed_frames(composition: CompositionRoot, seed: ExportSeed) -> None:
+    with composition.database.session() as session:
+        for frame in session.scalars(select(Frame).where(Frame.run_id == seed.run_id)):
+            frame.review_status = "accepted"
+        for annotation in session.scalars(
+            select(Annotation).join(Frame).where(Frame.run_id == seed.run_id)
+        ):
+            annotation.status = "accepted"
+
+
+def _split_image_names(output: Path) -> dict[str, set[str]]:
+    return {
+        split: {
+            item["file_name"]
+            for item in json.loads(
+                (output / split / "_annotations.coco.json").read_text(encoding="utf-8")
+            )["images"]
+        }
+        for split in ("train", "valid", "test")
+    }
+
+
 def test_coco_engine_matches_golden_and_is_byte_deterministic() -> None:
     engine = CocoExportEngine()
     images = (CocoImageInput("frame", 2, "images/00000002.jpg", 100, 50),)
@@ -361,6 +383,94 @@ def test_coco_engine_rejects_bbox_outside_image() -> None:
             categories=(CocoCategoryInput("category", 0, "zero"),),
             annotations=(CocoAnnotationInput("annotation", "frame", "category", 9, 9, 2, 2),),
         )
+
+
+def test_roboflow_engine_matches_reference_shape_without_invented_metadata() -> None:
+    document = json.loads(
+        CocoExportEngine().build_roboflow(
+            images=(CocoImageInput("frame", 0, "safe.jpg", 100, 50),),
+            categories=(CocoCategoryInput("category", 0, "timer"),),
+            annotations=(CocoAnnotationInput("annotation", "frame", "category", 1, 2, 3, 4),),
+        )
+    )
+
+    assert set(document) == {"info", "licenses", "categories", "images", "annotations"}
+    assert document["info"] == {"description": "DatasetFactory Roboflow-compatible COCO export"}
+    assert document["licenses"] == []
+    assert document["categories"] == [
+        {"id": 0, "name": "object", "supercategory": "none"},
+        {"id": 1, "name": "timer", "supercategory": "object"},
+    ]
+    assert set(document["images"][0]) == {"id", "license", "file_name", "height", "width"}
+    assert document["images"][0]["id"] == 0
+    assert set(document["annotations"][0]) == {
+        "id",
+        "image_id",
+        "category_id",
+        "bbox",
+        "iscrowd",
+        "area",
+        "segmentation",
+    }
+    assert document["annotations"][0]["segmentation"] == []
+
+
+def test_roboflow_split_is_deterministic_seeded_and_disjoint() -> None:
+    frames = tuple(
+        StoredExportFrame(f"frame-{name}", index, f"frames/{index}.jpg", "hash", 10, 10)
+        for index, name in enumerate("abcdef")
+    )
+    ratios = ExportSplitRatios()
+
+    first = ExportUseCases._partition_frames(frames, ratios=ratios, seed=17)
+    repeated = ExportUseCases._partition_frames(tuple(reversed(frames)), ratios=ratios, seed=17)
+    changed = ExportUseCases._partition_frames(frames, ratios=ratios, seed=23)
+
+    first_ids = {name: tuple(frame.id for frame in first[name]) for name in first}
+    repeated_ids = {name: tuple(frame.id for frame in repeated[name]) for name in repeated}
+    changed_ids = {name: tuple(frame.id for frame in changed[name]) for name in changed}
+    assert first_ids == repeated_ids
+    assert changed_ids != first_ids
+    assigned_ids = tuple(frame_id for value in first_ids.values() for frame_id in value)
+    assert len(assigned_ids) == len(set(assigned_ids)) == len(frames)
+    assert set(first_ids["train"]).isdisjoint(first_ids["valid"])
+    assert set(first_ids["train"]).isdisjoint(first_ids["test"])
+    assert set(first_ids["valid"]).isdisjoint(first_ids["test"])
+
+
+@pytest.mark.parametrize(
+    ("total", "expected"),
+    [
+        (1, {"train": 1, "valid": 0, "test": 0}),
+        (2, {"train": 1, "valid": 1, "test": 0}),
+        (3, {"train": 1, "valid": 1, "test": 1}),
+        (10, {"train": 8, "valid": 1, "test": 1}),
+    ],
+)
+def test_roboflow_split_allocates_small_datasets_without_duplicates(
+    total: int, expected: dict[str, int]
+) -> None:
+    assert ExportUseCases._split_counts(total, ExportSplitRatios().as_dict()) == expected
+
+
+def test_roboflow_image_names_do_not_collide_between_runs_of_one_profile() -> None:
+    first = ExportUseCases._roboflow_image_name(
+        "11111111-1111-1111-1111-111111111111",
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        7,
+        "runs/first/frames/00000007.jpg",
+    )
+    second = ExportUseCases._roboflow_image_name(
+        "22222222-2222-2222-2222-222222222222",
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        7,
+        "runs/second/frames/00000007.jpg",
+    )
+
+    assert first != second
+    assert first.endswith("_00000007.jpg")
+    assert second.endswith("_00000007.jpg")
+    assert all(forbidden not in first + second for forbidden in ("\\", ":", ".."))
 
 
 def test_export_api_publishes_only_accepted_snapshot(
@@ -455,6 +565,115 @@ def test_export_api_publishes_only_accepted_snapshot(
         for value in manifest.values()
         if isinstance(value, str)
     )
+
+
+def test_roboflow_export_publishes_three_reference_shaped_splits(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    _accept_all_seed_frames(composition, seed)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/exports",
+            json={
+                "run_id": seed.run_id,
+                "format": "roboflow_coco",
+                "split": {"train": 0.8, "valid": 0.1, "test": 0.1},
+                "seed": 17,
+            },
+        )
+        assert response.status_code == 202, response.text
+        completed = _wait_for_export(
+            composition.export_use_cases, response.json()["id"], expected="completed"
+        )
+
+    output = composition.workspace.resolve_relpath(str(completed["output_relpath"]))
+    assert {path.name for path in output.iterdir()} == {"train", "valid", "test", "manifest.json"}
+    all_names: list[str] = []
+    for split in ("train", "valid", "test"):
+        document = json.loads(
+            (output / split / "_annotations.coco.json").read_text(encoding="utf-8")
+        )
+        assert set(document) == {"info", "licenses", "categories", "images", "annotations"}
+        assert document["categories"][0] == {
+            "id": 0,
+            "name": "object",
+            "supercategory": "none",
+        }
+        assert all(item["segmentation"] == [] for item in document["annotations"])
+        split_names = [item["file_name"] for item in document["images"]]
+        assert set(split_names) == {
+            path.name for path in (output / split).iterdir() if path.suffix != ".json"
+        }
+        all_names.extend(split_names)
+    assert len(all_names) == len(set(all_names)) == 3
+    assert all(seed.run_id.replace("-", "") in name for name in all_names)
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest == completed["manifest"]
+    assert manifest["schema"] == "datasetfactory-roboflow-coco-export-v1"
+    assert manifest["format"] == "roboflow_coco"
+    assert manifest["seed"] == 17
+    assert manifest["split_ratios"] == {"train": 0.8, "valid": 0.1, "test": 0.1}
+    assert {name: manifest["splits"][name]["frame_count"] for name in manifest["splits"]} == {
+        "train": 1,
+        "valid": 1,
+        "test": 1,
+    }
+
+
+def test_default_payload_and_explicit_coco_keep_the_legacy_bytes_and_layout(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        default = client.post("/api/v1/exports", json={"run_id": seed.run_id})
+        default_record = _wait_for_export(
+            composition.export_use_cases, default.json()["id"], expected="completed"
+        )
+        explicit = client.post("/api/v1/exports", json={"run_id": seed.run_id, "format": "coco"})
+        explicit_record = _wait_for_export(
+            composition.export_use_cases, explicit.json()["id"], expected="completed"
+        )
+
+    default_output = composition.workspace.resolve_relpath(str(default_record["output_relpath"]))
+    explicit_output = composition.workspace.resolve_relpath(str(explicit_record["output_relpath"]))
+    assert (default_output / "annotations.json").read_bytes() == (
+        explicit_output / "annotations.json"
+    ).read_bytes()
+    assert json.loads((default_output / "annotations.json").read_bytes()) == json.loads(
+        Path("backend/tests/fixtures/expected-coco/accepted-review.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert {path.relative_to(default_output).as_posix() for path in default_output.rglob("*")} == {
+        "annotations.json",
+        "images",
+        "images/00000002.jpg",
+        "manifest.json",
+    }
+
+
+def test_roboflow_export_rejects_split_ratios_that_do_not_cover_the_dataset(
+    composition: CompositionRoot,
+) -> None:
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/exports",
+            json={
+                "run_id": str(uuid4()),
+                "format": "roboflow_coco",
+                "split": {"train": 0.7, "valid": 0.1, "test": 0.1},
+                "seed": 0,
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
 
 
 def test_category_rename_preserves_annotations_and_published_export(

@@ -1,17 +1,36 @@
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from backend.app.access.store.repositories.exports import ExportRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
-from backend.app.managers.workflow.export_use_cases import ExportUseCaseError, ExportUseCases
+from backend.app.managers.workflow.export_use_cases import (
+    ExportSplitRatios,
+    ExportUseCaseError,
+    ExportUseCases,
+)
+
+
+class ExportSplitRequest(StrictModel):
+    train: float = Field(default=0.8, ge=0, le=1)
+    valid: float = Field(default=0.1, ge=0, le=1)
+    test: float = Field(default=0.1, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def require_complete_ratio(self) -> "ExportSplitRequest":
+        if abs(self.train + self.valid + self.test - 1) > 1e-9:
+            raise ValueError("split ratios must sum to 1")
+        return self
 
 
 class CreateExportRequest(StrictModel):
     run_id: str = Field(min_length=1)
+    format: Literal["coco", "roboflow_coco"] = "coco"
+    split: ExportSplitRequest = Field(default_factory=ExportSplitRequest)
+    seed: int = 0
 
 
 class ExportResponse(StrictModel):
@@ -69,7 +88,18 @@ def create_exports_router(export_provider: ExportProvider) -> APIRouter:
     ) -> ExportResponse | JSONResponse:
         # Authorization policy: local-public. Only a controlled run id enters.
         try:
-            return _export_response(exports.create_export(payload.run_id))
+            return _export_response(
+                exports.create_export(
+                    payload.run_id,
+                    export_format=payload.format,
+                    split_ratios=ExportSplitRatios(
+                        train=payload.split.train,
+                        valid=payload.split.valid,
+                        test=payload.split.test,
+                    ),
+                    seed=payload.seed,
+                )
+            )
         except ExportUseCaseError as error:
             return _export_error(request, error)
 

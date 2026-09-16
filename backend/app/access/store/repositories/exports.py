@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -91,6 +92,12 @@ class StoredExportSnapshot:
     categories: tuple[StoredExportCategory, ...]
     frames: tuple[StoredExportFrame, ...]
     annotations: tuple[StoredExportAnnotation, ...]
+
+
+@dataclass(frozen=True)
+class ExportImageFile:
+    frame: StoredExportFrame
+    file_name: str
 
 
 @dataclass(frozen=True)
@@ -258,6 +265,71 @@ class ExportRepository:
             for frame in sorted(snapshot.frames, key=lambda item: (item.frame_index, item.id)):
                 self._copy_frame(frame, images_path / self._image_name(frame))
             self._write_file(temporary_path / "annotations.json", document)
+            manifest_json = json.dumps(
+                manifest,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            self._require_relative_manifest(manifest)
+            self._write_file(temporary_path / "manifest.json", manifest_json.encode("utf-8"))
+            staged.manifest_json = manifest_json
+            return staged
+        except Exception:
+            staged.discard()
+            raise
+
+    def stage_roboflow(
+        self,
+        snapshot: StoredExportSnapshot,
+        *,
+        documents: Mapping[str, bytes],
+        split_files: Mapping[str, tuple[ExportImageFile, ...]],
+        manifest: dict[str, Any],
+    ) -> StagedExport:
+        split_names = ("train", "valid", "test")
+        if set(documents) != set(split_names) or set(split_files) != set(split_names):
+            raise ExportPublishError("export_split_invalid")
+        published_frame_ids = [
+            item.frame.id for split in split_names for item in split_files[split]
+        ]
+        snapshot_frame_ids = [frame.id for frame in snapshot.frames]
+        if len(published_frame_ids) != len(set(published_frame_ids)) or set(
+            published_frame_ids
+        ) != set(snapshot_frame_ids):
+            raise ExportPublishError("export_split_invalid")
+
+        exports_path = self._workspace.resolve_relpath("exports")
+        try:
+            temporary_path = Path(
+                tempfile.mkdtemp(prefix=f".{snapshot.export_id}-", dir=exports_path)
+            )
+        except OSError as exc:
+            raise ExportPublishError("export_stage_failed") from exc
+        final_path = self._workspace.resolve_relpath(Path("exports") / snapshot.export_id)
+        staged = StagedExport(
+            snapshot.export_id,
+            f"exports/{snapshot.export_id}",
+            "",
+            temporary_path,
+            final_path,
+        )
+        try:
+            for split_name in split_names:
+                parsed = json.loads(documents[split_name])
+                if not isinstance(parsed, dict):
+                    raise ExportPublishError("export_document_invalid")
+                split_path = temporary_path / split_name
+                split_path.mkdir()
+                for item in sorted(
+                    split_files[split_name],
+                    key=lambda value: (value.frame.frame_index, value.frame.id),
+                ):
+                    if Path(item.file_name).name != item.file_name:
+                        raise ExportPublishError("export_image_name_invalid")
+                    self._copy_frame(item.frame, split_path / item.file_name)
+                self._write_file(split_path / "_annotations.coco.json", documents[split_name])
+
             manifest_json = json.dumps(
                 manifest,
                 ensure_ascii=False,
