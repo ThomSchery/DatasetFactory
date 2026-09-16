@@ -112,3 +112,46 @@ Oba pliki odtworzono z HEAD przez `Copy-Item`; odświeżeń zrzutów nie dołąc
 Próba kontroli przez Browser na działającym lokalnym frontendzie nie mogła wybrać przeglądarki: runtime zwrócił pustą listę `available browsers: []`. Repozytoryjne E2E Chromium przeszło 19/19 i obejmuje viewporty 1440×1000 oraz 1920×1080, a nowe stany mają testy interakcji i dostępności. Nie zapisano osobnych nowych zrzutów profilu i formularza Roboflow, więc nie oznaczamy tej części jako wykonanej kontroli manualnej.
 
 Po kontroli zatrzymano serwer frontendowy. Porty 8000, 5173 i 5174 są wolne.
+
+## Kontrola wizualna FE-016
+
+Lukę domyka `frontend/e2e/fe016-visual-qa.spec.ts` — repozytoryjny Playwright, wzorem `fe015-visual-qa.spec.ts`. Spec zapisuje cztery zrzuty bez `fullPage` do `docs/tickets/FE-016/screenshots/`: `profile-rename-*` i `export-variant-*` w 1440×1000 oraz 1920×1080.
+
+### Co widać na zrzutach
+
+`profile-rename-1440x1000.png` i `profile-rename-1920x1080.png`: edytowany wiersz klasy `7` z wpisaną nazwą `osiem`. Nad listą klas stały `Notice` „Ukończone eksporty pozostają niezmienne” z treścią o tym, że zmiana obejmie wyłącznie przyszłe eksporty. Pod polem tekstowym ostrzeżenie `warning` „Klasa zmieni grupę” z pełnym zdaniem „Po zapisaniu klasa przejdzie z «Znaki (OCR)» do «Pola HUD (gra)»”. Akcje „Zapisz nazwę” i „Anuluj” wyrównane do prawej krawędzi wiersza, w całości w viewporcie. Układ poprawny w obu rozdzielczościach; szerszy viewport rozciąga panel, a tekst pozostaje na `--measure-copy`.
+
+`export-variant-1440x1000.png` i `export-variant-1920x1080.png`: panel „Nowy eksport” z wariantem `Roboflow COCO — train / valid / test`, trzema polami proporcji `80 / 10 / 10` w jednym rzędzie oraz polem „Ziarno podziału” w rzędzie niższym. Przycisk „Uruchom eksport” w obrębie panelu.
+
+### Znalezisko: pole ziarna wypadało z rzędu proporcji
+
+Pierwszy przebieg pokazał realny błąd układu, którego nie widziała żadna asercja funkcjonalna: cztery pola dzieliły jeden rząd `repeat(4, …)`, a ponieważ tylko „Ziarno podziału” ma tekst pomocniczy, jego `input` lądował **72 px** poniżej pozostałych trzech. Widoczne w obu viewportach.
+
+Poprawka jest lokalna dla ekranu eksportu — `Field` jest wspólny dla FE-014 i FE-015 i nie został ruszony. Trzy proporcje tworzą własny rząd `.df-exports__split-ratios`, ziarno stoi pod nimi.
+
+### Falsyfikacja asercji geometrycznej
+
+1. `frontend/src/features/exports/ExportsScreen.css` skopiowano przez `Copy-Item`; SHA-256: `996BA4…BF1F`.
+2. Przywrócono poprzedni układ (`display: contents` na rzędzie proporcji, `repeat(4, …)` na kontenerze), czyli dokładnie stan sprzed poprawki.
+3. **Pierwsza wersja asercji przeszła.** Porównywała wyłącznie trzy pola proporcji między sobą, a te pozostają wyrównane także w zepsutym układzie — asercja nie widziała właśnie tego błędu, dla którego powstała.
+4. Asercję wzmocniono: pola, których etykiety zaczynają się w jednym rzędzie, muszą mieć `input` w jednym rzędzie. Probe na tym samym zepsutym układzie padł dokładnie na `„Train (%)” and „Ziarno podziału” start on one row but their inputs do not at 1440x1000`, `Expected: <= 1`, `Received: 72`.
+5. Plik odtworzono przez `Copy-Item`; SHA-256 wrócił do `996BA4…BF1F`, a spec przeszedł.
+
+### Bramka po dołożeniu specu
+
+Jeden nieprzerwany przebieg `scripts/check.ps1`: **9/9 PASS**, `skipped 0`. Backend 370/370, frontend 677/677, build PASS, E2E **20/20** (nowy spec), root safety PASS.
+
+Cztery zrzuty FE-016 wygenerowane przez bramkę są bajt w bajt identyczne z zacommitowanymi — `git status` ich nie pokazał.
+
+Bramka odświeżyła dwa zrzuty FE-001. Pomiar RGB wobec HEAD:
+
+| Plik | Piksele | Bbox | Maks. delta | Rozstrzygnięcie |
+| --- | --- | --- | --- | --- |
+| `error-1440.png` | 9 | `(312,95)–(315,101)` | 1 | znany dryf |
+| `exports-1440.png` | 3639 | `(918,292)–(1229,340)` | 216 | realna zmiana: akcja nazywa się teraz „Skonfiguruj nowy eksport”, a zrzut FE-001 pokazuje „Uruchom nowy eksport” |
+
+Oba pliki odtworzono przez `Copy-Item` z kopii blobów HEAD; odświeżeń nie commitujemy. Nieaktualny zrzut FE-001 zostaje jako dług dokumentacyjny do rozstrzygnięcia poza tym ticketem.
+
+### Uwaga poza zakresem FE-016
+
+Pole z `width="short"` i tekstem pomocniczym łamie etykietę i opis na `12ch`, bo `.df-field--short` ogranicza cały `Field`, nie samą kontrolkę. Dotyczy to tak samo istniejącego „Interwał próbkowania (ms)” w `RunLaunchForm` (widoczne w `docs/tickets/FE-001/screenshots/materials-1440.png`). Zachowano zgodność z istniejącym wzorcem; zmiana `Field` dotknęłaby FE-014 i FE-015, więc to materiał na osobny ticket.
