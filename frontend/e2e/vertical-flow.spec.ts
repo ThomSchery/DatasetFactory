@@ -720,8 +720,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     .toBe("accepted");
 
   await page.getByRole("link", { name: /Eksporty/ }).click();
-  await expect(page.getByRole("button", { name: "Uruchom eksport COCO" })).toBeVisible();
-  await page.getByRole("button", { name: "Uruchom eksport COCO" }).click();
+  await expect(page.getByRole("button", { name: "Uruchom eksport" })).toBeVisible();
+  await page.getByRole("button", { name: "Uruchom eksport" }).click();
   await expect(page).toHaveURL(/\/exports\?export_id=[^&]+$/);
   await expect(page.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible({
     timeout: 15_000,

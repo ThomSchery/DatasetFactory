@@ -391,7 +391,7 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     { phase: "accepted" },
     (current) => current.getByRole("button", { name: "Zamknij run" }),
     async (current) => {
-      await current.getByRole("button", { name: "Uruchom eksport COCO" }).click();
+      await current.getByRole("button", { name: "Uruchom eksport" }).click();
       await expect(current.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible({
         timeout: 8_000,
       });
