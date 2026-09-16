@@ -575,6 +575,106 @@ describe("annotation review query states", () => {
     ]);
   });
 
+  it("ignores a delayed class conflict after its draft context is gone", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "Ż" }],
+    });
+    let resolveCategory: ((response: Response) => void) | undefined;
+    const categoryResponse = new Promise<Response>((resolve) => {
+      resolveCategory = resolve;
+    });
+    const fetchSpy = reviewApi({ profile: conflictProfile });
+    const originalImplementation = fetchSpy.getMockImplementation()!;
+    fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        String(input) === `/api/v1/profiles/${conflictProfile.id}/categories` &&
+        init?.method === "POST"
+      ) {
+        return categoryResponse;
+      }
+      return originalImplementation(input, init);
+    });
+    renderApp(["/annotations/run-1"]);
+    const overlay = await drawDraft();
+    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+
+    fireEvent.pointerDown(document.body);
+    const empty = await screen.findByRole("region", { name: "Anotacja bez zaznaczenia" });
+    expect(
+      within(overlay).queryByRole("option", { name: /^Box — wybierz klasę:/ }),
+    ).not.toBeInTheDocument();
+
+    resolveCategory?.(
+      new Response(JSON.stringify(errorEnvelope("category_name_exists")), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await waitFor(() => {
+      expect(
+        fetchSpy.mock.calls.filter(
+          ([input]) => String(input) === `/api/v1/profiles/${conflictProfile.id}`,
+        ),
+      ).toHaveLength(2);
+    });
+    expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
+
+    await drawDraft();
+    const nextPopover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await user.type(within(nextPopover).getByRole("textbox", { name: "Klasa" }), "s");
+    expect(
+      within(nextPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a delayed class conflict visible while its draft context is alive", async () => {
+    const user = userEvent.setup();
+    const conflictProfile = profileFixture({
+      categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "Ż" }],
+    });
+    let resolveCategory: ((response: Response) => void) | undefined;
+    const categoryResponse = new Promise<Response>((resolve) => {
+      resolveCategory = resolve;
+    });
+    const fetchSpy = reviewApi({ profile: conflictProfile });
+    const originalImplementation = fetchSpy.getMockImplementation()!;
+    fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        String(input) === `/api/v1/profiles/${conflictProfile.id}/categories` &&
+        init?.method === "POST"
+      ) {
+        return categoryResponse;
+      }
+      return originalImplementation(input, init);
+    });
+    renderApp(["/annotations/run-1"]);
+    await drawDraft();
+    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    );
+
+    resolveCategory?.(
+      new Response(JSON.stringify(errorEnvelope("category_name_exists")), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(await within(popover).findByRole("alert")).toHaveTextContent(
+      "Klasa o tej nazwie już istnieje w profilu",
+    );
+    expect(
+      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     { existingId: "long-s", existingName: "ſ", proposedName: "S", typed: "s" },
     { existingId: "ligature-ff", existingName: "ﬀ", proposedName: "ff", typed: "ff" },

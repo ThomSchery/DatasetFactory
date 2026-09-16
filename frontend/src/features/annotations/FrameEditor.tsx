@@ -223,6 +223,24 @@ interface SelectionContext {
   epoch: number;
 }
 
+interface EditorMutationRequest {
+  intent: EditorMutationIntent;
+  selectionContext: SelectionContext;
+}
+
+function mutationOwnsSelectionContext(
+  mutationSelectionContext: SelectionContext,
+  current: SelectionContext,
+): boolean {
+  // IDs can recur after a deselect/reselect cycle. The epoch makes ownership
+  // about the exact interaction context that launched the request, not merely
+  // an annotation that happens to have the same identifier now.
+  return (
+    mutationSelectionContext.annotationId === current.annotationId &&
+    mutationSelectionContext.epoch === current.epoch
+  );
+}
+
 const DRAFT_ANNOTATION_ID = "new-annotation-draft";
 
 /**
@@ -320,9 +338,13 @@ function LoadedFrameEditor({
     updateSelectionContext(selectedId);
   }, [selectedId]);
 
-  const mutation = useMutation<void | CopyPreviousAnnotationsResult, unknown, EditorMutationIntent>({
+  const mutation = useMutation<
+    void | CopyPreviousAnnotationsResult,
+    unknown,
+    EditorMutationRequest
+  >({
     mutationKey: reviewMutationKey(runId),
-    mutationFn: async (intent) => {
+    mutationFn: async ({ intent }) => {
       createdCategoryRef.current = false;
       if (intent.kind !== "create-category") {
         return executeReviewMutation(frame.id, intent);
@@ -345,7 +367,7 @@ function LoadedFrameEditor({
         kind: "category",
       });
     },
-    onError: async (error, intent) => {
+    onError: async (error, { intent, selectionContext: mutationSelectionContext }) => {
       if (intent.kind === "copy-previous") {
         setCopyFeedback(null);
       }
@@ -357,7 +379,11 @@ function LoadedFrameEditor({
         intent.kind === "create-category"
       ) {
         setActionError(null);
-        setCategoryActionError(presentation);
+        if (
+          mutationOwnsSelectionContext(mutationSelectionContext, selectionContextRef.current)
+        ) {
+          setCategoryActionError(presentation);
+        }
       } else {
         setActionError(presentation);
       }
@@ -386,7 +412,11 @@ function LoadedFrameEditor({
         );
       }
       await Promise.all(invalidations);
-      if (intent.kind === "create-category" && presentation.code === "category_name_exists") {
+      if (
+        intent.kind === "create-category" &&
+        presentation.code === "category_name_exists" &&
+        mutationOwnsSelectionContext(mutationSelectionContext, selectionContextRef.current)
+      ) {
         const refreshedProfile = queryClient.getQueryData<GameProfile>(queryKeys.profile(profile.id));
         const exactConflict = refreshedProfile?.categories.find(
           (category) => category.name === intent.category.name,
@@ -403,10 +433,19 @@ function LoadedFrameEditor({
         );
       }
     },
-    onSuccess: async (data, intent) => {
+    onSuccess: async (data, { intent, selectionContext: mutationSelectionContext }) => {
       setActionError(null);
-      setCategoryActionError(null);
-      if (successfulMutationClearsCategoryConflict(intent, selectedId, geometryPreview)) {
+      const ownsSelectionContext = mutationOwnsSelectionContext(
+        mutationSelectionContext,
+        selectionContextRef.current,
+      );
+      if (ownsSelectionContext) {
+        setCategoryActionError(null);
+      }
+      if (
+        ownsSelectionContext &&
+        successfulMutationClearsCategoryConflict(intent, selectedId, geometryPreview)
+      ) {
         setCategoryConflict(null);
       }
       if (intent.kind === "review") {
@@ -514,7 +553,7 @@ function LoadedFrameEditor({
     );
   }, [selectedId, selectionTargetMissing]);
 
-  const currentBusyKey = mutation.isPending ? busyKey(mutation.variables) : null;
+  const currentBusyKey = mutation.isPending ? busyKey(mutation.variables.intent) : null;
   const invalidSet = useMemo(() => new Set(invalidIds), [invalidIds]);
   const selectedAnnotation =
     selectedId === null
@@ -621,7 +660,7 @@ function LoadedFrameEditor({
     }
     setActionError(null);
     setCopyFeedback(null);
-    mutation.mutate({
+    mutateWithCurrentSelectionContext({
       expectedVersion: frame.version,
       kind: "copy-previous",
       target: copyTarget,
@@ -714,7 +753,14 @@ function LoadedFrameEditor({
   function submit(intent: EditorMutationIntent): void {
     setActionError(null);
     setCategoryActionError(null);
-    mutation.mutate(intent);
+    mutateWithCurrentSelectionContext(intent);
+  }
+
+  function mutateWithCurrentSelectionContext(intent: EditorMutationIntent): void {
+    mutation.mutate({
+      intent,
+      selectionContext: { ...selectionContextRef.current },
+    });
   }
 
   function annotationById(annotationId: string): Annotation | undefined {
