@@ -74,6 +74,22 @@ class BlockingCocoEngine:
             annotations=annotations,
         )
 
+    def build_roboflow(
+        self,
+        *,
+        images: tuple[CocoImageInput, ...],
+        categories: tuple[CocoCategoryInput, ...],
+        annotations: tuple[CocoAnnotationInput, ...],
+    ) -> bytes:
+        self.entered.set()
+        if not self.release.wait(timeout=5):
+            raise RuntimeError("test export was not released")
+        return self._delegate.build_roboflow(
+            images=images,
+            categories=categories,
+            annotations=annotations,
+        )
+
 
 def _seed_export(composition: CompositionRoot, tmp_path: Path) -> ExportSeed:
     project_id = str(uuid4())
