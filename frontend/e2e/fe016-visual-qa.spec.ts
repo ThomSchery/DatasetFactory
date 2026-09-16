@@ -166,9 +166,6 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
       await expectInsideViewport(control, viewport, `export control ${String(index + 1)} at ${suffix}`);
       await expectInsideContainer(control, exportBody, `export control ${String(index + 1)} at ${suffix}`);
     }
-    // The three proportions share one row, so their inputs must share one top
-    // edge: a control with help text the others lack silently drops below the
-    // row, which no functional assertion sees.
     const ratioBoxes = await Promise.all(
       controls.slice(1, 4).map((control, index) => bounds(control, `ratio control ${String(index + 1)}`)),
     );
@@ -179,16 +176,40 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
         previous.x + previous.width,
         `ratio controls overlap at ${suffix}`,
       ).toBeLessThanOrEqual(current.x + 0.5);
-      expect(
-        Math.abs(previous.y - current.y),
-        `ratio controls are not aligned on one row at ${suffix}`,
-      ).toBeLessThanOrEqual(1);
     }
-    const seedBox = await bounds(controls[4]!, `seed control at ${suffix}`);
-    const ratioBottom = Math.max(...ratioBoxes.map((box) => box.y + box.height));
-    expect(seedBox.y, `seed control overlaps the ratio row at ${suffix}`).toBeGreaterThanOrEqual(
-      ratioBottom - 0.5,
-    );
+
+    // Fields whose labels start on one line must put their inputs on one line
+    // too. Only help text one field carries and its neighbours do not breaks
+    // this, and it breaks it below the labels, where no assertion that compares
+    // sibling inputs to each other can see it.
+    const fieldRows = await page
+      .locator(".df-exports__split-fields .df-field")
+      .evaluateAll((fields) =>
+        fields.map((field) => {
+          const label = field.querySelector(".df-field__label");
+          const control = field.querySelector(".df-field__control");
+          if (label === null || control === null) {
+            throw new Error("Split field is missing its label or its control");
+          }
+          return {
+            controlTop: control.getBoundingClientRect().top,
+            label: label.textContent ?? "",
+            labelTop: label.getBoundingClientRect().top,
+          };
+        }),
+      );
+    expect(fieldRows.length, `split fields are missing at ${suffix}`).toBe(4);
+    for (const field of fieldRows) {
+      for (const other of fieldRows) {
+        if (field === other || Math.abs(field.labelTop - other.labelTop) > 1) {
+          continue;
+        }
+        expect(
+          Math.abs(field.controlTop - other.controlTop),
+          `„${field.label}” and „${other.label}” start on one row but their inputs do not at ${suffix}`,
+        ).toBeLessThanOrEqual(1);
+      }
+    }
 
     await writeFile(
       path.join(screenshotDirectory, `export-variant-${suffix}.png`),
