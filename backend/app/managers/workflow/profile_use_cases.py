@@ -25,6 +25,7 @@ from backend.app.access.store.repositories.profiles import (
     AssetPublication,
     CategoryDraft,
     CategoryNameExistsError,
+    CategoryNotFoundError,
     NewCategoryDraft,
     ProfileAggregateDraft,
     ProfileNameExistsError,
@@ -34,7 +35,9 @@ from backend.app.access.store.repositories.profiles import (
     ProfileRepository,
     ProfileSelectionBlockedError,
     ProfileSummaryRecord,
+    ProfileVersionConflictError,
     RegionDraft,
+    RenamedCategoryDraft,
 )
 from backend.app.access.store.repositories.projects import ProjectRepository
 from backend.app.engines.definition import (
@@ -365,14 +368,7 @@ class ProfileUseCases:
             raise ProfileUseCaseError("profile_not_found") from exc
 
     def add_category(self, *, profile_id: str, category: CategoryDefinition) -> CategoryDraft:
-        try:
-            definition = self._engine.validate_category(category)
-        except DefinitionValidationError as exc:
-            details: dict[str, Any] = {"field": exc.field}
-            if exc.index is not None:
-                details["index"] = exc.index
-            raise ProfileUseCaseError(exc.code, details=details) from exc
-
+        definition = self._validated_category(category)
         try:
             return self._profiles.add_category(
                 profile_id,
@@ -385,15 +381,63 @@ class ProfileUseCases:
         except ProfileNotFoundError as exc:
             raise ProfileUseCaseError("profile_not_found") from exc
         except CategoryNameExistsError as exc:
-            details = {}
-            if exc.category_id is not None and exc.category_name is not None:
-                details = {
-                    "category_id": exc.category_id,
-                    "category_name": exc.category_name,
-                }
-            raise ProfileUseCaseError("category_name_exists", details=details) from exc
+            raise self._category_name_conflict(exc) from exc
         except ProfilePersistenceError as exc:
             raise ProfileUseCaseError("category_persistence_failed") from exc
+
+    def rename_category(
+        self,
+        *,
+        profile_id: str,
+        category_id: str,
+        category: CategoryDefinition,
+        expected_version: int,
+    ) -> ProfileRecord:
+        """Rename one existing category through the rules that govern creation.
+
+        The category identifier and every annotation pointing at it survive:
+        `Annotation.category_id` references `categories.id`, never the name.
+        """
+        definition = self._validated_category(category)
+        try:
+            return self._profiles.rename_category(
+                profile_id,
+                category_id,
+                RenamedCategoryDraft(
+                    name=definition.name,
+                    kind=definition.kind,
+                    expected_version=expected_version,
+                ),
+            )
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
+        except CategoryNotFoundError as exc:
+            raise ProfileUseCaseError("category_not_found") from exc
+        except ProfileVersionConflictError as exc:
+            raise ProfileUseCaseError("version_conflict") from exc
+        except CategoryNameExistsError as exc:
+            raise self._category_name_conflict(exc) from exc
+        except ProfilePersistenceError as exc:
+            raise ProfileUseCaseError("category_persistence_failed") from exc
+
+    def _validated_category(self, category: CategoryDefinition) -> CategoryDefinition:
+        try:
+            return self._engine.validate_category(category)
+        except DefinitionValidationError as exc:
+            details: dict[str, Any] = {"field": exc.field}
+            if exc.index is not None:
+                details["index"] = exc.index
+            raise ProfileUseCaseError(exc.code, details=details) from exc
+
+    @staticmethod
+    def _category_name_conflict(error: CategoryNameExistsError) -> ProfileUseCaseError:
+        details: dict[str, Any] = {}
+        if error.category_id is not None and error.category_name is not None:
+            details = {
+                "category_id": error.category_id,
+                "category_name": error.category_name,
+            }
+        return ProfileUseCaseError("category_name_exists", details=details)
 
     def get_reference_asset(self, asset_id: str) -> AssetRecord:
         try:

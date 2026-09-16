@@ -743,6 +743,100 @@ def test_same_category_name_can_be_added_to_different_profiles(
     assert [response.status_code for response in responses] == [201, 201]
 
 
+def test_category_rename_preserves_identity_ordinal_and_derives_new_group(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source)).json()
+        category = created["categories"][0]
+        renamed = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{category['id']}",
+            json={"name": "zero", "kind": "game", "expected_version": created["version"]},
+        )
+        restored = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{category['id']}",
+            json={"name": "0", "kind": "character", "expected_version": 2},
+        )
+
+    assert renamed.status_code == 200, renamed.text
+    renamed_category = next(
+        item for item in renamed.json()["categories"] if item["id"] == category["id"]
+    )
+    assert renamed_category == {"id": category["id"], "name": "zero", "kind": "game"}
+    assert renamed.json()["version"] == 2
+    assert restored.status_code == 200, restored.text
+    restored_category = next(
+        item for item in restored.json()["categories"] if item["id"] == category["id"]
+    )
+    assert restored_category == {"id": category["id"], "name": "0", "kind": "character"}
+    assert restored.json()["version"] == 3
+    with composition.database.session() as session:
+        stored = session.get(Category, category["id"])
+        assert stored is not None
+        assert stored.ordinal == 0
+
+
+def test_category_rename_noop_keeps_version_and_conflict_matches_creation(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source)).json()
+        zero, health = created["categories"]
+        noop = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{zero['id']}",
+            json={"name": "  0  ", "kind": "character", "expected_version": created["version"]},
+        )
+        conflict = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{zero['id']}",
+            json={"name": "  HeAlTh  ", "kind": "game", "expected_version": created["version"]},
+        )
+
+    assert noop.status_code == 200, noop.text
+    assert noop.json()["version"] == created["version"]
+    assert conflict.status_code == 409
+    assert conflict.json()["error"] == {
+        "code": "category_name_exists",
+        "message": "The category could not be saved.",
+        "details": {"category_id": health["id"], "category_name": "health"},
+        "request_id": conflict.json()["error"]["request_id"],
+    }
+
+
+def test_category_rename_rejects_stale_profile_version(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source)).json()
+        category = created["categories"][0]
+        first = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{category['id']}",
+            json={"name": "zero", "kind": "game", "expected_version": created["version"]},
+        )
+        stale = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{category['id']}",
+            json={"name": "score", "kind": "game", "expected_version": created["version"]},
+        )
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "version_conflict"
+
+
 @pytest.mark.parametrize(
     ("payload", "expected_code"),
     (

@@ -39,6 +39,14 @@ class CategoryNameExistsError(RuntimeError):
         self.category_name = category_name
 
 
+class CategoryNotFoundError(LookupError):
+    pass
+
+
+class ProfileVersionConflictError(RuntimeError):
+    pass
+
+
 class ProfileNotFoundError(LookupError):
     pass
 
@@ -81,6 +89,13 @@ class NewCategoryDraft:
     id: str
     name: str
     kind: str
+
+
+@dataclass(frozen=True)
+class RenamedCategoryDraft:
+    name: str
+    kind: str
+    expected_version: int
 
 
 @dataclass(frozen=True)
@@ -312,18 +327,7 @@ class ProfileRepository:
                 if session.get(GameProfile, profile_id) is None:
                     raise ProfileNotFoundError
 
-                normalized_name = draft.name.casefold()
-                existing_categories = session.scalars(
-                    select(Category).where(Category.profile_id == profile_id)
-                )
-                duplicate = next(
-                    (
-                        category
-                        for category in existing_categories
-                        if category.name.strip().casefold() == normalized_name
-                    ),
-                    None,
-                )
+                duplicate = self._duplicate_category(session, profile_id, draft.name)
                 if duplicate is not None:
                     raise CategoryNameExistsError(
                         category_id=duplicate.id,
@@ -351,6 +355,81 @@ class ProfileRepository:
             if "UNIQUE constraint failed: categories.profile_id, categories.name" in str(exc.orig):
                 raise CategoryNameExistsError from exc
             raise ProfilePersistenceError from exc
+
+    def rename_category(
+        self,
+        profile_id: str,
+        category_id: str,
+        draft: RenamedCategoryDraft,
+    ) -> ProfileRecord:
+        """Rename one category under the same writer reservation as creation."""
+        try:
+            with self._database.session() as session:
+                # Same ordering rationale as `add_category`: the reservation
+                # precedes the version read, so two tabs cannot both observe the
+                # same profile version and then both write a name.
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                profile = session.get(GameProfile, profile_id)
+                if profile is None:
+                    raise ProfileNotFoundError
+                category = session.get(Category, category_id)
+                if category is None or category.profile_id != profile_id:
+                    raise CategoryNotFoundError
+                if profile.version != draft.expected_version:
+                    raise ProfileVersionConflictError
+                if category.name == draft.name and category.kind == draft.kind:
+                    # Renaming a class to the name it already carries is a
+                    # no-op, not a conflict. Nothing is written, so the profile
+                    # version stays where every other tab expects it.
+                    return self._record(session, profile)
+
+                duplicate = self._duplicate_category(
+                    session, profile_id, draft.name, exclude_id=category_id
+                )
+                if duplicate is not None:
+                    raise CategoryNameExistsError(
+                        category_id=duplicate.id,
+                        category_name=duplicate.name,
+                    )
+                category.name = draft.name
+                category.kind = draft.kind
+                # `ordinal` is deliberately untouched: the identifier an export
+                # derives from it must survive a rename.
+                profile.version += 1
+                session.flush()
+                return self._record(session, profile)
+        except (
+            CategoryNameExistsError,
+            CategoryNotFoundError,
+            ProfileNotFoundError,
+            ProfileVersionConflictError,
+        ):
+            raise
+        except IntegrityError as exc:
+            if "UNIQUE constraint failed: categories.profile_id, categories.name" in str(exc.orig):
+                raise CategoryNameExistsError from exc
+            raise ProfilePersistenceError from exc
+
+    @staticmethod
+    def _duplicate_category(
+        session: Session,
+        profile_id: str,
+        name: str,
+        *,
+        exclude_id: str | None = None,
+    ) -> Category | None:
+        """The single profile-scoped uniqueness rule shared by create and rename."""
+        normalized_name = name.strip().casefold()
+        return next(
+            (
+                category
+                for category in session.scalars(
+                    select(Category).where(Category.profile_id == profile_id)
+                )
+                if category.id != exclude_id and category.name.strip().casefold() == normalized_name
+            ),
+            None,
+        )
 
     @staticmethod
     def _record(session: Session, profile: GameProfile) -> ProfileRecord:

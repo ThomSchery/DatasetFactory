@@ -457,6 +457,56 @@ def test_export_api_publishes_only_accepted_snapshot(
     )
 
 
+def test_category_rename_preserves_annotations_and_published_export(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_export(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        export = client.post("/api/v1/exports", json={"run_id": seed.run_id})
+        completed = _wait_for_export(
+            composition.export_use_cases,
+            export.json()["id"],
+            expected="completed",
+        )
+        output = composition.workspace.resolve_relpath(str(completed["output_relpath"]))
+        before = {
+            path.relative_to(output).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(output.rglob("*"))
+            if path.is_file()
+        }
+
+        renamed = client.patch(
+            f"/api/v1/profiles/{seed.profile_id}/categories/{seed.alternate_category_id}",
+            json={"name": "score", "kind": "game", "expected_version": 1},
+        )
+
+    assert renamed.status_code == 200, renamed.text
+    after = {
+        path.relative_to(output).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(output.rglob("*"))
+        if path.is_file()
+    }
+    assert after == before
+    with composition.database.session() as session:
+        category = session.get(Category, seed.alternate_category_id)
+        assert category is not None
+        assert (category.id, category.name, category.kind) == (
+            seed.alternate_category_id,
+            "score",
+            "game",
+        )
+        annotation_category_ids = set(
+            session.scalars(
+                select(Annotation.category_id).where(
+                    Annotation.category_id == seed.alternate_category_id
+                )
+            )
+        )
+    assert annotation_category_ids == {seed.alternate_category_id}
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected_error"),
     [

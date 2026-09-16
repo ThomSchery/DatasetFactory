@@ -29,6 +29,18 @@ class CategoryRequest(StrictModel):
     kind: Literal["character", "game"]
 
 
+class RenameCategoryRequest(StrictModel):
+    """The create payload plus optimistic concurrency on the owning profile.
+
+    `kind` travels exactly as it does on creation so both routes land in
+    `DatasetDefinitionEngine.validate_category` and answer with the same codes.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    kind: Literal["character", "game"]
+    expected_version: int = Field(ge=1)
+
+
 class CreateProfileRequest(StrictModel):
     name: str = Field(min_length=1, max_length=200)
     reference_image_path: str | None = Field(default=None, min_length=1)
@@ -154,9 +166,9 @@ def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse
 
 
 def _category_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
-    if error.code == "profile_not_found":
+    if error.code in {"profile_not_found", "category_not_found"}:
         status_code = 404
-    elif error.code == "category_name_exists":
+    elif error.code in {"category_name_exists", "version_conflict"}:
         status_code = 409
     elif error.code == "category_persistence_failed":
         status_code = 500
@@ -165,7 +177,7 @@ def _category_error(request: Request, error: ProfileUseCaseError) -> JSONRespons
     envelope = error_envelope(
         request,
         code=error.code,
-        message="The category could not be created.",
+        message="The category could not be saved.",
         details=error.details,
     )
     return JSONResponse(status_code=status_code, content=envelope.model_dump())
@@ -331,6 +343,37 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
         except ProfileUseCaseError as error:
             return _category_error(request, error)
         return CategoryResponse(id=category.id, name=category.name, kind=category.kind)
+
+    @router.patch(
+        "/{profile_id}/categories/{category_id}",
+        response_model=GameProfileResponse,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            500: {"model": ErrorEnvelope},
+        },
+    )
+    def rename_category(
+        profile_id: str,
+        category_id: str,
+        payload: RenameCategoryRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> GameProfileResponse | JSONResponse:
+        # Authorization policy: local-public. The whole profile answers rather
+        # than the single category: a rename bumps the profile version, and the
+        # caller needs that version for its next optimistic write.
+        try:
+            record = use_cases.rename_category(
+                profile_id=profile_id,
+                category_id=category_id,
+                category=CategoryDefinition(name=payload.name, kind=payload.kind),
+                expected_version=payload.expected_version,
+            )
+        except ProfileUseCaseError as error:
+            return _category_error(request, error)
+        return _response(record)
 
     @router.get(
         "/{profile_id}",
