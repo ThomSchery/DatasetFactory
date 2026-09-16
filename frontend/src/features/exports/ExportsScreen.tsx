@@ -318,48 +318,50 @@ export function ExportsScreen() {
             />
             {format === "roboflow_coco" ? (
               <div className="df-exports__split-fields">
-                <TextField
-                  disabled={busy}
-                  label="Train (%)"
-                  max={100}
-                  min={0}
-                  onChange={(event) => {
-                    setTrainPercent(event.target.value);
-                    setFormError(null);
-                  }}
-                  step={1}
-                  type="number"
-                  value={trainPercent}
-                  width="short"
-                />
-                <TextField
-                  disabled={busy}
-                  label="Valid (%)"
-                  max={100}
-                  min={0}
-                  onChange={(event) => {
-                    setValidPercent(event.target.value);
-                    setFormError(null);
-                  }}
-                  step={1}
-                  type="number"
-                  value={validPercent}
-                  width="short"
-                />
-                <TextField
-                  disabled={busy}
-                  label="Test (%)"
-                  max={100}
-                  min={0}
-                  onChange={(event) => {
-                    setTestPercent(event.target.value);
-                    setFormError(null);
-                  }}
-                  step={1}
-                  type="number"
-                  value={testPercent}
-                  width="short"
-                />
+                <div className="df-exports__split-ratios">
+                  <TextField
+                    disabled={busy}
+                    label="Train (%)"
+                    max={100}
+                    min={0}
+                    onChange={(event) => {
+                      setTrainPercent(event.target.value);
+                      setFormError(null);
+                    }}
+                    step={1}
+                    type="number"
+                    value={trainPercent}
+                    width="short"
+                  />
+                  <TextField
+                    disabled={busy}
+                    label="Valid (%)"
+                    max={100}
+                    min={0}
+                    onChange={(event) => {
+                      setValidPercent(event.target.value);
+                      setFormError(null);
+                    }}
+                    step={1}
+                    type="number"
+                    value={validPercent}
+                    width="short"
+                  />
+                  <TextField
+                    disabled={busy}
+                    label="Test (%)"
+                    max={100}
+                    min={0}
+                    onChange={(event) => {
+                      setTestPercent(event.target.value);
+                      setFormError(null);
+                    }}
+                    step={1}
+                    type="number"
+                    value={testPercent}
+                    width="short"
+                  />
+                </div>
                 <TextField
                   description="Ten sam run, podział i ziarno dają ten sam przydział klatek."
                   disabled={busy}

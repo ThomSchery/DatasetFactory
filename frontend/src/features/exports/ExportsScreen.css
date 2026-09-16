@@ -52,19 +52,24 @@
   gap: var(--size-sm);
 }
 
+/* SPACING-03: the three proportions are one group and the seed is another, so
+   they are separate rows rather than one four-column row. The seed carries help
+   text the proportions do not; sharing a row would push its input below theirs
+   and the controls would no longer read as aligned. */
 .df-exports__split-fields {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--size-sm);
+}
+
+.df-exports__split-ratios {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--size-sm);
   align-items: start;
 }
 
-.df-exports__split-fields > [role="alert"] {
-  grid-column: 1 / -1;
-}
-
 @media (max-width: 960px) {
-  .df-exports__split-fields {
+  .df-exports__split-ratios {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
