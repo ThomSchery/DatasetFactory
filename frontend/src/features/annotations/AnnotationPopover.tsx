@@ -124,9 +124,14 @@ export function AnnotationPopover({
     }
 
     const updateViewportRoom = () => {
+      // `clientHeight` rather than `innerHeight`: a horizontal scrollbar takes
+      // height off the viewport, and a panel capped against `innerHeight` puts
+      // its last row underneath that scrollbar (FE-017 A).
       const availableHeight = Math.max(
         0,
-        Math.floor(window.innerHeight - popover.getBoundingClientRect().top),
+        Math.floor(
+          document.documentElement.clientHeight - popover.getBoundingClientRect().top,
+        ),
       );
       const nextValue = `${String(availableHeight)}px`;
       if (popover.style.getPropertyValue(VIEWPORT_ROOM_PROPERTY) !== nextValue) {

@@ -7,6 +7,15 @@
 }
 
 html {
+  /* FE-017 A: the width available to the layout must not depend on whether the
+     page happens to scroll. The review screen's canvas lives in the `1fr`
+     column, so a document scrollbar that comes and goes moved the canvas and
+     every bbox on it by the scrollbar's width — measured at 15 px on
+     1440×1000, appearing with the "Niezapisane" notice and vanishing on save.
+     The gutter is reserved as a keyword rather than as a length because the
+     scrollbar's width is a platform number, not a value from the 8-point scale
+     (GRID-01). */
+  scrollbar-gutter: stable;
   background: var(--color-background-primary-default);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-sans);
