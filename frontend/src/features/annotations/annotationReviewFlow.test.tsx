@@ -502,6 +502,74 @@ describe("annotation review query states", () => {
     }
   });
 
+  it("does not reopen a box after its delayed create response outlives the selection", async () => {
+    let created = false;
+    let resolveCreate: ((response: Response) => void) | undefined;
+    const createResponse = new Promise<Response>((resolve) => {
+      resolveCreate = resolve;
+    });
+    const createdFixture = annotationFixture({
+      category_id: "category-1",
+      height: 100,
+      id: CREATED_ANNOTATION_ID,
+      version: 1,
+      width: 200,
+      x: 600,
+      y: 500,
+    });
+    const fetchSpy = reviewApi({
+      frame: () =>
+        frameDetailFixture({
+          annotations: created ? [annotationFixture(), createdFixture] : [annotationFixture()],
+        }),
+    });
+    const originalImplementation = fetchSpy.getMockImplementation()!;
+    fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        String(input) === "/api/v1/frames/frame-1/annotations" &&
+        init?.method === "POST"
+      ) {
+        return createResponse;
+      }
+      return originalImplementation(input, init);
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await drawDraft();
+    await waitFor(() => {
+      expect(
+        fetchSpy.mock.calls.filter(
+          ([input, init]) =>
+            String(input) === "/api/v1/frames/frame-1/annotations" &&
+            init?.method === "POST",
+        ),
+      ).toHaveLength(1);
+    });
+
+    // The request still belongs to the draft, but the operator has already
+    // left it. Its eventual id must not reopen the panel or become the active
+    // selection in this newer context (FE-015-FIX2 applied to FE-017 D).
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje na klatce" }));
+    expect(screen.getByRole("region", { name: "Anotacja bez zaznaczenia" })).toBeVisible();
+
+    await act(async () => {
+      created = true;
+      resolveCreate?.(
+        new Response(JSON.stringify(createdFixture), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await createResponse;
+    });
+
+    await waitFor(() => {
+      expect(within(overlay).getAllByRole("option")).toHaveLength(2);
+    });
+    expect(screen.getByRole("region", { name: "Anotacja bez zaznaczenia" })).toBeVisible();
+    expect(screen.queryByText(/^przypisano: /)).not.toBeInTheDocument();
+  });
+
   it("creates a character class and assigns it to the box the draw already saved", async () => {
     const user = userEvent.setup();
     const mutations: Array<{ body: unknown; method: string; url: string }> = [];
