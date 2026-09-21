@@ -10,6 +10,7 @@ from backend.app.access.store.repositories.annotations import (
     AnnotationNotFoundError,
     AnnotationRepository,
     CopyPreviousResult,
+    PreviousFrameClasses,
     ReviewCategoryError,
     ReviewCopyBBoxError,
     ReviewEmptyPatchError,
@@ -164,6 +165,12 @@ class ReviewUseCases:
                 decision=decision,
                 expected_version=expected_version,
             )
+        except Exception as exc:
+            raise self._translate(exc) from exc
+
+    def previous_frame_classes(self, frame_id: str) -> PreviousFrameClasses:
+        try:
+            return self._annotations.previous_frame_classes(frame_id)
         except Exception as exc:
             raise self._translate(exc) from exc
 

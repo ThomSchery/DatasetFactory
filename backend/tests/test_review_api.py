@@ -1195,3 +1195,162 @@ def test_concurrent_manual_creation_increments_revision_only_for_committed_mutat
     assert detail.version == 2
     assert detail.review_revision == 1
     assert sum(item.source == "manual" for item in detail.annotations) == 1
+
+
+def _seed_previous_classes(
+    composition: CompositionRoot,
+    seed: ReviewSeed,
+) -> tuple[str, str]:
+    """
+    Two more frames over the seeded one: index 2 with no annotations at all, and
+    index 3 whose predecessor is therefore an empty frame. The seeded frame
+    (index 0) keeps its two `category_id` annotations and is flipped to
+    `rejected`, so "previous in time" has to ignore the review status the
+    frontend filters by.
+    """
+    empty_frame_id = str(uuid4())
+    later_frame_id = str(uuid4())
+    with composition.database.session() as session:
+        source = session.get(Frame, seed.frame_id)
+        assert source is not None
+        source.review_status = "rejected"
+        for frame_id, index in ((empty_frame_id, 2), (later_frame_id, 3)):
+            session.add(
+                Frame(
+                    id=frame_id,
+                    run_id=seed.run_id,
+                    frame_index=index,
+                    timestamp_ms=index * 1000,
+                    image_relpath=f"runs/{seed.run_id}/frames/0000000{index}.jpg",
+                    stage_status="review_pending",
+                    review_status="pending",
+                    width=100,
+                    height=50,
+                    version=1,
+                )
+            )
+        session.flush()
+        session.add(
+            Annotation(
+                id=str(uuid4()),
+                frame_id=seed.frame_id,
+                category_id=seed.game_category_id,
+                x=10,
+                y=11,
+                width=20,
+                height=12,
+                confidence=None,
+                source="manual",
+                observation_id=None,
+                status="proposed",
+                version=1,
+            )
+        )
+        session.add(
+            Annotation(
+                id=str(uuid4()),
+                frame_id=seed.frame_id,
+                category_id=seed.alternate_category_id,
+                x=30,
+                y=11,
+                width=5,
+                height=5,
+                confidence=None,
+                source="manual",
+                observation_id=None,
+                status="deleted",
+                version=2,
+            )
+        )
+    return empty_frame_id, later_frame_id
+
+
+def test_previous_classes_lists_only_the_predecessor_classes_with_counts(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    empty_frame_id, _ = _seed_previous_classes(composition, seed)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/frames/{empty_frame_id}/annotations/previous-classes")
+
+    assert response.status_code == 200, response.text
+    # `alternate_category_id` is present on the predecessor but tombstoned, and
+    # `foreign_category_id` belongs to another profile: neither is offered,
+    # because `copy_previous` would not read either.
+    assert response.json() == {
+        "previous_frame_id": seed.frame_id,
+        "previous_frame_index": 0,
+        "classes": [
+            {"category_id": seed.category_id, "count": 2},
+            {"category_id": seed.game_category_id, "count": 1},
+        ],
+    }
+
+
+def test_previous_classes_tells_a_first_frame_apart_from_an_empty_predecessor(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_review(composition, tmp_path)
+    empty_frame_id, later_frame_id = _seed_previous_classes(composition, seed)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        first = client.get(f"/api/v1/frames/{seed.frame_id}/annotations/previous-classes")
+        empty = client.get(f"/api/v1/frames/{later_frame_id}/annotations/previous-classes")
+
+    assert first.status_code == 200, first.text
+    assert first.json() == {
+        "previous_frame_id": None,
+        "previous_frame_index": None,
+        "classes": [],
+    }
+    assert empty.status_code == 200, empty.text
+    assert empty.json() == {
+        "previous_frame_id": empty_frame_id,
+        "previous_frame_index": 2,
+        "classes": [],
+    }
+
+
+def test_previous_classes_agrees_with_what_copy_previous_actually_copies(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    """
+    The reason this route exists: every class it offers must be a class the copy
+    reads, so the operator cannot select one and be answered with `copied: 0`.
+    """
+    seed = _seed_review(composition, tmp_path)
+    empty_frame_id, _ = _seed_previous_classes(composition, seed)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        offered = client.get(
+            f"/api/v1/frames/{empty_frame_id}/annotations/previous-classes"
+        ).json()["classes"]
+        expected_total = sum(item["count"] for item in offered)
+        copied = client.post(
+            f"/api/v1/frames/{empty_frame_id}/annotations/copy-previous",
+            json={
+                "scope": "categories",
+                "category_ids": [item["category_id"] for item in offered],
+                "expected_version": 1,
+            },
+        )
+
+    assert copied.status_code == 200, copied.text
+    assert copied.json()["copied"] == expected_total
+
+
+def test_previous_classes_reports_a_missing_frame(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    _seed_review(composition, tmp_path)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/frames/{uuid4()}/annotations/previous-classes")
+
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "frame_not_found"

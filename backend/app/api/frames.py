@@ -62,6 +62,26 @@ class CopyPreviousAnnotationsResponse(StrictModel):
     frame_version: int
 
 
+class PreviousFrameClassResponse(StrictModel):
+    category_id: str
+    count: int
+
+
+class PreviousFrameClassesResponse(StrictModel):
+    """
+    What `copy-previous` would find, so the picker can offer only those classes.
+
+    `previous_frame_id: null` is "this frame has no predecessor in its run";
+    a non-null id with an empty `classes` is "the predecessor carries no
+    annotations". Two different answers, because the panel has to say two
+    different things, and neither is an error — this is a read.
+    """
+
+    previous_frame_id: str | None
+    previous_frame_index: int | None
+    classes: tuple[PreviousFrameClassResponse, ...]
+
+
 class FrameDetailResponse(StrictModel):
     id: str
     run_id: str
@@ -152,6 +172,28 @@ def create_frames_router(review_provider: ReviewProvider) -> APIRouter:
         except ReviewUseCaseError as error:
             return review_error(request, error)
         return annotation_response(record)
+
+    @router.get(
+        "/{frame_id}/annotations/previous-classes",
+        response_model=PreviousFrameClassesResponse,
+    )
+    def previous_frame_classes(
+        frame_id: str,
+        request: Request,
+        review: Annotated[ReviewUseCases, Depends(review_provider)],
+    ) -> PreviousFrameClassesResponse | JSONResponse:
+        try:
+            record = review.previous_frame_classes(frame_id)
+        except ReviewUseCaseError as error:
+            return review_error(request, error)
+        return PreviousFrameClassesResponse(
+            previous_frame_id=record.frame_id,
+            previous_frame_index=record.frame_index,
+            classes=tuple(
+                PreviousFrameClassResponse(category_id=item.category_id, count=item.count)
+                for item in record.classes
+            ),
+        )
 
     @router.post(
         "/{frame_id}/annotations/copy-previous",

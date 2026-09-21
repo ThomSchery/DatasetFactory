@@ -97,6 +97,28 @@ class CopyPreviousResult:
     frame_version: int
 
 
+@dataclass(frozen=True)
+class PreviousFrameClass:
+    category_id: str
+    count: int
+
+
+@dataclass(frozen=True)
+class PreviousFrameClasses:
+    """
+    What `copy_previous` would read, before anything is written.
+
+    `frame_id is None` means the frame has no temporal predecessor in its run.
+    An existing predecessor with an empty `classes` is a different answer, and
+    the panel says something different about each: one is the first frame of the
+    run, the other is a neighbour that carries no annotations.
+    """
+
+    frame_id: str | None
+    frame_index: int | None
+    classes: tuple[PreviousFrameClass, ...]
+
+
 class AnnotationRepository:
     """Persist review mutations with one SQLite write transaction per mutation."""
 
@@ -295,12 +317,7 @@ class AnnotationRepository:
             if frame.stage_status != "review_pending":
                 raise ReviewStageError
 
-            previous = session.scalar(
-                select(Frame)
-                .where(Frame.run_id == frame.run_id, Frame.frame_index < frame.frame_index)
-                .order_by(Frame.frame_index.desc())
-                .limit(1)
-            )
+            previous = self._previous_frame(session, frame)
             if previous is None:
                 raise ReviewPreviousFrameError
 
@@ -391,6 +408,65 @@ class AnnotationRepository:
                 replaced=len(target_annotations),
                 frame_version=frame.version,
             )
+
+    def previous_frame_classes(self, frame_id: str) -> PreviousFrameClasses:
+        """
+        Classes the previous temporal frame carries, with their counts.
+
+        Reads exactly what `copy_previous` would copy under the widest scope:
+        the same predecessor via `_previous_frame`, the same
+        `status != 'deleted'` and the same `Category.profile_id` filter. The
+        picker therefore cannot offer a class the copy would answer with
+        `copied: 0`, and the "previous in time" rule stays in one place rather
+        than being re-derived from the frame list the frontend happens to hold
+        (which is filtered by review status and so knows a different neighbour).
+        """
+        with self._database.session() as session:
+            frame = session.get(Frame, frame_id)
+            if frame is None:
+                raise ReviewFrameNotFoundError
+            run = session.get(PipelineRun, frame.run_id)
+            if run is None:
+                raise ReviewFrameNotFoundError
+            previous = self._previous_frame(session, frame)
+            if previous is None:
+                return PreviousFrameClasses(frame_id=None, frame_index=None, classes=())
+            rows = session.execute(
+                select(Annotation.category_id, func.count())
+                .join(Category, Annotation.category_id == Category.id)
+                .where(
+                    Annotation.frame_id == previous.id,
+                    Annotation.status != "deleted",
+                    Category.profile_id == run.profile_id,
+                )
+                .group_by(Annotation.category_id)
+                .order_by(Category.ordinal, Annotation.category_id)
+            ).all()
+            return PreviousFrameClasses(
+                frame_id=previous.id,
+                frame_index=previous.frame_index,
+                classes=tuple(
+                    PreviousFrameClass(category_id=category_id, count=count)
+                    for category_id, count in rows
+                ),
+            )
+
+    @staticmethod
+    def _previous_frame(session: Session, frame: Frame) -> Frame | None:
+        """
+        The frame's predecessor in time: the largest `frame_index` below it in
+        the same run, regardless of review status.
+
+        One definition for the copy and for the picker that parameterises it.
+        Two copies of this query would drift the first time either side changed,
+        and the picker would then offer classes the copy does not read.
+        """
+        return session.scalar(
+            select(Frame)
+            .where(Frame.run_id == frame.run_id, Frame.frame_index < frame.frame_index)
+            .order_by(Frame.frame_index.desc())
+            .limit(1)
+        )
 
     @staticmethod
     def _mutation_rows(
