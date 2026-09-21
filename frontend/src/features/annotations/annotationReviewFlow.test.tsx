@@ -643,10 +643,12 @@ describe("annotation review query states", () => {
     ]);
   });
 
-  it("creates a game class and reassigns an existing annotation through its versioned PATCH", async () => {
+  it("remembers a game class created for an existing annotation on the next draw", async () => {
     const user = userEvent.setup();
+    const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });
     const mutations: Array<{ body: unknown; method: string; url: string }> = [];
     reviewApi({
+      profile: evolvingProfile,
       mutation: (url, init) => {
         mutations.push({
           body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
@@ -654,10 +656,17 @@ describe("annotation review query states", () => {
           url,
         });
         if (url === `/api/v1/profiles/${PROFILE.id}/categories`) {
+          evolvingProfile.categories = [
+            ...evolvingProfile.categories,
+            { id: "score", kind: "game", name: "Score" },
+          ];
           return { status: 201, body: { id: "score", kind: "game", name: "Score" } };
         }
         if (url === "/api/v1/annotations/ann-1") {
           return { status: 200, body: annotationFixture({ category_id: "score" }) };
+        }
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          return { status: 201, body: createdAnnotation(init) };
         }
         throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
       },
@@ -686,6 +695,232 @@ describe("annotation review query states", () => {
         url: "/api/v1/annotations/ann-1",
       },
     ]);
+
+    await drawDraft();
+    await waitFor(() => {
+      expect(mutations).toHaveLength(3);
+    });
+    const nextDraw = mutations[2]?.body as { category_id?: string };
+    expect(nextDraw.category_id).toBe("score");
+  });
+
+  it("remembers a class created for a recovered draft on the next draw", async () => {
+    const user = userEvent.setup();
+    const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });
+    const mutations: Array<{ body: unknown; method: string; url: string }> = [];
+    let annotationPosts = 0;
+    reviewApi({
+      profile: evolvingProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        mutations.push({ body, method: init?.method ?? "GET", url });
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          annotationPosts += 1;
+          return annotationPosts === 1
+            ? { status: 500, body: errorEnvelope("internal_error") }
+            : { status: 201, body: createdAnnotation(init) };
+        }
+        if (url === `/api/v1/profiles/${evolvingProfile.id}/categories`) {
+          evolvingProfile.categories = [
+            ...evolvingProfile.categories,
+            { id: "category-8", kind: "character", name: "8" },
+          ];
+          return { status: 201, body: { id: "category-8", kind: "character", name: "8" } };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await drawDraft();
+    const draftPopover = await screen.findByRole("dialog", {
+      name: "Wybierz klasę dla nowego bbox",
+    });
+    expect(await within(draftPopover).findByRole("alert")).toHaveTextContent("Kod: internal_error");
+    await user.type(within(draftPopover).getByRole("textbox", { name: "Klasa" }), "8");
+    await user.click(
+      within(draftPopover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+    );
+
+    await waitFor(() => {
+      expect(mutations).toHaveLength(3);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: "Klasa" })).toBeEnabled();
+    });
+
+    fireEvent.pointerDown(overlay, { clientX: 500, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
+    fireEvent.pointerUp(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
+
+    await waitFor(() => {
+      const creates = mutations.filter(
+        (item) =>
+          item.url === "/api/v1/frames/frame-1/annotations" && item.method === "POST",
+      );
+      expect(creates).toHaveLength(3);
+      expect((creates[2]?.body as { category_id?: string }).category_id).toBe("category-8");
+    });
+  });
+
+  it("keeps the previous default when category creation succeeds but assignment fails", async () => {
+    const user = userEvent.setup();
+    const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });
+    const mutations: Array<{ body: unknown; method: string; url: string }> = [];
+    reviewApi({
+      profile: evolvingProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        mutations.push({ body, method: init?.method ?? "GET", url });
+        if (url === `/api/v1/profiles/${evolvingProfile.id}/categories`) {
+          evolvingProfile.categories = [
+            ...evolvingProfile.categories,
+            { id: "category-8", kind: "character", name: "8" },
+          ];
+          return { status: 201, body: { id: "category-8", kind: "character", name: "8" } };
+        }
+        if (url === "/api/v1/annotations/ann-1" && init?.method === "PATCH") {
+          const categoryId = (body as { category_id?: string }).category_id;
+          return categoryId === "category-8"
+            ? { status: 500, body: errorEnvelope("internal_error") }
+            : { status: 200, body: annotationFixture({ category_id: categoryId }) };
+        }
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          return { status: 201, body: createdAnnotation(init) };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    let popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(popover).getByRole("option", { name: "health" }));
+    await user.click(
+      within(popover).getByRole("button", {
+        name: "Zmień nazwę: przypisz inną klasę do tego boxa",
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+    );
+    expect(await within(popover).findByRole("alert")).toHaveTextContent("Kod: internal_error");
+
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Klasa" })).toBeEnabled();
+    });
+    await drawDraft();
+
+    await waitFor(() => {
+      const creates = mutations.filter(
+        (item) =>
+          item.url === "/api/v1/frames/frame-1/annotations" && item.method === "POST",
+      );
+      expect(creates).toHaveLength(1);
+      expect((creates[0]?.body as { category_id?: string }).category_id).toBe("category-2");
+    });
+  });
+
+  it("does not remember a created class when its delayed assignment outlives the context", async () => {
+    const user = userEvent.setup();
+    const evolvingProfile = profileFixture({ categories: [...PROFILE.categories] });
+    const mutations: Array<{ body: unknown; method: string; url: string }> = [];
+    let resolveCategory: ((response: Response) => void) | undefined;
+    const categoryResponse = new Promise<Response>((resolve) => {
+      resolveCategory = resolve;
+    });
+    const fetchSpy = reviewApi({
+      profile: evolvingProfile,
+      mutation: (url, init) => {
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        mutations.push({ body, method: init?.method ?? "GET", url });
+        if (url === "/api/v1/annotations/ann-1" && init?.method === "PATCH") {
+          return {
+            status: 200,
+            body: annotationFixture({
+              category_id: (body as { category_id?: string }).category_id,
+            }),
+          };
+        }
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          return { status: 201, body: createdAnnotation(init) };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
+    const originalImplementation = fetchSpy.getMockImplementation()!;
+    fetchSpy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        String(input) === `/api/v1/profiles/${evolvingProfile.id}/categories` &&
+        init?.method === "POST"
+      ) {
+        return categoryResponse;
+      }
+      return originalImplementation(input, init);
+    });
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    let popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(within(popover).getByRole("option", { name: "health" }));
+    await user.click(
+      within(popover).getByRole("button", {
+        name: "Zmień nazwę: przypisz inną klasę do tego boxa",
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
+    await user.click(
+      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+    );
+    fireEvent.pointerDown(document.body);
+    expect(screen.getByRole("region", { name: "Anotacja bez zaznaczenia" })).toBeVisible();
+
+    evolvingProfile.categories = [
+      ...evolvingProfile.categories,
+      { id: "category-8", kind: "character", name: "8" },
+    ];
+    await act(async () => {
+      resolveCategory?.(
+        new Response(JSON.stringify({ id: "category-8", kind: "character", name: "8" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      await categoryResponse;
+    });
+    await waitFor(() => {
+      expect(
+        mutations.some(
+          (item) =>
+            item.url === "/api/v1/annotations/ann-1" &&
+            (item.body as { category_id?: string }).category_id === "category-8",
+        ),
+      ).toBe(true);
+      expect(screen.getByRole("textbox", { name: "Klasa" })).toBeEnabled();
+    });
+
+    await drawDraft();
+    await waitFor(() => {
+      const creates = mutations.filter(
+        (item) =>
+          item.url === "/api/v1/frames/frame-1/annotations" && item.method === "POST",
+      );
+      expect(creates).toHaveLength(1);
+      expect((creates[0]?.body as { category_id?: string }).category_id).toBe("category-2");
+    });
   });
 
   it("keeps the typed name and the saved box when creating the category fails", async () => {

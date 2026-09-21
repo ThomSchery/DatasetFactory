@@ -95,6 +95,14 @@ interface CreateCategoryIntent {
 
 type EditorMutationIntent = ReviewMutationIntent | CreateCategoryIntent;
 
+interface CreateCategoryMutationResult {
+  assignment: ReviewMutationResult;
+  categoryId: string;
+  kind: "category-created";
+}
+
+type EditorMutationResult = ReviewMutationResult | CreateCategoryMutationResult;
+
 function busyKey(intent: EditorMutationIntent | undefined): string | null {
   if (intent === undefined) {
     return null;
@@ -471,7 +479,7 @@ function LoadedFrameEditor({
     );
   }, [selectedId]);
 
-  const mutation = useMutation<ReviewMutationResult, unknown, EditorMutationRequest>({
+  const mutation = useMutation<EditorMutationResult, unknown, EditorMutationRequest>({
     mutationKey: reviewMutationKey(runId),
     mutationFn: async ({ intent }) => {
       createdCategoryRef.current = false;
@@ -482,19 +490,21 @@ function LoadedFrameEditor({
       const category = await createProfileCategory(profile.id, intent.category);
       createdCategoryRef.current = true;
       if (intent.assignment.kind === "draft") {
-        return executeReviewMutation(frame.id, {
+        const assignment = await executeReviewMutation(frame.id, {
           bbox: intent.assignment.bbox,
           categoryId: category.id,
           expectedVersion: intent.assignment.expectedVersion,
           kind: "create",
         });
+        return { assignment, categoryId: category.id, kind: "category-created" };
       }
-      return executeReviewMutation(frame.id, {
+      const assignment = await executeReviewMutation(frame.id, {
         annotationId: intent.assignment.annotationId,
         categoryId: category.id,
         expectedVersion: intent.assignment.expectedVersion,
         kind: "category",
       });
+      return { assignment, categoryId: category.id, kind: "category-created" };
     },
     onError: async (error, { intent, selectionContext: mutationSelectionContext }) => {
       if (intent.kind === "copy-previous") {
@@ -563,6 +573,7 @@ function LoadedFrameEditor({
       }
     },
     onSuccess: async (data, { intent, selectionContext: mutationSelectionContext }) => {
+      const reviewResult = data.kind === "category-created" ? data.assignment : data;
       setActionError(null);
       const ownsSelectionContext = mutationOwnsSelectionContext(
         mutationSelectionContext,
@@ -606,6 +617,13 @@ function LoadedFrameEditor({
             : current,
         );
       }
+      if (
+        intent.kind === "create-category" &&
+        ownsSelectionContext &&
+        data.kind === "category-created"
+      ) {
+        onCategoryUsed(data.categoryId);
+      }
       if (intent.kind === "create-category" && intent.assignment.kind === "existing") {
         const annotationId = intent.assignment.annotationId;
         setAutoAssigned((current) => (current?.annotationId === annotationId ? null : current));
@@ -641,8 +659,8 @@ function LoadedFrameEditor({
           setSelectedId(null);
         }
       }
-      if (data.kind === "copied") {
-        const copied = data.result;
+      if (reviewResult.kind === "copied") {
+        const copied = reviewResult.result;
         setCopyFeedback(
           copied.copied === 0
             ? // The picker offers only classes the previous frame holds, so

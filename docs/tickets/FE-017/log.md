@@ -380,6 +380,80 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\t.wisniewski\.
 **Wynik: 9/9 PASS, zero SKIP.** Ostrzeżenie Vite o chunku większym niż 500 kB
 pozostało ostrzeżeniem; nie jest nowym błędem FE-017.
 
+---
+
+## FE-017-FIX1 — plan poprawki po cold review
+
+Cold review odtworzył lukę w regule klasy domyślnej: udane
+`create-category` przypisywało nową klasę do boxa, ale nie przekazywało jej id do
+pamięci sesji. Następny box wracał przez to do pierwszej klasy profilu.
+
+### Design Plan
+
+Poprawka nie zmienia wyglądu, tekstów ani struktury DOM. Korzysta z istniejącej
+trasy `FrameEditor → AnnotationPopover` i tylko przesuwa informację o id nowej
+klasy z wyniku mutacji do pamięci sesji po udanym przypisaniu.
+
+- [x] **Layout/Siatka (GRID-01/02):** bez zmian; panel i kanwa zachowują
+      istniejący układ.
+- [x] **Typografia (FONTSIZE-*, LHEIGHT-*, TYPO-*):** bez zmian.
+- [x] **Kolory (COLOR-*):** bez zmian.
+- [x] **Obramowania (BORDER-*, RADIUS-*):** bez zmian.
+- [x] **Cienie (SHADOW-*):** bez zmian.
+- [x] **Interakcje (COLOR-07, OPACITY-*):** bez nowych stanów; istniejące
+      powodzenie/błąd mutacji i granica kontekstu pozostają bez zmian.
+- [x] **Komponenty (katalog §4–5):** istniejące `AnnotationPopover`,
+      `GroupedOptionList` i `RegionOverlay`; bez nowego komponentu wspólnego.
+
+### Decyzja dla `409 category_name_exists`
+
+Klasa istniejąca, do której panel prowadzi po konflikcie nazwy, staje się
+ostatnio użyta **dopiero po udanym finalnym przypisaniu** (`PATCH` dla zapisanej
+anotacji albo `POST` dla draftu). Uzasadnienie: pamięć ma opisywać klasę, której
+operator rzeczywiście użył, a nie sposób jej odnalezienia. `409` samo w sobie nie
+zmienia pamięci; udane przypisanie zwycięskiej klasy robi to tak samo jak zwykły
+wybór istniejącej klasy.
+
+### Zakres testów
+
+- nowa klasa przypisana zapisanej anotacji (`existing`) zasila następny draw;
+- nowa klasa przypisana draftowi (`draft`) zasila następny draw;
+- utworzenie klasy zakończone nieudanym przypisaniem nie zmienia pamięci;
+- spóźnione powodzenie po utracie kontekstu nie zmienia pamięci.
+
+### Implementacja i weryfikacja lokalna
+
+`create-category` zwraca teraz oznaczony wynik zawierający `categoryId` oraz
+wynik przypisania. `onSuccess` przekazuje id do `onCategoryUsed` tylko wtedy,
+gdy cały łańcuch utworzenie → przypisanie zakończył się powodzeniem i mutacja
+nadal posiada kontekst selekcji. Ten sam warunek obowiązuje dla `existing` i
+`draft`; błąd przypisania po udanym utworzeniu klasy nie aktualizuje pamięci.
+
+- `annotationReviewFlow.test.tsx`: **75/75 PASS**;
+- cztery regresje FIX1 uruchomione osobno po falsyfikacji: **4/4 PASS**;
+- `npm run typecheck`: **PASS**.
+
+Falsyfikacja: zapisano poprawiony `FrameEditor.tsx`, usunięto wyłącznie oba
+wywołania `onCategoryUsed` dla `create-category` i uruchomiono regresję
+`existing`. Test padł dokładnie na:
+
+```text
+Expected: "score"
+Received: "category-1"
+```
+
+Plik odtworzono przez `Copy-Item`; SHA256 kopii i pliku po odtworzeniu:
+`DC2A08E7EB0CA115AAEFACA60F8AC67F1B7F4737DD1D66154D4212EADA654B67`.
+
+### `api.created` między viewportami visual spec
+
+Przeniesienie stanu z 1440 do 1920 jest celowe i jawne w komentarzu testu:
+oba viewporty należą do jednego scenariusza z jednym `ApiHarness`, a asercja
+licznika liczy przyrost względem `countBefore`, dzięki czemu drugi przebieg
+sprawdza dodanie do już niepustego stanu. Nie jest to izolowany snapshot test;
+zrzuty są dokumentacją tego scenariusza. Zgodnie z rozstrzygnięciem P3 nie
+zmieniano speca ani PNG w FIX1.
+
 ### PNG po bramce
 
 Visual specy nadpisały 25 historycznych plików. Pomiar wykonano na obrazach
