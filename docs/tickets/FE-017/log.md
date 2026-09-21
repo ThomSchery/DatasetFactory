@@ -218,3 +218,122 @@ anotacja, jedno `PATCH /annotations/{id}`). „Zmień nazwę” na ekranie profi
 (FE-016) = **zmień nazwę klasy w całym profilu** (wszystkie anotacje tej klasy,
 `PATCH /profiles/{id}/categories/{id}`). Te same słowa, rozbieżny zasięg;
 zaimplementowane zgodnie z poleceniem i odnotowane tutaj oraz w raporcie.
+
+---
+
+## B. Panel „Anotacje na klatce”
+
+- Usunięto nadtytuł „BIEŻĄCA KLATKA”. Zostały tytuł panelu oraz licznik
+  aktywnych anotacji.
+- Usunięto plakietki źródła `OCR`/`Ręczna` z wierszy listy oraz nagłówka panelu
+  anotacji. `confidence` OCR pozostało — to liczba dotycząca boxa, nie usunięta
+  etykieta pochodzenia.
+- Wiersz klasy zajmuje pełną szerokość listy, nazwa jest po lewej, licznik po
+  prawej. Nazwa ma `overflow-wrap` i nie jest obcinana wielokropkiem.
+- Test E2E mierzy szerokość wiersza względem listy oraz właściwości przepełnienia
+  długiej nazwy, zamiast rozstrzygać to samym zrzutem.
+
+## C. Klasy poprzedniej klatki z jednego źródła prawdy
+
+### Trasa
+
+`GET /api/v1/frames/{frame_id}/annotations/previous-classes`
+
+```json
+{
+  "previous_frame_id": "frame-previous-or-null",
+  "previous_frame_index": 16,
+  "classes": [
+    { "category_id": "hud-health", "count": 3 }
+  ]
+}
+```
+
+- `previous_frame_id: null`, `previous_frame_index: null`, `classes: []` oznacza
+  brak poprzedniej klatki.
+- Niepuste `previous_frame_id` i puste `classes` oznacza istniejącą poprzednią
+  klatkę bez aktywnych anotacji.
+- Klasy są zliczane po `category_id`, w kolejności `Category.ordinal`; anotacje
+  `deleted` i klasy z obcego profilu nie są oferowane.
+- Wspólny helper repozytorium `_previous_frame` wybiera największy
+  `frame_index < current.frame_index` w tym samym runie, niezależnie od statusu
+  review. Korzystają z niego zarówno odczyt, jak i `copy_previous`.
+- Frontend nie używa już `frame_index === 0` ani przefiltrowanej listy klatek do
+  odgadywania sąsiada. Pokazuje wyłącznie klasy z odpowiedzi backendu, wraz z
+  liczbą wystąpień, i rozróżnia oba puste stany osobnymi komunikatami.
+
+## D. Natychmiastowy zapis narysowanego boxa
+
+### Reguła klasy domyślnej
+
+Ostatnia klasa użyta w bieżącej sesji edytora runu; przed pierwszym użyciem —
+pierwsza klasa profilu według `ordinal`. Pamięć żyje nad komponentem pojedynczej
+klatki, więc przechodzi między klatkami tego runu, ale nie jest ukrytym stanem w
+`localStorage`.
+
+### Przepływ i widoczność decyzji automatycznej
+
+1. Zakończenie gestu rysowania wysyła dokładnie jeden
+   `POST /frames/{id}/annotations` z bboxem i klasą domyślną.
+2. Panel przechodzi na id anotacji zwrócone przez backend i w nagłówku pokazuje
+   plakietkę marki `PRZYPISANO: <klasa>`. Umieszczenie jej w istniejącym wierszu
+   nagłówka nie wypycha akcji poza viewport 1440×1000.
+3. Kliknięcie innej klasy w tym stanie natychmiast wysyła jeden `PATCH` — bez
+   drugiego kliknięcia potwierdzającego. Zwykła edycja zapisanej anotacji nadal
+   wymaga przycisku „Zmień nazwę”.
+4. „Porzuć box” wysyła wersjonowany `DELETE` zapisanej anotacji.
+5. `pendingCreated` utrzymuje id i geometrię między odpowiedzią `201` a refetchem
+   klatki. Porównanie epoki kontekstu z FE-015-FIX2 nie pozwala spóźnionej
+   odpowiedzi ponownie otworzyć panelu po odejściu operatora od boxa.
+
+„Zmień nazwę” w tym panelu zmienia klasę jednego boxa. Tak samo nazwany przycisk
+z FE-016 zmienia nazwę klasy w całym profilu. Rozbieżny zasięg jest świadomy i
+pozostaje zgodny z poleceniem operatora.
+
+## Falsyfikowalność A, C i D
+
+Każda sonda została uruchomiona po celowym cofnięciu właściwej poprawki, a plik
+odtworzono przez `Copy-Item`, nie przez `git restore`.
+
+| Część | Celowo cofnięta własność | Oczekiwana porażka |
+|---|---|---|
+| A | `scrollbar-gutter: stable` dokumentu | test E2E: `Expected: 1383, Received: 1368` — dokładnie 15 px |
+| C | zgodność filtrów trasy z `copy_previous` | test backendu: `assert 3 == 4` — trasa zaoferowała klasę, której kopiowanie nie skopiowało |
+| D | natychmiastowe wywołanie mutacji `create` po narysowaniu | test frontendu: `expected [] to have a length of 1` — nie wyszedł wymagany POST |
+
+Po każdym odtworzeniu docelowy test znów przechodził, a `git diff --check` nie
+wykazał pozostałości sondy. Tymczasowe `fe017-probe.spec.ts` i
+`playwright.probe.config.ts` zostały usunięte przed bramką; trwały test A ma
+lokalne dla pliku `ignoreDefaultArgs: ["--hide-scrollbars"]`.
+
+## Visual QA — oględziny pełnej rozdzielczości
+
+Sprawdzone ręcznie wszystkie sześć plików w `docs/tickets/FE-017/screenshots/`,
+osobno przy 1440×1000 i 1920×1080, bez `fullPage`:
+
+- **Panel anotacji:** tytuł i plakietka liczby są czytelne; nadtytułu i
+  plakietek źródła nie ma. Wiersze wykorzystują szerokość kolumny. Inspektor ma
+  własny pionowy pasek przewijania i nie wchodzi na kanwę.
+- **Kopiowanie:** po przewinięciu inspektora widoczne są tylko klasy źródła:
+  `health & armour — 1` oraz `7 — 3`; `Score` nie występuje. Liczniki tworzą
+  prawą kolumnę, długie nazwy nie są obcięte, poziomego paska nie ma.
+- **Narysowany box:** nagłówek „Nowa anotacja · box” pokazuje
+  `PRZYPISANO: 7`; „Porzuć box” i „Zmień nazwę” są jednocześnie w viewporcie.
+  Panel nie przekracza prawej krawędzi kolumny, a box, uchwyty i prowadnice są
+  widoczne na kanwie.
+- Przy 1440×1000 układ jest zwarty, lecz akcje nadal mieszczą się bez
+  przewijania panelu. Przy 1920×1080 kanwa wykorzystuje dodatkowe miejsce bez
+  zmiany szerokości kolumny bocznej.
+
+Wyszarzenie całego interfejsu podczas zapisu nadal jest zauważalne, ale przy
+krótkiej mutacji nie wyglądało na zawieszenie; zgodnie z ticketem nie zmieniano
+tego zachowania.
+
+## Weryfikacja przed pełną bramką
+
+- backend `pytest -q`: **374/374 PASS**;
+- frontend Vitest po teście spóźnionej odpowiedzi: **681/681 PASS**;
+- frontend `tsc --noEmit`: **PASS**;
+- test spóźnionego `POST`: zapisany box pojawia się po refetchu, lecz panel
+  pozostaje zamknięty i nie wraca znacznik automatycznego przypisania;
+- pełna bramka `scripts/check.ps1`: oczekuje na zwolnienie portów 8000 i 5173.
