@@ -329,11 +329,69 @@ Wyszarzenie całego interfejsu podczas zapisu nadal jest zauważalne, ale przy
 krótkiej mutacji nie wyglądało na zawieszenie; zgodnie z ticketem nie zmieniano
 tego zachowania.
 
-## Weryfikacja przed pełną bramką
+## Weryfikacja i pełna bramka
 
 - backend `pytest -q`: **374/374 PASS**;
 - frontend Vitest po teście spóźnionej odpowiedzi: **681/681 PASS**;
 - frontend `tsc --noEmit`: **PASS**;
 - test spóźnionego `POST`: zapisany box pojawia się po refetchu, lecz panel
   pozostaje zamknięty i nie wraca znacznik automatycznego przypisania;
-- pełna bramka `scripts/check.ps1`: oczekuje na zwolnienie portów 8000 i 5173.
+
+### Pierwszy przebieg bramki — znalezisko i poprawka testów
+
+Pierwszy pełny przebieg doszedł do E2E i ujawnił dwie stare asercje przepływu
+szkicu: `vertical-flow.spec.ts` oraz `visual-qa.spec.ts` nadal oczekiwały panelu
+„Wybierz klasę dla nowego bbox” i zera mutacji po rysowaniu. Produkt zachowywał
+się prawidłowo według FE-017 D — wysyłał `POST` i pokazywał zapisaną anotację.
+Dlatego przebieg zakończył się **2 FAIL / 21 PASS** w E2E i jednym SKIP
+(`E2E root safety`, po przerwaniu bramki na pierwszym błędzie).
+
+Commit `7eb7516` przepisał te asercje na nowy kontrakt:
+
+- jeden `POST` na każdy gest rysowania;
+- jawne `przypisano: 7` po zapisie;
+- pointerdown zamykający panel pierwszego zapisanego boxa nadal zaczyna drugi;
+- „Porzuć box” drugiego boxa wysyła `DELETE`, a backend zachowuje tombstone;
+- zrzut FE-017 czeka na odpowiedź `previous-classes`, więc nie ściga się ze
+  stanem ładowania inspektora.
+
+Oba długie testy uruchomione razem po poprawce: **2/2 PASS**.
+
+### Końcowy, nieprzerwany przebieg 9/9
+
+Polecenie uruchomione jeden raz od początku do końca, z absolutną ścieżką:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\t.wisniewski\.traycer\worktrees\thomschery__datasetfactory\feat-fe-017-editor-flow-and-layout-jump\scripts\check.ps1"
+```
+
+| Bramka | Wynik | Czas |
+|---|---:|---:|
+| backend format | PASS | 0,2 s |
+| backend lint | PASS | 0,1 s |
+| backend typy | PASS | 1,7 s |
+| backend testy | PASS — 374/374 | 324,7 s |
+| frontend typy | PASS | 1,1 s |
+| frontend testy | PASS — 681/681 | 37,8 s |
+| frontend build | PASS | 1,7 s |
+| E2E | PASS — 23/23 | 94,2 s |
+| E2E root safety | PASS — 2/2 | 0,6 s |
+
+**Wynik: 9/9 PASS, zero SKIP.** Ostrzeżenie Vite o chunku większym niż 500 kB
+pozostało ostrzeżeniem; nie jest nowym błędem FE-017.
+
+### PNG po bramce
+
+Visual specy nadpisały 25 historycznych plików. Pomiar wykonano na obrazach
+`RGB`, nie przez `getbbox()` na RGBA. To nie był znany dryf 9 pikseli:
+`FE-001/error-1440.png` różnił się w **3906 pikselach**, bbox
+`(312,85)–(1408,325)`, max delta **212**; pozostałe historyczne zrzuty miały od
+3375 do 198001 różnych pikseli. To były ponowne rendery dzisiejszego UI nad
+historycznymi dowodami ticketów, nie nowe artefakty do zatwierdzenia.
+
+Sześć zrzutów FE-017 różniło się w obrębie inspektora, bo wspólna konfiguracja
+bramki uruchamia Chromium z `--hide-scrollbars`, a zatwierdzone i obejrzane
+zrzuty FE-017 powstały w sondzie z widocznymi paskami — w środowisku zgodnym z
+przeglądarką operatora i błędem A. Wszystkie 25 PNG odtworzono bajt w bajt z
+HEAD przez `Copy-Item`; po zakończeniu bramki porty 8000, 5173 i 5174 nie miały
+nasłuchu.
