@@ -641,9 +641,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   };
   /*
    * The real browser is the only place this is worth asserting: dismissing the
-   * popover must not consume the `pointerdown` that begins the next drawing.
-   * `page.mouse` produces genuine pointer events, capture and all, which is
-   * exactly what jsdom cannot reproduce.
+   * saved box's popover must not consume the `pointerdown` that begins the next
+   * drawing. `page.mouse` produces genuine pointer events, capture and all,
+   * which is exactly what jsdom cannot reproduce.
    */
   const abandonFrom = {
     x: manualFrameBounds.x + manualFrameBounds.width * 0.6,
@@ -657,29 +657,39 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.down();
   await page.mouse.move(abandonTo.x, abandonTo.y, { steps: 4 });
   await page.mouse.up();
-  const draftPopover = page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
-  await expect(draftPopover).toBeVisible();
+  const savedPopover = page.getByRole("dialog", { name: "Edytuj anotację 7" });
+  await expect(savedPopover).toBeVisible();
+  await expect(savedPopover.getByText("przypisano: 7")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+      return frame.annotations.filter(
+        (annotation) => annotation.source === "manual" && annotation.status !== "deleted",
+      ).length;
+    })
+    .toBe(1);
 
   // One gesture: the popover closes and the same press starts the next box.
   await page.mouse.move(manualFrom.clientX, manualFrom.clientY);
   await page.mouse.down();
-  await expect(draftPopover).toBeHidden();
+  await expect(savedPopover).toBeHidden();
   await page.mouse.move(manualTo.clientX, manualTo.clientY, { steps: 4 });
   await page.mouse.up();
-  await expect(draftPopover).toBeVisible();
+  await expect(savedPopover).toBeVisible();
+  await expect(savedPopover.getByText("przypisano: 7")).toBeVisible();
 
-  const abandoned = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
-  expect(
-    abandoned.annotations.filter(
-      (annotation) => annotation.source === "manual" && annotation.status !== "deleted",
-    ),
-  ).toHaveLength(0);
-
-  // The profile carries one class, "7", and nothing is preselected: a class the
-  // human did not choose must never reach the dataset.
-  await expect(draftPopover.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
-  await draftPopover.getByRole("option", { name: "7" }).click();
-  await draftPopover.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }).click();
+  // FE-017 D persists both gestures immediately with the profile's first class.
+  // Abandoning the second box therefore has to issue a real DELETE and leave
+  // the first saved box intact.
+  await expect
+    .poll(async () => {
+      const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
+      return frame.annotations.filter(
+        (annotation) => annotation.source === "manual" && annotation.status !== "deleted",
+      ).length;
+    })
+    .toBe(2);
+  await savedPopover.getByRole("button", { name: "Porzuć box" }).click();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
@@ -750,7 +760,10 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   );
   expect(finalFrames.total).toBe(2);
   const finalFrame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
-  expect(finalFrame.annotations).toHaveLength(2);
+  // The second drawn box was persisted immediately and then abandoned through
+  // a real DELETE, so its tombstone remains beside the accepted manual box and
+  // the original deleted OCR row.
+  expect(finalFrame.annotations).toHaveLength(3);
   expect(finalFrame.annotations.filter((annotation) => annotation.status !== "deleted")).toEqual([
     expect.objectContaining({ source: "manual" }),
   ]);

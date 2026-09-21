@@ -625,17 +625,19 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.mouse.move(drawStart.x + 48, drawStart.y + 32, { steps: 3 });
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   await page.mouse.up();
-  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-  expect(mutationRequests).toEqual([]);
+  const createdDialog = page.getByRole("dialog", { name: "Edytuj anotację 7" });
+  await expect(createdDialog).toBeVisible();
+  await expect(createdDialog.getByText("przypisano: 7")).toBeVisible();
+  expect(mutationRequests).toEqual(["POST /api/v1/frames/frame-1/annotations"]);
 
-  const draft = overlay.getByRole("option", { name: /^Box — wybierz klasę:/ });
-  const draftBeforeReset = await draft.getAttribute("aria-label");
+  const created = overlay.getByRole("option", { name: /^7, źródło ręczna:/ });
+  const createdBeforeReset = await created.getAttribute("aria-label");
   await page.getByRole("button", { name: "Dopasuj kanwę do widoku" }).click();
   await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
-  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-  expect(await draft.getAttribute("aria-label")).toBe(draftBeforeReset);
+  await expect(createdDialog).toBeVisible();
+  expect(await created.getAttribute("aria-label")).toBe(createdBeforeReset);
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
-  expect(mutationRequests).toEqual([]);
+  expect(mutationRequests).toEqual(["POST /api/v1/frames/frame-1/annotations"]);
 
   const frameLabel = page.locator(".df-region-overlay__corner-label");
   await expect(frameLabel).toHaveCSS("pointer-events", "none");
@@ -652,9 +654,13 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.mouse.down();
   await page.mouse.move(labelPoint.x + 48, labelPoint.y + 48, { steps: 3 });
   await page.mouse.up();
-  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+  await expect(createdDialog).toBeVisible();
+  await expect(createdDialog.getByText("przypisano: 7")).toBeVisible();
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
-  expect(mutationRequests).toEqual([]);
+  expect(mutationRequests).toEqual([
+    "POST /api/v1/frames/frame-1/annotations",
+    "POST /api/v1/frames/frame-1/annotations",
+  ]);
 
   await page.mouse.move(8, 8);
   await expect(crosshair).toHaveCount(0);

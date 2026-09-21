@@ -117,8 +117,6 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
     expect(Math.abs(rowBox.width - listBox.width), `row is not full width at ${suffix}`)
       .toBeLessThanOrEqual(1);
 
-    await shoot(page, `annotations-panel-${suffix}`);
-
     // C: only the classes the previous frame holds, each with its count.
     // The unit the row digits are in is said once, in the list's own name.
     const picker = page.getByRole("group", {
@@ -134,6 +132,11 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
         "Źródłem jest klatka 16 — poprzednia w czasie, niezależnie od aktywnego filtra statusu.",
       ),
     ).toBeVisible();
+
+    // The previous-classes request resolves independently from the frame. Wait
+    // for it before the first screenshot too, otherwise this shot races between
+    // a short loading panel and the final scrollable inspector.
+    await shoot(page, `annotations-panel-${suffix}`);
 
     // The inspector is capped and scrolls (FE-014), so the picker has to be
     // brought into view or this screenshot repeats the one above.
