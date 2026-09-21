@@ -208,7 +208,8 @@ pojawienie się błędu nie przesuwa kolejnych pól (SPACING-04).
 
 ### GroupedOptionList
 
-Lista dwupoziomowa z filtrowaniem. Props: `groups` (`id`, `label`, `options`),
+Lista dwupoziomowa z filtrowaniem. Props: `groups` (`id`, `label`, `options`;
+pozycja to `id`, `label` i opcjonalny `detail`),
 `selectedIds`, `onChange`, `mode` (`single` albo `multiple`), `label`,
 `filterLabel`, `emptyMessage`, `onConfirm?`, `autoFocus?`, `disabled?`.
 
@@ -222,6 +223,7 @@ Lista dwupoziomowa z filtrowaniem. Props: `groups` (`id`, `label`, `options`),
 | wiersz | wysokość min. `--control-height-sm` (GRID-05), `--radius-sm`, `--font-size-sm` |
 | wiersz grupy | dodatkowo `--font-weight-semibold` (TYPO-07 — hierarchię niesie waga) |
 | wiersz pozycji | wcięcie `--size-md`, czyli o krok większe niż odstęp między wierszami (SPACING-01) |
+| `detail` pozycji | na końcu wiersza, `--color-text-weak-default`, `--font-family-mono` z `tabular-nums` (TYPO-07 — hierarchię niesie kolor i krój, nie drugi rozmiar). Nie podlega filtrowaniu, bo filtr dopasowuje `label`; wchodzi jednak w nazwę dostępną wiersza, bo liczba jest informacją |
 | znacznik wyboru | kwadrat `--size-sm`, obrys `--color-stroke-strong-default` (BWIDTH-03), zaznaczony wypełniony `--color-fill-brand-impeccable` |
 | stan częściowy | `aria-checked="mixed"` + poprzeczka zamiast wypełnienia — różnica kształtu, nie samego koloru (COLOR-09) |
 | hover / zaznaczony / disabled | `--color-surface-neutral-hover` / `--color-fill-brand-impeccable-soft` / `--opacity-disabled` |
