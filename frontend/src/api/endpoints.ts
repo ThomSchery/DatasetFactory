@@ -22,6 +22,7 @@ import type {
   Material,
   Page,
   PipelineRun,
+  PreviousFrameClasses,
   ProfileSummary,
   ReferenceFrameRequest,
   ReferencePreview,
@@ -236,6 +237,24 @@ export function createAnnotation(
     method: "POST",
     body,
   });
+}
+
+/**
+ * `GET /frames/{id}/annotations/previous-classes` — classes the previous
+ * temporal frame carries, with counts.
+ *
+ * Read-only companion to `copyPreviousAnnotations`: the backend resolves
+ * "previous in time" once, for both, so the picker cannot offer a class the
+ * copy answers with `copied: 0` (FE-017 C).
+ */
+export function getPreviousFrameClasses(
+  frameId: string,
+  signal?: AbortSignal,
+): Promise<PreviousFrameClasses> {
+  return apiRequest<PreviousFrameClasses>(
+    `/frames/${encodeURIComponent(frameId)}/annotations/previous-classes`,
+    { signal },
+  );
 }
 
 /** Replace one annotation group with its value from the previous temporal frame. */

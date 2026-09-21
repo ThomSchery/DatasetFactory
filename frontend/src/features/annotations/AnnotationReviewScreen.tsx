@@ -74,6 +74,15 @@ function ReviewForRun({ runId }: { runId: string }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<ReviewStatusFilter>(DEFAULT_REVIEW_STATUS_FILTER);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  /*
+   * The class a drawn box is saved with (FE-017 D), remembered here rather than
+   * inside the editor because the editor is rebuilt for every frame and the
+   * rule is "the last class used in this editor session". A session is this
+   * screen: it ends when the operator leaves the run, and nothing is written to
+   * `localStorage` — a default that outlives the tab is one the operator cannot
+   * see and therefore cannot predict.
+   */
+  const [lastUsedCategoryId, setLastUsedCategoryId] = useState<string | null>(null);
   const previousRunStatus = useRef<{ runId: string; status: RunStatus } | undefined>(undefined);
   const isWriting = useIsMutating({ mutationKey: reviewMutationKey(runId) }) > 0;
   const runQuery = useQuery({
@@ -231,6 +240,8 @@ function ReviewForRun({ runId }: { runId: string }) {
           frameId={selectedId}
           frames={framesQuery.data.items}
           key={selectedId}
+          lastUsedCategoryId={lastUsedCategoryId}
+          onCategoryUsed={setLastUsedCategoryId}
           onFilterChange={(nextFilter) => {
             setFilter(nextFilter);
             setSelectedFrameId(null);

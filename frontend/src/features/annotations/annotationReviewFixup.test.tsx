@@ -47,6 +47,21 @@ function reviewGet(options: ReviewGetOptions = {}) {
           : (options.frames ?? framePageFixture());
       return { body: frames, status: 200 };
     }
+    // Ahead of the frame-detail branch below, which would otherwise answer this
+    // path with a frame body (FE-017 C).
+    if (url.endsWith("/annotations/previous-classes")) {
+      return {
+        body: {
+          classes: profile.categories.map((category) => ({
+            category_id: category.id,
+            count: 1,
+          })),
+          previous_frame_id: "frame-previous",
+          previous_frame_index: 16,
+        },
+        status: 200,
+      };
+    }
     if (url.startsWith("/api/v1/frames/") && !url.endsWith("/image")) {
       const frameId = url.slice("/api/v1/frames/".length);
       const frame =
@@ -197,7 +212,9 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
       fetchSpy.mock.calls.some(([url]) => url === `/api/v1/profiles/${PROFILE.id}`),
     ).toBe(true);
     expect(fetchSpy.mock.calls.some(([url]) => url === "/api/v1/profiles/current")).toBe(false);
-    expect(screen.getByRole("checkbox", { name: "health" })).toBeVisible();
+    // FE-017 C put the source's occurrence count on the row, so it is part of
+    // the option's accessible name.
+    expect(await screen.findByRole("checkbox", { name: "health 1" })).toBeVisible();
   });
 
   it("shows central profile_not_found copy for a missing run profile", async () => {
@@ -277,7 +294,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    const save = screen.getByRole("button", { name: "Zapisz klasę" });
+    const save = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
     await user.click(save);
 
     expect(save).toHaveAttribute("aria-busy", "true");
@@ -361,7 +378,7 @@ describe("success refetches authoritative versions", () => {
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
 
     const conflict = await screen.findByRole("alert");
     expect(conflict).toHaveTextContent("Kod: version_conflict");
@@ -373,7 +390,7 @@ describe("success refetches authoritative versions", () => {
     await user.clear(screen.getByLabelText("Klasa"));
     await user.type(screen.getByLabelText("Klasa"), "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
 
     await waitFor(() => {
       const patchBodies = fetchSpy.mock.calls
@@ -418,7 +435,7 @@ describe("success refetches authoritative versions", () => {
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    const save = screen.getByRole("button", { name: "Zapisz klasę" });
+    const save = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
     await user.click(save);
     await waitFor(() => {
       expect(frameRead).toBeGreaterThanOrEqual(2);
@@ -480,16 +497,24 @@ describe("success refetches authoritative versions", () => {
 
       const surface = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
       layOut(surface);
+      // FE-017 D: the draw is the create. No class is chosen here, and that is
+      // the point — the default class is what the box is saved with.
       fireEvent.pointerDown(surface, { clientX: 10, clientY: 10, pointerId: 1 });
       fireEvent.pointerMove(surface, { clientX: 30, clientY: 30, pointerId: 1 });
       fireEvent.pointerUp(surface, { clientX: 30, clientY: 30, pointerId: 1 });
-      const create = screen.getByRole("button", { name: "Zapisz klasę" });
-      expect(create).toBeDisabled();
-      await user.click(screen.getByRole("option", { name: "7" }));
-      await user.click(create);
       await waitFor(() => {
+        const create = fetchSpy.mock.calls.find(
+          ([url, init]) =>
+            url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+        );
+        expect(JSON.parse(String(create?.[1]?.body))).toEqual({
+          bbox: { x: 192, y: 108, width: 384, height: 216 },
+          // First class of the profile by `ordinal`; nothing has been used in
+          // this session yet.
+          category_id: "category-1",
+          expected_version: 7,
+        });
         expect(frameRead).toBeGreaterThanOrEqual(2);
-        expect(create).not.toHaveAttribute("aria-busy");
       });
 
       await user.click(screen.getByRole("button", { name: decisionButton }));

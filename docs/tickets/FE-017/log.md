@@ -111,12 +111,15 @@ przewijaniem (`window.scrollTo(9999, 0)` i odczyt `window.scrollX`), bo
 | 1920×1000 | 0 |
 | 1920×1080 | 0 |
 
-Czyli w pasmie okien **1280–1294 px** aplikacja przewija się w poziomie o 15 px
-na stałe. Przed poprawką to samo działo się w tym pasmie za każdym razem, gdy
-strona przewijała się w pionie — poprawka czyni to bezwarunkowym. To świadomy
-wybór, zgodny z FE-07: powłoka deklaruje 1280 px szerokości roboczej i ma się
-nie ściskać, więc gdy przeglądarka daje 1265 px użytecznych, uczciwym wynikiem
-jest przewijanie, nie ściśnięcie kanwy o 15 px.
+Czyli w pasmie okien **1280–1294 px** poprawka zamienia przewijanie
+**warunkowe na bezwarunkowe**: przed nią aplikacja przewijała się w poziomie o
+15 px w tym pasmie za każdym razem, gdy strona przewijała się w pionie, teraz
+robi to zawsze. **To świadomy wybór, nie regresja.** Zgodnie z FE-07 powłoka
+deklaruje 1280 px szerokości roboczej i ma się nie ściskać, więc gdy
+przeglądarka daje 1265 px użytecznych, uczciwym wynikiem jest przewijanie, nie
+ściśnięcie kanwy o 15 px. Druga strona tego wyboru domyka sprawę: pozwolenie
+powłoce na ściśnięcie przywróciłoby dokładnie naprawiany błąd — szerokość kanwy
+znów zależałaby od tego, czy pasek akurat jest.
 
 ---
 

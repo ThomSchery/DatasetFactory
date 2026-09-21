@@ -314,6 +314,28 @@ export interface CopyPreviousAnnotationsResult {
   frame_version: number;
 }
 
+export interface PreviousFrameClass {
+  category_id: string;
+  count: number;
+}
+
+/**
+ * What a copy from the previous frame would find, read before anything is
+ * written, so the picker can offer only classes the copy can actually deliver.
+ *
+ * `previous_frame_id === null` means this frame has no predecessor in its run.
+ * A non-null id with an empty `classes` means the predecessor exists and
+ * carries no annotations. Two distinct answers on purpose: the panel has to say
+ * two different things, and the frontend cannot work either of them out on its
+ * own — its frame list is filtered by review status, so it does not know the
+ * run's real temporal neighbour.
+ */
+export interface PreviousFrameClasses {
+  previous_frame_id: string | null;
+  previous_frame_index: number | null;
+  classes: readonly PreviousFrameClass[];
+}
+
 /**
  * At least one of `category_id` or `bbox` must be present; an empty patch is
  * rejected with `400 empty_patch`.

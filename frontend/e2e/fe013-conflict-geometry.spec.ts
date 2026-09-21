@@ -46,7 +46,7 @@ async function measure(page: Page, panel: Locator, save: Locator): Promise<Panel
         top: saveRect.top,
       },
     };
-  }, '[aria-label="Zapisz klasę"]');
+  }, '[aria-label="Zmień nazwę: przypisz inną klasę do tego boxa"]');
 }
 
 function expectContained(geometry: PanelGeometry): void {
@@ -86,7 +86,7 @@ for (const conflict of conflicts) {
       .click();
 
     await expect(panel.getByRole("alert")).toContainText("już istnieje w profilu");
-    const save = panel.getByRole("button", { name: "Zapisz klasę" });
+    const save = panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
     const afterConflict = await measure(page, panel, save);
     expectContained(afterConflict);
 
@@ -156,11 +156,11 @@ test("FE-013 offers manual recovery when the backend names no winner", async ({ 
   await expect(filter).toHaveValue("");
   await expect(panel.getByRole("option", { name: "ſ" })).toBeVisible();
   await expect(panel.getByRole("option", { name: "ſ" })).toHaveAttribute("aria-selected", "false");
-  await expect(panel.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
   await expect(panel.getByRole("button", { name: /Utwórz i przypisz klasę/ })).toHaveCount(0);
 
   await panel.getByRole("option", { name: "ſ" }).click();
-  const save = panel.getByRole("button", { name: "Zapisz klasę" });
+  const save = panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
   expectContained(await measure(page, panel, save));
   await save.click();
 

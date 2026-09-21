@@ -67,7 +67,7 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
     await expect(panel.getByRole("option")).toHaveCount(18);
     await expect(panel.getByRole("textbox", { name: "Klasa" })).toHaveValue("");
     await expect(panel.getByRole("button", { name: "Usuń" })).toBeDisabled();
-    await expect(panel.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
     await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
     await expect(page.getByRole("button", { name: "Pomniejsz kanwę" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Powiększ kanwę" })).toBeVisible();

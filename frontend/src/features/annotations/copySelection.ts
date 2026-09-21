@@ -1,4 +1,8 @@
-import type { Category, CopyPreviousAnnotationsRequest } from "../../api";
+import type {
+  Category,
+  CopyPreviousAnnotationsRequest,
+  PreviousFrameClass,
+} from "../../api";
 
 import type { GroupedOptionGroup } from "../../components/common/GroupedOptionList";
 
@@ -26,12 +30,72 @@ export function copyOptionGroups(
   })).filter((group) => group.options.length > 0);
 }
 
+/**
+ * Names the copy picker, and with it the number every row ends in.
+ *
+ * The count has to be readable as a count without repeating the word on each
+ * row, so the unit lives here — in the collection's accessible name — and the
+ * rows carry the digit.
+ */
+export const PREVIOUS_CLASS_LIST_LABEL =
+  "Klasy z poprzedniej klatki i liczba ich wystąpień";
+
+/**
+ * The picker restricted to what the previous frame actually holds, with the
+ * occurrence count on each class.
+ *
+ * Order and grouping come from the profile, so a class sits where the operator
+ * is used to finding it; membership and counts come from the backend, which is
+ * the only side that knows which frame is the temporal predecessor (FE-017 C).
+ * A class the previous frame does not carry is absent rather than disabled:
+ * a selectable row that cannot copy anything is what produced `copied: 0`
+ * without explanation.
+ */
+export function previousClassOptionGroups(
+  categories: readonly Category[],
+  previousClasses: readonly PreviousFrameClass[],
+): readonly GroupedOptionGroup[] {
+  const countById = new Map(previousClasses.map((item) => [item.category_id, item.count]));
+  return COPY_GROUPS.map((group) => ({
+    id: group.id,
+    label: group.label,
+    options: categories
+      .filter((category) => category.kind === group.id && countById.has(category.id))
+      .map((category) => ({
+        /*
+         * The bare count, not "3 wystąpienia": the side column is 288 px wide
+         * and a spelled-out unit on every row left the class name with four
+         * broken lines. The unit is said once, in the list's accessible name,
+         * where it costs no width (`PREVIOUS_CLASS_LIST_LABEL`).
+         */
+        detail: String(countById.get(category.id) ?? 0),
+        id: category.id,
+        label: category.name,
+      })),
+  })).filter((group) => group.options.length > 0);
+}
+
 /** All classes of a kind, in profile order, so the default selection is stable. */
 export function categoryIdsOfKind(
   categories: readonly Category[],
   kind: Category["kind"],
 ): readonly string[] {
   return categories.filter((category) => category.kind === kind).map((category) => category.id);
+}
+
+/**
+ * The classes the picker may offer, in profile order.
+ *
+ * The default selection and the "is anything selectable" question both need
+ * this, and both have to agree with `previousClassOptionGroups` about which
+ * classes exist at all.
+ */
+export function previousClassIds(
+  categories: readonly Category[],
+  previousClasses: readonly PreviousFrameClass[],
+): readonly string[] {
+  const present = new Set(previousClasses.map((item) => item.category_id));
+  return categories.filter((category) => present.has(category.id)).map((category) => category.id);
 }
 
 function sameMembers(selected: ReadonlySet<string>, candidate: readonly string[]): boolean {

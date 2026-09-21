@@ -9,6 +9,7 @@ import {
   frameImageUrl,
   frameReviewCapabilities,
   getFrame,
+  getPreviousFrameClasses,
   invalidateFor,
   isActiveAnnotation,
   isVersionConflict,
@@ -16,7 +17,6 @@ import {
   type Annotation,
   type BBox,
   type CategoryInput,
-  type CopyPreviousAnnotationsResult,
   type ErrorPresentation,
   type FrameCounts,
   type FrameSummary,
@@ -46,12 +46,18 @@ import {
   type CategoryConflictRecovery,
 } from "./AnnotationPopover";
 import { ClassList } from "./ClassList";
-import { categoryIdsOfKind, copyOptionGroups, copyPreviousTarget } from "./copySelection";
+import {
+  copyPreviousTarget,
+  PREVIOUS_CLASS_LIST_LABEL,
+  previousClassIds,
+  previousClassOptionGroups,
+} from "./copySelection";
 import { FrameToolbar } from "./FrameToolbar";
 import {
   executeReviewMutation,
   reviewMutationKey,
   type ReviewMutationIntent,
+  type ReviewMutationResult,
 } from "./reviewMutations";
 
 interface FrameEditorProps {
@@ -60,6 +66,17 @@ interface FrameEditorProps {
   filter: ReviewStatusFilter;
   frameId: string;
   frames: readonly FrameSummary[];
+  /**
+   * The class a drawn box is saved with, remembered across frames (FE-017 D).
+   *
+   * It lives above this component because this component is rebuilt for every
+   * frame, and the rule is "the last class used in this editor session" — a
+   * session being the run the operator is working through, not the frame they
+   * happen to be on. `null` means nothing has been assigned yet in this
+   * session, and the first profile class by `ordinal` is used instead.
+   */
+  lastUsedCategoryId: string | null;
+  onCategoryUsed: (categoryId: string) => void;
   onFilterChange: (filter: ReviewStatusFilter) => void;
   onSelect: (frameId: string) => void;
   profile: GameProfile;
@@ -110,6 +127,8 @@ export function FrameEditor({
   filter,
   frameId,
   frames,
+  lastUsedCategoryId,
+  onCategoryUsed,
   onFilterChange,
   onSelect,
   profile,
@@ -172,6 +191,8 @@ export function FrameEditor({
       frame={frameQuery.data}
       frameRefreshing={frameQuery.isFetching}
       frames={frames}
+      lastUsedCategoryId={lastUsedCategoryId}
+      onCategoryUsed={onCategoryUsed}
       onFilterChange={onFilterChange}
       onSelect={onSelect}
       profile={profile}
@@ -279,6 +300,8 @@ function LoadedFrameEditor({
   frame,
   frameRefreshing,
   frames,
+  lastUsedCategoryId,
+  onCategoryUsed,
   onFilterChange,
   onSelect,
   profile,
@@ -298,21 +321,119 @@ function LoadedFrameEditor({
   const [categoryConflict, setCategoryConflict] = useState<CategoryConflictRecovery | null>(null);
   const createdCategoryRef = useRef(false);
   const [invalidIds, setInvalidIds] = useState<readonly string[]>([]);
-  // The HUD level is preselected whole, which is the request the panel sent by
-  // default before the picker existed.
-  const [copySelection, setCopySelection] = useState<readonly string[]>(() =>
-    categoryIdsOfKind(profile.categories, "game"),
-  );
+  /*
+   * `null` is "the operator has not touched the picker", not "nothing is
+   * selected" — the default depends on a query that resolves after mount, and
+   * storing the default into state on arrival would need an effect that then
+   * has to avoid overwriting a real choice. Keeping the two apart makes the
+   * default derived and the choice explicit.
+   */
+  const [copySelection, setCopySelection] = useState<readonly string[] | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  /*
+   * The annotation the editor labelled by itself, and the class it chose.
+   *
+   * FE-017 D saves a drawn box immediately, which means a class nobody pointed
+   * at reaches the dataset unless the mistake is obvious at once. This is what
+   * makes it obvious: while it is set, the panel names the class it assigned and
+   * a single click on any other class replaces it. It is cleared the moment the
+   * operator confirms or changes the class, deletes the box, or moves on.
+   */
+  const [autoAssigned, setAutoAssigned] = useState<{
+    annotationId: string;
+    categoryId: string;
+  } | null>(null);
+  /*
+   * An annotation the backend has confirmed but this frame read does not list
+   * yet.
+   *
+   * FE-017 D creates on the draw and then selects what the backend minted, so
+   * between the `201` and the frame that contains it the box belongs to
+   * nothing: the local draft is gone, the stored frame has not caught up, and
+   * the reconciliation below would read that as "the target is gone" and drop
+   * the selection — taking the panel and its "assigned for you" notice with it.
+   * Holding the confirmed row here closes that window without patching the
+   * query cache, and it costs nothing once the refetch lands, because the
+   * effect below drops it the moment the frame says the same thing.
+   */
+  const [pendingCreated, setPendingCreated] = useState<Annotation | null>(null);
   const capabilities = frameReviewCapabilities(frame.stage_status, frame.review_status);
-  const activeAnnotations = useMemo(
-    () => frame.annotations.filter(isActiveAnnotation),
-    [frame.annotations],
-  );
+  const activeAnnotations = useMemo(() => {
+    const stored = frame.annotations.filter(isActiveAnnotation);
+    return pendingCreated === null || stored.some((item) => item.id === pendingCreated.id)
+      ? stored
+      : [...stored, pendingCreated];
+  }, [frame.annotations, pendingCreated]);
+
+  useEffect(() => {
+    if (
+      pendingCreated !== null &&
+      frame.annotations.some((item) => item.id === pendingCreated.id)
+    ) {
+      setPendingCreated(null);
+    }
+  }, [frame.annotations, pendingCreated]);
   const categoryById = useMemo(
     () => new Map(profile.categories.map((category) => [category.id, category.name])),
     [profile.categories],
   );
+  /*
+   * The class a drawn box is saved with (FE-017 D).
+   *
+   * Last class assigned in this editor session, and the first profile class by
+   * `ordinal` before there is one. Chosen because it is the only rule the
+   * operator can predict without looking anything up: frames are annotated in
+   * runs of the same class, and the panel names the class it assigned, so the
+   * next default is on screen before the next box is drawn.
+   *
+   * `profile.categories` arrives ordered by `ordinal` (the profile repository
+   * orders it), so `[0]` is the first class of the profile and not whichever
+   * row the backend happened to return first. `undefined` means the profile has
+   * no classes at all, and nothing can be saved.
+   */
+  const defaultCategoryId = useMemo(() => {
+    const remembered = profile.categories.find((category) => category.id === lastUsedCategoryId);
+    return (remembered ?? profile.categories[0])?.id;
+  }, [lastUsedCategoryId, profile.categories]);
+
+  /*
+   * What a copy from the previous frame would find. The backend owns the
+   * "previous in time" rule, so this is a read of the same thing
+   * `copy-previous` writes from, rather than a second implementation of it
+   * here: the frame list this screen holds is filtered by review status and
+   * therefore knows a different neighbour than the copy does.
+   */
+  const previousClassesQuery = useQuery({
+    queryKey: queryKeys.framePreviousClasses(frame.id),
+    queryFn: ({ signal }) => getPreviousFrameClasses(frame.id, signal),
+  });
+  const previousClasses = previousClassesQuery.data;
+  const copyOfferedIds = useMemo(
+    () => previousClassIds(profile.categories, previousClasses?.classes ?? []),
+    [previousClasses?.classes, profile.categories],
+  );
+  const copyGroups = useMemo(
+    () => previousClassOptionGroups(profile.categories, previousClasses?.classes ?? []),
+    [previousClasses?.classes, profile.categories],
+  );
+  /*
+   * The HUD level preselected whole, which is the request the panel sent by
+   * default before the picker existed — now intersected with what the source
+   * actually has, so the default cannot itself ask for a class that is not
+   * there.
+   */
+  const copyDefaultSelection = useMemo(() => {
+    const gameIds = new Set(
+      profile.categories
+        .filter((category) => category.kind === "game")
+        .map((category) => category.id),
+    );
+    return copyOfferedIds.filter((id) => gameIds.has(id));
+  }, [copyOfferedIds, profile.categories]);
+  const copyEffectiveSelection = useMemo(() => {
+    const offered = new Set(copyOfferedIds);
+    return (copySelection ?? copyDefaultSelection).filter((id) => offered.has(id));
+  }, [copyDefaultSelection, copyOfferedIds, copySelection]);
 
   function updateSelectionContext(annotationId: string | null): void {
     const current = selectionContextRef.current;
@@ -338,11 +459,19 @@ function LoadedFrameEditor({
     updateSelectionContext(selectedId);
   }, [selectedId]);
 
-  const mutation = useMutation<
-    void | CopyPreviousAnnotationsResult,
-    unknown,
-    EditorMutationRequest
-  >({
+  /*
+   * "Assigned for you" is about the box that was just drawn, so it ends when
+   * the selection leaves it — by any route, including a deselect. One effect
+   * rather than a clear at every call site: enumerating the ways a selection
+   * can end is what failed repeatedly in this epic.
+   */
+  useEffect(() => {
+    setAutoAssigned((current) =>
+      current === null || current.annotationId === selectedId ? current : null,
+    );
+  }, [selectedId]);
+
+  const mutation = useMutation<ReviewMutationResult, unknown, EditorMutationRequest>({
     mutationKey: reviewMutationKey(runId),
     mutationFn: async ({ intent }) => {
       createdCategoryRef.current = false;
@@ -455,9 +584,21 @@ function LoadedFrameEditor({
       }
       if (intent.kind === "delete") {
         setSelectedId((current) => (current === intent.annotationId ? null : current));
+        setAutoAssigned((current) =>
+          current?.annotationId === intent.annotationId ? null : current,
+        );
+        // A deleted box must not be resurrected by the row held above while the
+        // frame catches up.
+        setPendingCreated((current) =>
+          current?.id === intent.annotationId ? null : current,
+        );
       }
       if (intent.kind === "category") {
         const annotationId = intent.annotationId;
+        onCategoryUsed(intent.categoryId);
+        // The operator has now said what the class is, so the "assigned for
+        // you" state is over for this box whether or not the panel stays open.
+        setAutoAssigned((current) => (current?.annotationId === annotationId ? null : current));
         setSelectedId((current) =>
           current === annotationId &&
           geometryPreview?.annotationId !== annotationId
@@ -467,6 +608,7 @@ function LoadedFrameEditor({
       }
       if (intent.kind === "create-category" && intent.assignment.kind === "existing") {
         const annotationId = intent.assignment.annotationId;
+        setAutoAssigned((current) => (current?.annotationId === annotationId ? null : current));
         setSelectedId((current) =>
           current === annotationId &&
           geometryPreview?.annotationId !== annotationId
@@ -474,19 +616,40 @@ function LoadedFrameEditor({
             : current,
         );
       }
-      if (
-        intent.kind === "create" ||
-        (intent.kind === "create-category" && intent.assignment.kind === "draft")
-      ) {
+      if (intent.kind === "create-category" && intent.assignment.kind === "draft") {
         setDraftBBox(null);
         updateSelectionContext(null);
         setSelectedId(null);
       }
-      if (intent.kind === "copy-previous" && data !== undefined) {
+      if (intent.kind === "create") {
+        setDraftBBox(null);
+        onCategoryUsed(intent.categoryId);
+        /*
+         * FE-017 D: the box is already saved, so the panel moves onto the real
+         * annotation rather than closing. The context guard is what keeps a
+         * late response from selecting a box the operator has already walked
+         * away from — a click outside during the request closes the context,
+         * and this `create` no longer owns it (FE-015-FIX2).
+         */
+        if (ownsSelectionContext && data.kind === "created") {
+          setPendingCreated(data.annotation);
+          updateSelectionContext(data.annotation.id);
+          setSelectedId(data.annotation.id);
+          setAutoAssigned({ annotationId: data.annotation.id, categoryId: intent.categoryId });
+        } else {
+          updateSelectionContext(null);
+          setSelectedId(null);
+        }
+      }
+      if (data.kind === "copied") {
+        const copied = data.result;
         setCopyFeedback(
-          data.copied === 0
-            ? "Poprzednia klatka nie ma anotacji w tej grupie. Nic nie zmieniono."
-            : `Skopiowano: ${data.copied}. Zastąpiono: ${data.replaced}.`,
+          copied.copied === 0
+            ? // The picker offers only classes the previous frame holds, so
+              // this is now a race: the source changed between the read that
+              // built the list and this request.
+              "Poprzednia klatka już nie ma anotacji w zaznaczonych klasach. Nic nie zmieniono."
+            : `Skopiowano: ${copied.copied}. Zastąpiono: ${copied.replaced}.`,
         );
       }
       await Promise.all([
@@ -647,12 +810,44 @@ function LoadedFrameEditor({
   const popoverAnnotation = selectedId === DRAFT_ANNOTATION_ID ? draftAnnotation : selectedAnnotation;
   const editorDisabled = !capabilities.canEdit || mutation.isPending;
   const canDirectEdit = capabilities.canEdit;
-  const copyTarget = copyPreviousTarget(copySelection, profile.categories);
+  const copyTarget = copyPreviousTarget(copyEffectiveSelection, profile.categories);
+  /*
+   * Three answers the backend gives, and the panel says something different
+   * about each: the route has not answered yet, there is no previous frame at
+   * all, or there is one and it carries nothing. `frame.frame_index === 0` used
+   * to stand in for the middle one — which is the same rule the backend owns,
+   * restated here, and wrong for a run whose frame indices have gaps.
+   */
+  const previousFrameKnown = previousClasses !== undefined;
+  const hasPreviousFrame = previousClasses?.previous_frame_id !== null;
   const copyDisabled =
-    frame.frame_index === 0 ||
+    !previousFrameKnown ||
+    !hasPreviousFrame ||
+    copyOfferedIds.length === 0 ||
     !capabilities.canEdit ||
     mutation.isPending ||
     copyTarget === null;
+  const copyStatus = ((): string | null => {
+    if (previousClassesQuery.isError) {
+      return errorMessage(describeApiError(previousClassesQuery.error));
+    }
+    if (!previousFrameKnown) {
+      return "Sprawdzanie, które klasy ma poprzednia klatka…";
+    }
+    if (!hasPreviousFrame) {
+      return "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania.";
+    }
+    if (copyOfferedIds.length === 0) {
+      return `Poprzednia klatka (nr ${String(previousClasses.previous_frame_index)}) nie ma żadnych anotacji — nie ma czego powtórzyć.`;
+    }
+    if (!capabilities.canEdit) {
+      return "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji.";
+    }
+    if (copyTarget === null) {
+      return "Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia.";
+    }
+    return copyFeedback;
+  })();
 
   function copyPrevious(): void {
     if (copyDisabled || copyTarget === null) {
@@ -864,13 +1059,36 @@ function LoadedFrameEditor({
     changeAnnotationGeometry(annotation, bbox);
   }
 
+  /*
+   * FE-017 D: a drawn box is saved at once, with the default class.
+   *
+   * The operator chose this over keeping a draft, knowing the risk that a class
+   * nobody pointed at reaches the dataset; `autoAssigned` is what makes that
+   * visible immediately rather than in the export. The draft still exists here
+   * as the in-flight rectangle, and it survives a failed `POST` — which turns
+   * the old "choose a class, then save" panel into the recovery path for a
+   * create the backend refused.
+   */
   function handleDraw(bbox: BBox): void {
+    const drawn = toBBox(bbox);
     setActionError(null);
     setCategoryActionError(null);
     setCategoryConflict(null);
-    setDraftBBox(toBBox(bbox));
+    setAutoAssigned(null);
+    setDraftBBox(drawn);
     updateSelectionContext(DRAFT_ANNOTATION_ID);
     setSelectedId(DRAFT_ANNOTATION_ID);
+    if (defaultCategoryId === undefined) {
+      // Nothing to save against: `Annotation.category_id` is `NOT NULL`, so the
+      // box stays a draft and the panel says the profile has no classes.
+      return;
+    }
+    mutateWithCurrentSelectionContext({
+      bbox: drawn,
+      categoryId: defaultCategoryId,
+      expectedVersion: frame.version,
+      kind: "create",
+    });
   }
 
   function selectAnnotation(annotationId: string): void {
@@ -984,7 +1202,6 @@ function LoadedFrameEditor({
             </StatusBadge>
           }
           className="df-review-workspace__inspector"
-          eyebrow="Bieżąca klatka"
           title="Anotacje na klatce"
         >
           <ClassList
@@ -997,21 +1214,33 @@ function LoadedFrameEditor({
           <section aria-labelledby="copy-previous-heading" className="df-review-copy">
             <div>
               <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
-              <p>Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu.</p>
+              <p>
+                {previousFrameKnown && hasPreviousFrame
+                  ? `Źródłem jest klatka ${String(previousClasses.previous_frame_index)} — poprzednia w czasie, niezależnie od aktywnego filtra statusu.`
+                  : "Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu."}
+              </p>
             </div>
-            <GroupedOptionList
-              disabled={!capabilities.canEdit || mutation.isPending || frame.frame_index === 0}
-              emptyMessage="Żadna klasa profilu nie pasuje do wpisanego tekstu."
-              filterLabel="Filtruj klasy"
-              groups={copyOptionGroups(profile.categories)}
-              label="Grupa anotacji"
-              mode="multiple"
-              onChange={(selection) => {
-                setCopySelection(selection);
-                setCopyFeedback(null);
-              }}
-              selectedIds={copySelection}
-            />
+            {/*
+              The list appears only when the source has something to offer. An
+              empty list with a "nothing matches the filter" message would say
+              the operator mistyped, when in fact there is nothing to type
+              towards — that difference is the whole point of part C.
+            */}
+            {copyOfferedIds.length === 0 ? null : (
+              <GroupedOptionList
+                disabled={!capabilities.canEdit || mutation.isPending}
+                emptyMessage="Żadna klasa z poprzedniej klatki nie pasuje do wpisanego tekstu."
+                filterLabel="Filtruj klasy"
+                groups={copyGroups}
+                label={PREVIOUS_CLASS_LIST_LABEL}
+                mode="multiple"
+                onChange={(selection) => {
+                  setCopySelection(selection);
+                  setCopyFeedback(null);
+                }}
+                selectedIds={copyEffectiveSelection}
+              />
+            )}
             <Button
               disabled={copyDisabled}
               loading={currentBusyKey === "copy-previous"}
@@ -1022,13 +1251,7 @@ function LoadedFrameEditor({
               Powtórz
             </Button>
             <p aria-live="polite" className="df-review-copy__status">
-              {frame.frame_index === 0
-                ? "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."
-                : !capabilities.canEdit
-                  ? "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji."
-                  : copyTarget === null
-                    ? "Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia."
-                    : copyFeedback}
+              {copyStatus}
             </p>
           </section>
           {capabilities.terminal ? (
@@ -1075,6 +1298,12 @@ function LoadedFrameEditor({
 
         <AnnotationPopover
           annotation={popoverAnnotation}
+          autoAssignedCategoryName={
+            popoverAnnotation !== undefined &&
+            autoAssigned?.annotationId === popoverAnnotation.id
+              ? (categoryById.get(autoAssigned.categoryId) ?? autoAssigned.categoryId)
+              : undefined
+          }
           busyKey={currentBusyKey}
           categories={profile.categories}
           categoryConflict={categoryConflict}

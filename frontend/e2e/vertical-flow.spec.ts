@@ -677,9 +677,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
 
   // The profile carries one class, "7", and nothing is preselected: a class the
   // human did not choose must never reach the dataset.
-  await expect(draftPopover.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+  await expect(draftPopover.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
   await draftPopover.getByRole("option", { name: "7" }).click();
-  await draftPopover.getByRole("button", { name: "Zapisz klasę" }).click();
+  await draftPopover.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }).click();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);

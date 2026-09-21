@@ -43,6 +43,16 @@ export type CategoryConflictRecovery =
 
 interface AnnotationPopoverProps {
   annotation?: Annotation;
+  /**
+   * Set while this annotation carries a class the editor picked for it.
+   *
+   * FE-017 D saves a box the moment it is drawn, so a class nobody pointed at
+   * can reach the dataset. Two things follow from this prop, and they are the
+   * counterweight the ticket requires: the panel names that class outright, and
+   * a single click on any other class replaces it — no separate save step,
+   * because there is no considered choice here to protect.
+   */
+  autoAssignedCategoryName?: string;
   busyKey: string | null;
   categories: readonly Category[];
   categoryConflict: CategoryConflictRecovery | null;
@@ -79,6 +89,7 @@ function syncFormState(current: FormState, categoryId: string): FormState {
 
 export function AnnotationPopover({
   annotation,
+  autoAssignedCategoryName,
   busyKey,
   categories,
   categoryConflict,
@@ -244,6 +255,8 @@ export function AnnotationPopover({
     };
   }, [annotation]);
 
+  const justDrawn = autoAssignedCategoryName !== undefined;
+
   function saveCategory(categoryId: string): void {
     if (annotation === undefined || categoryId === "") {
       return;
@@ -270,13 +283,39 @@ export function AnnotationPopover({
       role={annotation === undefined ? "region" : "dialog"}
     >
       <header className="df-annotation-popover__header">
-        <strong>{draft ? "Nowa anotacja · box" : "Anotacja"}</strong>
-        {annotation === undefined ? null : (
+        {/*
+          A box saved a moment ago by the draw gesture is still "the new box" to
+          the operator, even though it is already in the database — so the
+          heading follows the moment rather than the persistence state.
+        */}
+        <strong>
+          {draft || justDrawn ? "Nowa anotacja · box" : "Anotacja"}
+        </strong>
+        {/*
+          FE-017 B struck the `OCR`/`Ręczna` badge in both places the operator
+          marked up, here and in the class rows. The OCR confidence stays: it is
+          a number about this one box, not the provenance label that was cut.
+
+          FE-017 D adds the class the editor assigned by itself. It sits in the
+          header rather than in a block of its own because the panel is capped
+          to the viewport on the shortest supported window, and anything with
+          its own height pushes the action row out of sight — the failure
+          FE-010-FIX1 was about. A badge on a row that already exists costs
+          nothing.
+        */}
+        {autoAssignedCategoryName === undefined &&
+        (annotation === undefined ||
+          annotation.source !== "ocr" ||
+          annotation.confidence === null) ? null : (
           <span className="df-annotation-popover__badges">
-            <StatusBadge srLabel="Źródło:" tone={annotation.source === "ocr" ? "brand" : "success"}>
-              {annotation.source === "ocr" ? "OCR" : "Ręczna"}
-            </StatusBadge>
-            {annotation.source === "ocr" && annotation.confidence !== null ? (
+            {autoAssignedCategoryName === undefined ? null : (
+              <StatusBadge srLabel="Klasa wybrana automatycznie:" tone="brand">
+                przypisano: {autoAssignedCategoryName}
+              </StatusBadge>
+            )}
+            {annotation !== undefined &&
+            annotation.source === "ocr" &&
+            annotation.confidence !== null ? (
               <StatusBadge srLabel="Confidence OCR:" tone="neutral">
                 {Math.round(annotation.confidence * 100)}%
               </StatusBadge>
@@ -322,7 +361,20 @@ export function AnnotationPopover({
         label="Klasy profilu"
         mode="single"
         onChange={(selection) => {
-          setForm((current) => ({ ...current, categoryId: selection[0] ?? "" }));
+          const next = selection[0] ?? "";
+          setForm((current) => ({ ...current, categoryId: next }));
+          /*
+           * One click is the whole correction for a class the editor assigned
+           * by itself. Elsewhere selection deliberately does not save —
+           * GroupedOptionList never lets focus choose, so a freshly drawn box
+           * cannot get a class nobody indicated. Here the box already has
+           * exactly such a class, so a click is the operator overruling it, and
+           * making them click twice would be asking them to confirm a value
+           * they never chose.
+           */
+          if (justDrawn && next !== "") {
+            saveCategory(next);
+          }
         }}
         onConfirm={(selection) => {
           saveCategory(selection[0] ?? "");
@@ -344,10 +396,23 @@ export function AnnotationPopover({
           size="sm"
           variant="muted"
         >
-          {draft ? "Porzuć box" : "Usuń"}
+          {/*
+            "Porzuć box" now removes a saved annotation as well as a draft: the
+            box the operator is abandoning exists in the database the moment it
+            is drawn (FE-017 D), and `FrameEditor.removeAnnotation` sends the
+            versioned `DELETE` for it.
+          */}
+          {draft || justDrawn ? "Porzuć box" : "Usuń"}
         </Button>
         <Button
-          aria-label="Zapisz klasę"
+          /*
+           * Reported, implemented as asked: "Zmień nazwę" here reassigns this
+           * one box, while the identically worded action on the profile screen
+           * (FE-016) renames a class across the whole profile. The accessible
+           * name contains the visible label, as WCAG 2.5.3 requires, and then
+           * says which of the two this is.
+           */
+          aria-label={draft ? "Zapisz klasę" : "Zmień nazwę: przypisz inną klasę do tego boxa"}
           disabled={disabled || annotation === undefined || form.categoryId === ""}
           loading={
             annotation !== undefined &&
@@ -358,7 +423,7 @@ export function AnnotationPopover({
           }}
           size="sm"
         >
-          Zapisz
+          {draft ? "Zapisz" : "Zmień nazwę"}
         </Button>
       </div>
 

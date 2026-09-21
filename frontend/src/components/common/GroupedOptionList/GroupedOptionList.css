@@ -12,6 +12,9 @@
 
 .df-grouped-options__list {
   display: grid;
+  /* Explicit `minmax(0, …)` rather than the implicit `auto` track: a row whose
+     content is wider than the column must shrink it, not widen the list. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--size-xs);
   /* F1.5: 38 character classes have to stay scrollable inside a popover and
      inside a side panel, so the height is capped here rather than at each
@@ -50,7 +53,9 @@
 
 .df-grouped-options__group {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: calc(var(--size-xs) / 2);
+  min-width: 0;
 }
 
 .df-grouped-options__group-title {
@@ -69,6 +74,11 @@
   display: flex;
   align-items: center;
   gap: var(--size-xs);
+  /* A flex item's default `min-width: auto` keeps the row at its content width,
+     so a row carrying both a class name and a `detail` pushed the list wider
+     than the side column and made it scroll sideways. Zero lets the label
+     shrink into its ellipsis instead, which is what it is for. */
+  min-width: 0;
   /* GRID-05: a desktop hit area, so a class row is never a hairline target. */
   min-height: var(--control-height-sm);
   padding: calc(var(--size-xs) / 2) var(--size-xs);
@@ -140,6 +150,18 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* TYPO-07 and DataList's rule: the trailing number is secondary, so weight and
+   colour separate it from the label rather than a second font size. Tabular
+   figures keep the column of counts from wobbling row to row. */
+.df-grouped-options__detail {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

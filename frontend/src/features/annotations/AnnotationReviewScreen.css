@@ -196,11 +196,14 @@
   gap: var(--size-xs);
 }
 
+/*
+ * FE-017 B: the row is the button, edge to edge. The grid used to keep a second
+ * `auto` track for the `OCR`/`Ręczna` badges; with those gone the name has the
+ * whole row and wraps instead of being truncated, so `health & armour` is
+ * readable rather than clipped.
+ */
 .df-review-classes__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--size-xs);
+  display: block;
   width: 100%;
 }
 
@@ -208,10 +211,15 @@
   justify-content: space-between;
   min-width: 0;
   width: 100%;
+  /* Only `min-height` is set by `Button`, so a wrapped name grows the row.
+     Without block padding the second line would touch the border. */
+  padding-block: var(--size-xs);
+  text-align: start;
 }
 
 .df-review-classes__item .df-button__content {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--size-xs);
   min-width: 0;
@@ -219,20 +227,17 @@
 }
 
 .df-review-classes__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  /* A class name is operator input and can be one long unbreakable token, so
+     wrapping has to be allowed inside a word as well as between words. */
+  overflow-wrap: anywhere;
 }
 
 .df-review-classes__count {
+  flex: 0 0 auto;
   margin-inline-start: auto;
   font-family: var(--font-family-mono);
   font-variant-numeric: tabular-nums;
-}
-
-.df-review-classes__sources {
-  display: flex;
-  gap: var(--size-xs);
-  justify-self: end;
 }
 
 .df-review-copy {
@@ -262,6 +267,20 @@
 
 .df-review-copy .df-button {
   justify-self: start;
+}
+
+/*
+ * FE-017 C put an occurrence count at the end of each row here, which leaves
+ * the class name less of a 288 px column than the list's default one-line
+ * ellipsis needs — `health & armour` came out as `healt…`. In this list the
+ * name wraps between words instead, for the same reason the class rows above it
+ * do: a name the operator cannot read is not a choice they can make. The
+ * annotation panel's picker keeps the one-line behaviour, where there is no
+ * count and 38 classes have to stay scannable.
+ */
+.df-review-copy .df-grouped-options__label {
+  overflow: visible;
+  white-space: normal;
 }
 
 .df-annotation-popover {
@@ -356,6 +375,17 @@
   color: var(--color-text-weak-default);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-standard);
+}
+
+/*
+ * FE-017 D: the "assigned for you" notice is a `Notice`, so it brings its own
+ * surface. Only the class name it carries is operator input, so only wrapping
+ * needs saying here — a long unbreakable name must not widen the panel's single
+ * track the way the conflict alert once did (FE-013-FIX2).
+ */
+.df-annotation-popover .df-notice {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .df-review-workspace__inspector,

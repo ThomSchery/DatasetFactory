@@ -32,6 +32,11 @@ export const queryKeys = {
 
   frames: () => ["frames"] as const,
   frame: (frameId: string) => ["frames", frameId] as const,
+  // Deliberately under `frame(frameId)`, so the one invalidation an annotation
+  // mutation already performs also refreshes what a copy from the previous
+  // frame would find. Navigating to another frame uses a different key and
+  // refetches on mount, so no event has to name this key on its own.
+  framePreviousClasses: (frameId: string) => ["frames", frameId, "previous-classes"] as const,
 
   exports: () => ["exports"] as const,
   export: (exportId: string) => ["exports", exportId] as const,

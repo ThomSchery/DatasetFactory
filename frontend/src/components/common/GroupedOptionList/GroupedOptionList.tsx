@@ -12,6 +12,16 @@ import "./GroupedOptionList.css";
 export const SHORTCUT_SCOPE_ATTRIBUTE = "data-shortcut-scope";
 
 export interface GroupedOption {
+  /**
+   * A short trailing fact about this option, shown at the end of its row.
+   *
+   * Deliberately not part of `label`: the filter matches labels, and a count
+   * folded into the label would make typing `3` select classes by how many
+   * annotations they happen to have. It is still inside the row, so it joins
+   * the option's accessible name — which is the point, since the number is
+   * information and not decoration.
+   */
+  detail?: string;
   id: string;
   label: string;
 }
@@ -356,6 +366,7 @@ export function GroupedOptionList({
               <OptionRowElement
                 active={activeId === option.id}
                 checked={selected.has(option.id) ? "true" : "false"}
+                detail={option.detail}
                 disabled={disabled}
                 index={rowIndexById.get(option.id) ?? 0}
                 key={option.id}
@@ -409,6 +420,7 @@ function checkedState(
 interface OptionRowElementProps {
   active: boolean;
   checked: "true" | "false" | "mixed";
+  detail?: string;
   disabled: boolean;
   index: number;
   label: string;
@@ -422,6 +434,7 @@ interface OptionRowElementProps {
 function OptionRowElement({
   active,
   checked,
+  detail,
   disabled,
   index,
   label,
@@ -459,6 +472,17 @@ function OptionRowElement({
     >
       <span aria-hidden="true" className="df-grouped-options__mark" />
       <span className="df-grouped-options__label">{label}</span>
+      {detail === undefined ? null : (
+        <>
+          {/*
+            An explicit space: both spans are inline, so the accessible name is
+            their text concatenated, and without this the row would announce
+            "Score3 wystąpienia".
+          */}
+          {" "}
+          <span className="df-grouped-options__detail">{detail}</span>
+        </>
+      )}
     </div>
   );
 }

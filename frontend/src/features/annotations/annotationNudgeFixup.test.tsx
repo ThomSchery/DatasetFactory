@@ -510,7 +510,7 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
 
     const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(dialog).getByRole("option", { name: "health" }));
-    within(dialog).getByRole("button", { name: "Zapisz klasę" }).focus();
+    within(dialog).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }).focus();
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
@@ -609,7 +609,7 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
 
     const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     await user.click(within(dialog).getByRole("option", { name: "health" }));
-    await user.click(within(dialog).getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(within(dialog).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
 
     await waitFor(() => {
       expect(mutations(fetchSpy).filter((request) => "category_id" in request.body)).toHaveLength(1);

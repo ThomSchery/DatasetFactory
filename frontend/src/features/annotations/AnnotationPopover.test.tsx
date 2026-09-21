@@ -212,7 +212,7 @@ describe("AnnotationPopover", () => {
       "aria-selected",
       "true",
     );
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
     expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 
@@ -234,11 +234,11 @@ describe("AnnotationPopover", () => {
     }
     expect(screen.getByRole("option", { name: "Health" })).toBeVisible();
     expect(screen.getByRole("option", { name: "7" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("option", { name: "Health" }));
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
     expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 

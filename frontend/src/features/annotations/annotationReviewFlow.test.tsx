@@ -2,7 +2,14 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { queryKeys, type FrameDetail, type Page, type FrameSummary } from "../../api";
+import {
+  queryKeys,
+  type Annotation,
+  type FrameDetail,
+  type FrameSummary,
+  type Page,
+  type PreviousFrameClasses,
+} from "../../api";
 import {
   annotationFixture,
   dashboardFixture,
@@ -37,19 +44,102 @@ interface ReviewApiOptions {
   frame?: FrameDetail | (() => FrameDetail);
   frames?: Page<FrameSummary>;
   mutation?: (url: string, init: RequestInit | undefined) => StubbedResponse;
+  /** What `GET /frames/{id}/annotations/previous-classes` answers (FE-017 C). */
+  previousClasses?: PreviousFrameClasses;
   profile?: typeof PROFILE;
+}
+
+export const CREATED_ANNOTATION_ID = "ann-created";
+
+/** `POST /frames/{id}/annotations` as the backend answers it: the new row. */
+function createdAnnotation(init: RequestInit | undefined): Annotation {
+  const body = JSON.parse(String(init?.body)) as {
+    bbox: { height: number; width: number; x: number; y: number };
+    category_id: string;
+  };
+  return annotationFixture({
+    ...body.bbox,
+    category_id: body.category_id,
+    confidence: null,
+    id: CREATED_ANNOTATION_ID,
+    observation_id: null,
+    source: "manual",
+    version: 1,
+  });
+}
+
+/**
+ * The default answer for the previous-classes route: a predecessor carrying one
+ * annotation of every profile class, so the picker offers the whole profile the
+ * way it did before FE-017 C and the existing copy assertions keep their
+ * meaning. A fixture choice, not a reimplementation of the backend's rule —
+ * tests that care about the rule state their own answer.
+ */
+function defaultPreviousClasses(
+  frame: FrameDetail,
+  profile: typeof PROFILE,
+): PreviousFrameClasses {
+  if (frame.frame_index === 0) {
+    return { classes: [], previous_frame_id: null, previous_frame_index: null };
+  }
+  return {
+    classes: profile.categories.map((category) => ({ category_id: category.id, count: 1 })),
+    previous_frame_id: "frame-previous",
+    previous_frame_index: frame.frame_index - 1,
+  };
 }
 
 function reviewApi(options: ReviewApiOptions = {}) {
   const frameSource = options.frame ?? frameDetailFixture();
-  const currentFrame = () =>
-    typeof frameSource === "function" ? frameSource() : frameSource;
-  const initialFrame = currentFrame();
+  const baseFrame = () => (typeof frameSource === "function" ? frameSource() : frameSource);
+  /*
+   * Annotations this fake has answered a create with. A frame read after a
+   * create has to contain the new annotation, exactly as the backend's would:
+   * FE-017 D leaves the editor selecting it, and a frame that does not list it
+   * means the selection target is gone, so the panel closes. Recorded from the
+   * response rather than reconstructed from the request, so a test that
+   * supplies its own `mutation` gets the same behaviour for free.
+   */
+  const created: Annotation[] = [];
+  const currentFrame = () => {
+    const frame = baseFrame();
+    const known = new Set(frame.annotations.map((item) => item.id));
+    const extra = created.filter((item) => !known.has(item.id));
+    return extra.length === 0
+      ? frame
+      : { ...frame, annotations: [...frame.annotations, ...extra] };
+  };
+  const initialFrame = baseFrame();
   const frames = options.frames ?? framePageFixture();
   const profile = options.profile ?? PROFILE;
+  const previousClasses =
+    options.previousClasses ?? defaultPreviousClasses(initialFrame, profile);
   return stubFetch((url, init) => {
     if (init?.method !== undefined && init.method !== "GET") {
-      return options.mutation?.(url, init) ?? { status: 200, body: currentFrame() };
+      const response =
+        options.mutation?.(url, init) ??
+        /*
+         * FE-017 D: drawing a box saves it, and the editor selects the
+         * annotation the backend minted, so `POST /annotations` has to answer
+         * with an annotation rather than with the frame.
+         */
+        (url.endsWith("/annotations")
+          ? { status: 201, body: createdAnnotation(init) }
+          : { status: 200, body: currentFrame() });
+      if (url.endsWith("/annotations") && init.method === "POST" && response.status < 300) {
+        const body = response.body as Annotation | undefined;
+        if (body?.id !== undefined) {
+          created.push(body);
+        }
+      }
+      if (init.method === "DELETE") {
+        const deletedId = url.slice("/api/v1/annotations/".length).split("?")[0];
+        const index = created.findIndex((item) => item.id === deletedId);
+        if (index >= 0) {
+          created.splice(index, 1);
+        }
+      }
+      return response;
     }
     if (url === "/api/v1/runs/run-1") {
       return { status: 200, body: runFixture({ id: "run-1", profile_id: profile.id }) };
@@ -59,6 +149,9 @@ function reviewApi(options: ReviewApiOptions = {}) {
     }
     if (url.startsWith("/api/v1/runs/run-1/frames?")) {
       return { status: 200, body: frames };
+    }
+    if (url === `/api/v1/frames/${initialFrame.id}/annotations/previous-classes`) {
+      return { status: 200, body: previousClasses };
     }
     if (url === `/api/v1/frames/${initialFrame.id}`) {
       return { status: 200, body: currentFrame() };
@@ -147,7 +240,14 @@ describe("annotation review query states", () => {
       "true",
     );
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
-    expect(screen.getByText("Ręczna")).toBeInTheDocument();
+    /*
+     * The collection is unified because both classes are listed, not because a
+     * badge names the provenance — FE-017 B removed those. `source` still
+     * reaches the shape's accessible name and the export.
+     */
+    expect(screen.getByRole("button", { name: "Klasa health, 1 anotacji" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" })).toBeInTheDocument();
+    expect(screen.queryByText("Ręczna")).not.toBeInTheDocument();
     expect(screen.getByText("7 · 91%")).toBeInTheDocument();
   });
 
@@ -163,7 +263,7 @@ describe("annotation review query states", () => {
       expect(option).toHaveAttribute("aria-selected", "false");
     }
     expect(within(panel).getByRole("button", { name: "Usuń" })).toBeDisabled();
-    expect(within(panel).getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(within(panel).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
 
     await user.click(within(panel).getByRole("option", { name: "health" }));
     await user.keyboard("{Enter}");
@@ -251,6 +351,35 @@ describe("annotation review query states", () => {
     );
   });
 
+  /*
+   * FE-017 B. The operator struck two things off a screenshot of this panel:
+   * the eyebrow above the title, and the source badges. What is left is the
+   * title, the annotation count and the class rows.
+   */
+  it("leaves the inspector with its title and count and nothing struck off", async () => {
+    reviewApi({
+      frame: frameDetailFixture({
+        annotations: [
+          annotationFixture(),
+          annotationFixture({ id: "ann-2", category_id: "category-2", source: "manual" }),
+        ],
+      }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    const inspector = await screen.findByRole("region", { name: "Anotacje na klatce" });
+    expect(within(inspector).queryByText("Bieżąca klatka")).not.toBeInTheDocument();
+    expect(inspector.querySelector(".df-panel__eyebrow")).toBeNull();
+    expect(within(inspector).queryByText("OCR")).not.toBeInTheDocument();
+    expect(within(inspector).queryByText("Ręczna")).not.toBeInTheDocument();
+    expect(
+      within(inspector).getByText("2", { selector: ".df-status-badge" }),
+    ).toBeVisible();
+    expect(
+      within(inspector).getByRole("button", { name: "Klasa 7, 1 anotacji" }),
+    ).toBeVisible();
+  });
+
   it("keeps image and inspector selection synchronized through one selectedId", async () => {
     const user = userEvent.setup();
     const second = annotationFixture({ id: "ann-2", category_id: "category-2", x: 400 });
@@ -287,8 +416,15 @@ describe("annotation review query states", () => {
     expect(classHealth).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("keeps a drawn bbox as a client draft and a click outside discards it without POST", async () => {
-    const fetchSpy = reviewApi();
+  /*
+   * FE-017 D replaced the draft workflow: a drawn box is saved at once with the
+   * default class. The two tests below are the ones that used to pin "drawing
+   * never POSTs" and "nothing is chosen for the operator"; what has to hold now
+   * is that exactly one create goes out, that the class it used is named on
+   * screen, and that correcting it takes a single click.
+   */
+  it("saves a drawn box at once with the default class and names that class", async () => {
+    const fetchSpy = reviewApi({ profile: RICH_PROFILE });
     renderApp(["/annotations/run-1"]);
 
     const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
@@ -305,94 +441,68 @@ describe("annotation review query states", () => {
     } as DOMRect);
     const inspector = screen.getByRole("heading", { name: "Anotacje na klatce" }).closest("section");
     expect(inspector).not.toBeNull();
-    expect(within(inspector as HTMLElement).getByText("1", { selector: ".df-status-badge" })).toBeVisible();
+    expect(
+      within(inspector as HTMLElement).getByText("1", { selector: ".df-status-badge" }),
+    ).toBeVisible();
 
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
 
-    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-    expect(within(overlay).getAllByRole("option")).toHaveLength(2);
-    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toHaveClass(
-      "df-region-overlay__shape--draft",
-    );
-
-    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje na klatce" }));
-
-    expect(screen.queryByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).not.toBeInTheDocument();
-    expect(within(overlay).getAllByRole("option")).toHaveLength(1);
-    expect(within(inspector as HTMLElement).getByText("1", { selector: ".df-status-badge" })).toBeVisible();
-    expect(
-      fetchSpy.mock.calls.some(
+    await waitFor(() => {
+      const creates = fetchSpy.mock.calls.filter(
         ([url, init]) =>
           url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
-      ),
-    ).toBe(false);
+      );
+      // Exactly one create, and the default class is the profile's first by
+      // `ordinal` because nothing has been assigned in this session yet.
+      expect(creates).toHaveLength(1);
+      expect(JSON.parse(String(creates[0]?.[1]?.body))).toEqual({
+        bbox: { x: 600, y: 500, width: 200, height: 100 },
+        category_id: "score",
+        expected_version: 7,
+      });
+    });
+
+    // The assigned class is stated outright in the panel header, which is the
+    // counterweight to saving without being asked.
+    expect(await screen.findByText("przypisano: Score")).toBeVisible();
+    expect(screen.getByText("Klasa wybrana automatycznie:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Porzuć box" })).toBeEnabled();
   });
 
-  it("opens a drawn box ready to choose from, with nothing chosen for the user", async () => {
+  it("corrects an automatically assigned class in one click", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi({ profile: RICH_PROFILE });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
-      left: 0,
-      top: 0,
-      width: 960,
-      height: 540,
-      right: 960,
-      bottom: 540,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    } as DOMRect);
-    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
-    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
-    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    await drawDraft();
+    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
+    await screen.findByText("przypisano: Score");
 
-    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
-    expect(within(popover).getByLabelText("Klasa")).toHaveValue("");
-    expect(within(popover).getByLabelText("Klasa")).toHaveFocus();
-    for (const option of within(popover).getAllByRole("option")) {
-      expect(option).toHaveAttribute("aria-selected", "false");
-    }
-    expect(within(popover).getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
-
-    await user.keyboard("{Enter}");
-
-    for (const option of within(popover).getAllByRole("option")) {
-      expect(option).toHaveAttribute("aria-selected", "false");
-    }
-    expect(
-      fetchSpy.mock.calls.some(
-        ([url, init]) =>
-          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
-      ),
-    ).toBe(false);
-    expect(
-      fetchSpy.mock.calls.filter(
-        ([, init]) => init?.method !== undefined && init.method !== "GET",
-      ),
-    ).toHaveLength(0);
-
+    // One click on the class the operator actually wants. No confirmation step:
+    // there is no considered choice here to protect, only one the editor made.
     await user.click(within(popover).getByRole("option", { name: "Timer" }));
-    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
 
     await waitFor(() => {
-      const post = fetchSpy.mock.calls.find(
-        ([url, init]) =>
-          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
-      );
-      expect(JSON.parse(String(post?.[1]?.body))).toEqual({
-        bbox: { x: 600, y: 500, width: 200, height: 100 },
+      const patches = fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH");
+      expect(patches).toHaveLength(1);
+      expect(patches[0]?.[0]).toBe(`/api/v1/annotations/${CREATED_ANNOTATION_ID}`);
+      expect(JSON.parse(String(patches[0]?.[1]?.body))).toEqual({
         category_id: "timer",
-        expected_version: 7,
+        expected_version: 1,
       });
     });
+
+    // FE-015: no write may address an annotation without its id.
+    for (const [url, init] of fetchSpy.mock.calls) {
+      if (init?.method === "PATCH" || init?.method === "DELETE") {
+        expect(String(url)).toMatch(/^\/api\/v1\/annotations\/[^/?]+/);
+      }
+    }
   });
 
-  it("creates a character class and then assigns it to the draft in exactly two writes", async () => {
+  it("creates a character class and assigns it to the box the draw already saved", async () => {
     const user = userEvent.setup();
     const mutations: Array<{ body: unknown; method: string; url: string }> = [];
     reviewApi({
@@ -411,8 +521,15 @@ describe("annotation review query states", () => {
         if (url === "/api/v1/frames/frame-1/annotations") {
           return {
             status: 201,
-            body: annotationFixture({ category_id: "category-8", id: "ann-new" }),
+            body: annotationFixture({
+              category_id: "category-1",
+              id: CREATED_ANNOTATION_ID,
+              version: 1,
+            }),
           };
+        }
+        if (url === `/api/v1/annotations/${CREATED_ANNOTATION_ID}`) {
+          return { status: 200, body: annotationFixture({ category_id: "category-8" }) };
         }
         throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
       },
@@ -420,29 +537,40 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
     await drawDraft();
 
-    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
     await user.click(
       within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
     );
 
     await waitFor(() => {
-      expect(mutations).toHaveLength(2);
+      expect(mutations).toHaveLength(3);
     });
+    /*
+     * FE-017 D: the draw is the first write, and the class the operator then
+     * invents reaches the box through the versioned `PATCH` rather than a
+     * second create. Creating a class and assigning it is still exactly two
+     * writes; the box existing already is the change.
+     */
     expect(mutations).toEqual([
+      {
+        body: {
+          bbox: { x: 600, y: 500, width: 200, height: 100 },
+          category_id: "category-1",
+          expected_version: 7,
+        },
+        method: "POST",
+        url: "/api/v1/frames/frame-1/annotations",
+      },
       {
         body: { kind: "character", name: "8" },
         method: "POST",
         url: `/api/v1/profiles/${PROFILE.id}/categories`,
       },
       {
-        body: {
-          bbox: { x: 600, y: 500, width: 200, height: 100 },
-          category_id: "category-8",
-          expected_version: 7,
-        },
-        method: "POST",
-        url: "/api/v1/frames/frame-1/annotations",
+        body: { category_id: "category-8", expected_version: 1 },
+        method: "PATCH",
+        url: `/api/v1/annotations/${CREATED_ANNOTATION_ID}`,
       },
     ]);
   });
@@ -492,10 +620,16 @@ describe("annotation review query states", () => {
     ]);
   });
 
-  it("keeps the typed name and draft box when creating the category fails", async () => {
+  it("keeps the typed name and the saved box when creating the category fails", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi({
-      mutation: (url) => {
+      mutation: (url, init) => {
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          return {
+            status: 201,
+            body: annotationFixture({ id: CREATED_ANNOTATION_ID, version: 1 }),
+          };
+        }
         if (url === `/api/v1/profiles/${PROFILE.id}/categories`) {
           return { status: 500, body: errorEnvelope("category_persistence_failed") };
         }
@@ -504,7 +638,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
     const overlay = await drawDraft();
-    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     const filter = within(popover).getByRole("textbox", { name: "Klasa" });
     await user.type(filter, "8");
 
@@ -516,12 +650,14 @@ describe("annotation review query states", () => {
       "Nie udało się zapisać nowej klasy",
     );
     expect(filter).toHaveValue("8");
-    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toBeVisible();
+    // The box is not lost by the failure: it was saved by the draw, so it is on
+    // the canvas as a real annotation rather than as a draft shape.
+    expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     expect(
       fetchSpy.mock.calls.filter(
         ([, init]) => init?.method !== undefined && init.method !== "GET",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
   /*
@@ -531,7 +667,7 @@ describe("annotation review query states", () => {
    * gate belong to the draft that earned the `409`; the next box is a new
    * intent and gets the same proposal back.
    */
-  it("takes the class conflict away with the draft it belonged to", async () => {
+  it("takes the class conflict away with the box it belonged to", async () => {
     const user = userEvent.setup();
     const conflictProfile = profileFixture({
       categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "ſ" }],
@@ -541,41 +677,54 @@ describe("annotation review query states", () => {
       profile: conflictProfile,
       mutation: (url, init) => {
         writes.push({ method: init?.method ?? "GET", url });
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          return {
+            status: 201,
+            body: annotationFixture({ id: CREATED_ANNOTATION_ID, version: 1 }),
+          };
+        }
         if (url === `/api/v1/profiles/${conflictProfile.id}/categories`) {
           return { status: 409, body: errorEnvelope("category_name_exists") };
+        }
+        if (url.startsWith(`/api/v1/annotations/${CREATED_ANNOTATION_ID}`)) {
+          return { status: 204, body: undefined };
         }
         throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
       },
     });
     renderApp(["/annotations/run-1"]);
-    const overlay = await drawDraft();
-    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await drawDraft();
+    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
     await user.click(
       within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
     );
     await within(popover).findByRole("alert");
 
+    // "Porzuć box" now deletes a saved annotation, not a client-side draft.
     await user.click(within(popover).getByRole("button", { name: "Porzuć box" }));
 
     const empty = await screen.findByRole("region", { name: "Anotacja bez zaznaczenia" });
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
-    expect(
-      within(overlay).queryByRole("option", { name: /^Box — wybierz klasę:/ }),
-    ).not.toBeInTheDocument();
 
     await drawDraft();
-    const nextPopover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    const nextPopover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     await user.type(within(nextPopover).getByRole("textbox", { name: "Klasa" }), "s");
     expect(
       within(nextPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
     ).toBeInTheDocument();
     expect(writes).toEqual([
+      { method: "POST", url: "/api/v1/frames/frame-1/annotations" },
       { method: "POST", url: `/api/v1/profiles/${conflictProfile.id}/categories` },
+      {
+        method: "DELETE",
+        url: `/api/v1/annotations/${CREATED_ANNOTATION_ID}?expected_version=1`,
+      },
+      { method: "POST", url: "/api/v1/frames/frame-1/annotations" },
     ]);
   });
 
-  it("ignores a delayed class conflict after its draft context is gone", async () => {
+  it("ignores a delayed class conflict after its box context is gone", async () => {
     const user = userEvent.setup();
     const conflictProfile = profileFixture({
       categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "Ż" }],
@@ -596,8 +745,8 @@ describe("annotation review query states", () => {
       return originalImplementation(input, init);
     });
     renderApp(["/annotations/run-1"]);
-    const overlay = await drawDraft();
-    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    await drawDraft();
+    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
     await user.click(
       within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
@@ -605,9 +754,6 @@ describe("annotation review query states", () => {
 
     fireEvent.pointerDown(document.body);
     const empty = await screen.findByRole("region", { name: "Anotacja bez zaznaczenia" });
-    expect(
-      within(overlay).queryByRole("option", { name: /^Box — wybierz klasę:/ }),
-    ).not.toBeInTheDocument();
 
     resolveCategory?.(
       new Response(JSON.stringify(errorEnvelope("category_name_exists")), {
@@ -625,14 +771,14 @@ describe("annotation review query states", () => {
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
     await drawDraft();
-    const nextPopover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    const nextPopover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     await user.type(within(nextPopover).getByRole("textbox", { name: "Klasa" }), "s");
     expect(
       within(nextPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
     ).toBeInTheDocument();
   });
 
-  it("keeps a delayed class conflict visible while its draft context is alive", async () => {
+  it("keeps a delayed class conflict visible while its box context is alive", async () => {
     const user = userEvent.setup();
     const conflictProfile = profileFixture({
       categories: [...PROFILE.categories, { id: "long-s", kind: "game", name: "Ż" }],
@@ -654,7 +800,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
     await drawDraft();
-    const popover = screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" });
+    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
     await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
     await user.click(
       within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
@@ -744,7 +890,7 @@ describe("annotation review query states", () => {
         ).length,
       ).toBeGreaterThanOrEqual(2);
 
-      await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+      await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
       await waitFor(() => {
         expect(writes).toHaveLength(2);
       });
@@ -802,14 +948,14 @@ describe("annotation review query states", () => {
     for (const option of within(popover).getAllByRole("option")) {
       expect(option).toHaveAttribute("aria-selected", "false");
     }
-    expect(within(popover).getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
     expect(
       within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(1);
 
     await user.click(blocking);
-    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
     await waitFor(() => {
       expect(writes).toHaveLength(2);
     });
@@ -1383,12 +1529,46 @@ describe("annotation review query states", () => {
     ]);
   });
 
-  it("keeps the local draft and its bbox through a frame refetch", async () => {
-    const fetchSpy = reviewApi({ frame: frameDetailFixture({ frame_index: 1 }) });
+  /*
+   * The draw's own refetch is what makes the saved box reach the frame, so the
+   * panel that opens on it has to survive the next one too — otherwise the
+   * "assigned automatically" marker would flicker away before it was read.
+   */
+  it("keeps the just-drawn box selected and marked through a frame refetch", async () => {
+    let created = false;
+    const fetchSpy = reviewApi({
+      frame: () =>
+        frameDetailFixture({
+          annotations: created
+            ? [
+                annotationFixture(),
+                annotationFixture({
+                  category_id: "category-1",
+                  height: 100,
+                  id: CREATED_ANNOTATION_ID,
+                  version: 1,
+                  width: 200,
+                  x: 600,
+                  y: 500,
+                }),
+              ]
+            : [annotationFixture()],
+          frame_index: 1,
+        }),
+      mutation: (url, init) => {
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          created = true;
+          return {
+            status: 201,
+            body: annotationFixture({ id: CREATED_ANNOTATION_ID, version: 1 }),
+          };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
     const { queryClient } = renderApp(["/annotations/run-1"]);
-    const overlay = await drawDraft();
-    const draftOption = within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ });
-    const draftLabel = draftOption.getAttribute("aria-label");
+    await drawDraft();
+    await screen.findByText("przypisano: 7");
     const frameGetsBefore = fetchSpy.mock.calls.filter(
       ([input, init]) =>
         String(input) === "/api/v1/frames/frame-1" &&
@@ -1404,15 +1584,10 @@ describe("annotation review query states", () => {
         ([input, init]) =>
           String(input) === "/api/v1/frames/frame-1" &&
           (init?.method === undefined || init.method === "GET"),
-      ),
-    ).toHaveLength(frameGetsBefore + 1);
-    expect(
-      screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" }),
-    ).toBeInTheDocument();
-    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toHaveAttribute(
-      "aria-label",
-      draftLabel,
-    );
+      ).length,
+    ).toBeGreaterThan(frameGetsBefore);
+    expect(screen.getByRole("dialog", { name: /Edytuj anotację/ })).toBeInTheDocument();
+    expect(screen.getByText("przypisano: 7")).toBeInTheDocument();
   });
 
   it("replaces the rejected proposal when another category name also conflicts", async () => {
@@ -1500,7 +1675,7 @@ describe("annotation review query states", () => {
     });
 
     await user.click(within(popover).getByRole("option", { name: "health" }));
-    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -1561,7 +1736,7 @@ describe("annotation review query states", () => {
     expect(filter).toHaveValue("Score");
     expect(recovered).toHaveAttribute("aria-selected", "true");
 
-    await user.click(within(popover).getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
     await waitFor(() => {
       expect(writes).toHaveLength(2);
     });
@@ -1572,9 +1747,23 @@ describe("annotation review query states", () => {
     });
   });
 
-  it("nudges a draft in source pixels without POST before or after Enter", async () => {
+  /*
+   * FE-017 D turned the draft into the recovery state for a create the backend
+   * refused: the rectangle is still on screen, still local, and still has no
+   * id — so nudging it may not reach the API, and `Enter` may not either.
+   * That is the FE-015 rule this used to guard, in the one place a draft can
+   * still be reached.
+   */
+  it("nudges a rejected box locally and sends nothing more, before or after Enter", async () => {
     const user = userEvent.setup();
-    const fetchSpy = reviewApi();
+    const fetchSpy = reviewApi({
+      mutation: (url, init) => {
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          return { status: 409, body: errorEnvelope("version_conflict") };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
     renderApp(["/annotations/run-1"]);
 
     const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
@@ -1593,12 +1782,17 @@ describe("annotation review query states", () => {
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
 
+    expect(await screen.findByText(/Kod: version_conflict/)).toBeInTheDocument();
+    const writesAfterRejection = fetchSpy.mock.calls.filter(
+      ([, init]) => init?.method !== undefined && init.method !== "GET",
+    ).length;
+    expect(writesAfterRejection).toBe(1);
+
     /*
      * The draft has no class chip to park focus on, and the overlay's own
-     * options answer arrows with roving focus. The geometry summary used to be
-     * the third place focus could sit; with it gone, this is the state the
-     * operator is in after clicking anything that is not a control — panel
-     * blurred, nothing else focused.
+     * options answer arrows with roving focus. This is the state the operator
+     * is in after clicking anything that is not a control — panel blurred,
+     * nothing else focused.
      */
     (document.activeElement as HTMLElement | null)?.blur();
     await user.keyboard("{ArrowRight}{Shift>}{ArrowDown}{/Shift}");
@@ -1606,11 +1800,14 @@ describe("annotation review query states", () => {
     expect(
       within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ }),
     ).toHaveAttribute("aria-label", expect.stringContaining("x 601, y 510"));
-    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
 
     await user.keyboard("{Enter}");
 
-    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([, init]) => init?.method !== undefined && init.method !== "GET",
+      ),
+    ).toHaveLength(writesAfterRejection);
   });
 
   it("accumulates three nudges in one preview and sends exactly one PATCH on Enter", async () => {
@@ -1758,27 +1955,28 @@ describe("annotation review query states", () => {
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
-    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+    await screen.findByText(/^przypisano: /);
 
-    // One gesture, both effects: the popover closes and the very same
-    // pointerdown begins the next drawing. Losing it would leave the user
-    // unable to draw straight after dismissing a popover, with nothing on
-    // screen to explain why.
+    // One gesture, both effects: the panel closes and the very same pointerdown
+    // begins the next drawing. Losing it would leave the operator unable to
+    // draw straight after dismissing a panel, with nothing on screen to
+    // explain why.
     fireEvent.pointerDown(overlay, { clientX: 500, clientY: 200, pointerId: 2 });
     fireEvent.pointerMove(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
     fireEvent.pointerUp(overlay, { clientX: 600, clientY: 260, pointerId: 2 });
 
-    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-    const draftShape = within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ });
-    // The second rectangle, not the first: the abandoned draft did not linger.
-    expect(draftShape).toHaveAttribute("aria-label", expect.stringContaining("x 1000, y 400"));
-    expect(within(overlay).getAllByRole("option")).toHaveLength(2);
-    expect(
-      fetchSpy.mock.calls.some(
+    await waitFor(() => {
+      const creates = fetchSpy.mock.calls.filter(
         ([url, init]) =>
           url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
-      ),
-    ).toBe(false);
+      );
+      // Two gestures, two boxes: the second pointerdown was not eaten by the
+      // dismissal of the first panel.
+      expect(creates).toHaveLength(2);
+      expect(JSON.parse(String(creates[1]?.[1]?.body))).toMatchObject({
+        bbox: { x: 1000, y: 400, width: 200, height: 120 },
+      });
+    });
   });
 
   it("keeps the popover open while the bbox it edits is dragged", async () => {
@@ -1808,7 +2006,13 @@ describe("annotation review query states", () => {
     expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
   });
 
-  it("keeps the draft after a failed explicit class save", async () => {
+  /*
+   * A create the backend refuses leaves the rectangle on screen as a draft, and
+   * the panel becomes the old "choose a class, then save" surface — the one
+   * path where "Zapisz" still means what it used to. Losing the box here would
+   * make the operator redraw work the backend merely rejected once.
+   */
+  it("keeps the box on screen and retriable after the create fails", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi({
       mutation: (url) =>
@@ -1834,32 +2038,71 @@ describe("annotation review query states", () => {
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
 
+    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toBeVisible();
+
     const field = screen.getByRole("textbox", { name: "Klasa" });
     await user.clear(field);
     await user.type(field, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
     await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
 
-    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
-    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toBeVisible();
-    const post = fetchSpy.mock.calls.find(
-      ([url, init]) =>
-        url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
-    );
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
-      bbox: { x: 600, y: 500, width: 200, height: 100 },
-      category_id: "category-2",
-      expected_version: 7,
+    await waitFor(() => {
+      const posts = fetchSpy.mock.calls.filter(
+        ([url, init]) =>
+          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
+      );
+      expect(posts).toHaveLength(2);
+      // The draw used the default class; the retry uses the one the operator
+      // picked, on the same rectangle and the same frame version.
+      expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({
+        bbox: { x: 600, y: 500, width: 200, height: 100 },
+        category_id: "category-1",
+        expected_version: 7,
+      });
+      expect(JSON.parse(String(posts[1]?.[1]?.body))).toEqual({
+        bbox: { x: 600, y: 500, width: 200, height: 100 },
+        category_id: "category-2",
+        expected_version: 7,
+      });
     });
   });
 
-  it("discards the unsaved draft when another annotation or filter is selected", async () => {
+  /*
+   * Moving the selection away ends the "assigned for you" state but must not
+   * touch the box: it is saved, so there is nothing to discard, and the
+   * one-click correction must not still be armed when the operator comes back
+   * to it later expecting an ordinary panel.
+   */
+  it("ends the assigned-for-you state on the next selection without touching the box", async () => {
     const user = userEvent.setup();
-    const fetchSpy = reviewApi();
+    let created = false;
+    const createdFixture = annotationFixture({
+      category_id: "category-1",
+      height: 100,
+      id: CREATED_ANNOTATION_ID,
+      version: 1,
+      width: 200,
+      x: 600,
+      y: 500,
+    });
+    const fetchSpy = reviewApi({
+      frame: () =>
+        frameDetailFixture({
+          annotations: created ? [annotationFixture(), createdFixture] : [annotationFixture()],
+        }),
+      mutation: (url, init) => {
+        if (url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST") {
+          created = true;
+          return { status: 201, body: createdFixture };
+        }
+        throw new Error(`Nieobsłużona mutacja testowa: ${url}`);
+      },
+    });
     renderApp(["/annotations/run-1"]);
 
-    let overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -1871,32 +2114,20 @@ describe("annotation review query states", () => {
       y: 0,
       toJSON: () => ({}),
     } as DOMRect);
-    const draw = () => {
-      fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
-      fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
-      fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
-    };
-
-    draw();
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    expect(within(overlay).getAllByRole("option")).toHaveLength(1);
-
-    draw();
-    await user.click(screen.getByRole("button", { name: /Wszystkie/ }));
+    fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
+    fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    await screen.findByText("przypisano: 7");
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Wszystkie/ })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
+      expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     });
-    overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    expect(within(overlay).getAllByRole("option")).toHaveLength(1);
-    expect(
-      fetchSpy.mock.calls.some(
-        ([url, init]) =>
-          url === "/api/v1/frames/frame-1/annotations" && init?.method === "POST",
-      ),
-    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Klasa 7, 2 anotacji" }));
+
+    expect(screen.queryByText(/^przypisano: /)).not.toBeInTheDocument();
+    // Both boxes are still there, and nothing was deleted to get here.
+    expect(within(overlay).getAllByRole("option")).toHaveLength(2);
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
   });
 
   it("updates the overlay live and saves the dragged bbox through the existing PATCH", async () => {
@@ -2209,12 +2440,16 @@ describe("temporal frame navigation", () => {
 
     await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
     for (const name of ["Score", "Timer", "health"]) {
-      expect(screen.getByRole("checkbox", { name })).toHaveAttribute("aria-checked", "false");
+      expect(
+        screen.getByRole("checkbox", { name: `${name} 1` }),
+      ).toHaveAttribute("aria-checked", "false");
     }
 
     await user.click(screen.getByRole("checkbox", { name: "Znaki" }));
     for (const name of ["7", "1"]) {
-      expect(screen.getByRole("checkbox", { name })).toHaveAttribute("aria-checked", "true");
+      expect(
+        screen.getByRole("checkbox", { name: `${name} 1` }),
+      ).toHaveAttribute("aria-checked", "true");
     }
     await user.click(screen.getByRole("button", { name: "Powtórz" }));
 
@@ -2229,12 +2464,12 @@ describe("temporal frame navigation", () => {
     copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("checkbox", { name: "Timer" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Timer 1" }));
     expect(screen.getByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
       "aria-checked",
       "mixed",
     );
-    await user.click(screen.getByRole("checkbox", { name: "7" }));
+    await user.click(screen.getByRole("checkbox", { name: "7 1" }));
     await user.click(screen.getByRole("button", { name: "Powtórz" }));
 
     await waitFor(() => {
@@ -2266,8 +2501,10 @@ describe("temporal frame navigation", () => {
     const picker = filter.closest(".df-grouped-options");
     expect(picker).not.toBeNull();
     const copyClasses = within(picker as HTMLElement);
-    expect(copyClasses.getByRole("checkbox", { name: "Timer" })).toBeVisible();
-    expect(copyClasses.queryByRole("checkbox", { name: "Score" })).not.toBeInTheDocument();
+    expect(copyClasses.getByRole("checkbox", { name: "Timer 1" })).toBeVisible();
+    expect(
+      copyClasses.queryByRole("checkbox", { name: "Score 1" }),
+    ).not.toBeInTheDocument();
     expect(copyClasses.queryByRole("group", { name: "Znaki" })).not.toBeInTheDocument();
   });
 
@@ -2302,7 +2539,7 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const row = await screen.findByRole("checkbox", { name: "Timer" });
+    const row = await screen.findByRole("checkbox", { name: "Timer 1" });
     row.focus();
     await user.keyboard("axr");
 
@@ -2310,17 +2547,83 @@ describe("temporal frame navigation", () => {
     expect(requests).toEqual([]);
   });
 
-  it("disables copy on the first frame and explains why", async () => {
-    reviewApi({ frame: frameDetailFixture({ frame_index: 0 }) });
+  it("disables copy when the backend reports no previous frame, and says so", async () => {
+    reviewApi({
+      frame: frameDetailFixture({ frame_index: 0 }),
+      previousClasses: { classes: [], previous_frame_id: null, previous_frame_index: null },
+    });
     renderApp(["/annotations/run-1"]);
 
-    expect(await screen.findByRole("button", { name: "Powtórz" })).toBeDisabled();
     expect(
-      screen.getByText("To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."),
+      await screen.findByText("To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Powtórz" })).toBeDisabled();
+    // No picker at all: there is nothing to type towards, so an empty list with
+    // a "nothing matches" message would be a lie.
+    expect(screen.queryByLabelText("Filtruj klasy")).not.toBeInTheDocument();
+  });
+
+  /*
+   * FE-017 C: "no previous frame" and "previous frame without annotations" are
+   * two states and have to read differently. The frame index is identical in
+   * both fixtures here, so only the backend's answer can tell them apart.
+   */
+  it("distinguishes an empty previous frame from a missing one", async () => {
+    reviewApi({
+      frame: frameDetailFixture({ frame_index: 1 }),
+      previousClasses: {
+        classes: [],
+        previous_frame_id: "frame-previous",
+        previous_frame_index: 0,
+      },
+    });
+    renderApp(["/annotations/run-1"]);
+
+    expect(
+      await screen.findByText(
+        "Poprzednia klatka (nr 0) nie ma żadnych anotacji — nie ma czego powtórzyć.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Powtórz" })).toBeDisabled();
+    expect(screen.queryByLabelText("Filtruj klasy")).not.toBeInTheDocument();
+  });
+
+  it("offers only the classes the previous frame holds, with their counts", async () => {
+    reviewApi({
+      frame: frameDetailFixture({ frame_index: 4 }),
+      previousClasses: {
+        classes: [
+          { category_id: "score", count: 3 },
+          { category_id: "category-1", count: 1 },
+        ],
+        previous_frame_id: "frame-previous",
+        previous_frame_index: 2,
+      },
+      profile: RICH_PROFILE,
+    });
+    renderApp(["/annotations/run-1"]);
+
+    expect(
+      await screen.findByRole("checkbox", { name: "Score 3" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "7 1" })).toBeInTheDocument();
+    // In the profile but absent from the source: not offered, so it cannot be
+    // selected into a request that would answer `copied: 0`.
+    for (const absent of ["Timer", "health", "1"]) {
+      expect(
+        screen.queryByRole("checkbox", { name: new RegExp(`^${absent} `) }),
+      ).not.toBeInTheDocument();
+    }
+    // The source frame is named from the backend's answer, not from the
+    // filtered frame list this screen happens to hold.
+    expect(
+      screen.getByText(
+        "Źródłem jest klatka 2 — poprzednia w czasie, niezależnie od aktywnego filtra statusu.",
+      ),
     ).toBeInTheDocument();
   });
 
-  it("keeps the target unchanged when the previous group is empty", async () => {
+  it("explains a copy that found nothing after the source changed underneath", async () => {
     const user = userEvent.setup();
     reviewApi({
       frame: frameDetailFixture({ frame_index: 1 }),
@@ -2333,7 +2636,9 @@ describe("temporal frame navigation", () => {
 
     await user.click(await screen.findByRole("button", { name: "Powtórz" }));
     expect(
-      await screen.findByText("Poprzednia klatka nie ma anotacji w tej grupie. Nic nie zmieniono."),
+      await screen.findByText(
+        "Poprzednia klatka już nie ma anotacji w zaznaczonych klasach. Nic nie zmieniono.",
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -2532,7 +2837,7 @@ describe("review filters and mutations", () => {
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Dane zmieniły się w międzyczasie");
@@ -2641,7 +2946,7 @@ describe("review filters and mutations", () => {
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    const saveButton = screen.getByRole("button", { name: "Zapisz klasę" });
+    const saveButton = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
     await user.click(saveButton);
 
     expect(saveButton).toHaveAttribute("aria-busy", "true");
@@ -2675,7 +2980,7 @@ describe("keyboard-complete annotation list", () => {
     const classSelect = screen.getByLabelText("Klasa");
     await user.clear(classSelect);
     await user.type(classSelect, "health");
-    const saveClass = screen.getByRole("button", { name: "Zapisz klasę" });
+    const saveClass = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(saveClass).toBeEnabled());
@@ -2713,6 +3018,14 @@ describe("keyboard-complete annotation list", () => {
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
+    /*
+     * The draw sends its own create and the fixture refuses it, so the panel
+     * falls back to the draft surface — the one place "Zapisz" still means
+     * "save this box". Pressing it from the keyboard is the control under test.
+     */
+    await waitFor(() => {
+      expect(requests.filter((request) => request.method === "POST")).toHaveLength(1);
+    });
     await user.click(screen.getByRole("option", { name: "7" }));
     const createButton = screen.getByRole("button", { name: "Zapisz klasę" });
     createButton.focus();
@@ -2727,6 +3040,7 @@ describe("keyboard-complete annotation list", () => {
         ]),
       );
       expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(2);
+      expect(requests.filter((request) => request.method === "POST")).toHaveLength(2);
     });
   });
 });

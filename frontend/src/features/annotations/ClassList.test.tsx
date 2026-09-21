@@ -67,8 +67,10 @@ describe("ClassList", () => {
     );
 
     expect(screen.getByRole("button", { name: "Klasa 7, 2 anotacji" })).toBeVisible();
-    expect(screen.getByText("OCR")).toBeVisible();
-    expect(screen.getByText("Ręczna")).toBeVisible();
+    // FE-017 B: the row carries the class and the count, and nothing about
+    // where the annotation came from.
+    expect(screen.queryByText("OCR")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ręczna")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Klasa 7, 2 anotacji" }));
     expect(onSelect).toHaveBeenLastCalledWith("ann-1");

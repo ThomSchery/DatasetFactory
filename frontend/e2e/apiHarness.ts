@@ -1,7 +1,14 @@
 import type { Page, Route } from "@playwright/test";
 import path from "node:path";
 
-import type { Category, Dashboard, Export, FrameDetail, PipelineRun } from "../src/api/types";
+import type {
+  Annotation,
+  Category,
+  Dashboard,
+  Export,
+  FrameDetail,
+  PipelineRun,
+} from "../src/api/types";
 import {
   dashboardFixture,
   emptyDashboard,
@@ -115,8 +122,29 @@ export class ApiHarness {
   readonly requests: CapturedRequest[] = [];
   dashboardMode: DashboardMode;
   phase: HarnessPhase;
+  /**
+   * What `GET /frames/{id}/annotations/previous-classes` answers (FE-017 C).
+   *
+   * Overridable because the two states the panel has to tell apart — no
+   * previous frame at all, and a previous frame carrying nothing — are the
+   * backend's answer and cannot be derived from anything else the fixture
+   * holds.
+   */
+  previousClasses: {
+    classes: { category_id: string; count: number }[];
+    previous_frame_id: string | null;
+    previous_frame_index: number | null;
+  };
   private readonly categoryConflict: CategoryConflictFixture | null;
   private exportReads = 0;
+  /**
+   * Annotations created through `POST /frames/{id}/annotations`.
+   *
+   * FE-017 D saves a drawn box at once and the editor then selects it, so a
+   * frame read after the create has to list it — a frame that does not means
+   * the selection target is gone and the panel closes.
+   */
+  private readonly created: Annotation[] = [];
 
   constructor(
     options: {
@@ -128,6 +156,11 @@ export class ApiHarness {
     this.categoryConflict = options.categoryConflict ?? null;
     this.dashboardMode = options.dashboardMode ?? "normal";
     this.phase = options.phase ?? "empty";
+    this.previousClasses = {
+      classes: profile.categories.map((category) => ({ category_id: category.id, count: 1 })),
+      previous_frame_id: "frame-0",
+      previous_frame_index: 16,
+    };
   }
 
   /** The profile as the API answers it, including any pre-existing winner. */
@@ -140,6 +173,26 @@ export class ApiHarness {
 
   async install(page: Page): Promise<void> {
     await page.route("**/api/v1/**", (route) => this.handle(route));
+  }
+
+  /** `POST /frames/{id}/annotations` as the backend answers it: the new row. */
+  private createAnnotation(body: unknown): Annotation {
+    const request = body as {
+      bbox: { height: number; width: number; x: number; y: number };
+      category_id: string;
+    };
+    const created: Annotation = {
+      ...request.bbox,
+      category_id: request.category_id,
+      confidence: null,
+      id: `ann-created-${String(this.created.length + 1)}`,
+      observation_id: null,
+      source: "manual",
+      status: "proposed",
+      version: 1,
+    };
+    this.created.push(created);
+    return created;
   }
 
   private dashboard(): Dashboard {
@@ -291,8 +344,34 @@ export class ApiHarness {
       }));
       return;
     }
+    if (pathname === "/frames/frame-1/annotations/previous-classes" && method === "GET") {
+      await json(route, this.previousClasses);
+      return;
+    }
+    if (pathname === "/frames/frame-1/annotations" && method === "POST") {
+      const created = this.createAnnotation(body);
+      await json(route, created, 201);
+      return;
+    }
     if (pathname === "/frames/frame-1" && method === "GET") {
-      await json(route, this.phase === "review" ? pendingFrame : acceptedFrame);
+      const frame = this.phase === "review" ? pendingFrame : acceptedFrame;
+      // A frame read after a create lists what the create returned, the way the
+      // backend's does — FE-017 D leaves the editor selecting it.
+      await json(
+        route,
+        this.created.length === 0
+          ? frame
+          : { ...frame, annotations: [...frame.annotations, ...this.created] },
+      );
+      return;
+    }
+    if (pathname.startsWith("/annotations/") && method === "DELETE") {
+      const deletedId = pathname.slice("/annotations/".length);
+      const index = this.created.findIndex((item) => item.id === deletedId);
+      if (index >= 0) {
+        this.created.splice(index, 1);
+      }
+      await route.fulfill({ status: 204, body: "" });
       return;
     }
     if (pathname === "/frames/frame-1/image" && method === "GET") {

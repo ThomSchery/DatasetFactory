@@ -1,6 +1,5 @@
 import type { Annotation, Category } from "../../api";
 import { Button } from "../../components/common/Button";
-import { StatusBadge } from "../../components/common/StatusBadge";
 
 interface ClassListProps {
   annotations: readonly Annotation[];
@@ -34,7 +33,16 @@ function classGroups(
   }));
 }
 
-/** Compact class summary. Selection is owned by FrameEditor and only passed through. */
+/**
+ * Compact class summary. Selection is owned by FrameEditor and only passed
+ * through.
+ *
+ * FE-017 B dropped the `OCR`/`Ręczna` badges the row used to carry beside the
+ * button. The `source` field is untouched in the data and in the export; the
+ * operator asked for the row to say the class and the count and nothing else,
+ * so the whole row is now the button and the class name may wrap rather than be
+ * truncated to fit a badge column that no longer exists.
+ */
 export function ClassList({ annotations, categories, disabled, onSelect, selectedId }: ClassListProps) {
   const groups = classGroups(annotations, categories);
   if (groups.length === 0) {
@@ -52,7 +60,6 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
         const selected = selectedIndex >= 0;
         const nextIndex = selected ? (selectedIndex + 1) % group.annotations.length : 0;
         const nextAnnotation = group.annotations[nextIndex];
-        const sources = new Set(group.annotations.map((annotation) => annotation.source));
         const label = group.category?.name ?? group.categoryId;
         return (
           <li className="df-review-classes__item" data-selected={selected || undefined} key={group.categoryId}>
@@ -74,14 +81,6 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
                 {group.annotations.length}
               </span>
             </Button>
-            <span className="df-review-classes__sources">
-              {sources.has("ocr") ? (
-                <StatusBadge srLabel="Źródło:" tone="brand">OCR</StatusBadge>
-              ) : null}
-              {sources.has("manual") ? (
-                <StatusBadge srLabel="Źródło:" tone="success">Ręczna</StatusBadge>
-              ) : null}
-            </span>
           </li>
         );
       })}
