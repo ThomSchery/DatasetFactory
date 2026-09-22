@@ -134,7 +134,7 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
     await kindWarning.scrollIntoViewIfNeeded();
     await expect(immutableNotice).toBeInViewport();
     await expect(kindWarning).toBeInViewport();
-    await expect(kindWarning).toContainText("Znaki (OCR)");
+    await expect(kindWarning).toContainText("Liczby");
     await expect(kindWarning).toContainText("Pola HUD (gra)");
     await expectInsideViewport(immutableNotice, viewport, `immutable notice at ${suffix}`);
     await expectInsideViewport(kindWarning, viewport, `kind warning at ${suffix}`);
