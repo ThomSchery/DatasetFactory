@@ -56,7 +56,7 @@ class RegionNameExistsError(RuntimeError):
 
 
 class ProfileRegionBlockedError(RuntimeError):
-    """A run bound to this very profile still owns the single workflow slot."""
+    """A run bound to this profile may still execute cropping work."""
 
 
 class ProfileVersionConflictError(RuntimeError):
@@ -400,14 +400,19 @@ class ProfileRepository:
                 if profile.version != draft.expected_version:
                     raise ProfileVersionConflictError
                 # Not the same gate as `activate`: that one refuses whenever the
-                # single workflow slot is taken at all. Here only a run bound to
-                # *this* profile matters, because only that run's crop stage
-                # reads these regions (`FrameRepository._processing_record`).
+                # single workflow slot is taken at all. Here only unfinished work
+                # bound to *this* profile matters, because only that work's crop
+                # stage reads these regions (`FrameRepository._processing_record`).
+                # Paused, failed and cancelled runs release the slot but may all
+                # resume; queued runs may start. Letting any of them survive this
+                # write would make "from the next run onwards" false.
                 blocking_run = session.scalar(
                     select(PipelineRun.id)
                     .where(
-                        PipelineRun.workflow_slot == 1,
                         PipelineRun.profile_id == profile_id,
+                        PipelineRun.status.in_(
+                            ("queued", "running", "paused", "failed", "cancelled")
+                        ),
                     )
                     .limit(1)
                 )

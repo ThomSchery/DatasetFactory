@@ -180,6 +180,24 @@ describe("GroupedOptionList in multiple mode", () => {
 });
 
 describe("GroupedOptionList in single mode", () => {
+  it("skips disabled disclosure controls while filtering with the keyboard", async () => {
+    const user = userEvent.setup();
+    render(<Harness mode="single" />);
+    const filter = screen.getByLabelText("Filtruj klasy");
+
+    await user.type(filter, "znak");
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("option", { name: "0" })).toHaveFocus();
+
+    await user.keyboard("{End}");
+    expect(screen.getByRole("option", { name: "2" })).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("option", { name: "0" })).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(filter).toHaveFocus();
+  });
+
   it("ignores Enter in an empty filter until a row is explicitly focused", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

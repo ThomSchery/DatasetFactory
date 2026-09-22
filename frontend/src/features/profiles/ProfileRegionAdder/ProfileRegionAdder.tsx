@@ -34,7 +34,7 @@ function failureMessage(error: unknown): string {
     return "Profil zmienił się w innej karcie. Odśwież widok i narysuj region ponownie.";
   }
   if (isApiError(error) && error.code === "active_run") {
-    return "Nie można teraz dodać regionu do tego profilu. Aktywny run czyta regiony podczas kadrowania, więc część jego klatek dostałaby nowy region, a część nie. Zatrzymaj lub dokończ run i spróbuj ponownie.";
+    return "Nie można teraz dodać regionu do tego profilu. Niedokończony run może jeszcze czytać regiony podczas kadrowania, więc część jego klatek dostałaby nowy region, a część nie. Dokończ ten run — wznów go, jeśli został zatrzymany — i spróbuj ponownie.";
   }
   const failure = describeApiError(error);
   return `${failure.message} ${failure.action}`;

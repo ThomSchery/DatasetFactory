@@ -189,7 +189,10 @@ export function GroupedOptionList({
           kind: "group",
           visibleOptions: options,
         });
-      } else {
+      } else if (!filtering) {
+        // Filtering disables disclosure controls because it temporarily forces
+        // matching groups open. Disabled buttons cannot receive focus, so they
+        // must also leave the roving keyboard model while the filter is active.
         collected.push({
           group,
           id: `${DISCLOSURE_ROW_PREFIX}${group.id}`,
@@ -206,7 +209,7 @@ export function GroupedOptionList({
       }
     }
     return collected;
-  }, [mode, shown]);
+  }, [filtering, mode, shown]);
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
   const rowIndexById = useMemo(

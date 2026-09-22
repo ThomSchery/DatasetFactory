@@ -38,6 +38,7 @@ def _seed_run_with_sample(
     profile_id: str,
     tmp_path: Path,
     holds_workflow_slot: bool = False,
+    run_status: str | None = None,
 ) -> dict[str, str]:
     """One profile-bound run with a frame that is already cropped and accepted."""
     source = tmp_path / f"material-{uuid4().hex}.mp4"
@@ -69,14 +70,15 @@ def _seed_run_with_sample(
             )
         )
         session.flush()
+        status = run_status or ("running" if holds_workflow_slot else "completed")
         session.add(
             PipelineRun(
                 id=ids["run"],
                 profile_id=profile_id,
                 video_id=ids["video"],
                 interval_ms=1000,
-                status="running" if holds_workflow_slot else "completed",
-                workflow_slot=1 if holds_workflow_slot else None,
+                status=status,
+                workflow_slot=1 if status == "running" else None,
                 attempt=1,
                 total_frames=1,
                 ocr_engine="stub",
@@ -370,6 +372,39 @@ def test_added_region_is_refused_while_a_run_on_this_profile_owns_the_slot(
             profile_id=profile_id,
             tmp_path=tmp_path,
             holds_workflow_slot=True,
+        )
+        response = client.post(
+            f"/api/v1/profiles/{profile_id}/regions",
+            json=_region_payload(),
+        )
+        reloaded = client.get(f"/api/v1/profiles/{profile_id}")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "active_run"
+    assert len(reloaded.json()["regions"]) == 1
+    assert reloaded.json()["version"] == 1
+
+
+@pytest.mark.parametrize("run_status", ("queued", "paused", "failed", "cancelled"))
+def test_added_region_is_refused_while_same_profile_work_can_still_run(
+    run_status: str,
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    """Re-runnable work has released the slot, but resume/start would still
+    read the profile's live regions and mix two region sets in one run."""
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        profile_id = created.json()["id"]
+        _seed_run_with_sample(
+            composition,
+            profile_id=profile_id,
+            tmp_path=tmp_path,
+            run_status=run_status,
         )
         response = client.post(
             f"/api/v1/profiles/{profile_id}/regions",

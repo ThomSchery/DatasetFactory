@@ -234,9 +234,11 @@ dopiero w trakcie runu (`crop_out_of_bounds`). Nazwa jest unikalna w profilu po
 `strip().casefold()`, a zapis rozpoczyna `BEGIN IMMEDIATE` przed sprawdzeniem
 `expected_version`. Dodanie **nie dotyka** istniejących `region_samples`, etapów
 klatek ani decyzji weryfikacji — nowy region obowiązuje od kolejnego runu. Żądanie
-jest odrzucane kodem `409 active_run`, gdy `workflow_slot` należy do runu **tego
-samego** profilu: etap kadrowania czyta regiony na żywo, więc klatki jeszcze
-nieprzetworzone przycięłyby się z nowym regionem, a wcześniejsze nie.
+jest odrzucane kodem `409 active_run`, gdy run **tego samego** profilu nadal może
+wejść w etap kadrowania (`queued`, `running`, `paused`, `failed`, `cancelled`). Etap
+kadrowania czyta regiony na żywo, więc sprawdzanie wyłącznie `workflow_slot` nie
+wystarcza: pauza lub błąd zwalnia slot, ale taki run można wznowić. `review_ready` i
+`completed` nie wracają do kadrowania i nie blokują zmiany.
 
 `POST /profiles/{profile_id}/categories` waliduje pojedynczą kategorię tym samym
 silnikiem definicji co tworzenie profilu. Nazwy są unikalne po `strip().casefold()`.
