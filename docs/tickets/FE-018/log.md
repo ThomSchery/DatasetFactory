@@ -44,9 +44,13 @@ jedyną tanią odpowiedzią, która utrzymuje obietnicę „nowy region obowiąz
 runu” dosłownie prawdziwą.
 
 **Zakres blokady jest węższy niż przy `activate_profile`.** Tamta blokuje, gdy
-ktokolwiek zajmuje `workflow_slot`. Tutaj blokuje tylko wtedy, gdy run zajmujący slot
-działa **na tym samym profilu** — run na innym profilu nie dotyka tych regionów i nie ma
-czego chronić. Kod błędu pozostaje `active_run`, status `409`.
+ktokolwiek zajmuje `workflow_slot`. Tutaj blokuje tylko pracę związaną **z tym samym
+profilem**, która może jeszcze wejść w etap kadrowania: `queued`, `running`, `paused`,
+`failed` lub `cancelled`. Trzy ostatnie stany zwalniają `workflow_slot`, ale stan maszyny
+pozwala je wznowić, więc sprawdzanie samego slotu zostawiałoby tę samą lukę po pauzie albo
+błędzie. `review_ready` i `completed` nie mogą wrócić do kadrowania i nie blokują zmiany;
+run na innym profilu nie dotyka tych regionów. Kod błędu pozostaje `active_run`, status
+`409`.
 
 Komunikat w interfejsie mówi wprost, dlaczego: część klatek zdążyłaby użyć nowego
 regionu, a część nie.
@@ -117,6 +121,9 @@ z `--font-size-xs` i nie wprowadza wartości spoza tokenów.
   jeden przystanek `Tab` (wymóg z §5 katalogu: „pole filtrowania jest wejściem i wyjściem z listy”);
 - `mode="single"`: trójkąt **jest** wierszem nagłówka grupy i bierze udział w roving tabindex
   (`tabIndex` sterowany `activeId`), `Enter`/`Spacja` zwija i rozwija;
+- podczas filtrowania wymuszone otwarcie wyłącza trójkąty i usuwa je z modelu roving tabindex;
+  strzałki, `Home` i `End` przechodzą wtedy wyłącznie po aktywnych wynikach, nie próbują
+  ustawić fokusa na wyłączonym przycisku;
 - wiersze pozycji zwiniętej grupy **nie wchodzą** do tablicy `rows`, więc strzałki ich nie
   odwiedzają — zwijanie nie tworzy pułapki fokusa;
 - treść grupy jest zawsze w DOM z atrybutem `hidden`, więc `aria-controls` nigdy nie wskazuje
@@ -154,4 +161,89 @@ zmiana `7` → `A` (obie `character`) też jest przejściem między grupami i te
 
 ## 6. Przebieg prac
 
-(uzupełniane w trakcie)
+### 6.1 Commity implementacyjne
+
+| Commit | Zakres |
+|---|---|
+| `e1322c8` | plan, rozpoznanie i rozstrzygnięcia `active_run` / stanu zwijania |
+| `a6f9c92` | repozytorium, use case i trasa dodania regionu wraz z testami kontraktu |
+| `c67a3be` | wspólna taksonomia czterech grup, `CollapsibleGroup`, integracja pickerów i test filtra przez zwinięcie |
+| `54833fd` | interfejs dodania regionu na ekranie profilu, grupy klas na tym ekranie i aktualizacja ostrzeżenia FE-016 |
+| `0cf9905` | scenariusz Playwright/Visual QA FE-018 i aktualizacja historycznego testu FE-016 do czterech grup |
+| `01fbf81` | poprawki po cold review: pełna blokada pracy, którą można uruchomić/wznowić, i prawidłowy fokus przy filtrze |
+
+### 6.2 Sondy przed pełną bramką
+
+- `uv run --frozen pytest backend/tests/test_profile_region_api.py -q` — **15/15 PASS**;
+- `uv run --frozen ruff format --check` — **272 pliki poprawnie sformatowane**;
+- `uv run --frozen ruff check` — **PASS**;
+- `uv run --frozen python -m mypy` — **PASS, 100 plików źródłowych**;
+- `npm run typecheck` — **PASS**;
+- `npm test` przed cold review — **43/43 pliki, 705/705 testów PASS**;
+- test falsyfikowalny filtra: grupa `Liczby` zostaje zwinięta, klasa jest niewidoczna,
+  wpisanie jej nazwy pokazuje wynik, a wyczyszczenie filtra przywraca wcześniejsze zwinięcie;
+- test FE-016 obejmuje też przejście `7` (`Liczby`) → `A` (`Litery`) bez zmiany `kind`,
+  więc ostrzeżenie naprawdę rozumie cztery grupy, a nie tylko dawny podział `character/game`.
+
+### 6.3 Cold review i dwie naprawy przed bramką
+
+Niezależny reviewer odtworzył na `0cf9905` dwa blokery:
+
+1. po pauzie `workflow_slot` znikał, więc API przyjmowało region (`201`), a wznowiona
+   kolejna klatka tego samego runu dostawała już inny zestaw regionów;
+2. w trybie `single` filtrowanie wyłączało przyciski grup, ale zostawiało je w tablicy
+   nawigacji; `Home`/strzałka próbowały fokusować wyłączony przycisk.
+
+Commit `01fbf81` zamknął oba przypadki. Blokada obejmuje teraz `queued`, `running`,
+`paused`, `failed` i `cancelled` tego samego profilu; `review_ready` i `completed` są
+bezpieczne, bo nie wracają do kadrowania. Regresja klawiatury przechodzi sekwencję
+`ArrowDown` → `End` → `Home` → `ArrowUp` przy aktywnym filtrze. Po poprawce:
+
+- backend regionów: **15/15 PASS**;
+- `GroupedOptionList` + ekran profilu: **23/23 PASS**;
+- `npm run typecheck`: **PASS**.
+
+Finalny cold review zakresu `234aea2..01fbf81` zakończył się bez otwartych ustaleń.
+Recenzent niezależnie uzyskał **15/15** testów backendu, **41/41** wskazanych testów
+frontendu i powtórzył naprawioną sekwencję fokusa w prawdziwym Chromium. Pełny zapis:
+`artifacts/fe-018-cold-review/index.md`.
+
+### 6.4 Visual QA — oględziny pełnej rozdzielczości
+
+`fe018-visual-qa.spec.ts`: **1/1 PASS**. Sprawdzone ręcznie wszystkie dziesięć PNG przy
+1440×1000 i 1920×1080, bez `fullPage`, ponownie po pełnej bramce:
+
+- **dodawanie regionu:** ostrzeżenie „Nowy region obowiązuje od kolejnego runu” jest
+  widoczne przed zapisem, nad kanwą; szkic prostokąta ma czytelny obrys, pole nazwy i akcje
+  pozostają w naturalnej kolejności, a nic nie nachodzi na nawigację ani krawędź karty;
+- **profil — grupy rozwinięte:** cztery nagłówki `Pola HUD (gra)`, `Liczby`, `Litery`,
+  `Symbole` są jednoznaczne, wiersze i plakietki zachowują wyrównanie, a trójkąty mają
+  widoczny stan rozwinięcia;
+- **profil — grupy zwinięte:** zwinięte nagłówki pozostają widoczne, znikają tylko ich
+  wiersze; karta nie zostawia przypadkowych pustych bloków;
+- **anotacje:** ten sam język trójkątów i nagłówków działa w wąskim panelu przy obu
+  viewportach; stan rozwinięty nie zasłania przycisków „Usuń”/„Zmień nazwę”, a po
+  zwinięciu wszystkie nagłówki mieszczą się bez przycięcia;
+- szeroki viewport powiększa kanwę i wiersze, a 1440×1000 zachowuje czytelny, kompaktowy
+  panel; nie ma poziomego przepełnienia, obciętych etykiet ani kolizji z kontrolkami zoomu.
+
+### 6.5 Pełna bramka
+
+Jeden nieprzerwany przebieg absolutnej ścieżki `scripts/check.ps1`: **9/9 PASS, 0 SKIP**.
+
+| Etap | Wynik |
+|---|---|
+| backend format | PASS — 272 pliki |
+| backend lint | PASS |
+| backend typy | PASS — 100 plików źródłowych |
+| backend testy | PASS — 389/389 |
+| frontend typy | PASS |
+| frontend testy | PASS — 43/43 pliki, 706/706 |
+| frontend build | PASS |
+| E2E | PASS — 24/24 |
+| E2E root safety | PASS — 2/2 |
+
+Bramka ponownie wyrenderowała 25 historycznych PNG. Przed przebiegiem 28 śledzonych PNG
+skopiowano do kontrolowanego katalogu tymczasowego; po bramce wszystkie przywrócono przez
+`Copy-Item` (nie `git restore`) i potwierdzono **0** zmodyfikowanych historycznych PNG.
+Dziesięć nowych PNG FE-018 pozostało jako dowód ticketu.
