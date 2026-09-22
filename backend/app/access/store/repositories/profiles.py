@@ -43,6 +43,22 @@ class CategoryNotFoundError(LookupError):
     pass
 
 
+class RegionNameExistsError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        region_id: str | None = None,
+        region_name: str | None = None,
+    ) -> None:
+        super().__init__(region_name)
+        self.region_id = region_id
+        self.region_name = region_name
+
+
+class ProfileRegionBlockedError(RuntimeError):
+    """A run bound to this very profile still owns the single workflow slot."""
+
+
 class ProfileVersionConflictError(RuntimeError):
     pass
 
@@ -74,6 +90,17 @@ class RegionDraft:
     y: int
     width: int
     height: int
+
+
+@dataclass(frozen=True)
+class NewRegionDraft:
+    id: str
+    name: str
+    x: int
+    y: int
+    width: int
+    height: int
+    expected_version: int
 
 
 @dataclass(frozen=True)
@@ -356,6 +383,72 @@ class ProfileRepository:
                 raise CategoryNameExistsError from exc
             raise ProfilePersistenceError from exc
 
+    def add_region(self, profile_id: str, draft: NewRegionDraft) -> ProfileRecord:
+        """Append one HUD region under the same writer reservation as a rename.
+
+        The reservation precedes every read, so the version check, the active-run
+        check and the duplicate-name check all see the state the INSERT will land
+        on. A region is appended, never replaced: `region_samples` reference
+        `hud_regions.id`, and nothing here touches an existing identifier.
+        """
+        try:
+            with self._database.session() as session:
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                profile = session.get(GameProfile, profile_id)
+                if profile is None:
+                    raise ProfileNotFoundError
+                if profile.version != draft.expected_version:
+                    raise ProfileVersionConflictError
+                # Not the same gate as `activate`: that one refuses whenever the
+                # single workflow slot is taken at all. Here only a run bound to
+                # *this* profile matters, because only that run's crop stage
+                # reads these regions (`FrameRepository._processing_record`).
+                blocking_run = session.scalar(
+                    select(PipelineRun.id)
+                    .where(
+                        PipelineRun.workflow_slot == 1,
+                        PipelineRun.profile_id == profile_id,
+                    )
+                    .limit(1)
+                )
+                if blocking_run is not None:
+                    raise ProfileRegionBlockedError
+
+                duplicate = self._duplicate_region(session, profile_id, draft.name)
+                if duplicate is not None:
+                    raise RegionNameExistsError(
+                        region_id=duplicate.id,
+                        region_name=duplicate.name,
+                    )
+
+                session.add(
+                    HudRegion(
+                        id=draft.id,
+                        profile_id=profile_id,
+                        name=draft.name,
+                        x=draft.x,
+                        y=draft.y,
+                        width=draft.width,
+                        height=draft.height,
+                    )
+                )
+                profile.version += 1
+                session.flush()
+                return self._record(session, profile)
+        except (
+            ProfileNotFoundError,
+            ProfileRegionBlockedError,
+            ProfileVersionConflictError,
+            RegionNameExistsError,
+        ):
+            raise
+        except IntegrityError as exc:
+            if "UNIQUE constraint failed: hud_regions.profile_id, hud_regions.name" in str(
+                exc.orig
+            ):
+                raise RegionNameExistsError from exc
+            raise ProfilePersistenceError from exc
+
     def rename_category(
         self,
         profile_id: str,
@@ -427,6 +520,21 @@ class ProfileRepository:
                     select(Category).where(Category.profile_id == profile_id)
                 )
                 if category.id != exclude_id and category.name.strip().casefold() == normalized_name
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _duplicate_region(session: Session, profile_id: str, name: str) -> HudRegion | None:
+        """The profile-scoped region name rule, folded exactly like categories."""
+        normalized_name = name.strip().casefold()
+        return next(
+            (
+                region
+                for region in session.scalars(
+                    select(HudRegion).where(HudRegion.profile_id == profile_id)
+                )
+                if region.name.strip().casefold() == normalized_name
             ),
             None,
         )

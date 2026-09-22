@@ -111,6 +111,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /profiles/reference-frame` | `{video_id,timestamp_ms}` | `201 {asset_id,width,height}` | `400/404/409/502/503/504` |
 | `POST /profiles` | `{name, reference_image_path xor reference_asset_id, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing/asset_not_found`, `409 profile_name_exists` |
 | `POST /profiles/{profile_id}/categories` | `{name,kind:character\|game}` | `201 Category` | `400 validation_error`, `404 profile_not_found`, `409 category_name_exists`, `500 category_persistence_failed` |
+| `POST /profiles/{profile_id}/regions` | `{name,x,y,width,height,expected_version}` | `201 GameProfile` | `400 invalid_region_name/invalid_region_bbox/region_out_of_bounds`, `404 profile_not_found`, `409 region_name_exists/version_conflict/active_run`, `500 region_persistence_failed` |
 | `GET /profiles` | — | lista podsumowań profili z licznikami i `active` | `500` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
 | `POST /profiles/{profile_id}/activate` | — | wybrany `GameProfile` | `404 profile_not_found`, `409 active_run` |
@@ -225,6 +226,17 @@ po `run.profile_id`; `/profiles/current` pozostaje skrótem dla bieżącego prof
 używanym przez pozostałe przepływy. Statyczna trasa `/profiles/current` musi być
 rozwiązywana przed dynamiczną `/{profile_id}`. Brak rekordu zwraca stabilne
 `404 profile_not_found` i nigdy nie powoduje podstawienia bieżącego profilu.
+
+`POST /profiles/{profile_id}/regions` dokłada jeden region HUD do istniejącego
+profilu. Prostokąt jest walidowany wobec `source_width`/`source_height` tego
+profilu już przy dodawaniu, tą samą regułą, którą `crop_regions` egzekwuje
+dopiero w trakcie runu (`crop_out_of_bounds`). Nazwa jest unikalna w profilu po
+`strip().casefold()`, a zapis rozpoczyna `BEGIN IMMEDIATE` przed sprawdzeniem
+`expected_version`. Dodanie **nie dotyka** istniejących `region_samples`, etapów
+klatek ani decyzji weryfikacji — nowy region obowiązuje od kolejnego runu. Żądanie
+jest odrzucane kodem `409 active_run`, gdy `workflow_slot` należy do runu **tego
+samego** profilu: etap kadrowania czyta regiony na żywo, więc klatki jeszcze
+nieprzetworzone przycięłyby się z nowym regionem, a wcześniejsze nie.
 
 `POST /profiles/{profile_id}/categories` waliduje pojedynczą kategorię tym samym
 silnikiem definicji co tworzenie profilu. Nazwy są unikalne po `strip().casefold()`.

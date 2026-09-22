@@ -62,6 +62,22 @@ class DatasetDefinitionEngine:
         """Validate one category with the same rules used by profile creation."""
         return self._validate_category(category, index=None)
 
+    def validate_region(
+        self,
+        region: RegionDefinition,
+        *,
+        source_width: int,
+        source_height: int,
+    ) -> RegionDefinition:
+        """Validate one region with the same rules used by profile creation.
+
+        The bounds check is the point: `crop_regions` raises `crop_out_of_bounds`
+        when `x + width` leaves the frame, and that failure would otherwise
+        surface an hour into the next run instead of at the moment the operator
+        drew the rectangle.
+        """
+        return self._validate_region(region, source_width, source_height, index=None)
+
     def validate_profile(self, profile: ProfileDefinition) -> ProfileDefinition:
         name = profile.name.strip()
         if not name:
@@ -129,7 +145,7 @@ class DatasetDefinitionEngine:
         region: RegionDefinition,
         source_width: int,
         source_height: int,
-        index: int,
+        index: int | None,
     ) -> RegionDefinition:
         name = region.name.strip()
         if not name or len(name) > 200:

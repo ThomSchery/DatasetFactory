@@ -24,6 +24,21 @@ class RegionRequest(StrictModel):
     height: int = Field(gt=0)
 
 
+class AddRegionRequest(StrictModel):
+    """The create payload plus optimistic concurrency on the owning profile.
+
+    The bounds are checked against the profile's reference image here rather
+    than at the next run, so `crop_out_of_bounds` cannot surface an hour later.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    expected_version: int = Field(ge=1)
+
+
 class CategoryRequest(StrictModel):
     name: str = Field(min_length=1, max_length=200)
     kind: Literal["character", "game"]
@@ -178,6 +193,24 @@ def _category_error(request: Request, error: ProfileUseCaseError) -> JSONRespons
         request,
         code=error.code,
         message="The category could not be saved.",
+        details=error.details,
+    )
+    return JSONResponse(status_code=status_code, content=envelope.model_dump())
+
+
+def _region_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
+    if error.code == "profile_not_found":
+        status_code = 404
+    elif error.code in {"region_name_exists", "version_conflict", "active_run"}:
+        status_code = 409
+    elif error.code == "region_persistence_failed":
+        status_code = 500
+    else:
+        status_code = 400
+    envelope = error_envelope(
+        request,
+        code=error.code,
+        message="The HUD region could not be added.",
         details=error.details,
     )
     return JSONResponse(status_code=status_code, content=envelope.model_dump())
@@ -343,6 +376,42 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
         except ProfileUseCaseError as error:
             return _category_error(request, error)
         return CategoryResponse(id=category.id, name=category.name, kind=category.kind)
+
+    @router.post(
+        "/{profile_id}/regions",
+        response_model=GameProfileResponse,
+        status_code=201,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            500: {"model": ErrorEnvelope},
+        },
+    )
+    def create_region(
+        profile_id: str,
+        payload: AddRegionRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> GameProfileResponse | JSONResponse:
+        # Authorization policy: local-public. The whole profile answers rather
+        # than the single region: appending bumps the profile version, and the
+        # caller needs that version for its next optimistic write.
+        try:
+            record = use_cases.add_region(
+                profile_id=profile_id,
+                region=region_definition(
+                    name=payload.name,
+                    x=payload.x,
+                    y=payload.y,
+                    width=payload.width,
+                    height=payload.height,
+                ),
+                expected_version=payload.expected_version,
+            )
+        except ProfileUseCaseError as error:
+            return _region_error(request, error)
+        return _response(record)
 
     @router.patch(
         "/{profile_id}/categories/{category_id}",

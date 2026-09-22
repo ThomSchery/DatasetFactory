@@ -27,16 +27,19 @@ from backend.app.access.store.repositories.profiles import (
     CategoryNameExistsError,
     CategoryNotFoundError,
     NewCategoryDraft,
+    NewRegionDraft,
     ProfileAggregateDraft,
     ProfileNameExistsError,
     ProfileNotFoundError,
     ProfilePersistenceError,
     ProfileRecord,
+    ProfileRegionBlockedError,
     ProfileRepository,
     ProfileSelectionBlockedError,
     ProfileSummaryRecord,
     ProfileVersionConflictError,
     RegionDraft,
+    RegionNameExistsError,
     RenamedCategoryDraft,
 )
 from backend.app.access.store.repositories.projects import ProjectRepository
@@ -385,6 +388,55 @@ class ProfileUseCases:
         except ProfilePersistenceError as exc:
             raise ProfileUseCaseError("category_persistence_failed") from exc
 
+    def add_region(
+        self,
+        *,
+        profile_id: str,
+        region: RegionDefinition,
+        expected_version: int,
+    ) -> ProfileRecord:
+        """Append one HUD region to a profile that already exists.
+
+        The new region governs the next run and nothing before it: no
+        `region_sample` is created for frames that already have one, and no frame
+        returns to cropping or OCR. The whole profile answers, because appending
+        bumps the profile version and the caller needs it for its next write.
+
+        `source_width`/`source_height` are read outside the writing transaction
+        on purpose: they are immutable for the life of a profile — no route
+        changes them — so the only state the reservation has to protect is the
+        version, the run gate and the name.
+        """
+        profile = self.get_profile(profile_id)
+        definition = self._validated_region(
+            region,
+            source_width=profile.source_width,
+            source_height=profile.source_height,
+        )
+        try:
+            return self._profiles.add_region(
+                profile_id,
+                NewRegionDraft(
+                    id=str(uuid4()),
+                    name=definition.name,
+                    x=definition.bbox.x,
+                    y=definition.bbox.y,
+                    width=definition.bbox.width,
+                    height=definition.bbox.height,
+                    expected_version=expected_version,
+                ),
+            )
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
+        except ProfileVersionConflictError as exc:
+            raise ProfileUseCaseError("version_conflict") from exc
+        except ProfileRegionBlockedError as exc:
+            raise ProfileUseCaseError("active_run") from exc
+        except RegionNameExistsError as exc:
+            raise self._region_name_conflict(exc) from exc
+        except ProfilePersistenceError as exc:
+            raise ProfileUseCaseError("region_persistence_failed") from exc
+
     def rename_category(
         self,
         *,
@@ -428,6 +480,32 @@ class ProfileUseCases:
             if exc.index is not None:
                 details["index"] = exc.index
             raise ProfileUseCaseError(exc.code, details=details) from exc
+
+    def _validated_region(
+        self,
+        region: RegionDefinition,
+        *,
+        source_width: int,
+        source_height: int,
+    ) -> RegionDefinition:
+        try:
+            return self._engine.validate_region(
+                region,
+                source_width=source_width,
+                source_height=source_height,
+            )
+        except DefinitionValidationError as exc:
+            details: dict[str, Any] = {"field": exc.field}
+            if exc.index is not None:
+                details["index"] = exc.index
+            raise ProfileUseCaseError(exc.code, details=details) from exc
+
+    @staticmethod
+    def _region_name_conflict(error: RegionNameExistsError) -> ProfileUseCaseError:
+        details: dict[str, Any] = {}
+        if error.region_id is not None and error.region_name is not None:
+            details = {"region_id": error.region_id, "region_name": error.region_name}
+        return ProfileUseCaseError("region_name_exists", details=details)
 
     @staticmethod
     def _category_name_conflict(error: CategoryNameExistsError) -> ProfileUseCaseError:
