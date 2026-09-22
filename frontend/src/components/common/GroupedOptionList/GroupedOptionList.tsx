@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { CollapsibleGroup } from "../CollapsibleGroup";
 import { TextField } from "../TextField";
 import "./GroupedOptionList.css";
 
@@ -68,19 +69,30 @@ interface GroupRow {
 }
 
 interface OptionRow {
+  groupId: string;
   id: string;
   kind: "option";
   option: GroupedOption;
 }
 
-type Row = GroupRow | OptionRow;
+/** The disclosure control of a group whose header is not a checkbox row. */
+interface DisclosureRow {
+  group: GroupedOptionGroup;
+  id: string;
+  kind: "disclosure";
+}
+
+type Row = GroupRow | OptionRow | DisclosureRow;
 
 interface VisibleGroup {
   group: GroupedOptionGroup;
+  /** Collapse gives way to the filter; this is the state actually rendered. */
+  open: boolean;
   options: readonly GroupedOption[];
 }
 
 const GROUP_ROW_PREFIX = "group:";
+const DISCLOSURE_ROW_PREFIX = "disclosure:";
 
 function normalize(value: string): string {
   return value.trim().toLocaleLowerCase("pl");
@@ -93,17 +105,25 @@ function limitCodePoints(value: string, maximum: number | undefined): string {
 function visibleGroups(
   groups: readonly GroupedOptionGroup[],
   query: string,
+  collapsed: ReadonlySet<string>,
 ): readonly VisibleGroup[] {
   const needle = normalize(query);
+  const filtering = needle !== "";
   return groups
     .map((group) => {
       // A group whose own name matches keeps all of its options: filtering by
-      // "Znaki" is a request for the group, not for a class called "Znaki".
+      // "Litery" is a request for the group, not for a class called "Litery".
       const options =
-        needle === "" || normalize(group.label).includes(needle)
+        !filtering || normalize(group.label).includes(needle)
           ? group.options
           : group.options.filter((option) => normalize(option.label).includes(needle));
-      return { group, options };
+      /*
+       * Filtering wins over collapsing, always. Typing `8` while `Liczby` is
+       * collapsed has to show `8` — collapsing is for browsing, and a search
+       * that hides its own results is broken. The remembered state comes back
+       * the moment the filter is cleared.
+       */
+      return { group, open: filtering || !collapsed.has(group.id), options };
     })
     .filter((entry) => entry.options.length > 0);
 }
@@ -146,14 +166,22 @@ export function GroupedOptionList({
 }: GroupedOptionListProps) {
   const [uncontrolledQuery, setUncontrolledQuery] = useState("");
   const [requestedActiveId, setRequestedActiveId] = useState<string | null>(null);
-  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  // Groups open by default: the panel is autofocused and used under time
+  // pressure, so nothing starts hidden. The state is per mount, which is why
+  // every box opens its picker the same way.
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
+  const rowRefs = useRef(new Map<string, HTMLElement>());
   const filterRef = useRef<HTMLInputElement | null>(null);
 
   const query = filterValue ?? uncontrolledQuery;
-  const shown = useMemo(() => visibleGroups(groups, query), [groups, query]);
+  const filtering = normalize(query) !== "";
+  const shown = useMemo(
+    () => visibleGroups(groups, query, collapsedIds),
+    [collapsedIds, groups, query],
+  );
   const rows = useMemo(() => {
     const collected: Row[] = [];
-    for (const { group, options } of shown) {
+    for (const { group, open, options } of shown) {
       if (mode === "multiple") {
         collected.push({
           group,
@@ -161,9 +189,20 @@ export function GroupedOptionList({
           kind: "group",
           visibleOptions: options,
         });
+      } else {
+        collected.push({
+          group,
+          id: `${DISCLOSURE_ROW_PREFIX}${group.id}`,
+          kind: "disclosure",
+        });
+      }
+      if (!open) {
+        // A collapsed row is `hidden`, so it must not be in the roving
+        // tabindex either — otherwise an arrow key lands on nothing.
+        continue;
       }
       for (const option of options) {
-        collected.push({ id: option.id, kind: "option", option });
+        collected.push({ groupId: group.id, id: option.id, kind: "option", option });
       }
     }
     return collected;
@@ -174,14 +213,39 @@ export function GroupedOptionList({
     () => new Map(rows.map((row, index) => [row.id, index])),
     [rows],
   );
+  const defaultRow =
+    mode === "single" ? (rows.find((row) => row.kind === "option") ?? rows[0]) : rows[0];
   // The active row is derived, not stored: filtering may remove the row the
   // user last touched, and the list still has to have exactly one tab stop.
   const activeId =
-    rows.find((row) => row.id === requestedActiveId)?.id ?? rows[0]?.id ?? null;
+    rows.find((row) => row.id === requestedActiveId)?.id ?? defaultRow?.id ?? null;
 
   function focusRow(id: string): void {
     setRequestedActiveId(id);
     rowRefs.current.get(id)?.focus();
+  }
+
+  function groupIdOf(row: Row): string {
+    return row.kind === "option" ? row.groupId : row.group.id;
+  }
+
+  function setCollapsed(groupId: string, collapsed: boolean): void {
+    setCollapsedIds((current) => {
+      if (current.has(groupId) === collapsed) {
+        return current;
+      }
+      const next = new Set(current);
+      if (collapsed) {
+        next.add(groupId);
+      } else {
+        next.delete(groupId);
+      }
+      return next;
+    });
+  }
+
+  function toggleCollapsed(groupId: string): void {
+    setCollapsed(groupId, !collapsedIds.has(groupId));
   }
 
   function toggleOption(optionId: string): readonly string[] {
@@ -214,6 +278,10 @@ export function GroupedOptionList({
     if (disabled) {
       return;
     }
+    if (row.kind === "disclosure") {
+      toggleCollapsed(row.group.id);
+      return;
+    }
     const next = row.kind === "group" ? toggleGroup(row) : toggleOption(row.option.id);
     onChange(next);
     if (confirm) {
@@ -221,9 +289,18 @@ export function GroupedOptionList({
     }
   }
 
-  function handleRowKeyDown(event: KeyboardEvent<HTMLDivElement>, index: number): void {
+  function headerRowId(groupId: string): string {
+    return `${mode === "multiple" ? GROUP_ROW_PREFIX : DISCLOSURE_ROW_PREFIX}${groupId}`;
+  }
+
+  function handleRowKeyDown(event: KeyboardEvent<HTMLElement>, index: number): void {
     const row = rows[index];
     if (row === undefined) {
+      return;
+    }
+    if (row.kind === "disclosure" && (event.key === "Enter" || event.key === " ")) {
+      // The row is a real button; its native activation already toggles the
+      // group. Swallowing the key here would cancel the click it produces.
       return;
     }
     switch (event.key) {
@@ -245,6 +322,33 @@ export function GroupedOptionList({
         if (previous !== undefined) {
           focusRow(previous.id);
         }
+        return;
+      }
+      /*
+       * The tree convention, and the only way to reach the triangle without
+       * adding a second tab stop to the list: Left collapses the group the
+       * focused row belongs to, Right expands it. While a filter is active the
+       * collapse state is suspended, so neither key has anything to do.
+       */
+      case "ArrowLeft": {
+        if (filtering || disabled) {
+          return;
+        }
+        event.preventDefault();
+        const groupId = groupIdOf(row);
+        setCollapsed(groupId, true);
+        if (row.kind === "option") {
+          // This row is about to be hidden; focus has to land on the header.
+          focusRow(headerRowId(groupId));
+        }
+        return;
+      }
+      case "ArrowRight": {
+        if (filtering || disabled) {
+          return;
+        }
+        event.preventDefault();
+        setCollapsed(groupIdOf(row), false);
         return;
       }
       case "Home": {
@@ -278,7 +382,11 @@ export function GroupedOptionList({
   function handleFilterKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const first = rows[0];
+      // FE-008-FIX1: the filter enters the choices, not the disclosure chrome.
+      // A collapsed-only list falls back to its first disclosure so the user
+      // can still reopen it without reaching for the pointer.
+      const first =
+        mode === "single" ? (rows.find((row) => row.kind === "option") ?? rows[0]) : rows[0];
       if (first !== undefined) {
         focusRow(first.id);
       }
@@ -298,8 +406,9 @@ export function GroupedOptionList({
       // visible user choice. Only a non-empty query with one visible result is
       // unambiguous enough to confirm from here. Keyboard users can always
       // enter the list with an arrow and confirm the visibly focused row.
-      if (normalize(query) !== "" && rows.length === 1) {
-        activate(rows[0], true);
+      const optionRows = rows.filter((row): row is OptionRow => row.kind === "option");
+      if (normalize(query) !== "" && optionRows.length === 1) {
+        activate(optionRows[0], true);
       }
     }
   }
@@ -329,59 +438,82 @@ export function GroupedOptionList({
         className="df-grouped-options__list"
         role={mode === "single" ? "listbox" : "group"}
       >
-        {shown.map(({ group, options }) => (
-          <div
-            aria-label={group.label}
-            className="df-grouped-options__group"
-            key={group.id}
-            role="group"
-          >
-            {mode === "multiple" ? (
-              <OptionRowElement
-                active={activeId === `${GROUP_ROW_PREFIX}${group.id}`}
-                checked={checkedState(options, selected)}
-                disabled={disabled}
-                index={rowIndexById.get(`${GROUP_ROW_PREFIX}${group.id}`) ?? 0}
-                key={`${GROUP_ROW_PREFIX}${group.id}`}
-                label={group.label}
-                mode={mode}
-                onActivate={activate}
-                onKeyDown={handleRowKeyDown}
-                refCallback={(element) => {
-                  registerRow(rowRefs.current, `${GROUP_ROW_PREFIX}${group.id}`, element);
-                }}
-                row={{
-                  group,
-                  id: `${GROUP_ROW_PREFIX}${group.id}`,
-                  kind: "group",
-                  visibleOptions: options,
-                }}
-              />
-            ) : (
-              <p aria-hidden="true" className="df-grouped-options__group-title">
-                {group.label}
-              </p>
-            )}
-            {options.map((option) => (
-              <OptionRowElement
-                active={activeId === option.id}
-                checked={selected.has(option.id) ? "true" : "false"}
-                detail={option.detail}
-                disabled={disabled}
-                index={rowIndexById.get(option.id) ?? 0}
-                key={option.id}
-                label={option.label}
-                mode={mode}
-                onActivate={activate}
-                onKeyDown={handleRowKeyDown}
-                refCallback={(element) => {
-                  registerRow(rowRefs.current, option.id, element);
-                }}
-                row={{ id: option.id, kind: "option", option }}
-              />
-            ))}
-          </div>
-        ))}
+        {shown.map(({ group, open, options }) => {
+          const groupRowId = `${GROUP_ROW_PREFIX}${group.id}`;
+          const disclosureRowId = `${DISCLOSURE_ROW_PREFIX}${group.id}`;
+          return (
+            <CollapsibleGroup
+              key={group.id}
+              label={group.label}
+              onToggle={() => {
+                toggleCollapsed(group.id);
+              }}
+              open={open}
+              summary={
+                mode === "multiple" ? (
+                  <OptionRowElement
+                    active={activeId === groupRowId}
+                    ariaExpanded={open}
+                    checked={checkedState(options, selected)}
+                    disabled={disabled}
+                    index={rowIndexById.get(groupRowId) ?? 0}
+                    label={group.label}
+                    mode={mode}
+                    onActivate={activate}
+                    onKeyDown={handleRowKeyDown}
+                    refCallback={(element) => {
+                      registerRow(rowRefs.current, groupRowId, element);
+                    }}
+                    row={{ group, id: groupRowId, kind: "group", visibleOptions: options }}
+                  />
+                ) : undefined
+              }
+              /*
+               * `multiple`: the checkbox row beside the triangle is the row in
+               * the roving tabindex and carries `aria-expanded`, so the triangle
+               * is a mouse affordance only. `single` has no such row, so the
+               * triangle *is* the group's row and rovers with the rest.
+               */
+              toggleDisabled={disabled || filtering}
+              toggleKeyDown={
+                mode === "single"
+                  ? (event) => {
+                      handleRowKeyDown(event, rowIndexById.get(disclosureRowId) ?? 0);
+                    }
+                  : undefined
+              }
+              toggleRef={
+                mode === "single"
+                  ? (element) => {
+                      registerRow(rowRefs.current, disclosureRowId, element);
+                    }
+                  : undefined
+              }
+              toggleTabIndex={
+                mode === "multiple" ? -1 : activeId === disclosureRowId && !disabled ? 0 : -1
+              }
+            >
+              {options.map((option) => (
+                <OptionRowElement
+                  active={activeId === option.id}
+                  checked={selected.has(option.id) ? "true" : "false"}
+                  detail={option.detail}
+                  disabled={disabled}
+                  index={rowIndexById.get(option.id) ?? 0}
+                  key={option.id}
+                  label={option.label}
+                  mode={mode}
+                  onActivate={activate}
+                  onKeyDown={handleRowKeyDown}
+                  refCallback={(element) => {
+                    registerRow(rowRefs.current, option.id, element);
+                  }}
+                  row={{ groupId: group.id, id: option.id, kind: "option", option }}
+                />
+              ))}
+            </CollapsibleGroup>
+          );
+        })}
       </div>
       {rows.length === 0 ? (
         <p className="df-grouped-options__empty" role="status">
@@ -394,9 +526,9 @@ export function GroupedOptionList({
 }
 
 function registerRow(
-  registry: Map<string, HTMLDivElement>,
+  registry: Map<string, HTMLElement>,
   id: string,
-  element: HTMLDivElement | null,
+  element: HTMLElement | null,
 ): void {
   if (element === null) {
     registry.delete(id);
@@ -419,6 +551,8 @@ function checkedState(
 
 interface OptionRowElementProps {
   active: boolean;
+  /** Group rows announce their own collapse state; `Left`/`Right` change it. */
+  ariaExpanded?: boolean;
   checked: "true" | "false" | "mixed";
   detail?: string;
   disabled: boolean;
@@ -426,13 +560,14 @@ interface OptionRowElementProps {
   label: string;
   mode: "single" | "multiple";
   onActivate: (row: Row, confirm: boolean) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLDivElement>, index: number) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>, index: number) => void;
   refCallback: (element: HTMLDivElement | null) => void;
   row: Row;
 }
 
 function OptionRowElement({
   active,
+  ariaExpanded,
   checked,
   detail,
   disabled,
@@ -457,6 +592,7 @@ function OptionRowElement({
     <div
       aria-checked={single ? undefined : checked}
       aria-disabled={disabled || undefined}
+      aria-expanded={ariaExpanded}
       aria-selected={single ? checked === "true" : undefined}
       className={classes}
       data-checked={checked}

@@ -1572,7 +1572,7 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
 
     await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
-    await user.click(screen.getByRole("checkbox", { name: "Znaki" }));
+    await user.click(screen.getByRole("checkbox", { name: "Liczby" }));
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
     const oldPopover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
     const oldFilter = within(oldPopover).getByRole("textbox", { name: "Klasa" });
@@ -2735,7 +2735,7 @@ describe("temporal frame navigation", () => {
     expect(await screen.findByText("Skopiowano: 2. Zastąpiono: 1.")).toBeInTheDocument();
   });
 
-  it("selects every class of a level with one click on its checkbox", async () => {
+  it("selects every class of a subgroup with one click on its checkbox", async () => {
     const user = userEvent.setup();
     const requests: unknown[] = [];
     copyApi(requests);
@@ -2748,7 +2748,7 @@ describe("temporal frame navigation", () => {
       ).toHaveAttribute("aria-checked", "false");
     }
 
-    await user.click(screen.getByRole("checkbox", { name: "Znaki" }));
+    await user.click(screen.getByRole("checkbox", { name: "Liczby" }));
     for (const name of ["7", "1"]) {
       expect(
         screen.getByRole("checkbox", { name: `${name} 1` }),
@@ -2808,7 +2808,7 @@ describe("temporal frame navigation", () => {
     expect(
       copyClasses.queryByRole("checkbox", { name: "Score 1" }),
     ).not.toBeInTheDocument();
-    expect(copyClasses.queryByRole("group", { name: "Znaki" })).not.toBeInTheDocument();
+    expect(copyClasses.queryByRole("group", { name: "Liczby" })).not.toBeInTheDocument();
   });
 
   it("refuses to copy when the selection is empty and says why", async () => {

@@ -161,6 +161,22 @@ describe("GroupedOptionList in multiple mode", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Nic nie pasuje.");
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });
+
+  it("lets filtering reveal a result from a collapsed group, then restores the collapse", async () => {
+    const user = userEvent.setup();
+    render(<Harness mode="single" />);
+
+    await user.click(screen.getByRole("button", { name: "Zwiń grupę Znaki" }));
+    expect(screen.getByText("2")).not.toBeVisible();
+
+    const filter = screen.getByLabelText("Filtruj klasy");
+    await user.type(filter, "2");
+    expect(screen.getByRole("option", { name: "2" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Zwiń grupę Znaki" })).toBeDisabled();
+
+    await user.clear(filter);
+    expect(screen.getByText("2")).not.toBeVisible();
+  });
 });
 
 describe("GroupedOptionList in single mode", () => {

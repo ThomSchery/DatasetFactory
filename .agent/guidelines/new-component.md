@@ -79,6 +79,7 @@ frontend/src/components/
 | `TextField` | `frontend/src/components/common/TextField` | Każde pole tekstowe lub liczbowe; jedyny dozwolony `<input>` w aplikacji. |
 | `SelectField` | `frontend/src/components/common/SelectField` | Każda lista wyboru; jedyny dozwolony `<select>` w aplikacji. |
 | `GroupedOptionList` | `frontend/src/components/common/GroupedOptionList` | Wybór z listy dwupoziomowej: grupy i ich pozycje, z filtrowaniem. Jedyny dozwolony sposób renderowania pola wyboru (checkboxa) i listy z wcięciem. Gdy poziomy nie są potrzebne — `SelectField`. |
+| `CollapsibleGroup` | `frontend/src/components/common/CollapsibleGroup` | Nazwana grupa treści zwijana trójkątnym znacznikiem. Używać dla tych samych podgrup klas w pickerach i na ekranie profilu; stan rozwinięcia kontroluje konsument. |
 | `DataList` | `frontend/src/components/common/DataList` | Pary etykieta/wartość: metadane projektu, profilu, runu, liczby klatek. |
 | `RegionOverlay` | `frontend/src/components/common/RegionOverlay` | Prostokąty nad obrazem: regiony HUD profilu, boksy weryfikacji. Jedyny dozwolony sposób rysowania i wskazywania geometrii nad `<img>`. |
 
@@ -242,6 +243,24 @@ Trzy własności są powodem istnienia tego komponentu:
 Zaznaczenie **nie podąża za fokusem**. Przejście strzałkami po liście niczego
 nie wybiera — inaczej świeżo narysowany box dostawałby klasę, której człowiek
 nie wskazał.
+
+### CollapsibleGroup
+
+Kontrolowana grupa ujawniana trójkątnym znacznikiem. Props: `label`, `open`,
+`onToggle`, `children`, opcjonalnie `summary` oraz ustawienia kontrolki
+`toggleDisabled`, `toggleKeyDown`, `toggleRef`, `toggleTabIndex` dla list z
+roving tabindex.
+
+- nagłówek i treść mają odstęp `calc(var(--size-xs) / 2)`, a grupy rozdziela
+  przestrzeń zamiast obrysu (SPACING-01, BORDER-02);
+- znacznik jest `Button size="sm" variant="muted"`, ma nazwę „Zwiń/Rozwiń
+  grupę …”, `aria-expanded` i `aria-controls`;
+- treść pozostaje w DOM i po zwinięciu dostaje `hidden`, dzięki czemu
+  `aria-controls` zawsze wskazuje istniejący element, a ukryte kontrolki nie
+  wchodzą do fokusa;
+- domyślny nagłówek używa `--font-size-xs`, `--font-weight-semibold`,
+  `--letter-spacing-wide` i `--color-text-weak-default` (TYPO-07). Konsument
+  może podać własny `summary`, np. wiersz-checkbox grupy.
 
 ### DataList
 

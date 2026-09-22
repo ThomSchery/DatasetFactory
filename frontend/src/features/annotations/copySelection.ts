@@ -3,14 +3,9 @@ import type {
   CopyPreviousAnnotationsRequest,
   PreviousFrameClass,
 } from "../../api";
+import { groupCategories } from "../../api/categoryGroups";
 
 import type { GroupedOptionGroup } from "../../components/common/GroupedOptionList";
-
-/** The two levels the copy picker offers, in the order the panel shows them. */
-export const COPY_GROUPS: readonly { id: "game" | "character"; label: string }[] = [
-  { id: "game", label: "Pola HUD (gra)" },
-  { id: "character", label: "Znaki" },
-];
 
 /** Everything a copy request needs beyond the frame version. */
 export type CopyPreviousTarget = Pick<
@@ -21,13 +16,14 @@ export type CopyPreviousTarget = Pick<
 export function copyOptionGroups(
   categories: readonly Category[],
 ): readonly GroupedOptionGroup[] {
-  return COPY_GROUPS.map((group) => ({
+  return groupCategories(categories, (category) => ({
+    id: category.id,
+    label: category.name,
+  })).map((group) => ({
     id: group.id,
     label: group.label,
-    options: categories
-      .filter((category) => category.kind === group.id)
-      .map((category) => ({ id: category.id, label: category.name })),
-  })).filter((group) => group.options.length > 0);
+    options: group.items,
+  }));
 }
 
 /**
@@ -56,23 +52,24 @@ export function previousClassOptionGroups(
   previousClasses: readonly PreviousFrameClass[],
 ): readonly GroupedOptionGroup[] {
   const countById = new Map(previousClasses.map((item) => [item.category_id, item.count]));
-  return COPY_GROUPS.map((group) => ({
+  return groupCategories(
+    categories.filter((category) => countById.has(category.id)),
+    (category) => ({
+      /*
+       * The bare count, not "3 wystąpienia": the side column is 288 px wide
+       * and a spelled-out unit on every row left the class name with four
+       * broken lines. The unit is said once, in the list's accessible name,
+       * where it costs no width (`PREVIOUS_CLASS_LIST_LABEL`).
+       */
+      detail: String(countById.get(category.id) ?? 0),
+      id: category.id,
+      label: category.name,
+    }),
+  ).map((group) => ({
     id: group.id,
     label: group.label,
-    options: categories
-      .filter((category) => category.kind === group.id && countById.has(category.id))
-      .map((category) => ({
-        /*
-         * The bare count, not "3 wystąpienia": the side column is 288 px wide
-         * and a spelled-out unit on every row left the class name with four
-         * broken lines. The unit is said once, in the list's accessible name,
-         * where it costs no width (`PREVIOUS_CLASS_LIST_LABEL`).
-         */
-        detail: String(countById.get(category.id) ?? 0),
-        id: category.id,
-        label: category.name,
-      })),
-  })).filter((group) => group.options.length > 0);
+    options: group.items,
+  }));
 }
 
 /** All classes of a kind, in profile order, so the default selection is stable. */

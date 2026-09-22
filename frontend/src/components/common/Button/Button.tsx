@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 import "./Button.css";
 
@@ -9,6 +9,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   loading?: boolean;
   loadingLabel?: string;
+  /** Needed where a roving tabindex has to move focus onto this control. */
+  ref?: Ref<HTMLButtonElement>;
   size?: ButtonSize;
   variant?: ButtonVariant;
 }
@@ -19,6 +21,7 @@ export function Button({
   disabled = false,
   loading = false,
   loadingLabel = "Ładowanie…",
+  ref,
   size = "md",
   type = "button",
   variant = "primary",
@@ -42,6 +45,7 @@ export function Button({
       className={classes}
       data-loading={loading || undefined}
       disabled={disabled || loading}
+      ref={ref}
       type={type}
     >
       <span className="df-button__content">{children}</span>

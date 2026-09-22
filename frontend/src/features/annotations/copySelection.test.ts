@@ -9,10 +9,12 @@ const CATEGORIES: readonly Category[] = [
   { id: "zero", kind: "character", name: "0" },
   { id: "one", kind: "character", name: "1" },
   { id: "two", kind: "character", name: "2" },
+  { id: "letter-a", kind: "character", name: "A" },
+  { id: "dash", kind: "character", name: "-" },
 ];
 
 describe("copyOptionGroups", () => {
-  it("splits the profile into the two named levels in panel order", () => {
+  it("splits the annotation panel into the four shared groups in panel order", () => {
     expect(copyOptionGroups(CATEGORIES)).toEqual([
       {
         id: "game",
@@ -23,20 +25,22 @@ describe("copyOptionGroups", () => {
         ],
       },
       {
-        id: "character",
-        label: "Znaki",
+        id: "digits",
+        label: "Liczby",
         options: [
           { id: "zero", label: "0" },
           { id: "one", label: "1" },
           { id: "two", label: "2" },
         ],
       },
+      { id: "letters", label: "Litery", options: [{ id: "letter-a", label: "A" }] },
+      { id: "symbols", label: "Symbole", options: [{ id: "dash", label: "-" }] },
     ]);
   });
 
   it("drops a level the profile has no classes for", () => {
     expect(copyOptionGroups([CATEGORIES[2] as Category]).map((group) => group.id)).toEqual([
-      "character",
+      "digits",
     ]);
   });
 });

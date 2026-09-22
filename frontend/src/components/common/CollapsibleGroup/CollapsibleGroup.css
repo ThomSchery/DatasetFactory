@@ -1,0 +1,61 @@
+/*
+ * A named group with a disclosure triangle. The hierarchy is carried by weight
+ * and colour (TYPO-07); groups are separated by space, never by a rule
+ * (BORDER-02).
+ */
+
+.df-collapsible-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--size-xs) / 2);
+  min-width: 0;
+}
+
+.df-collapsible-group__header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  min-width: 0;
+}
+
+/* The triangle is a hit target, not a labelled action, so it keeps the shared
+   button chrome but drops the horizontal padding a worded label needs. */
+.df-collapsible-group__toggle.df-button {
+  flex: none;
+  width: var(--control-height-sm);
+  min-width: var(--control-height-sm);
+  padding-inline: var(--size-none);
+  border-radius: var(--radius-sm);
+}
+
+.df-collapsible-group__marker {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+}
+
+.df-collapsible-group__title {
+  min-width: 0;
+  margin: var(--size-none);
+  overflow: hidden;
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.df-collapsible-group__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--size-xs) / 2);
+  min-width: 0;
+}
+
+/* `hidden` has to win over the grid display the rule above sets. */
+.df-collapsible-group__content[hidden] {
+  display: none;
+}
