@@ -5,7 +5,7 @@
 }
 
 .df-profile-collection__list,
-.df-profile-collection__categories {
+.df-profile-collection__category-list {
   display: grid;
   gap: var(--size-xs);
   margin: 0;
@@ -13,8 +13,14 @@
   list-style: none;
 }
 
+.df-profile-collection__categories {
+  display: grid;
+  gap: var(--size-sm);
+  min-width: 0;
+}
+
 .df-profile-collection__row,
-.df-profile-collection__categories li {
+.df-profile-collection__category-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;

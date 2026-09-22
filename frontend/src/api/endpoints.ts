@@ -1,5 +1,6 @@
 import { apiRequest, buildUrl } from "./client";
 import type {
+  AddRegionRequest,
   Annotation,
   Category,
   CategoryInput,
@@ -96,6 +97,24 @@ export function activateProfile(profileId: string): Promise<GameProfile> {
 /** `GET /profiles/{profile_id}` → the exact full profile assigned to a run. */
 export function getProfile(profileId: string, signal?: AbortSignal): Promise<GameProfile> {
   return apiRequest<GameProfile>(`/profiles/${encodeURIComponent(profileId)}`, { signal });
+}
+
+/**
+ * `POST /profiles/{profile_id}/regions` → `201` with the whole profile.
+ *
+ * The new region governs the next run: no `region_sample` is created for frames
+ * that already have one and no frame returns to cropping or OCR. The backend
+ * answers `409 active_run` while a run on this very profile owns the workflow
+ * slot, because its crop stage reads the regions live.
+ */
+export function addProfileRegion(
+  profileId: string,
+  body: AddRegionRequest,
+): Promise<GameProfile> {
+  return apiRequest<GameProfile>(`/profiles/${encodeURIComponent(profileId)}/regions`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** `POST /profiles/{profile_id}/categories` → `201` with the new category. */

@@ -17,8 +17,17 @@ export {
   isApiError,
   isApiTransportError,
   isVersionConflict,
+  regionNameConflictFromError,
 } from "./errors";
-export type { CategoryNameConflict, ErrorDetails } from "./errors";
+export type { CategoryNameConflict, ErrorDetails, RegionNameConflict } from "./errors";
+
+export {
+  CATEGORY_GROUPS,
+  categoryGroupIdOf,
+  categoryGroupLabelOf,
+  groupCategories,
+} from "./categoryGroups";
+export type { CategoryGroupDescriptor, CategoryGroupId } from "./categoryGroups";
 
 export * from "./endpoints";
 

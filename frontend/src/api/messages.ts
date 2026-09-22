@@ -120,6 +120,17 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Klasa o tej nazwie już istnieje w profilu.",
     action: "Lista została odświeżona. Wskaż istniejącą klasę na liście i zapisz przypisanie albo podaj inną nazwę.",
   },
+  // The add-a-region twin of `category_name_exists`. `hud_regions` carries
+  // `UniqueConstraint(profile_id, name)` and the backend names the region that
+  // already holds the name, so the screen can point at it.
+  region_name_exists: {
+    message: "Region o tej nazwie już istnieje w tym profilu.",
+    action: "Podaj inną nazwę regionu.",
+  },
+  region_persistence_failed: {
+    message: "Nie udało się zapisać regionu.",
+    action: "Spróbuj ponownie; jeśli błąd wraca, sprawdź dostępność bazy w workspace.",
+  },
   regions_required: {
     message: "Profil musi mieć przynajmniej jeden region HUD.",
     action: "Zaznacz region na obrazie referencyjnym.",

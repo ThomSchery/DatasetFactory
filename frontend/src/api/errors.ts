@@ -105,6 +105,23 @@ export interface CategoryNameConflict {
   name: string;
 }
 
+export interface RegionNameConflict {
+  id: string;
+  name: string;
+}
+
+/** The backend-authoritative region that caused an add-name conflict. */
+export function regionNameConflictFromError(error: unknown): RegionNameConflict | null {
+  if (!isApiError(error) || error.code !== "region_name_exists") {
+    return null;
+  }
+  const id = error.details.region_id;
+  const name = error.details.region_name;
+  return typeof id === "string" && id !== "" && typeof name === "string" && name !== ""
+    ? { id, name }
+    : null;
+}
+
 /** The backend-authoritative category that caused a create-name conflict. */
 export function categoryNameConflictFromError(error: unknown): CategoryNameConflict | null {
   if (!isApiError(error) || error.code !== "category_name_exists") {

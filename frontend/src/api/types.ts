@@ -78,6 +78,16 @@ export interface RenameCategoryRequest extends CategoryInput {
   expected_version: number;
 }
 
+/**
+ * One region appended to a profile that already exists.
+ *
+ * The version is the profile's, not the region's: appending bumps the profile,
+ * and the response carries the new value for the next write.
+ */
+export interface AddRegionRequest extends RegionInput {
+  expected_version: number;
+}
+
 export interface CreateProfileRequest {
   name: string;
   reference_image_path?: string;

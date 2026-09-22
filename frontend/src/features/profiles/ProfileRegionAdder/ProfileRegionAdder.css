@@ -1,0 +1,52 @@
+.df-profile-region-adder {
+  display: grid;
+  gap: var(--size-sm);
+  min-width: 0;
+}
+
+.df-profile-region-adder__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-sm);
+}
+
+.df-profile-region-adder__header h3,
+.df-profile-region-adder__header p,
+.df-profile-region-adder__hint,
+.df-profile-region-adder__geometry {
+  margin: var(--size-none);
+}
+
+.df-profile-region-adder__header h3 {
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.df-profile-region-adder__header p,
+.df-profile-region-adder__hint,
+.df-profile-region-adder__geometry {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-profile-region-adder__form {
+  display: grid;
+  gap: var(--size-sm);
+  min-width: 0;
+}
+
+.df-profile-region-adder__geometry {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.df-profile-region-adder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--size-xs);
+}
