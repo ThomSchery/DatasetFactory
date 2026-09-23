@@ -23,6 +23,7 @@ from backend.app.access.store.models import (
     Frame,
     GameProfile,
     HudRegion,
+    OcrObservation,
     PipelineRun,
     RegionSample,
     VideoAsset,
@@ -45,6 +46,7 @@ def _seed_run_with_sample(
     source.write_bytes(b"material")
     ids = {
         "frame": str(uuid4()),
+        "observation": str(uuid4()),
         "run": str(uuid4()),
         "sample": str(uuid4()),
         "video": str(uuid4()),
@@ -118,6 +120,31 @@ def _seed_run_with_sample(
                 region_id=region_id,
                 crop_relpath="runs/crop.png",
                 stage_status="ocr_complete",
+            )
+        )
+        session.flush()
+        session.add(
+            OcrObservation(
+                id=ids["observation"],
+                sample_id=ids["sample"],
+                char="0",
+                x=1,
+                y=2,
+                width=3,
+                height=4,
+                confidence=0.9,
+                engine="stub",
+                engine_version="1",
+                runtime_sha256="1" * 64,
+                model_sha256="2" * 64,
+                config_hash="3" * 64,
+                language="eng",
+                page_segmentation_mode=6,
+                experimental=False,
+                quality_gate="passed",
+                warning="",
+                valid=True,
+                rejection_code=None,
             )
         )
         session.flush()
@@ -509,7 +536,7 @@ def test_added_region_rejects_unsupported_page_segmentation_modes(
     assert response.json()["error"]["code"] == "invalid_region_page_segmentation_mode"
 
 
-def test_region_ocr_config_can_be_edited_without_touching_geometry_or_existing_samples(
+def test_region_ocr_config_can_be_edited_without_touching_existing_observations(
     composition: CompositionRoot,
     tmp_path: Path,
 ) -> None:
@@ -532,6 +559,16 @@ def test_region_ocr_config_can_be_edited_without_touching_geometry_or_existing_s
                 sample_before.crop_relpath,
                 sample_before.stage_status,
             )
+            observation_before = session.get(OcrObservation, ids["observation"])
+            assert observation_before is not None
+            observation_snapshot = (
+                observation_before.id,
+                observation_before.sample_id,
+                observation_before.char,
+                observation_before.config_hash,
+                observation_before.page_segmentation_mode,
+            )
+            observation_count = session.scalar(select(func.count(OcrObservation.id)))
 
         response = client.patch(
             f"/api/v1/profiles/{profile_id}/regions/{region_before['id']}/ocr-config",
@@ -559,6 +596,16 @@ def test_region_ocr_config_can_be_edited_without_touching_geometry_or_existing_s
             sample_after.crop_relpath,
             sample_after.stage_status,
         ) == sample_snapshot
+        observation_after = session.get(OcrObservation, ids["observation"])
+        assert observation_after is not None
+        assert (
+            observation_after.id,
+            observation_after.sample_id,
+            observation_after.char,
+            observation_after.config_hash,
+            observation_after.page_segmentation_mode,
+        ) == observation_snapshot
+        assert session.scalar(select(func.count(OcrObservation.id))) == observation_count
 
 
 def test_region_ocr_config_edit_revalidates_subset_and_region_identity(

@@ -90,3 +90,24 @@ Zakres UI obejmuje istniejący ekran profilu oraz formularz tworzenia profilu. N
 - Weryfikacja: frontend `typecheck` i `build` — PASS; pełny Vitest —
   43 pliki, 713 testów PASS. Testy ekranów obejmują oba pola przy tworzeniu,
   edycję istniejącego regionu, podzbiór klas i opisy trybów.
+
+### 2026-09-23 — falsyfikowalność wymaganych kryteriów
+
+Każdą próbę wykonano przez kopię pliku, celowe wyłączenie ochrony, pojedynczy
+test, odtworzenie przez `Copy-Item` i porównanie SHA256.
+
+- **Brak liter w regionie cyfrowym:** usunięcie filtra whitelist z parsera dało
+  `['W', '0'] != ['0']` w
+  `test_numeric_region_drops_letter_candidates_before_mapping`. Po odtworzeniu
+  `tesseract.py` hash wyniósł ponownie
+  `3EEC9E041513F19F53D48F472D2952C29A153B928CE17F514C1DC95B4138D7ED`, test PASS.
+- **Zgodność po migracji:** zastąpienie legacy fallbacku PSM trybem `6` dało
+  `page_segmentation_mode: 6 != 7` w
+  `test_legacy_region_fallback_keeps_same_frame_ocr_result_after_migration`.
+  Po odtworzeniu `manager.py` hash wyniósł ponownie
+  `133B9D6D0ED3274563D485C16CB046925FE0E3DD52E896560DDDEB613B4D4FEA`, test PASS.
+- **Brak przeliczania wstecz:** celowe usunięcie zapisanych obserwacji w
+  transakcji edycji dało `observation_after is None` w
+  `test_region_ocr_config_can_be_edited_without_touching_existing_observations`.
+  Po odtworzeniu `profiles.py` hash wyniósł ponownie
+  `2E24ECB4BA69C1386A5001F9EDB98C2DC8F5638A336EF8885EFC9207F150F1A7`, test PASS.
