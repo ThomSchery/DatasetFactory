@@ -22,6 +22,8 @@ class RegionRequest(StrictModel):
     y: int = Field(ge=0)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
+    allowed_chars: str | None = Field(default=None, min_length=1)
+    page_segmentation_mode: int | None = None
 
 
 class AddRegionRequest(StrictModel):
@@ -36,6 +38,14 @@ class AddRegionRequest(StrictModel):
     y: int = Field(ge=0)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
+    allowed_chars: str = Field(min_length=1)
+    page_segmentation_mode: int
+    expected_version: int = Field(ge=1)
+
+
+class UpdateRegionOcrConfigRequest(StrictModel):
+    allowed_chars: str = Field(min_length=1)
+    page_segmentation_mode: int
     expected_version: int = Field(ge=1)
 
 
@@ -86,6 +96,8 @@ class RegionResponse(StrictModel):
     y: int
     width: int
     height: int
+    allowed_chars: str | None = None
+    page_segmentation_mode: int | None = None
 
 
 class CategoryResponse(StrictModel):
@@ -130,7 +142,19 @@ def _response(record: ProfileRecord) -> GameProfileResponse:
         source_width=record.source_width,
         source_height=record.source_height,
         version=record.version,
-        regions=tuple(RegionResponse(**vars(region)) for region in record.regions),
+        regions=tuple(
+            RegionResponse(
+                id=region.id,
+                name=region.name,
+                x=region.x,
+                y=region.y,
+                width=region.width,
+                height=region.height,
+                allowed_chars=region.ocr_allowed_chars,
+                page_segmentation_mode=region.ocr_page_segmentation_mode,
+            )
+            for region in record.regions
+        ),
         categories=tuple(
             CategoryResponse(id=category.id, name=category.name, kind=category.kind)
             for category in record.categories
@@ -199,7 +223,7 @@ def _category_error(request: Request, error: ProfileUseCaseError) -> JSONRespons
 
 
 def _region_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
-    if error.code == "profile_not_found":
+    if error.code in {"profile_not_found", "region_not_found"}:
         status_code = 404
     elif error.code in {"region_name_exists", "version_conflict", "active_run"}:
         status_code = 409
@@ -301,6 +325,10 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                 y=region.y,
                 width=region.width,
                 height=region.height,
+                allowed_chars=(
+                    tuple(region.allowed_chars) if region.allowed_chars is not None else None
+                ),
+                page_segmentation_mode=region.page_segmentation_mode,
             )
             for region in payload.regions
         )
@@ -406,7 +434,38 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                     y=payload.y,
                     width=payload.width,
                     height=payload.height,
+                    allowed_chars=tuple(payload.allowed_chars),
+                    page_segmentation_mode=payload.page_segmentation_mode,
                 ),
+                expected_version=payload.expected_version,
+            )
+        except ProfileUseCaseError as error:
+            return _region_error(request, error)
+        return _response(record)
+
+    @router.patch(
+        "/{profile_id}/regions/{region_id}/ocr-config",
+        response_model=GameProfileResponse,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            500: {"model": ErrorEnvelope},
+        },
+    )
+    def update_region_ocr_config(
+        profile_id: str,
+        region_id: str,
+        payload: UpdateRegionOcrConfigRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> GameProfileResponse | JSONResponse:
+        try:
+            record = use_cases.update_region_ocr_config(
+                profile_id=profile_id,
+                region_id=region_id,
+                allowed_chars=tuple(payload.allowed_chars),
+                page_segmentation_mode=payload.page_segmentation_mode,
                 expected_version=payload.expected_version,
             )
         except ProfileUseCaseError as error:

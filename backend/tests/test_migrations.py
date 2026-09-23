@@ -26,7 +26,14 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     }
     assert profile_columns["source_width"]["nullable"] is False
     assert profile_columns["source_height"]["nullable"] is False
-    assert {"x", "y", "width", "height"} <= region_columns.keys()
+    assert {
+        "x",
+        "y",
+        "width",
+        "height",
+        "ocr_allowed_chars",
+        "ocr_page_segmentation_mode",
+    } <= region_columns.keys()
     assert all(region_columns[name]["nullable"] is False for name in ("x", "y", "width", "height"))
     assert {"id", "relpath", "content_type", "size_bytes"} <= reference_columns.keys()
     assert "status" in reference_columns
@@ -51,9 +58,15 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
         "warning",
     } <= run_columns
     assert "review_revision" in run_columns
-    assert "recovery_skipped_frames" in run_columns
+    assert {"recovery_skipped_frames", "ocr_region_config_json"} <= run_columns
     assert "error_code" in export_columns
-    assert {"ocr_engine", "experimental", "quality_gate", "warning"} <= checkpoint_columns
+    assert {
+        "ocr_engine",
+        "experimental",
+        "quality_gate",
+        "warning",
+        "ocr_region_config_json",
+    } <= checkpoint_columns
     assert {"runtime_sha256", "experimental", "quality_gate", "warning"} <= (observation_columns)
     run_indexes = {index["name"]: index for index in inspector.get_indexes("pipeline_runs")}
     assert run_indexes["uq_pipeline_runs_global_workflow_slot"]["unique"] == 1
@@ -96,7 +109,12 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
         constraint["name"] for constraint in inspector.get_check_constraints("hud_regions")
     }
     assert "ck_profile_source_size" in profile_checks
-    assert {"ck_hud_region_origin", "ck_hud_region_size"} <= region_checks
+    assert {
+        "ck_hud_region_origin",
+        "ck_hud_region_size",
+        "ck_hud_region_ocr_psm",
+        "ck_hud_region_ocr_config_complete",
+    } <= region_checks
     engine.dispose()
 
     command.downgrade(config, "base")
@@ -107,6 +125,89 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     command.upgrade(config, "head")
     engine = create_engine(settings.database_url)
     assert set(inspect(engine).get_table_names()) >= EXPECTED_TABLES
+    engine.dispose()
+
+
+def test_region_ocr_config_migration_preserves_legacy_region_as_fallback(
+    settings: Settings,
+) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0006")
+    engine = create_engine(settings.database_url)
+    now = "2026-09-23T08:00:00+00:00"
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id,name,workspace_path,active_profile_id,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',NULL,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reference_assets "
+                "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+                "VALUES ('a','assets/references/a.png','image/png',1,'ready',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO game_profiles "
+                "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+                "source_height,version,created_at,updated_at) "
+                "VALUES ('g','p','Game','game','a',1920,1080,1,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO hud_regions "
+                "(id,profile_id,name,x,y,width,height,created_at,updated_at) "
+                "VALUES ('r','g','score_right',10,20,100,40,:now,:now)"
+            ),
+            {"now": now},
+        )
+    engine.dispose()
+
+    command.upgrade(config, "0007")
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        migrated = (
+            connection.execute(
+                text(
+                    "SELECT id,profile_id,name,x,y,width,height,ocr_allowed_chars,"
+                    "ocr_page_segmentation_mode FROM hud_regions WHERE id='r'"
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert dict(migrated) == {
+            "id": "r",
+            "profile_id": "g",
+            "name": "score_right",
+            "x": 10,
+            "y": 20,
+            "width": 100,
+            "height": 40,
+            "ocr_allowed_chars": None,
+            "ocr_page_segmentation_mode": None,
+        }
+        assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
+    engine.dispose()
+
+    command.downgrade(config, "0006")
+    engine = create_engine(settings.database_url)
+    inspector = inspect(engine)
+    assert "ocr_allowed_chars" not in {
+        column["name"] for column in inspector.get_columns("hud_regions")
+    }
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT name FROM hud_regions WHERE id='r'")
+        ).scalar_one() == ("score_right")
     engine.dispose()
 
 
@@ -354,7 +455,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0006"
+            "0007"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -465,7 +566,7 @@ def test_documented_cleanup_sql_actually_unblocks_the_migration(settings: Settin
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0006"
+            "0007"
         )
     engine.dispose()
 
@@ -564,6 +665,6 @@ def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Set
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0006"
+            "0007"
         )
     engine.dispose()

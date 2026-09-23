@@ -87,6 +87,17 @@ class HudRegion(TimestampMixin, Base):
         UniqueConstraint("profile_id", "name", name="uq_hud_regions_profile_name"),
         CheckConstraint("x >= 0 AND y >= 0", name="ck_hud_region_origin"),
         CheckConstraint("width > 0 AND height > 0", name="ck_hud_region_size"),
+        CheckConstraint(
+            "ocr_page_segmentation_mode IS NULL OR "
+            "ocr_page_segmentation_mode IN (3,4,6,7,8,10,11,12,13)",
+            name="ck_hud_region_ocr_psm",
+        ),
+        CheckConstraint(
+            "(ocr_allowed_chars IS NULL AND ocr_page_segmentation_mode IS NULL) OR "
+            "(ocr_allowed_chars IS NOT NULL AND length(ocr_allowed_chars) > 0 AND "
+            "ocr_page_segmentation_mode IS NOT NULL)",
+            name="ck_hud_region_ocr_config_complete",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -98,6 +109,8 @@ class HudRegion(TimestampMixin, Base):
     y: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
+    ocr_allowed_chars: Mapped[str | None] = mapped_column(Text)
+    ocr_page_segmentation_mode: Mapped[int | None] = mapped_column(Integer)
 
 
 class Category(TimestampMixin, Base):
@@ -204,6 +217,7 @@ class PipelineRun(TimestampMixin, Base):
     experimental: Mapped[bool] = mapped_column(nullable=False)
     quality_gate: Mapped[str] = mapped_column(String(20), nullable=False)
     warning: Mapped[str] = mapped_column(Text, nullable=False)
+    ocr_region_config_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     review_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recovery_skipped_frames: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -364,6 +378,10 @@ class StageCheckpoint(TimestampMixin, Base):
     experimental: Mapped[bool] = mapped_column(nullable=False)
     quality_gate: Mapped[str] = mapped_column(String(20), nullable=False)
     warning: Mapped[str] = mapped_column(Text, nullable=False)
+    # The run-level columns above describe the adapter identity shared by the whole
+    # run; per-region whitelist/PSM live here so a checkpoint cannot claim a single
+    # configuration once regions disagree.
+    ocr_region_config_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
 
 
 class Export(TimestampMixin, Base):

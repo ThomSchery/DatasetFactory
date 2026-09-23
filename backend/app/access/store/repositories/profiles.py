@@ -55,6 +55,10 @@ class RegionNameExistsError(RuntimeError):
         self.region_name = region_name
 
 
+class RegionNotFoundError(LookupError):
+    pass
+
+
 class ProfileRegionBlockedError(RuntimeError):
     """A run bound to this profile may still execute cropping work."""
 
@@ -90,6 +94,8 @@ class RegionDraft:
     y: int
     width: int
     height: int
+    ocr_allowed_chars: str | None = None
+    ocr_page_segmentation_mode: int | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +106,15 @@ class NewRegionDraft:
     y: int
     width: int
     height: int
+    ocr_allowed_chars: str
+    ocr_page_segmentation_mode: int
+    expected_version: int
+
+
+@dataclass(frozen=True)
+class RegionOcrConfigDraft:
+    ocr_allowed_chars: str
+    ocr_page_segmentation_mode: int
     expected_version: int
 
 
@@ -207,6 +222,8 @@ class ProfileRepository:
                             y=region.y,
                             width=region.width,
                             height=region.height,
+                            ocr_allowed_chars=region.ocr_allowed_chars,
+                            ocr_page_segmentation_mode=region.ocr_page_segmentation_mode,
                         )
                         for region in draft.regions
                     ]
@@ -435,6 +452,8 @@ class ProfileRepository:
                         y=draft.y,
                         width=draft.width,
                         height=draft.height,
+                        ocr_allowed_chars=draft.ocr_allowed_chars,
+                        ocr_page_segmentation_mode=draft.ocr_page_segmentation_mode,
                     )
                 )
                 profile.version += 1
@@ -452,6 +471,56 @@ class ProfileRepository:
                 exc.orig
             ):
                 raise RegionNameExistsError from exc
+            raise ProfilePersistenceError from exc
+
+    def update_region_ocr_config(
+        self,
+        profile_id: str,
+        region_id: str,
+        draft: RegionOcrConfigDraft,
+    ) -> ProfileRecord:
+        """Update only OCR settings; geometry and prior samples stay immutable."""
+        try:
+            with self._database.session() as session:
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                profile = session.get(GameProfile, profile_id)
+                if profile is None:
+                    raise ProfileNotFoundError
+                if profile.version != draft.expected_version:
+                    raise ProfileVersionConflictError
+                region = session.scalar(
+                    select(HudRegion).where(
+                        HudRegion.id == region_id,
+                        HudRegion.profile_id == profile_id,
+                    )
+                )
+                if region is None:
+                    raise RegionNotFoundError
+                blocking_run = session.scalar(
+                    select(PipelineRun.id)
+                    .where(
+                        PipelineRun.profile_id == profile_id,
+                        PipelineRun.status.in_(
+                            ("queued", "running", "paused", "failed", "cancelled")
+                        ),
+                    )
+                    .limit(1)
+                )
+                if blocking_run is not None:
+                    raise ProfileRegionBlockedError
+                region.ocr_allowed_chars = draft.ocr_allowed_chars
+                region.ocr_page_segmentation_mode = draft.ocr_page_segmentation_mode
+                profile.version += 1
+                session.flush()
+                return self._record(session, profile)
+        except (
+            ProfileNotFoundError,
+            ProfileRegionBlockedError,
+            ProfileVersionConflictError,
+            RegionNotFoundError,
+        ):
+            raise
+        except IntegrityError as exc:
             raise ProfilePersistenceError from exc
 
     def rename_category(
@@ -547,7 +616,16 @@ class ProfileRepository:
     @staticmethod
     def _record(session: Session, profile: GameProfile) -> ProfileRecord:
         regions = tuple(
-            RegionDraft(item.id, item.name, item.x, item.y, item.width, item.height)
+            RegionDraft(
+                item.id,
+                item.name,
+                item.x,
+                item.y,
+                item.width,
+                item.height,
+                item.ocr_allowed_chars,
+                item.ocr_page_segmentation_mode,
+            )
             for item in session.scalars(
                 select(HudRegion)
                 .where(HudRegion.profile_id == profile.id)

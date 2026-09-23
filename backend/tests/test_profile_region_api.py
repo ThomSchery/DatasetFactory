@@ -131,6 +131,8 @@ def _region_payload(**overrides: object) -> dict[str, object]:
         "y": 4,
         "width": 8,
         "height": 8,
+        "allowed_chars": "0",
+        "page_segmentation_mode": 7,
         "expected_version": 1,
     }
     payload.update(overrides)
@@ -163,6 +165,8 @@ def test_added_region_gets_its_own_identity_and_bumps_the_profile_version(
     added = body["regions"][1]
     assert added["id"] not in {"", existing_region_id}
     assert (added["x"], added["y"], added["width"], added["height"]) == (4, 4, 8, 8)
+    assert added["allowed_chars"] == "0"
+    assert added["page_segmentation_mode"] == 7
     # The existing region keeps the identity `region_samples` point at.
     assert body["regions"][0]["id"] == existing_region_id
     assert reloaded.json() == body
@@ -454,3 +458,140 @@ def test_added_region_rejects_a_missing_profile(composition: CompositionRoot) ->
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "profile_not_found"
+
+
+def test_added_region_rejects_characters_that_are_not_profile_classes(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        profile_id = created.json()["id"]
+        response = client.post(
+            f"/api/v1/profiles/{profile_id}/regions",
+            json=_region_payload(allowed_chars="01"),
+        )
+        reloaded = client.get(f"/api/v1/profiles/{profile_id}")
+
+    assert response.status_code == 400
+    assert response.json()["error"] == {
+        "code": "region_allowed_chars_not_in_profile",
+        "message": "The HUD region could not be added.",
+        "details": {"field": "allowed_chars"},
+        "request_id": response.json()["error"]["request_id"],
+    }
+    assert reloaded.json()["version"] == 1
+    assert len(reloaded.json()["regions"]) == 1
+
+
+@pytest.mark.parametrize("page_segmentation_mode", (0, 1, 2, 5, 9, 14))
+def test_added_region_rejects_unsupported_page_segmentation_modes(
+    page_segmentation_mode: int,
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        response = client.post(
+            f"/api/v1/profiles/{created.json()['id']}/regions",
+            json=_region_payload(page_segmentation_mode=page_segmentation_mode),
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_region_page_segmentation_mode"
+
+
+def test_region_ocr_config_can_be_edited_without_touching_geometry_or_existing_samples(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=_payload(source))
+        profile_id = created.json()["id"]
+        region_before = created.json()["regions"][0]
+        ids = _seed_run_with_sample(composition, profile_id=profile_id, tmp_path=tmp_path)
+
+        with composition.database.session() as session:
+            sample_before = session.get(RegionSample, ids["sample"])
+            assert sample_before is not None
+            sample_snapshot = (
+                sample_before.id,
+                sample_before.region_id,
+                sample_before.crop_relpath,
+                sample_before.stage_status,
+            )
+
+        response = client.patch(
+            f"/api/v1/profiles/{profile_id}/regions/{region_before['id']}/ocr-config",
+            json={
+                "allowed_chars": "0",
+                "page_segmentation_mode": 6,
+                "expected_version": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["version"] == 2
+    region_after = response.json()["regions"][0]
+    assert {key: region_after[key] for key in ("id", "name", "x", "y", "width", "height")} == {
+        key: region_before[key] for key in ("id", "name", "x", "y", "width", "height")
+    }
+    assert region_after["allowed_chars"] == "0"
+    assert region_after["page_segmentation_mode"] == 6
+    with composition.database.session() as session:
+        sample_after = session.get(RegionSample, ids["sample"])
+        assert sample_after is not None
+        assert (
+            sample_after.id,
+            sample_after.region_id,
+            sample_after.crop_relpath,
+            sample_after.stage_status,
+        ) == sample_snapshot
+
+
+def test_region_ocr_config_edit_revalidates_subset_and_region_identity(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        first = client.post("/api/v1/profiles", json=_payload(source, name="First"))
+        second = client.post("/api/v1/profiles", json=_payload(source, name="Second"))
+        first_region_id = first.json()["regions"][0]["id"]
+        second_region_id = second.json()["regions"][0]["id"]
+        invalid_subset = client.patch(
+            f"/api/v1/profiles/{first.json()['id']}/regions/{first_region_id}/ocr-config",
+            json={
+                "allowed_chars": "01",
+                "page_segmentation_mode": 7,
+                "expected_version": 1,
+            },
+        )
+        wrong_profile = client.patch(
+            f"/api/v1/profiles/{first.json()['id']}/regions/{second_region_id}/ocr-config",
+            json={
+                "allowed_chars": "0",
+                "page_segmentation_mode": 7,
+                "expected_version": 1,
+            },
+        )
+
+    assert invalid_subset.status_code == 400
+    assert invalid_subset.json()["error"]["code"] == "region_allowed_chars_not_in_profile"
+    assert wrong_profile.status_code == 404
+    assert wrong_profile.json()["error"]["code"] == "region_not_found"

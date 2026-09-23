@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,8 @@ from backend.app.access.store.repositories.profiles import (
     ProfileVersionConflictError,
     RegionDraft,
     RegionNameExistsError,
+    RegionNotFoundError,
+    RegionOcrConfigDraft,
     RenamedCategoryDraft,
 )
 from backend.app.access.store.repositories.projects import ProjectRepository
@@ -323,6 +326,12 @@ class ProfileUseCases:
                             y=region.bbox.y,
                             width=region.bbox.width,
                             height=region.bbox.height,
+                            ocr_allowed_chars=(
+                                "".join(region.allowed_chars)
+                                if region.allowed_chars is not None
+                                else None
+                            ),
+                            ocr_page_segmentation_mode=region.page_segmentation_mode,
                         )
                         for region in definition.regions
                     ),
@@ -412,7 +421,11 @@ class ProfileUseCases:
             region,
             source_width=profile.source_width,
             source_height=profile.source_height,
+            character_categories=(
+                category.name for category in profile.categories if category.kind == "character"
+            ),
         )
+        whitelist, mode = self._required_ocr_config(definition)
         try:
             return self._profiles.add_region(
                 profile_id,
@@ -423,6 +436,8 @@ class ProfileUseCases:
                     y=definition.bbox.y,
                     width=definition.bbox.width,
                     height=definition.bbox.height,
+                    ocr_allowed_chars=whitelist,
+                    ocr_page_segmentation_mode=mode,
                     expected_version=expected_version,
                 ),
             )
@@ -434,6 +449,54 @@ class ProfileUseCases:
             raise ProfileUseCaseError("active_run") from exc
         except RegionNameExistsError as exc:
             raise self._region_name_conflict(exc) from exc
+        except ProfilePersistenceError as exc:
+            raise ProfileUseCaseError("region_persistence_failed") from exc
+
+    def update_region_ocr_config(
+        self,
+        *,
+        profile_id: str,
+        region_id: str,
+        allowed_chars: tuple[str, ...],
+        page_segmentation_mode: int,
+        expected_version: int,
+    ) -> ProfileRecord:
+        profile = self.get_profile(profile_id)
+        existing = next((item for item in profile.regions if item.id == region_id), None)
+        if existing is None:
+            raise ProfileUseCaseError("region_not_found")
+        definition = self._validated_region(
+            RegionDefinition(
+                name=existing.name,
+                bbox=BBox(existing.x, existing.y, existing.width, existing.height),
+                allowed_chars=allowed_chars,
+                page_segmentation_mode=page_segmentation_mode,
+            ),
+            source_width=profile.source_width,
+            source_height=profile.source_height,
+            character_categories=(
+                category.name for category in profile.categories if category.kind == "character"
+            ),
+        )
+        whitelist, mode = self._required_ocr_config(definition)
+        try:
+            return self._profiles.update_region_ocr_config(
+                profile_id,
+                region_id,
+                RegionOcrConfigDraft(
+                    ocr_allowed_chars=whitelist,
+                    ocr_page_segmentation_mode=mode,
+                    expected_version=expected_version,
+                ),
+            )
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
+        except RegionNotFoundError as exc:
+            raise ProfileUseCaseError("region_not_found") from exc
+        except ProfileVersionConflictError as exc:
+            raise ProfileUseCaseError("version_conflict") from exc
+        except ProfileRegionBlockedError as exc:
+            raise ProfileUseCaseError("active_run") from exc
         except ProfilePersistenceError as exc:
             raise ProfileUseCaseError("region_persistence_failed") from exc
 
@@ -487,18 +550,30 @@ class ProfileUseCases:
         *,
         source_width: int,
         source_height: int,
+        character_categories: Iterable[str] | None = None,
     ) -> RegionDefinition:
+        """Validate a region the same way profile creation does."""
         try:
             return self._engine.validate_region(
                 region,
                 source_width=source_width,
                 source_height=source_height,
+                character_categories=character_categories,
             )
         except DefinitionValidationError as exc:
             details: dict[str, Any] = {"field": exc.field}
             if exc.index is not None:
                 details["index"] = exc.index
             raise ProfileUseCaseError(exc.code, details=details) from exc
+
+    @staticmethod
+    def _required_ocr_config(definition: RegionDefinition) -> tuple[str, int]:
+        """Every write path states both settings; a region never half-configures."""
+        if definition.allowed_chars is None or definition.page_segmentation_mode is None:
+            raise ProfileUseCaseError(
+                "incomplete_region_ocr_config", details={"field": "allowed_chars"}
+            )
+        return "".join(definition.allowed_chars), definition.page_segmentation_mode
 
     @staticmethod
     def _region_name_conflict(error: RegionNameExistsError) -> ProfileUseCaseError:
@@ -534,5 +609,19 @@ class ProfileUseCases:
                 raise ProfileUseCaseError("asset_not_found") from preview_error
 
 
-def region_definition(*, name: str, x: int, y: int, width: int, height: int) -> RegionDefinition:
-    return RegionDefinition(name=name, bbox=BBox(x=x, y=y, width=width, height=height))
+def region_definition(
+    *,
+    name: str,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    allowed_chars: tuple[str, ...] | None = None,
+    page_segmentation_mode: int | None = None,
+) -> RegionDefinition:
+    return RegionDefinition(
+        name=name,
+        bbox=BBox(x=x, y=y, width=width, height=height),
+        allowed_chars=allowed_chars,
+        page_segmentation_mode=page_segmentation_mode,
+    )

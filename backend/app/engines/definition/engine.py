@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 CategoryKind = Literal["character", "game"]
 _CHARACTER_CATEGORIES = frozenset("-/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+OCR_PAGE_SEGMENTATION_MODES = frozenset({3, 4, 6, 7, 8, 10, 11, 12, 13})
 
 
 def normalize_profile_name(name: str) -> str:
@@ -38,6 +39,8 @@ class BBox:
 class RegionDefinition:
     name: str
     bbox: BBox
+    allowed_chars: tuple[str, ...] | None = None
+    page_segmentation_mode: int | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class DatasetDefinitionEngine:
         *,
         source_width: int,
         source_height: int,
+        character_categories: Iterable[str] | None = None,
     ) -> RegionDefinition:
         """Validate one region with the same rules used by profile creation.
 
@@ -76,7 +80,13 @@ class DatasetDefinitionEngine:
         surface an hour into the next run instead of at the moment the operator
         drew the rectangle.
         """
-        return self._validate_region(region, source_width, source_height, index=None)
+        return self._validate_region(
+            region,
+            source_width,
+            source_height,
+            index=None,
+            character_categories=character_categories,
+        )
 
     def validate_profile(self, profile: ProfileDefinition) -> ProfileDefinition:
         name = profile.name.strip()
@@ -93,13 +103,22 @@ class DatasetDefinitionEngine:
         if not profile.categories:
             raise DefinitionValidationError("categories_required", field="categories")
 
-        regions = tuple(
-            self._validate_region(region, profile.source_width, profile.source_height, index)
-            for index, region in enumerate(profile.regions)
-        )
         categories = tuple(
             self._validate_category(category, index)
             for index, category in enumerate(profile.categories)
+        )
+        character_categories = tuple(
+            category.name for category in categories if category.kind == "character"
+        )
+        regions = tuple(
+            self._validate_region(
+                region,
+                profile.source_width,
+                profile.source_height,
+                index,
+                character_categories=character_categories,
+            )
+            for index, region in enumerate(profile.regions)
         )
         self._require_unique(
             (region.name for region in regions), "duplicate_region_name", "regions"
@@ -146,6 +165,8 @@ class DatasetDefinitionEngine:
         source_width: int,
         source_height: int,
         index: int | None,
+        *,
+        character_categories: Iterable[str] | None = None,
     ) -> RegionDefinition:
         name = region.name.strip()
         if not name or len(name) > 200:
@@ -155,7 +176,39 @@ class DatasetDefinitionEngine:
             raise DefinitionValidationError("invalid_region_bbox", field="regions", index=index)
         if bbox.x + bbox.width > source_width or bbox.y + bbox.height > source_height:
             raise DefinitionValidationError("region_out_of_bounds", field="regions", index=index)
-        return RegionDefinition(name=name, bbox=bbox)
+        allowed_chars = region.allowed_chars
+        page_segmentation_mode = region.page_segmentation_mode
+        if (allowed_chars is None) != (page_segmentation_mode is None):
+            raise DefinitionValidationError(
+                "incomplete_region_ocr_config", field="regions", index=index
+            )
+        if allowed_chars is not None:
+            ordered_character_categories = tuple(character_categories or ())
+            available = frozenset(ordered_character_categories)
+            normalized = tuple(dict.fromkeys(allowed_chars))
+            if not normalized:
+                raise DefinitionValidationError(
+                    "region_allowed_chars_required", field="allowed_chars", index=index
+                )
+            if any(len(char) != 1 or char not in available for char in normalized):
+                raise DefinitionValidationError(
+                    "region_allowed_chars_not_in_profile", field="allowed_chars", index=index
+                )
+            if page_segmentation_mode not in OCR_PAGE_SEGMENTATION_MODES:
+                raise DefinitionValidationError(
+                    "invalid_region_page_segmentation_mode",
+                    field="page_segmentation_mode",
+                    index=index,
+                )
+            allowed_chars = tuple(
+                char for char in ordered_character_categories if char in normalized
+            )
+        return RegionDefinition(
+            name=name,
+            bbox=bbox,
+            allowed_chars=allowed_chars,
+            page_segmentation_mode=page_segmentation_mode,
+        )
 
     @staticmethod
     def _validate_category(category: CategoryDefinition, index: int | None) -> CategoryDefinition:
