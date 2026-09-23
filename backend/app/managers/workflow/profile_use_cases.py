@@ -27,6 +27,7 @@ from backend.app.access.store.repositories.profiles import (
     CategoryDraft,
     CategoryNameExistsError,
     CategoryNotFoundError,
+    CategoryUsedByRegionsError,
     NewCategoryDraft,
     NewRegionDraft,
     ProfileAggregateDraft,
@@ -532,6 +533,16 @@ class ProfileUseCases:
             raise ProfileUseCaseError("version_conflict") from exc
         except CategoryNameExistsError as exc:
             raise self._category_name_conflict(exc) from exc
+        except CategoryUsedByRegionsError as exc:
+            raise ProfileUseCaseError(
+                "category_used_by_regions",
+                details={
+                    "regions": [
+                        {"id": region_id, "name": region_name}
+                        for region_id, region_name in exc.regions
+                    ]
+                },
+            ) from exc
         except ProfilePersistenceError as exc:
             raise ProfileUseCaseError("category_persistence_failed") from exc
 

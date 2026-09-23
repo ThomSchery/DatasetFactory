@@ -189,6 +189,51 @@ describe("profile collection and explicit selection", () => {
     expect(input).toHaveValue("HEALTH");
   });
 
+  it("names every region whose explicit OCR range blocks a class change", async () => {
+    const user = userEvent.setup();
+    const current = profileFixture({
+      categories: [{ id: "category-1", name: "7", kind: "character" }],
+    });
+    stubFetch((url, init) => {
+      if (url.endsWith("/profiles")) {
+        return { status: 200, body: [profileSummaryFixture()] };
+      }
+      if (url.endsWith("/profiles/profile-1/categories/category-1") && init?.method === "PATCH") {
+        return {
+          status: 409,
+          body: errorEnvelope(
+            "category_used_by_regions",
+            "Klasa jest używana przez regiony.",
+            {
+              regions: [
+                { id: "region-score", name: "score_right" },
+                { id: "region-timer", name: "timer" },
+              ],
+            },
+          ),
+        };
+      }
+      if (url.endsWith("/profiles/profile-1")) {
+        return { status: 200, body: current };
+      }
+      return { status: 500, body: errorEnvelope("unexpected_request") };
+    });
+
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zmień nazwę klasy 7" }));
+    const input = screen.getByRole("textbox", { name: "Nowa nazwa klasy 7" });
+    await user.clear(input);
+    await user.type(input, "8");
+    await user.click(screen.getByRole("button", { name: "Zapisz nazwę" }));
+
+    expect(
+      await screen.findByText(
+        "Najpierw zmień zakres znaków OCR w regionach: „score_right”, „timer”.",
+      ),
+    ).toBeInTheDocument();
+    expect(input).toHaveValue("8");
+  });
+
   it("shows and collapses the same four class groups, including an in-kind rename warning", async () => {
     const user = userEvent.setup();
     const current = profileFixture({
@@ -394,6 +439,6 @@ describe("profile collection and explicit selection", () => {
         page_segmentation_mode: 6,
       });
     });
-    expect(await screen.findByText(/6 — Jednolity blok tekstu/)).toBeInTheDocument();
+    expect(await screen.findByText(/6 — Jeden zwarty blok tekstu/)).toBeInTheDocument();
   });
 });

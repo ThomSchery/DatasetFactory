@@ -156,6 +156,12 @@ describe("per-region OCR configuration", () => {
     ]);
     expect(OCR_PAGE_SEGMENTATION_OPTIONS.every((option) => option.label.length > 5)).toBe(true);
     expect(OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => String(option.value))).not.toContain("0");
+    expect(OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === "6")?.label).not.toContain(
+      "wiele wierszy",
+    );
+    expect(OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === "11")?.label).toContain(
+      "Oddzielne wiersze",
+    );
   });
 });
 

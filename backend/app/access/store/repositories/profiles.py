@@ -43,6 +43,12 @@ class CategoryNotFoundError(LookupError):
     pass
 
 
+class CategoryUsedByRegionsError(RuntimeError):
+    def __init__(self, regions: tuple[tuple[str, str], ...]) -> None:
+        super().__init__(", ".join(name for _, name in regions))
+        self.regions = regions
+
+
 class RegionNameExistsError(RuntimeError):
     def __init__(
         self,
@@ -558,6 +564,21 @@ class ProfileRepository:
                         category_id=duplicate.id,
                         category_name=duplicate.name,
                     )
+                if category.kind == "character" and (
+                    draft.kind != "character" or draft.name != category.name
+                ):
+                    blocking_regions = tuple(
+                        (region.id, region.name)
+                        for region in session.scalars(
+                            select(HudRegion)
+                            .where(HudRegion.profile_id == profile_id)
+                            .order_by(HudRegion.created_at, HudRegion.id)
+                        )
+                        if region.ocr_allowed_chars is not None
+                        and category.name in region.ocr_allowed_chars
+                    )
+                    if blocking_regions:
+                        raise CategoryUsedByRegionsError(blocking_regions)
                 category.name = draft.name
                 category.kind = draft.kind
                 # `ordinal` is deliberately untouched: the identifier an export
@@ -568,6 +589,7 @@ class ProfileRepository:
         except (
             CategoryNameExistsError,
             CategoryNotFoundError,
+            CategoryUsedByRegionsError,
             ProfileNotFoundError,
             ProfileVersionConflictError,
         ):

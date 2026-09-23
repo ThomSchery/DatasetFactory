@@ -110,6 +110,11 @@ export interface RegionNameConflict {
   name: string;
 }
 
+export interface RegionOcrBlocker {
+  id: string;
+  name: string;
+}
+
 /** The backend-authoritative region that caused an add-name conflict. */
 export function regionNameConflictFromError(error: unknown): RegionNameConflict | null {
   if (!isApiError(error) || error.code !== "region_name_exists") {
@@ -132,4 +137,26 @@ export function categoryNameConflictFromError(error: unknown): CategoryNameConfl
   return typeof id === "string" && id !== "" && typeof name === "string" && name !== ""
     ? { id, name }
     : null;
+}
+
+/** Explicit OCR regions that still depend on the character being changed. */
+export function regionOcrBlockersFromError(error: unknown): RegionOcrBlocker[] {
+  if (!isApiError(error) || error.code !== "category_used_by_regions") {
+    return [];
+  }
+  const regions = error.details.regions;
+  if (!Array.isArray(regions)) {
+    return [];
+  }
+  return regions.filter(
+    (region): region is RegionOcrBlocker =>
+      typeof region === "object" &&
+      region !== null &&
+      "id" in region &&
+      typeof region.id === "string" &&
+      region.id !== "" &&
+      "name" in region &&
+      typeof region.name === "string" &&
+      region.name !== "",
+  );
 }

@@ -781,6 +781,97 @@ def test_category_rename_preserves_identity_ordinal_and_derives_new_group(
         assert stored.ordinal == 0
 
 
+@pytest.mark.parametrize(
+    ("replacement", "kind"),
+    (("1", "character"), ("zero", "game")),
+    ids=("rename-character", "change-kind"),
+)
+def test_category_change_rejects_explicit_region_whitelist_breakage_and_names_blockers(
+    composition: CompositionRoot,
+    tmp_path: Path,
+    replacement: str,
+    kind: str,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    payload = _payload(source)
+    payload["regions"] = [
+        {
+            "name": "score_right",
+            "x": 0,
+            "y": 0,
+            "width": 32,
+            "height": 24,
+            "allowed_chars": "0",
+            "page_segmentation_mode": 7,
+        }
+    ]
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=payload).json()
+        zero = next(category for category in created["categories"] if category["name"] == "0")
+        response = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{zero['id']}",
+            json={
+                "name": replacement,
+                "kind": kind,
+                "expected_version": created["version"],
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "category_used_by_regions"
+    assert response.json()["error"]["details"] == {
+        "regions": [{"id": created["regions"][0]["id"], "name": "score_right"}]
+    }
+    with composition.database.session() as session:
+        stored = session.get(Category, zero["id"])
+        assert stored is not None
+        assert (stored.name, stored.kind) == ("0", "character")
+
+
+def test_category_rename_not_used_by_explicit_region_still_succeeds(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source)
+    payload = _payload(source)
+    payload["regions"] = [
+        {
+            "name": "score_right",
+            "x": 0,
+            "y": 0,
+            "width": 32,
+            "height": 24,
+            "allowed_chars": "0",
+            "page_segmentation_mode": 7,
+        }
+    ]
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/profiles", json=payload).json()
+        health = next(
+            category for category in created["categories"] if category["name"] == "health"
+        )
+        response = client.patch(
+            f"/api/v1/profiles/{created['id']}/categories/{health['id']}",
+            json={
+                "name": "armour",
+                "kind": "game",
+                "expected_version": created["version"],
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    renamed = next(
+        category for category in response.json()["categories"] if category["id"] == health["id"]
+    )
+    assert renamed == {"id": health["id"], "name": "armour", "kind": "game"}
+
+
 def test_category_rename_noop_keeps_version_and_conflict_matches_creation(
     composition: CompositionRoot,
     tmp_path: Path,

@@ -207,7 +207,11 @@ def _profile_error(request: Request, error: ProfileUseCaseError) -> JSONResponse
 def _category_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
     if error.code in {"profile_not_found", "category_not_found"}:
         status_code = 404
-    elif error.code in {"category_name_exists", "version_conflict"}:
+    elif error.code in {
+        "category_name_exists",
+        "category_used_by_regions",
+        "version_conflict",
+    }:
         status_code = 409
     elif error.code == "category_persistence_failed":
         status_code = 500

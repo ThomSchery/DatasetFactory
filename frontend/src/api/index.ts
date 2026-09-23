@@ -18,8 +18,14 @@ export {
   isApiTransportError,
   isVersionConflict,
   regionNameConflictFromError,
+  regionOcrBlockersFromError,
 } from "./errors";
-export type { CategoryNameConflict, ErrorDetails, RegionNameConflict } from "./errors";
+export type {
+  CategoryNameConflict,
+  ErrorDetails,
+  RegionNameConflict,
+  RegionOcrBlocker,
+} from "./errors";
 
 export {
   CATEGORY_GROUPS,

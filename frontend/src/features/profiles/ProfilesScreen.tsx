@@ -14,6 +14,7 @@ import {
   isVersionConflict,
   listProfiles,
   queryKeys,
+  regionOcrBlockersFromError,
   renameProfileCategory,
 } from "../../api";
 import type { Category, RenameCategoryRequest } from "../../api";
@@ -36,6 +37,11 @@ function formatCreatedAt(value: string): string {
 }
 
 function renameFailureMessage(error: unknown): string {
+  const blockers = regionOcrBlockersFromError(error);
+  if (blockers.length > 0) {
+    const names = blockers.map((region) => `„${region.name}”`).join(", ");
+    return `Najpierw zmień zakres znaków OCR w regionach: ${names}.`;
+  }
   const conflict = categoryNameConflictFromError(error);
   if (conflict !== null) {
     return `Klasa „${conflict.name}” już istnieje w tym profilu. Podaj inną nazwę.`;

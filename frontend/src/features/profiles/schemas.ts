@@ -34,11 +34,11 @@ const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 export const OCR_PAGE_SEGMENTATION_OPTIONS = [
   { value: "3", label: "3 — Automatyczny układ strony" },
   { value: "4", label: "4 — Kolumna tekstu o zmiennym rozmiarze" },
-  { value: "6", label: "6 — Jednolity blok tekstu (wiele wierszy)" },
+  { value: "6", label: "6 — Jeden zwarty blok tekstu" },
   { value: "7", label: "7 — Jeden wiersz tekstu" },
   { value: "8", label: "8 — Jedno słowo" },
   { value: "10", label: "10 — Jeden znak" },
-  { value: "11", label: "11 — Rzadki tekst w dowolnej kolejności" },
+  { value: "11", label: "11 — Oddzielne wiersze lub fragmenty tekstu (sprawdzone dla HUD)" },
   { value: "12", label: "12 — Rzadki tekst z wykrywaniem orientacji" },
   { value: "13", label: "13 — Surowy pojedynczy wiersz" },
 ] as const;

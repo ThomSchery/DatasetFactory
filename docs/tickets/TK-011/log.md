@@ -1,5 +1,43 @@
 # TK-011 — log implementacji
 
+## Design Plan FIX1 (2026-09-23)
+
+Zakres UI jest wyłącznie informacyjny: nie zmienia układu ani komponentów.
+
+### Elementy interfejsu
+
+- etykiety opcji PSM `6` i `11` w istniejącym `SelectField`: `6` opisuje ścisły
+  jednolity blok bez sugerowania, że jest domyślnym wyborem dla każdego regionu
+  wielowierszowego; `11` nazywa rzadki tekst i wskazuje zmierzoną przydatność dla
+  oddzielnych wierszy HUD;
+- komunikat błędu istniejącego `TextField` przy zmianie klasy: po odrzuceniu
+  zapisu nazywa regiony, których jawny zakres nadal używa zmienianego znaku.
+
+### Moduły i ID wytycznych UI/UX
+
+- bez zmian layoutu, kolorów, obramowań, cieni i interakcji; oba miejsca używają
+  istniejących `SelectField` / `TextField` oraz ich kontraktu `Field`;
+- `GRID-10`, `SPACING-03/04/08`: zachowujemy bieżącą szerokość kontrolek i
+  zarezerwowane miejsce na błąd;
+- `TYPO-07`, `FONTSIZE-09/10`, `LHEIGHT-09/10`: treść pozostaje w istniejącej
+  typografii kontrolek, a hierarchii nie budujemy nowym rozmiarem;
+- `COLOR-07/08/09`, `BORDER-03/06`, `RADIUS-05`, `OPACITY-02`: stany błędu,
+  fokusa i disabled pozostają własnością gotowych komponentów;
+- tekst realizuje `impeccable clarify`: mówi, który wybór sprawdził się na danych
+  operatora i co blokuje zapis, bez obietnicy, że jeden PSM pasuje do każdego
+  obrazu.
+
+### Checklista przed kodowaniem UI
+
+- [x] Layout/Siatka: bez zmian; istniejący `SelectField` / `TextField`, `GRID-10`.
+- [x] Typografia: bez nowych tokenów; istniejąca typografia pól, `TYPO-07`.
+- [x] Kolory: bez zmian; błąd przez istniejący stan `Field`, `COLOR-08/09`.
+- [x] Obramowania: bez zmian; istniejący `stroke-strong` i `radius-md`.
+- [x] Cienie: brak zmian i nowych warstw.
+- [x] Interakcje: istniejące focus/disabled/error; komunikat jest powiązany ARIA.
+- [x] Komponenty: `SelectField` i `TextField` z katalogu `common/`; brak nowego
+  komponentu.
+
 ## Design Plan (2026-09-22)
 
 Zakres UI obejmuje istniejący ekran profilu oraz formularz tworzenia profilu. Nie zmieniamy prostokąta ani nie dodajemy usuwania istniejących regionów.
