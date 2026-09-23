@@ -120,6 +120,17 @@ function requestBodies(
     .map(([, init]) => JSON.parse(String(init?.body)));
 }
 
+async function setSelectedRegionOcr(
+  user: ReturnType<typeof userEvent.setup>,
+  allowedChars = "7",
+  pageSegmentationMode = "7",
+): Promise<void> {
+  const whitelist = screen.getByLabelText("Dozwolone znaki OCR");
+  await user.clear(whitelist);
+  await user.type(whitelist, allowedChars);
+  await user.selectOptions(screen.getByLabelText("Układ tekstu OCR"), pageSegmentationMode);
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -229,6 +240,7 @@ describe("creating a profile", () => {
     drawRegion(surface, { xRatio: 0.25, yRatio: 0.25 }, { xRatio: 0.75, yRatio: 0.5 });
 
     await user.click(screen.getByRole("button", { name: "7" }));
+    await setSelectedRegionOcr(user, "7", "6");
     await user.type(screen.getByLabelText("Klasa specyficzna dla gry"), "nazwa mapy");
     await user.click(screen.getByRole("button", { name: "Dodaj klasę" }));
 
@@ -243,7 +255,17 @@ describe("creating a profile", () => {
     expect(requestBodies(fetchSpy, "/profiles")[0]).toEqual({
       name: "Gra testowa",
       reference_image_path: "D:\\gry\\hud.png",
-      regions: [{ name: "Region 1", x: 480, y: 270, width: 960, height: 270 }],
+      regions: [
+        {
+          allowed_chars: "7",
+          name: "Region 1",
+          page_segmentation_mode: 6,
+          x: 480,
+          y: 270,
+          width: 960,
+          height: 270,
+        },
+      ],
       categories: [
         { kind: "character", name: "7" },
         { kind: "game", name: "nazwa mapy" },
@@ -330,6 +352,7 @@ describe("creating a profile", () => {
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.4, yRatio: 0.4 });
     await user.click(screen.getByRole("button", { name: "7" }));
+    await setSelectedRegionOcr(user);
 
     const submit = screen.getByRole("button", { name: "Utwórz profil" });
     await user.click(submit);
@@ -381,6 +404,7 @@ describe("the reference frame comes from an imported material", () => {
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.25, yRatio: 0.25 }, { xRatio: 0.75, yRatio: 0.5 });
     await user.click(screen.getByRole("button", { name: "7" }));
+    await setSelectedRegionOcr(user);
 
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
 
@@ -395,7 +419,17 @@ describe("the reference frame comes from an imported material", () => {
     expect(requestBodies(fetchSpy, "/profiles")[0]).toEqual({
       name: "Gra testowa",
       reference_asset_id: "frame-asset-1",
-      regions: [{ name: "Region 1", x: 480, y: 270, width: 960, height: 270 }],
+      regions: [
+        {
+          allowed_chars: "7",
+          name: "Region 1",
+          page_segmentation_mode: 7,
+          x: 480,
+          y: 270,
+          width: 960,
+          height: 270,
+        },
+      ],
       categories: [{ kind: "character", name: "7" }],
     });
   });
@@ -454,6 +488,7 @@ describe("backend rejections", () => {
     const surface = await loadReferenceImage();
     drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.4, yRatio: 0.4 });
     await user.click(screen.getByRole("button", { name: "7" }));
+    await setSelectedRegionOcr(user);
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
   }
 
@@ -529,6 +564,7 @@ describe("regions are reachable without precise clicking", () => {
     await user.type(nameField, "Pasek zdrowia");
 
     await user.click(screen.getByRole("button", { name: "7" }));
+    await setSelectedRegionOcr(user);
     await user.click(screen.getByRole("button", { name: "Utwórz profil" }));
 
     await waitFor(() => {

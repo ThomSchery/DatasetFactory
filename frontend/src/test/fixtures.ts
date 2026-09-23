@@ -67,6 +67,7 @@ export function runFixture(overrides: Partial<PipelineRun> = {}): PipelineRun {
     experimental: true,
     quality_gate: "failed",
     warning: "Tesseract jest adapterem eksperymentalnym.",
+    ocr_regions: [],
     ...overrides,
   };
 }
@@ -85,7 +86,18 @@ export function profileFixture(overrides: Partial<GameProfile> = {}): GameProfil
     source_width: 1920,
     source_height: 1080,
     version: 1,
-    regions: [{ id: "region-1", name: "Pasek zdrowia", x: 10, y: 20, width: 100, height: 40 }],
+    regions: [
+      {
+        id: "region-1",
+        name: "Pasek zdrowia",
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 40,
+        allowed_chars: null,
+        page_segmentation_mode: null,
+      },
+    ],
     categories: [{ id: "category-1", name: "7", kind: "character" }],
     ...overrides,
   };

@@ -32,6 +32,7 @@ import type {
   RunSummary,
   ReviewFrameRequest,
   UpdateAnnotationRequest,
+  UpdateRegionOcrConfigRequest,
   VersionedMutationRequest,
 } from "./types";
 
@@ -115,6 +116,18 @@ export function addProfileRegion(
     method: "POST",
     body,
   });
+}
+
+/** `PATCH /profiles/{profile_id}/regions/{region_id}/ocr-config` → updated profile. */
+export function updateProfileRegionOcrConfig(
+  profileId: string,
+  regionId: string,
+  body: UpdateRegionOcrConfigRequest,
+): Promise<GameProfile> {
+  return apiRequest<GameProfile>(
+    `/profiles/${encodeURIComponent(profileId)}/regions/${encodeURIComponent(regionId)}/ocr-config`,
+    { method: "PATCH", body },
+  );
 }
 
 /** `POST /profiles/{profile_id}/categories` → `201` with the new category. */

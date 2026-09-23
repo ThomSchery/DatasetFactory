@@ -67,6 +67,8 @@ export interface RegionInput {
   y: number;
   width: number;
   height: number;
+  allowed_chars?: string | null;
+  page_segmentation_mode?: number | null;
 }
 
 export interface CategoryInput {
@@ -85,6 +87,14 @@ export interface RenameCategoryRequest extends CategoryInput {
  * and the response carries the new value for the next write.
  */
 export interface AddRegionRequest extends RegionInput {
+  allowed_chars: string;
+  page_segmentation_mode: number;
+  expected_version: number;
+}
+
+export interface UpdateRegionOcrConfigRequest {
+  allowed_chars: string;
+  page_segmentation_mode: number;
   expected_version: number;
 }
 
@@ -176,6 +186,26 @@ export interface VersionedMutationRequest {
   expected_version: number;
 }
 
+export interface OcrProvenance {
+  engine_id: string;
+  engine_version: string;
+  runtime_sha256: string;
+  model_sha256: string;
+  config_hash: string;
+  experimental: boolean;
+  quality_gate: string;
+  language: string;
+  page_segmentation_mode: number;
+}
+
+export interface RegionOcrSnapshot {
+  region_id: string;
+  region_name: string;
+  allowed_chars: string;
+  page_segmentation_mode: number;
+  provenance: OcrProvenance;
+}
+
 export interface PipelineRun {
   id: string;
   profile_id: string;
@@ -201,6 +231,7 @@ export interface PipelineRun {
   experimental: boolean;
   quality_gate: string;
   warning: string;
+  ocr_regions: RegionOcrSnapshot[];
 }
 
 export interface RunSummary {

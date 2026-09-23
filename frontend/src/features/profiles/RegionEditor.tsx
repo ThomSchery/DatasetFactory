@@ -4,7 +4,12 @@ import { RegionOverlay, type OverlayShape, type SourceRect, type SourceSize } fr
 import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { RegionList } from "./RegionList";
-import type { RegionValue } from "./schemas";
+import { RegionOcrConfigFields } from "./RegionOcrConfigFields";
+import {
+  DEFAULT_REGION_PAGE_SEGMENTATION_MODE,
+  regionOcrValidation,
+  type RegionValue,
+} from "./schemas";
 
 /*
  * Drawing works only while the profile is being created (FE-001-F3 §Logika.6).
@@ -17,6 +22,7 @@ type ImageStatus = "loading" | "ready" | "error";
 export interface RegionEditorProps {
   /** Opaque asset URL from `referenceAssetUrl`; never a filesystem path. */
   assetUrl: string;
+  characterClasses: readonly string[];
   disabled?: boolean;
   error?: string;
   onChange: (regions: RegionValue[]) => void;
@@ -38,6 +44,7 @@ function nextRegionName(regions: readonly RegionValue[]): string {
 
 export function RegionEditor({
   assetUrl,
+  characterClasses,
   disabled = false,
   error,
   onChange,
@@ -56,6 +63,8 @@ export function RegionEditor({
       ...rect,
       id: `region-${String(Date.now())}-${String(regions.length)}`,
       name: nextRegionName(regions),
+      allowed_chars: characterClasses.join(""),
+      page_segmentation_mode: DEFAULT_REGION_PAGE_SEGMENTATION_MODE,
     };
     onChange([...regions, region]);
     setSelectedId(region.id);
@@ -72,6 +81,24 @@ export function RegionEditor({
     }
     onChange(regions.map((region) => (region.id === selected.id ? { ...region, name } : region)));
   }
+
+  function updateSelected(changes: Partial<RegionValue>) {
+    if (selected === null) {
+      return;
+    }
+    onChange(
+      regions.map((region) => (region.id === selected.id ? { ...region, ...changes } : region)),
+    );
+  }
+
+  const selectedOcrErrors =
+    selected === null
+      ? {}
+      : regionOcrValidation(
+          selected.allowed_chars,
+          selected.page_segmentation_mode,
+          characterClasses,
+        );
 
   const shapes: OverlayShape[] = regions.map((region) => ({
     height: region.height,
@@ -126,15 +153,30 @@ export function RegionEditor({
       </p>
 
       {selected === null ? null : (
-        <TextField
-          description="Nazwa musi być unikalna w profilu; pojawia się przy anotacjach z tego regionu."
-          label={`Nazwa zaznaczonego regionu (x ${String(selected.x)}, y ${String(selected.y)}, ${String(selected.width)} × ${String(selected.height)} px)`}
-          onChange={(event) => {
-            handleRename(event.target.value);
-          }}
-          value={selected.name}
-          width="short"
-        />
+        <div className="df-profiles__region-settings">
+          <TextField
+            disabled={disabled}
+            description="Nazwa musi być unikalna w profilu; pojawia się przy anotacjach z tego regionu."
+            label={`Nazwa zaznaczonego regionu (x ${String(selected.x)}, y ${String(selected.y)}, ${String(selected.width)} × ${String(selected.height)} px)`}
+            onChange={(event) => {
+              handleRename(event.target.value);
+            }}
+            value={selected.name}
+            width="short"
+          />
+          <RegionOcrConfigFields
+            allowedChars={selected.allowed_chars}
+            allowedCharsError={selectedOcrErrors.allowedChars}
+            characterClasses={characterClasses}
+            disabled={disabled}
+            onAllowedCharsChange={(allowed_chars) => updateSelected({ allowed_chars })}
+            onPageSegmentationModeChange={(page_segmentation_mode) =>
+              updateSelected({ page_segmentation_mode })
+            }
+            pageSegmentationMode={selected.page_segmentation_mode}
+            pageSegmentationModeError={selectedOcrErrors.pageSegmentationMode}
+          />
+        </div>
       )}
 
       <RegionList

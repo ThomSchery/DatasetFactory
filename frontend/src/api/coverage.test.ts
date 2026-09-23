@@ -26,6 +26,10 @@ const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["POST /profiles", "createProfile"],
   ["POST /profiles/{profile_id}/categories", "createProfileCategory"],
   ["POST /profiles/{profile_id}/regions", "addProfileRegion"],
+  [
+    "PATCH /profiles/{profile_id}/regions/{region_id}/ocr-config",
+    "updateProfileRegionOcrConfig",
+  ],
   ["GET /profiles", "listProfiles"],
   ["GET /profiles/current", "getCurrentProfile"],
   ["POST /profiles/{profile_id}/activate", "activateProfile"],

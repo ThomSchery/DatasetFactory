@@ -111,7 +111,8 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /profiles/reference-frame` | `{video_id,timestamp_ms}` | `201 {asset_id,width,height}` | `400/404/409/502/503/504` |
 | `POST /profiles` | `{name, reference_image_path xor reference_asset_id, regions[], categories[]}` | `201 GameProfile` | `400 validation`, `404 source_missing/asset_not_found`, `409 profile_name_exists` |
 | `POST /profiles/{profile_id}/categories` | `{name,kind:character\|game}` | `201 Category` | `400 validation_error`, `404 profile_not_found`, `409 category_name_exists`, `500 category_persistence_failed` |
-| `POST /profiles/{profile_id}/regions` | `{name,x,y,width,height,expected_version}` | `201 GameProfile` | `400 invalid_region_name/invalid_region_bbox/region_out_of_bounds`, `404 profile_not_found`, `409 region_name_exists/version_conflict/active_run`, `500 region_persistence_failed` |
+| `POST /profiles/{profile_id}/regions` | `{name,x,y,width,height,allowed_chars,page_segmentation_mode,expected_version}` | `201 GameProfile` | `400 invalid_region_name/invalid_region_bbox/region_out_of_bounds/region_allowed_chars_not_in_profile/invalid_region_page_segmentation_mode`, `404 profile_not_found`, `409 region_name_exists/version_conflict/active_run`, `500 region_persistence_failed` |
+| `PATCH /profiles/{profile_id}/regions/{region_id}/ocr-config` | `{allowed_chars,page_segmentation_mode,expected_version}` | `200 GameProfile` | `400 region_allowed_chars_not_in_profile/invalid_region_page_segmentation_mode`, `404 profile_not_found/region_not_found`, `409 version_conflict/active_run`, `500 region_persistence_failed` |
 | `GET /profiles` | — | lista podsumowań profili z licznikami i `active` | `500` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
 | `POST /profiles/{profile_id}/activate` | — | wybrany `GameProfile` | `404 profile_not_found`, `409 active_run` |

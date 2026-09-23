@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CHARACTER_CLASS_ALPHABET,
+  OCR_PAGE_SEGMENTATION_OPTIONS,
   categorySchema,
   isDuplicateName,
   profileCreateSchema,
@@ -17,7 +18,18 @@ import {
 const VALID = {
   name: "Gra testowa",
   reference_image_path: "D:\\gry\\hud.png",
-  regions: [{ id: "r1", name: "Pasek zdrowia", x: 10, y: 20, width: 100, height: 40 }],
+  regions: [
+    {
+      id: "r1",
+      name: "Pasek zdrowia",
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 40,
+      allowed_chars: "7",
+      page_segmentation_mode: 7,
+    },
+  ],
   categories: [{ kind: "character" as const, name: "7" }],
 };
 
@@ -72,9 +84,9 @@ describe("the profile a user can submit", () => {
 
   it("rejects two regions with the same name — `duplicate_region_name`", () => {
     const regions = [
-      { id: "r1", name: "Pasek zdrowia", x: 0, y: 0, width: 10, height: 10 },
+      { ...VALID.regions[0], id: "r1", name: "Pasek zdrowia", x: 0, y: 0 },
       // `_require_unique` compares case-folded, so this is the same name.
-      { id: "r2", name: "pasek ZDROWIA", x: 20, y: 20, width: 10, height: 10 },
+      { ...VALID.regions[0], id: "r2", name: "pasek ZDROWIA", x: 20, y: 20 },
     ];
 
     expect(messagesFor({ ...VALID, regions })).toContain(
@@ -84,9 +96,9 @@ describe("the profile a user can submit", () => {
 
   it("folds names the way `casefold` does, not the way `toLowerCase` does", () => {
     const regions = [
-      { id: "r1", name: "Straße", x: 0, y: 0, width: 10, height: 10 },
+      { ...VALID.regions[0], id: "r1", name: "Straße", x: 0, y: 0 },
       // `casefold` maps `ß` onto `ss`, so the backend reads one name here.
-      { id: "r2", name: "STRASSE", x: 20, y: 20, width: 10, height: 10 },
+      { ...VALID.regions[0], id: "r2", name: "STRASSE", x: 20, y: 20 },
     ];
 
     expect(messagesFor({ ...VALID, regions })).toContain(
@@ -125,6 +137,25 @@ describe("region geometry mirrors RegionRequest", () => {
 
   it("requires a name", () => {
     expect(regionSchema.safeParse({ ...VALID.regions[0], name: " " }).success).toBe(false);
+  });
+});
+
+describe("per-region OCR configuration", () => {
+  it("rejects characters that do not have a character class in the profile", () => {
+    expect(
+      messagesFor({
+        ...VALID,
+        regions: [{ ...VALID.regions[0], allowed_chars: "7W" }],
+      }),
+    ).toContain("Znaki spoza klas profilu: W. Dodaj klasy albo usuń te znaki z zakresu.");
+  });
+
+  it("offers only recognizing PSM modes and explains every option", () => {
+    expect(OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => Number(option.value))).toEqual([
+      3, 4, 6, 7, 8, 10, 11, 12, 13,
+    ]);
+    expect(OCR_PAGE_SEGMENTATION_OPTIONS.every((option) => option.label.length > 5)).toBe(true);
+    expect(OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => String(option.value))).not.toContain("0");
   });
 });
 

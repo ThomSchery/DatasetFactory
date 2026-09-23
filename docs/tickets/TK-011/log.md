@@ -73,3 +73,20 @@ Zakres UI obejmuje istniejący ekran profilu oraz formularz tworzenia profilu. N
   konfiguracją, po czym porównuje znak, bbox, confidence, hash i PSM obserwacji.
 - Weryfikacja: `test_tesseract_ocr.py` — 28 passed;
   `test_durable_workflow.py` — 21 passed; `ruff check` i `mypy` — PASS.
+
+### 2026-09-23 — interfejs konfiguracji OCR regionu
+
+- Wspólne pola domenowe pokazują whitelist oraz natywny select ze wszystkimi
+  dopuszczonymi trybami `3, 4, 6, 7, 8, 10, 11, 12, 13` opisanymi po polsku.
+  Tryb `0` nie jest oferowany, a opis wyjaśnia, że nie rozpoznaje znaków.
+- Tworzenie profilu i dodawanie regionu wysyła oba jawne ustawienia. Walidacja
+  klienta wskazuje konkretne znaki spoza klas profilu, ale backend pozostaje
+  autorytatywną granicą zapisu.
+- Lista istniejących regionów pokazuje efektywny zakres i układ; legacy `NULL`
+  jest oznaczony jako konfiguracja odziedziczona. Edytor zmienia wyłącznie oba
+  pola OCR przez wersjonowany endpoint, bez udostępniania geometrii.
+- Trwały komunikat wyjaśnia, że nowe ustawienia obowiązują od kolejnego runu i
+  nie przeliczają istniejących klatek, próbek ani obserwacji.
+- Weryfikacja: frontend `typecheck` i `build` — PASS; pełny Vitest —
+  43 pliki, 713 testów PASS. Testy ekranów obejmują oba pola przy tworzeniu,
+  edycję istniejącego regionu, podzbiór klas i opisy trybów.

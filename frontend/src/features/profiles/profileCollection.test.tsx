@@ -241,7 +241,16 @@ describe("profile collection and explicit selection", () => {
           version: 5,
           regions: [
             ...current.regions,
-            { id: "region-timer", name: "timer", x: 960, y: 108, width: 240, height: 108 },
+            {
+              id: "region-timer",
+              name: "timer",
+              x: 960,
+              y: 108,
+              width: 240,
+              height: 108,
+              allowed_chars: "7",
+              page_segmentation_mode: 7,
+            },
           ],
         };
         return { status: 201, body: current };
@@ -255,8 +264,8 @@ describe("profile collection and explicit selection", () => {
     renderApp(["/profiles"]);
     await user.click(await screen.findByRole("button", { name: "Dodaj region" }));
 
-    expect(screen.getByText("Nowy region obowiązuje od kolejnego runu")).toBeInTheDocument();
-    expect(screen.getByText(/nie tworzy brakujących region_samples/)).toBeInTheDocument();
+    expect(screen.getByText("Ustawienia regionu obowiązują od kolejnego runu")).toBeInTheDocument();
+    expect(screen.getByText(/nie przelicza istniejących klatek, próbek ani obserwacji/)).toBeInTheDocument();
 
     const surface = screen.getByRole("listbox", { name: /narysuj nowy region/ });
     drawRegion(surface as unknown as SVGElement);
@@ -265,9 +274,11 @@ describe("profile collection and explicit selection", () => {
 
     await waitFor(() => {
       expect(requestBody).toEqual({
+        allowed_chars: "7",
         expected_version: 4,
         height: 108,
         name: "timer",
+        page_segmentation_mode: 7,
         width: 240,
         x: 960,
         y: 108,
@@ -309,6 +320,80 @@ describe("profile collection and explicit selection", () => {
 
     expect(await screen.findByText(/Region „Pasek zdrowia” już istnieje/)).toBeInTheDocument();
     expect(input).toHaveValue("Pasek zdrowia");
-    expect(screen.getByText("Nowy region obowiązuje od kolejnego runu")).toBeInTheDocument();
+    expect(screen.getByText("Ustawienia regionu obowiązują od kolejnego runu")).toBeInTheDocument();
+  });
+
+  it("validates the profile character subset and edits only an existing region's OCR", async () => {
+    const user = userEvent.setup();
+    let current = profileFixture({
+      name: "Quake Champions",
+      version: 4,
+      regions: [
+        {
+          id: "region-1",
+          name: "score_right",
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 40,
+          allowed_chars: "7",
+          page_segmentation_mode: 7,
+        },
+      ],
+    });
+    let requestBody: unknown = null;
+    stubFetch((url, init) => {
+      if (url.endsWith("/profiles")) {
+        return { status: 200, body: [profileSummaryFixture({ name: current.name })] };
+      }
+      if (
+        url.endsWith("/profiles/profile-1/regions/region-1/ocr-config") &&
+        init?.method === "PATCH"
+      ) {
+        requestBody = JSON.parse(String(init.body));
+        current = {
+          ...current,
+          version: 5,
+          regions: [
+            {
+              ...current.regions[0],
+              allowed_chars: "7",
+              page_segmentation_mode: 6,
+            },
+          ],
+        };
+        return { status: 200, body: current };
+      }
+      if (url.endsWith("/profiles/profile-1")) {
+        return { status: 200, body: current };
+      }
+      return { status: 500, body: errorEnvelope("unexpected_request") };
+    });
+
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Edytuj OCR regionu score_right" }));
+    const whitelist = screen.getByLabelText("Dozwolone znaki OCR");
+    await user.clear(whitelist);
+    await user.type(whitelist, "7W");
+    await user.click(screen.getByRole("button", { name: "Zapisz ustawienia" }));
+
+    expect(
+      screen.getByText("Znaki spoza klas profilu: W. Dodaj klasy albo usuń te znaki z zakresu."),
+    ).toBeInTheDocument();
+    expect(requestBody).toBeNull();
+
+    await user.clear(whitelist);
+    await user.type(whitelist, "7");
+    await user.selectOptions(screen.getByLabelText("Układ tekstu OCR"), "6");
+    await user.click(screen.getByRole("button", { name: "Zapisz ustawienia" }));
+
+    await waitFor(() => {
+      expect(requestBody).toEqual({
+        allowed_chars: "7",
+        expected_version: 4,
+        page_segmentation_mode: 6,
+      });
+    });
+    expect(await screen.findByText(/6 — Jednolity blok tekstu/)).toBeInTheDocument();
   });
 });

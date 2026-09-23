@@ -23,7 +23,11 @@ import { TextField } from "../../components/common/TextField";
 import { Empty, FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { CategoryEditor } from "./CategoryEditor";
 import { RegionEditor } from "./RegionEditor";
-import { profileCreateSchema, type ProfileCreateValues } from "./schemas";
+import {
+  characterClassesOf,
+  profileCreateSchema,
+  type ProfileCreateValues,
+} from "./schemas";
 import "./ProfileCreateScreen.css";
 
 /*
@@ -62,6 +66,7 @@ export function ProfileCreateScreen({ onCancel }: { onCancel?: () => void } = {}
 
   const regions = form.watch("regions");
   const categories = form.watch("categories");
+  const characterClasses = characterClassesOf(categories);
 
   const materials = useQuery({
     queryKey: queryKeys.materialList({ page: 1, page_size: 100 }),
@@ -97,8 +102,10 @@ export function ProfileCreateScreen({ onCancel }: { onCancel?: () => void } = {}
         // The client-side `id` exists only to key React and the overlay; the
         // backend mints the durable one.
         regions: values.regions.map((region) => ({
+          allowed_chars: region.allowed_chars,
           height: region.height,
           name: region.name.trim(),
+          page_segmentation_mode: region.page_segmentation_mode,
           width: region.width,
           x: region.x,
           y: region.y,
@@ -351,6 +358,7 @@ export function ProfileCreateScreen({ onCancel }: { onCancel?: () => void } = {}
             />
             <RegionEditor
               assetUrl={referenceAssetUrl(preview.asset_id)}
+              characterClasses={characterClasses}
               disabled={busy}
               error={regionsError}
               onChange={(next) => {

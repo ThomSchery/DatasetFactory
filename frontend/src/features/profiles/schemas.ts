@@ -31,6 +31,53 @@ export const CHARACTER_CLASS_ALPHABET: readonly string[] = [
 
 const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 
+export const OCR_PAGE_SEGMENTATION_OPTIONS = [
+  { value: "3", label: "3 — Automatyczny układ strony" },
+  { value: "4", label: "4 — Kolumna tekstu o zmiennym rozmiarze" },
+  { value: "6", label: "6 — Jednolity blok tekstu (wiele wierszy)" },
+  { value: "7", label: "7 — Jeden wiersz tekstu" },
+  { value: "8", label: "8 — Jedno słowo" },
+  { value: "10", label: "10 — Jeden znak" },
+  { value: "11", label: "11 — Rzadki tekst w dowolnej kolejności" },
+  { value: "12", label: "12 — Rzadki tekst z wykrywaniem orientacji" },
+  { value: "13", label: "13 — Surowy pojedynczy wiersz" },
+] as const;
+
+export const DEFAULT_REGION_PAGE_SEGMENTATION_MODE = 7;
+
+const OCR_PAGE_SEGMENTATION_MODES = new Set<number>(
+  OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => Number(option.value)),
+);
+
+export function characterClassesOf(
+  categories: readonly { kind: "character" | "game"; name: string }[],
+): string[] {
+  return categories
+    .filter((category) => category.kind === "character")
+    .map((category) => category.name);
+}
+
+export function regionOcrValidation(
+  allowedChars: string,
+  pageSegmentationMode: number,
+  characterClasses: readonly string[],
+): { allowedChars?: string; pageSegmentationMode?: string } {
+  const errors: { allowedChars?: string; pageSegmentationMode?: string } = {};
+  if (allowedChars.length === 0) {
+    errors.allowedChars = "Podaj co najmniej jeden dozwolony znak.";
+  } else {
+    const available = new Set(characterClasses);
+    const unsupported = [...new Set([...allowedChars].filter((char) => !available.has(char)))];
+    if (unsupported.length > 0) {
+      errors.allowedChars = `Znaki spoza klas profilu: ${unsupported.join(" ")}. Dodaj klasy albo usuń te znaki z zakresu.`;
+    }
+  }
+  if (!OCR_PAGE_SEGMENTATION_MODES.has(pageSegmentationMode)) {
+    errors.pageSegmentationMode = "Wybierz obsługiwany układ tekstu.";
+  }
+  return errors;
+}
+
 /**
  * Mirrors Python `str.casefold()`, which `_require_unique` uses server side.
  * `toLowerCase` is not the same mapping: it leaves `ß` and final `ς` alone,
@@ -73,6 +120,13 @@ export const regionSchema = z.object({
   y: z.number().int().min(0),
   width: z.number().int().positive("Region musi mieć dodatnią szerokość."),
   height: z.number().int().positive("Region musi mieć dodatnią wysokość."),
+  allowed_chars: z.string().min(1, "Podaj co najmniej jeden dozwolony znak."),
+  page_segmentation_mode: z
+    .number()
+    .int()
+    .refine((value) => OCR_PAGE_SEGMENTATION_MODES.has(value), {
+      message: "Wybierz obsługiwany układ tekstu.",
+    }),
 });
 
 export type RegionValue = z.infer<typeof regionSchema>;
@@ -121,6 +175,21 @@ export const profileCreateSchema = z
         path: ["categories"],
       });
     }
+    const characterClasses = characterClassesOf(profile.categories);
+    profile.regions.forEach((region, index) => {
+      const errors = regionOcrValidation(
+        region.allowed_chars,
+        region.page_segmentation_mode,
+        characterClasses,
+      );
+      if (errors.allowedChars !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: errors.allowedChars,
+          path: ["regions", index, "allowed_chars"],
+        });
+      }
+    });
   });
 
 export type ProfileCreateValues = z.input<typeof profileCreateSchema>;

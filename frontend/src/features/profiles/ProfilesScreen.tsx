@@ -230,7 +230,7 @@ export function ProfilesScreen({ initialCreate = false }: { initialCreate?: bool
 
       {selectedId === null ? null : (
         <Panel
-          description="Istniejące regiony pozostają tylko do odczytu; możesz dodać następny dla przyszłych runów. Nazwy klas możesz porządkować bez zmiany istniejących anotacji."
+          description="Możesz dodać region albo zmienić jego zakres znaków i układ OCR dla przyszłych runów. Geometria istniejących regionów pozostaje tylko do odczytu."
           eyebrow="Definicja profilu"
           title={detail.data?.name ?? "Podgląd profilu"}
         >

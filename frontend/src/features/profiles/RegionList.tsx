@@ -45,6 +45,9 @@ export function RegionList({
             <span className="df-profiles__row-meta">
               x {region.x}, y {region.y}, {region.width} × {region.height} px
             </span>
+            <span className="df-profiles__row-meta">
+              OCR: {region.allowed_chars || "brak znaków"} · układ {region.page_segmentation_mode}
+            </span>
           </div>
           <div className="df-profiles__row-actions">
             {/* The visible label is short because the column is narrow; the

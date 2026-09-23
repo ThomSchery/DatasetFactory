@@ -13,6 +13,12 @@
   gap: var(--size-md);
 }
 
+.df-profiles__region-settings {
+  display: grid;
+  gap: var(--size-sm);
+  min-width: 0;
+}
+
 .df-profiles__reference-source {
   display: grid;
   gap: var(--size-sm);

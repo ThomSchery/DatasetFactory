@@ -52,6 +52,7 @@ export type MutationEvent =
   | { type: "profile-category-created"; profileId: string }
   | { type: "profile-category-renamed"; profileId: string }
   | { type: "profile-region-added"; profileId: string }
+  | { type: "profile-region-ocr-updated"; profileId: string }
   | { type: "profile-selected" }
   | { type: "material-imported" }
   | { type: "run-created" }
@@ -68,6 +69,7 @@ function keysFor(event: MutationEvent): readonly (readonly unknown[])[] {
     case "profile-category-created":
     case "profile-category-renamed":
     case "profile-region-added":
+    case "profile-region-ocr-updated":
       // The base key is a deliberate prefix for the list, current shortcut
       // and every historical detail. One invalidation refreshes whichever of
       // those views are mounted without scheduling duplicate detail refetches.

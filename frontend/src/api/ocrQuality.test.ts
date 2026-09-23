@@ -35,6 +35,7 @@ function run(overrides: Partial<PipelineRun> = {}): PipelineRun {
     experimental: true,
     quality_gate: "failed",
     warning: "Tesseract is an experimental OCR adapter.",
+    ocr_regions: [],
     ...overrides,
   };
 }
