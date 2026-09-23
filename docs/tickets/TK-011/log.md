@@ -111,3 +111,26 @@ test, odtworzenie przez `Copy-Item` i porównanie SHA256.
   `test_region_ocr_config_can_be_edited_without_touching_existing_observations`.
   Po odtworzeniu `profiles.py` hash wyniósł ponownie
   `2E24ECB4BA69C1386A5001F9EDB98C2DC8F5638A336EF8885EFC9207F150F1A7`, test PASS.
+
+### 2026-09-23 — pełna bramka
+
+- Jeden nieprzerwany przebieg poleceniem z absolutną ścieżką:
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\t.wisniewski\.traycer\worktrees\thomschery__datasetfactory\feat-tk-011-per-region-ocr-config\scripts\check.ps1"`.
+- Wynik: **9/9 PASS, zero SKIP**. Backend: format, lint, mypy i 409 testów;
+  frontend: typy, 713 testów i build; E2E: 24 testy; root safety: 2 testy,
+  0 pominiętych.
+- E2E nadpisało 33 historyczne PNG obecne w aktualnej wersji zestawu. Wszystkie
+  odtworzono przez `Copy-Item` z głównego workspace; po odtworzeniu żaden zrzut
+  nie pozostał zmieniony.
+
+### 2026-09-23 — weryfikacja na prawdziwych danych operatora
+
+- Źródło: 25 istniejących cropów na region z runu
+  `b4a755c9-4e55-4142-bc09-50f7469e124b`. Produkcyjny adapter i przypięty
+  Tesseract 5.5.3 pracowały na tymczasowej kopii 100 PNG; baza operatora i sam
+  run pozostały tylko do odczytu.
+- `score_right`, whitelist `0123456789`, PSM `7`: **43 obserwacje, zero liter**.
+  Dwie dawne błędne obserwacje `M` i `W` znikają zamiast być mapowane na klasy.
+- `health & armour`, whitelist `0123456789/`, wieloliniowy PSM `6`:
+  **131 obserwacji**. Wynik jest jawnie niezerowy; zmiana trybu usuwa zmierzony
+  objaw zera na tych cropach.
