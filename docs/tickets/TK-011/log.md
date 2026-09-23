@@ -56,3 +56,20 @@ Zakres UI obejmuje istniejący ekran profilu oraz formularz tworzenia profilu. N
   istniejące próbki pozostają bez zmian.
 - Weryfikacja: `test_profile_region_api.py` — 24 passed; dwa testy migracji
   (`initial_migration_up_down_up`, `region_ocr_config_migration`) — 2 passed.
+
+### 2026-09-23 — wykonanie OCR i provenance per region
+
+- Run utrwala przed OCR deterministyczny snapshot każdego regionu: zakres znaków,
+  PSM oraz kompletne provenance z hashem konfiguracji. Ten sam dokument jest
+  kopiowany do checkpointów i uwzględniany przy recovery.
+- Worker dobiera snapshot po identyfikatorze regionu i przekazuje jego whitelist
+  oraz PSM do Tesseracta. Obserwacja jest akceptowana tylko wtedy, gdy provenance
+  kandydata odpowiada snapshotowi tego regionu.
+- Jedno provenance na run nie wystarcza przy różnych ustawieniach regionów.
+  Dotychczasowe pola run-level zostają dla kompatybilności i wspólnej tożsamości
+  adaptera; autorytatywne ustawienia obserwacji znajdują się w snapshotach regionów.
+- Legacy `NULL` używa dokładnie dawnego whitelist profilu i domyślnego PSM adaptera.
+  Test uruchamia ten sam kadr raz z fallbackiem i raz z jawną równoważną
+  konfiguracją, po czym porównuje znak, bbox, confidence, hash i PSM obserwacji.
+- Weryfikacja: `test_tesseract_ocr.py` — 28 passed;
+  `test_durable_workflow.py` — 21 passed; `ruff check` i `mypy` — PASS.

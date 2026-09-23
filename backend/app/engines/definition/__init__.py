@@ -1,9 +1,9 @@
 from backend.app.engines.definition.engine import (
+    OCR_PAGE_SEGMENTATION_MODES,
     BBox,
     CategoryDefinition,
     DatasetDefinitionEngine,
     DefinitionValidationError,
-    OCR_PAGE_SEGMENTATION_MODES,
     ProfileDefinition,
     RegionDefinition,
     normalize_profile_name,
@@ -28,12 +28,12 @@ from backend.app.engines.definition.ocr_mapping import (
 
 __all__ = [
     "EVALUATOR_VERSION",
+    "OCR_PAGE_SEGMENTATION_MODES",
     "AnnotationDraft",
     "BBox",
     "CategoryDefinition",
     "DatasetDefinitionEngine",
     "DefinitionValidationError",
-    "OCR_PAGE_SEGMENTATION_MODES",
     "ExpectedOcrCharacter",
     "OcrCandidate",
     "OcrEvaluationCrop",

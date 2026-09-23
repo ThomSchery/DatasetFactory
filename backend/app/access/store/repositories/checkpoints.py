@@ -21,6 +21,10 @@ from backend.app.access.store.models import (
     RegionSample,
     StageCheckpoint,
 )
+from backend.app.access.store.ocr_regions import (
+    RegionOcrSnapshot,
+    decode_region_ocr_snapshots,
+)
 from backend.app.access.store.repositories.runs import ResumeReservation
 from backend.app.access.store.workspace import Workspace, WorkspaceError
 from backend.app.managers.workflow.state_machine import (
@@ -82,6 +86,7 @@ class CheckpointRecord:
     experimental: bool
     quality_gate: str
     warning: str
+    ocr_regions: tuple[RegionOcrSnapshot, ...] = ()
 
 
 class CheckpointRepository:
@@ -378,6 +383,7 @@ class CheckpointRepository:
             experimental=run.experimental,
             quality_gate=run.quality_gate,
             warning=run.warning,
+            ocr_region_config_json=run.ocr_region_config_json,
         )
 
     @staticmethod
@@ -408,4 +414,5 @@ class CheckpointRepository:
             experimental=checkpoint.experimental,
             quality_gate=checkpoint.quality_gate,
             warning=checkpoint.warning,
+            ocr_regions=decode_region_ocr_snapshots(checkpoint.ocr_region_config_json),
         )

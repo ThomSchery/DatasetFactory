@@ -161,21 +161,33 @@ def test_parser_empty_output_is_success_with_known_provenance() -> None:
 
 
 class FixtureWritingRunner:
-    def __init__(self, failures: list[OcrProcessError | int] | None = None) -> None:
+    def __init__(
+        self,
+        failures: list[OcrProcessError | int] | None = None,
+        *,
+        characters: str = "A",
+    ) -> None:
         self.failures = list(failures or [])
+        self.characters = characters
         self.calls = 0
+        self.arguments: list[list[str]] = []
 
     def run(self, arguments: list[str], *, timeout_seconds: int) -> OcrProcessResult:
         assert timeout_seconds == 30
         self.calls += 1
+        self.arguments.append(arguments)
         if self.failures:
             failure = self.failures.pop(0)
             if isinstance(failure, OcrProcessError):
                 raise failure
             return OcrProcessResult(failure, "", "failure")
         output_base = Path(arguments[2])
-        output_base.with_suffix(".box").write_text("A 10 16 20 56 0\n", encoding="utf-8")
-        output_base.with_suffix(".hocr").write_text(_hocr("A"), encoding="utf-8")
+        boxes = "".join(
+            f"{character} {10 + index * 20} 16 {20 + index * 20} 56 0\n"
+            for index, character in enumerate(self.characters)
+        )
+        output_base.with_suffix(".box").write_text(boxes, encoding="utf-8")
+        output_base.with_suffix(".hocr").write_text(_hocr(self.characters), encoding="utf-8")
         return OcrProcessResult(0, "", "")
 
 
@@ -227,6 +239,50 @@ def test_describe_measures_the_runtime_instead_of_trusting_the_pins(tmp_path: Pa
     with pytest.raises(OcrProcessError) as swapped_model:
         engine.describe(["A"])
     assert swapped_model.value.code == "ocr_provenance_mismatch"
+
+
+def test_per_call_psm_reaches_tesseract_and_changes_provenance(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    crop_relpath = _copy_crop(workspace)
+    runner = FixtureWritingRunner()
+    engine = TesseractOcrEngine(workspace, _fake_runtime(tmp_path), 30, runner)
+
+    candidates = engine.detect_characters(crop_relpath, ["A"], 6)
+    described = engine.describe(["A"], 6)
+    default_description = engine.describe(["A"])
+
+    assert runner.arguments[0][runner.arguments[0].index("--psm") + 1] == "6"
+    assert "tessedit_char_whitelist=A" in runner.arguments[0]
+    assert candidates[0].provenance == described
+    assert described.page_segmentation_mode == 6
+    assert described.config_hash != default_description.config_hash
+
+
+@pytest.mark.parametrize("page_segmentation_mode", (0, 1, 2, 5, 9, 14))
+def test_engine_rejects_unsupported_per_region_psm(
+    page_segmentation_mode: int,
+    tmp_path: Path,
+) -> None:
+    engine = TesseractOcrEngine(
+        _workspace(tmp_path),
+        _fake_runtime(tmp_path),
+        30,
+        FixtureWritingRunner(),
+    )
+
+    with pytest.raises(ValueError, match="unsupported page segmentation mode"):
+        engine.describe(["A"], page_segmentation_mode)
+
+
+def test_numeric_region_drops_letter_candidates_before_mapping(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    crop_relpath = _copy_crop(workspace)
+    runner = FixtureWritingRunner(characters="W0")
+    engine = TesseractOcrEngine(workspace, _fake_runtime(tmp_path), 30, runner)
+
+    candidates = engine.detect_characters(crop_relpath, tuple("0123456789"), 7)
+
+    assert [candidate.char for candidate in candidates] == ["0"]
 
 
 def test_create_measurement_and_pre_ocr_verification_hash_each_file_once(

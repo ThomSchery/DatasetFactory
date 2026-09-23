@@ -18,12 +18,17 @@ class OcrProcessError(RuntimeError):
 
 @runtime_checkable
 class OcrEngine(Protocol):
-    def describe(self, allowed_chars: Collection[str]) -> OcrProvenance: ...
+    def describe(
+        self,
+        allowed_chars: Collection[str],
+        page_segmentation_mode: int | None = None,
+    ) -> OcrProvenance: ...
 
     def detect_characters(
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
+        page_segmentation_mode: int | None = None,
     ) -> tuple[OcrCandidate, ...]: ...
 
     def cancel_current(self) -> None: ...

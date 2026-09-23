@@ -341,9 +341,14 @@ class TesseractOcrEngine:
         self._retry_backoff_seconds = retry_backoff_seconds
         self._sleeper = sleeper
 
-    def describe(self, allowed_chars: Collection[str]) -> OcrProvenance:
+    def describe(
+        self,
+        allowed_chars: Collection[str],
+        page_segmentation_mode: int | None = None,
+    ) -> OcrProvenance:
         allowed = self._normalize_allowed_chars(allowed_chars)
         whitelist = "".join(allowed)
+        psm = self._effective_page_segmentation_mode(page_segmentation_mode)
         # Measured, not declared: this provenance is persisted on the run and on the
         # sample/crop checkpoints long before the first OCR call would verify it.
         runtime_hash, model_hash = self._runtime.verified_hashes(language=self._language)
@@ -351,9 +356,9 @@ class TesseractOcrEngine:
             self._runtime.expected_version,
             runtime_sha256=runtime_hash,
             model_sha256=model_hash,
-            config_hash=self._config_hash(whitelist),
+            config_hash=self._config_hash(whitelist, psm),
             language=self._language,
-            page_segmentation_mode=self._page_segmentation_mode,
+            page_segmentation_mode=psm,
         )
 
     def cancel_current(self) -> None:
@@ -364,9 +369,11 @@ class TesseractOcrEngine:
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
+        page_segmentation_mode: int | None = None,
     ) -> tuple[OcrCandidate, ...]:
         crop = self._resolve_crop(crop_relpath)
         allowed = self._normalize_allowed_chars(allowed_chars)
+        psm = self._effective_page_segmentation_mode(page_segmentation_mode)
         if not allowed:
             return ()
         runtime_hash, model_hash = self._runtime.verified_hashes(language=self._language)
@@ -379,7 +386,7 @@ class TesseractOcrEngine:
         output_base = temporary / "result"
         try:
             whitelist = "".join(allowed)
-            self._run_with_retry(crop, output_base, whitelist)
+            self._run_with_retry(crop, output_base, whitelist, psm)
             box_path = output_base.with_suffix(".box")
             hocr_path = output_base.with_suffix(".hocr")
             if not box_path.is_file() or not hocr_path.is_file():
@@ -389,7 +396,7 @@ class TesseractOcrEngine:
                 hocr_text = hocr_path.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeError) as exc:
                 raise OcrProcessError("ocr_output_unreadable") from exc
-            config_hash = self._config_hash(whitelist)
+            config_hash = self._config_hash(whitelist, psm)
             return self._parser.parse(
                 box_text,
                 hocr_text,
@@ -402,7 +409,7 @@ class TesseractOcrEngine:
                     model_sha256=model_hash,
                     config_hash=config_hash,
                     language=self._language,
-                    page_segmentation_mode=self._page_segmentation_mode,
+                    page_segmentation_mode=psm,
                 ),
             )
         finally:
@@ -414,7 +421,13 @@ class TesseractOcrEngine:
         except WorkspaceError as exc:
             raise OcrProcessError("ocr_artifact_path_invalid") from exc
 
-    def _run_with_retry(self, crop: Path, output_base: Path, whitelist: str) -> None:
+    def _run_with_retry(
+        self,
+        crop: Path,
+        output_base: Path,
+        whitelist: str,
+        page_segmentation_mode: int,
+    ) -> None:
         arguments = [
             str(self._runtime.executable),
             str(crop),
@@ -422,7 +435,7 @@ class TesseractOcrEngine:
             "--tessdata-dir",
             str(self._runtime.model.parent),
             "--psm",
-            str(self._page_segmentation_mode),
+            str(page_segmentation_mode),
             "-l",
             self._language,
             "-c",
@@ -454,13 +467,13 @@ class TesseractOcrEngine:
     def _is_abnormal_termination(returncode: int) -> bool:
         return returncode < 0 or returncode >= 0xC0000000
 
-    def _config_hash(self, whitelist: str) -> str:
+    def _config_hash(self, whitelist: str, page_segmentation_mode: int) -> str:
         payload = json.dumps(
             {
                 "hocr_char_boxes": True,
                 "language": self._language,
                 "model_sha256": self._runtime.expected_model_sha256.lower(),
-                "page_segmentation_mode": self._page_segmentation_mode,
+                "page_segmentation_mode": page_segmentation_mode,
                 "whitelist": whitelist,
             },
             ensure_ascii=False,
@@ -468,6 +481,12 @@ class TesseractOcrEngine:
             sort_keys=True,
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _effective_page_segmentation_mode(self, value: int | None) -> int:
+        psm = self._page_segmentation_mode if value is None else value
+        if type(psm) is not int or psm not in {3, 4, 6, 7, 8, 10, 11, 12, 13}:
+            raise ValueError("unsupported page segmentation mode")
+        return psm
 
     @staticmethod
     def _normalize_allowed_chars(allowed_chars: Collection[str]) -> tuple[str, ...]:

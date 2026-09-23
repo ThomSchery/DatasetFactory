@@ -4,6 +4,7 @@ import hashlib
 import shutil
 import threading
 import time
+from collections.abc import Collection
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -21,7 +22,7 @@ from backend.app.access.media.processing import (
     RegionCrop,
     SampledFrame,
 )
-from backend.app.access.ocr import OcrProcessError
+from backend.app.access.ocr import OcrEngine, OcrProcessError
 from backend.app.access.store.models import (
     Annotation,
     Category,
@@ -84,8 +85,12 @@ class StubOcrEngine:
             page_segmentation_mode=7,
         )
 
-    def describe(self, allowed_chars: object) -> OcrProvenance:
-        del allowed_chars
+    def describe(
+        self,
+        allowed_chars: object,
+        page_segmentation_mode: int | None = None,
+    ) -> OcrProvenance:
+        del allowed_chars, page_segmentation_mode
         self.describe_calls += 1
         return self._provenance
 
@@ -93,8 +98,9 @@ class StubOcrEngine:
         self,
         crop_relpath: Path,
         allowed_chars: object,
+        page_segmentation_mode: int | None = None,
     ) -> tuple[OcrCandidate, ...]:
-        del crop_relpath, allowed_chars
+        del crop_relpath, allowed_chars, page_segmentation_mode
         self.detect_calls += 1
         if self.empty:
             return ()
@@ -102,6 +108,53 @@ class StubOcrEngine:
 
     def cancel_current(self) -> None:
         self.cancelled.set()
+
+
+class PerRegionOcrEngine:
+    def __init__(self, *, default_psm: int = 7) -> None:
+        self.default_psm = default_psm
+        self.detect_calls: list[tuple[Path, tuple[str, ...], int]] = []
+
+    def _provenance(
+        self,
+        allowed_chars: Collection[str],
+        page_segmentation_mode: int | None,
+    ) -> OcrProvenance:
+        allowed = tuple(dict.fromkeys(allowed_chars))
+        psm = self.default_psm if page_segmentation_mode is None else page_segmentation_mode
+        config_hash = hashlib.sha256(f"{''.join(allowed)}:{psm}".encode()).hexdigest()
+        return OcrProvenance(
+            engine_id="per-region-stub",
+            engine_version="1",
+            runtime_sha256="1" * 64,
+            model_sha256="2" * 64,
+            config_hash=config_hash,
+            experimental=False,
+            quality_gate="passed",
+            language="eng",
+            page_segmentation_mode=psm,
+        )
+
+    def describe(
+        self,
+        allowed_chars: Collection[str],
+        page_segmentation_mode: int | None = None,
+    ) -> OcrProvenance:
+        return self._provenance(allowed_chars, page_segmentation_mode)
+
+    def detect_characters(
+        self,
+        crop_relpath: Path,
+        allowed_chars: Collection[str],
+        page_segmentation_mode: int | None = None,
+    ) -> tuple[OcrCandidate, ...]:
+        allowed = tuple(dict.fromkeys(allowed_chars))
+        provenance = self._provenance(allowed, page_segmentation_mode)
+        self.detect_calls.append((crop_relpath, allowed, provenance.page_segmentation_mode))
+        return (OcrCandidate(allowed[0], BBox(4, 5, 12, 20), 0.91, provenance),)
+
+    def cancel_current(self) -> None:
+        return None
 
 
 def test_worker_require_provenance_rejects_mismatched_ocr_candidates() -> None:
@@ -313,7 +366,7 @@ def _seed(
 def _install_workflow(
     composition: CompositionRoot,
     media: StubMediaAccess,
-    ocr: StubOcrEngine,
+    ocr: OcrEngine,
     *,
     heartbeat_interval_seconds: float = 0.05,
 ) -> tuple[DatasetWorkflow, RunRepository, WorkflowRecovery]:
@@ -349,6 +402,149 @@ def _create_run(client: TestClient, seeded: SeededWorkflow) -> dict[str, Any]:
     )
     assert response.status_code == 201, response.text
     return cast(dict[str, Any], response.json())
+
+
+def test_one_frame_uses_each_regions_own_ocr_settings_and_provenance(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    with composition.database.session() as session:
+        first = session.scalar(select(HudRegion).where(HudRegion.profile_id == seeded.profile_id))
+        assert first is not None
+        first.name = "score_right"
+        first.ocr_allowed_chars = "0"
+        first.ocr_page_segmentation_mode = 7
+        session.add(
+            Category(
+                id=str(uuid4()),
+                profile_id=seeded.profile_id,
+                name="A",
+                kind="character",
+                ordinal=1,
+            )
+        )
+        second_id = str(uuid4())
+        session.add(
+            HudRegion(
+                id=second_id,
+                profile_id=seeded.profile_id,
+                name="multiline",
+                x=500,
+                y=32,
+                width=420,
+                height=96,
+                ocr_allowed_chars="A",
+                ocr_page_segmentation_mode=6,
+            )
+        )
+
+    ocr = PerRegionOcrEngine()
+    _install_workflow(composition, StubMediaAccess(composition), ocr)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        assert [
+            (item["region_name"], item["allowed_chars"], item["page_segmentation_mode"])
+            for item in created["ocr_regions"]
+        ] == [("score_right", "0", 7), ("multiline", "A", 6)]
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+
+    assert sorted((allowed, psm) for _, allowed, psm in ocr.detect_calls) == [
+        (("0",), 7),
+        (("A",), 6),
+    ]
+    with composition.database.session() as session:
+        observations = tuple(
+            session.scalars(
+                select(OcrObservation)
+                .join(RegionSample, RegionSample.id == OcrObservation.sample_id)
+                .join(Frame, Frame.id == RegionSample.frame_id)
+                .where(Frame.run_id == created["id"])
+                .order_by(OcrObservation.char)
+            )
+        )
+        checkpoints = tuple(
+            session.scalars(select(StageCheckpoint).where(StageCheckpoint.run_id == created["id"]))
+        )
+
+    assert [(item.char, item.page_segmentation_mode) for item in observations] == [
+        ("0", 7),
+        ("A", 6),
+    ]
+    assert observations[0].config_hash != observations[1].config_hash
+    assert all(
+        checkpoint.ocr_region_config_json == checkpoints[0].ocr_region_config_json
+        for checkpoint in checkpoints
+    )
+    assert checkpoints[0].ocr_region_config_json != "[]"
+
+
+def test_legacy_region_fallback_keeps_same_frame_ocr_result_after_migration(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    ocr = PerRegionOcrEngine(default_psm=7)
+    _install_workflow(composition, StubMediaAccess(composition), ocr)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        legacy = _create_run(client, seeded)
+        assert legacy["ocr_regions"][0]["allowed_chars"] == "0"
+        assert legacy["ocr_regions"][0]["page_segmentation_mode"] == 7
+        started = client.post(
+            f"/api/v1/runs/{legacy['id']}/start",
+            json={"expected_version": legacy["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, legacy["id"], "review_ready")
+
+        with composition.database.session() as session:
+            region = session.scalar(
+                select(HudRegion).where(HudRegion.profile_id == seeded.profile_id)
+            )
+            assert region is not None
+            assert region.ocr_allowed_chars is None
+            assert region.ocr_page_segmentation_mode is None
+            region.ocr_allowed_chars = "0"
+            region.ocr_page_segmentation_mode = 7
+
+        explicit = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{explicit['id']}/start",
+            json={"expected_version": explicit["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, explicit["id"], "review_ready")
+
+    def observation_result(run_id: str) -> tuple[object, ...]:
+        with composition.database.session() as session:
+            observation = session.scalar(
+                select(OcrObservation)
+                .join(RegionSample, RegionSample.id == OcrObservation.sample_id)
+                .join(Frame, Frame.id == RegionSample.frame_id)
+                .where(Frame.run_id == run_id)
+            )
+            assert observation is not None
+            return (
+                observation.char,
+                observation.x,
+                observation.y,
+                observation.width,
+                observation.height,
+                observation.confidence,
+                observation.config_hash,
+                observation.page_segmentation_mode,
+            )
+
+    assert observation_result(legacy["id"]) == observation_result(explicit["id"])
 
 
 def _wait_status(

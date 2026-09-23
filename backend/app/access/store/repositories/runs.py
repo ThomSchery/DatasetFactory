@@ -19,8 +19,14 @@ from backend.app.access.store.models import (
     Export,
     Frame,
     GameProfile,
+    HudRegion,
     PipelineRun,
     VideoAsset,
+)
+from backend.app.access.store.ocr_regions import (
+    RegionOcrSnapshot,
+    decode_region_ocr_snapshots,
+    encode_region_ocr_snapshots,
 )
 from backend.app.engines.definition import OcrProvenance
 from backend.app.managers.workflow.state_machine import (
@@ -68,6 +74,14 @@ class RunSourceError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class RegionOcrDraft:
+    region_id: str
+    region_name: str
+    allowed_chars: tuple[str, ...] | None
+    page_segmentation_mode: int | None
+
+
+@dataclass(frozen=True)
 class RunCreationContext:
     profile_width: int
     profile_height: int
@@ -75,6 +89,7 @@ class RunCreationContext:
     video_height: int
     duration_ms: int
     allowed_chars: tuple[str, ...]
+    regions: tuple[RegionOcrDraft, ...]
 
 
 @dataclass(frozen=True)
@@ -106,6 +121,7 @@ class RunRecord:
     experimental: bool
     quality_gate: str
     warning: str
+    ocr_regions: tuple[RegionOcrSnapshot, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -185,6 +201,23 @@ class RunRepository:
                     .order_by(Category.ordinal)
                 )
             )
+            regions = tuple(
+                RegionOcrDraft(
+                    region_id=region.id,
+                    region_name=region.name,
+                    allowed_chars=(
+                        tuple(region.ocr_allowed_chars)
+                        if region.ocr_allowed_chars is not None
+                        else None
+                    ),
+                    page_segmentation_mode=region.ocr_page_segmentation_mode,
+                )
+                for region in session.scalars(
+                    select(HudRegion)
+                    .where(HudRegion.profile_id == profile_id)
+                    .order_by(HudRegion.created_at, HudRegion.id)
+                )
+            )
             return RunCreationContext(
                 profile.source_width,
                 profile.source_height,
@@ -192,6 +225,7 @@ class RunRepository:
                 video.height,
                 video.duration_ms,
                 allowed,
+                regions,
             )
 
     def create(
@@ -203,6 +237,7 @@ class RunRepository:
         duration_ms: int,
         provenance: OcrProvenance,
         warning: str,
+        region_ocr_snapshots: tuple[RegionOcrSnapshot, ...] = (),
     ) -> RunRecord:
         total_frames = max(1, math.ceil(duration_ms / interval_ms))
         with self._database.session() as session:
@@ -232,6 +267,7 @@ class RunRepository:
                 experimental=provenance.experimental,
                 quality_gate=provenance.quality_gate,
                 warning=warning,
+                ocr_region_config_json=encode_region_ocr_snapshots(region_ocr_snapshots),
                 version=1,
                 review_revision=0,
                 recovery_skipped_frames=0,
@@ -810,6 +846,7 @@ class RunRepository:
             experimental=run.experimental,
             quality_gate=run.quality_gate,
             warning=run.warning,
+            ocr_regions=decode_region_ocr_snapshots(run.ocr_region_config_json),
         )
 
     @staticmethod

@@ -118,5 +118,6 @@ class WorkflowRecovery:
             and checkpoint.experimental == run.experimental
             and checkpoint.quality_gate == run.quality_gate
             and checkpoint.warning == run.warning
+            and checkpoint.ocr_regions == run.ocr_regions
             and self._checkpoints.is_valid(checkpoint)
         )

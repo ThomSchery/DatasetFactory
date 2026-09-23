@@ -14,6 +14,7 @@ from backend.app.access.media.processing import (
     SampledFrame,
 )
 from backend.app.access.ocr import OcrEngine, OcrProcessError
+from backend.app.access.store.ocr_regions import RegionOcrSnapshot
 from backend.app.access.store.repositories.checkpoints import (
     CheckpointArtifactError,
     CheckpointRepository,
@@ -135,6 +136,7 @@ class WorkflowWorker:
 
     def _crop(self, run_id: str, frame: FrameProcessingRecord) -> None:
         self._runs.update_progress(run_id, stage="cropping", frame_index=frame.frame_index)
+        run = self._runs.get(run_id)
         requested = tuple(
             CropRegion(
                 region.id,
@@ -159,7 +161,10 @@ class WorkflowWorker:
                     for artifact in artifacts
                 ],
                 "ocr_provenance": self._provenance_payload(self._runs.provenance(run_id)),
-                "warning": self._runs.get(run_id).warning,
+                "ocr_region_provenance": [
+                    self._region_provenance_payload(snapshot) for snapshot in run.ocr_regions
+                ],
+                "warning": run.warning,
             },
         )
         self._frames.commit_cropped(run_id, frame.frame_index, crops, manifest)
@@ -169,17 +174,22 @@ class WorkflowWorker:
         run = self._runs.get(run_id)
         expected = self._runs.provenance(run_id)
         regions = {region.id: region for region in frame.regions}
+        ocr_regions = {region.region_id: region for region in run.ocr_regions}
         observations: list[ObservationWrite] = []
         with self._heartbeat(run_id):
             for sample in frame.samples:
                 # Tesseract verifies the pinned runtime/model inside this call,
                 # immediately before launching OCR. Repeating `describe()` here would
                 # hash the same multi-megabyte files once more for every frame.
+                ocr_region = ocr_regions.get(sample.region_id)
+                if ocr_region is None:
+                    raise OcrProcessError("ocr_region_config_missing")
                 candidates = self._ocr.detect_characters(
                     sample.crop_relpath,
-                    tuple(frame.category_ids),
+                    ocr_region.allowed_chars,
+                    ocr_region.page_segmentation_mode,
                 )
-                self._require_provenance(candidates, expected)
+                self._require_provenance(candidates, ocr_region.provenance)
                 region = regions[sample.region_id]
                 mapped = self._definition.map_ocr_candidates(
                     candidates,
@@ -221,6 +231,9 @@ class WorkflowWorker:
                     self._observation_payload(item, run.warning) for item in observations
                 ],
                 "ocr_provenance": self._provenance_payload(expected),
+                "ocr_region_provenance": [
+                    self._region_provenance_payload(snapshot) for snapshot in run.ocr_regions
+                ],
                 "warning": run.warning,
             },
         )
@@ -275,6 +288,16 @@ class WorkflowWorker:
             "quality_gate": provenance.quality_gate,
             "language": provenance.language,
             "page_segmentation_mode": provenance.page_segmentation_mode,
+        }
+
+    @classmethod
+    def _region_provenance_payload(cls, snapshot: RegionOcrSnapshot) -> dict[str, Any]:
+        return {
+            "region_id": snapshot.region_id,
+            "region_name": snapshot.region_name,
+            "allowed_chars": "".join(snapshot.allowed_chars),
+            "page_segmentation_mode": snapshot.page_segmentation_mode,
+            "ocr_provenance": cls._provenance_payload(snapshot.provenance),
         }
 
     @classmethod

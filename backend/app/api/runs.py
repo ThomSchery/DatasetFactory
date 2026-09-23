@@ -22,6 +22,26 @@ class VersionedMutationRequest(StrictModel):
     expected_version: int = Field(ge=1)
 
 
+class OcrProvenanceResponse(StrictModel):
+    engine_id: str
+    engine_version: str
+    runtime_sha256: str
+    model_sha256: str
+    config_hash: str
+    experimental: bool
+    quality_gate: str
+    language: str
+    page_segmentation_mode: int
+
+
+class RegionOcrSnapshotResponse(StrictModel):
+    region_id: str
+    region_name: str
+    allowed_chars: str
+    page_segmentation_mode: int
+    provenance: OcrProvenanceResponse
+
+
 class RunResponse(StrictModel):
     id: str
     profile_id: str
@@ -47,6 +67,7 @@ class RunResponse(StrictModel):
     experimental: bool
     quality_gate: str
     warning: str
+    ocr_regions: tuple[RegionOcrSnapshotResponse, ...]
 
 
 class FrameSummaryResponse(StrictModel):
@@ -111,6 +132,16 @@ def run_response(record: RunRecord) -> RunResponse:
     """Render one run. Public so `/dashboard` shows the same run, warning included."""
     # Persistence-only reservation ownership is deliberately not part of the public API.
     values = {field: getattr(record, field) for field in RunResponse.model_fields}
+    values["ocr_regions"] = tuple(
+        RegionOcrSnapshotResponse(
+            region_id=snapshot.region_id,
+            region_name=snapshot.region_name,
+            allowed_chars="".join(snapshot.allowed_chars),
+            page_segmentation_mode=snapshot.page_segmentation_mode,
+            provenance=OcrProvenanceResponse(**vars(snapshot.provenance)),
+        )
+        for snapshot in record.ocr_regions
+    )
     if record.recovery_skipped_frames:
         recovery_warning = (
             "Recovery warning: skipped "

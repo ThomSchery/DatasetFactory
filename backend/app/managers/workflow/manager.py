@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from backend.app.access.ocr import OcrEngine, OcrProcessError
+from backend.app.access.store.ocr_regions import RegionOcrSnapshot
 from backend.app.access.store.repositories.checkpoints import CheckpointReservationError
 from backend.app.access.store.repositories.frames import (
     FrameNotFoundError,
@@ -15,6 +16,7 @@ from backend.app.access.store.repositories.frames import (
 )
 from backend.app.access.store.repositories.runs import (
     ActiveRunError,
+    RegionOcrDraft,
     RunCompletionPreconditionError,
     RunNotFoundError,
     RunPage,
@@ -116,13 +118,45 @@ class DatasetWorkflow:
             code = exc.code if isinstance(exc, OcrProcessError) else "ocr_configuration_invalid"
             raise WorkflowError(code) from exc
         self._require_complete_provenance(provenance)
+        try:
+            region_snapshots = tuple(
+                self._region_ocr_snapshot(region, context.allowed_chars, provenance)
+                for region in context.regions
+            )
+        except (OcrProcessError, ValueError) as exc:
+            code = exc.code if isinstance(exc, OcrProcessError) else "ocr_configuration_invalid"
+            raise WorkflowError(code) from exc
         return self._runs.create(
             profile_id=profile_id,
             video_id=video_id,
             interval_ms=interval_ms,
             duration_ms=context.duration_ms,
             provenance=provenance,
+            region_ocr_snapshots=region_snapshots,
             warning=quality_warning(provenance),
+        )
+
+    def _region_ocr_snapshot(
+        self,
+        region: RegionOcrDraft,
+        profile_allowed_chars: tuple[str, ...],
+        fallback_provenance: OcrProvenance,
+    ) -> RegionOcrSnapshot:
+        if (region.allowed_chars is None) != (region.page_segmentation_mode is None):
+            raise ValueError("incomplete region OCR configuration")
+        allowed_chars = region.allowed_chars or profile_allowed_chars
+        provenance = (
+            fallback_provenance
+            if region.allowed_chars is None
+            else self._ocr.describe(allowed_chars, region.page_segmentation_mode)
+        )
+        self._require_complete_provenance(provenance)
+        return RegionOcrSnapshot(
+            region_id=region.region_id,
+            region_name=region.region_name,
+            allowed_chars=allowed_chars,
+            page_segmentation_mode=provenance.page_segmentation_mode,
+            provenance=provenance,
         )
 
     def start(self, run_id: str, *, expected_version: int) -> RunRecord:
