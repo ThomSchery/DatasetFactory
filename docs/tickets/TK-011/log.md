@@ -175,6 +175,15 @@ test, odtworzenie przez `Copy-Item` i porównanie SHA256.
   odtworzono przez `Copy-Item`, SHA-256 był identyczny, a zestaw 4 testów wrócił
   do PASS.
 - Pełny backend po FIX1: **413 passed**, zero błędów.
+- Pełna bramka FIX1, jednym nieprzerwanym wywołaniem absolutnej ścieżki:
+  **9/9 PASS, zero SKIP**. Backend: 413 testów; frontend: 43 pliki i 714
+  testów; E2E: 24 testy; root safety: 2 testy. E2E zmieniło dokładnie 33
+  historyczne PNG; wszystkie odtworzono z głównego workspace przez `Copy-Item`.
+- Przebieg potwierdzający na `32614bc`, po zmianie dostawcy modelu, ponownie
+  jednym nieprzerwanym wywołaniem: `WYNIK: PASS - wszystkie 9 bramki sa zielone`,
+  kod wyjścia 0. Backend 413 passed (366s), frontend 43 pliki / 714 testów, E2E
+  24 passed, root safety `fail 0`, `skipped 0`. Ponownie zmienione te same 33
+  PNG odtworzono przez `Copy-Item`; poza logiem worktree jest czysty.
 
 ### 2026-09-23 — pełna bramka
 
