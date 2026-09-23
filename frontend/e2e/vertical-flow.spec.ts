@@ -215,6 +215,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await profileSurface.dispatchEvent("pointerup", { ...profileTo, pointerId: 1 });
   await expect(profileSurface.getByRole("option", { name: /Region 1/ })).toBeVisible();
   await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByLabel("Dozwolone znaki OCR").fill("7");
   const initialDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.getByRole("button", { name: "Utwórz profil" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");

@@ -104,11 +104,15 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
 
     await page.getByRole("button", { name: "Dodaj region" }).click();
     const nextRunNotice = page.getByRole("status", {
-      name: "Nowy region obowiązuje od kolejnego runu",
+      name: "Ustawienia regionu obowiązują od kolejnego runu",
     });
     await expect(nextRunNotice).toBeVisible({ timeout: 30_000 });
-    await expect(nextRunNotice).toContainText("nie tworzy brakujących region_samples");
+    await expect(nextRunNotice).toContainText(
+      "nie przelicza istniejących klatek, próbek ani obserwacji",
+    );
     await expect(page.getByRole("textbox", { name: "Nazwa nowego regionu" })).toBeVisible();
+    await expect(page.getByLabel("Dozwolone znaki OCR")).toHaveValue("78A-");
+    await expect(page.getByLabel("Układ tekstu OCR")).toHaveValue("7");
     await nextRunNotice.scrollIntoViewIfNeeded();
     await shoot(page, `profile-add-region-${suffix}`);
 

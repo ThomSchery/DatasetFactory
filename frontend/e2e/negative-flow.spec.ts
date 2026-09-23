@@ -80,6 +80,7 @@ async function createProfile(page: Page): Promise<void> {
   await surface.dispatchEvent("pointermove", { ...to, pointerId: 11 });
   await surface.dispatchEvent("pointerup", { ...to, pointerId: 11 });
   await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByLabel("Dozwolone znaki OCR").fill("7");
   const initialDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.getByRole("button", { name: "Utwórz profil" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
