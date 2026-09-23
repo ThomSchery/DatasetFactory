@@ -112,9 +112,10 @@ class WorkflowRecovery:
             and checkpoint.ocr_engine_version == run.ocr_engine_version
             and checkpoint.ocr_runtime_sha256 == run.ocr_runtime_sha256
             and checkpoint.ocr_model_sha256 == run.ocr_model_sha256
-            and checkpoint.ocr_config_hash == run.ocr_config_hash
+            and checkpoint.ocr_fallback_config_hash == run.ocr_fallback_config_hash
             and checkpoint.ocr_language == run.ocr_language
-            and checkpoint.ocr_page_segmentation_mode == run.ocr_page_segmentation_mode
+            and checkpoint.ocr_fallback_page_segmentation_mode
+            == run.ocr_fallback_page_segmentation_mode
             and checkpoint.experimental == run.experimental
             and checkpoint.quality_gate == run.quality_gate
             and checkpoint.warning == run.warning

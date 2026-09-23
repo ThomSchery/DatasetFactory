@@ -77,9 +77,9 @@ Zakres UI obejmuje istniejący ekran profilu oraz formularz tworzenia profilu. N
 
 ## Decyzje implementacyjne
 
-- Kolumny regionu będą nullable tylko dla rekordów sprzed TK-011. Fallback odtwarza dokładnie dotychczasowy whitelist profilu i domyślny PSM adaptera; pierwsza edycja materializuje konfigurację jawną.
-- Jawny zakres nie rozszerza się po dodaniu klasy do profilu. To wartość konfiguracyjna regionu, nie zapytanie „wszystkie aktualne klasy”. Usunięcie klasy pozostaje poza zakresem v1, a każdy zapis konfiguracji ponownie waliduje podzbiór.
-- Jedno provenance na run jest niewystarczające. Run i checkpoint utrwalą dodatkowy, autorytatywny per-region snapshot; istniejące pola run-level pozostają dla zgodności i opisują wspólną tożsamość adaptera / fallback legacy, nie zastępują snapshotu regionów.
+- Kolumny regionu będą nullable tylko dla rekordów sprzed TK-011. Fallback odtwarza dokładnie dotychczasowy whitelist profilu i domyślny PSM adaptera; pierwsza edycja materializuje konfigurację jawną. Migracja materializuje także snapshot każdego istniejącego runu, aby jego wznowienie nie zależało od bieżącej konfiguracji adaptera.
+- Jawny zakres nie rozszerza się po dodaniu klasy do profilu. To wartość konfiguracyjna regionu, nie zapytanie „wszystkie aktualne klasy”. Każde zwężenie zbioru klas znakowych przez `PATCH` nazwy albo rodzaju klasy jest odrzucane, jeśli jawny zakres regionu nadal używa znaku; API nie udostępnia innej trasy usunięcia klasy.
+- Jedno provenance na run jest niewystarczające. Snapshoty regionów są autorytatywne dla ustawień OCR. Poziom runu/checkpointu przechowuje neutralną tożsamość adaptera, a osobną konfigurację fallbacku tylko wtedy, gdy co najmniej jeden region rzeczywiście jej używa.
 
 ## Implementacja i weryfikacja
 
@@ -104,11 +104,13 @@ Zakres UI obejmuje istniejący ekran profilu oraz formularz tworzenia profilu. N
   oraz PSM do Tesseracta. Obserwacja jest akceptowana tylko wtedy, gdy provenance
   kandydata odpowiada snapshotowi tego regionu.
 - Jedno provenance na run nie wystarcza przy różnych ustawieniach regionów.
-  Dotychczasowe pola run-level zostają dla kompatybilności i wspólnej tożsamości
-  adaptera; autorytatywne ustawienia obserwacji znajdują się w snapshotach regionów.
+  Run-level manifest zawiera neutralne `ocr_adapter`; opcjonalne `ocr_fallback`
+  pojawia się wyłącznie, gdy rzeczywiście używa go region. Autorytatywne ustawienia
+  obserwacji znajdują się w snapshotach regionów.
 - Legacy `NULL` używa dokładnie dawnego whitelist profilu i domyślnego PSM adaptera.
-  Test uruchamia ten sam kadr raz z fallbackiem i raz z jawną równoważną
-  konfiguracją, po czym porównuje znak, bbox, confidence, hash i PSM obserwacji.
+  Test integracyjny porównuje parametry i wynik stuba, a test prawdziwego adaptera
+  uruchamia ten sam crop raz z pominiętym PSM i raz z jawnym PSM `7`, po czym
+  porównuje kompletne kandydaty i provenance.
 - Weryfikacja: `test_tesseract_ocr.py` — 28 passed;
   `test_durable_workflow.py` — 21 passed; `ruff check` i `mypy` — PASS.
 
@@ -141,7 +143,7 @@ test, odtworzenie przez `Copy-Item` i porównanie SHA256.
   `3EEC9E041513F19F53D48F472D2952C29A153B928CE17F514C1DC95B4138D7ED`, test PASS.
 - **Zgodność po migracji:** zastąpienie legacy fallbacku PSM trybem `6` dało
   `page_segmentation_mode: 6 != 7` w
-  `test_legacy_region_fallback_keeps_same_frame_ocr_result_after_migration`.
+  `test_legacy_and_equivalent_explicit_region_use_same_parameters_and_stub_result`.
   Po odtworzeniu `manager.py` hash wyniósł ponownie
   `133B9D6D0ED3274563D485C16CB046925FE0E3DD52E896560DDDEB613B4D4FEA`, test PASS.
 - **Brak przeliczania wstecz:** celowe usunięcie zapisanych obserwacji w
@@ -149,6 +151,30 @@ test, odtworzenie przez `Copy-Item` i porównanie SHA256.
   `test_region_ocr_config_can_be_edited_without_touching_existing_observations`.
   Po odtworzeniu `profiles.py` hash wyniósł ponownie
   `2E24ECB4BA69C1386A5001F9EDB98C2DC8F5638A336EF8885EFC9207F150F1A7`, test PASS.
+
+### 2026-09-23 — FIX1 po cold review
+
+- **Legacy run po migracji:** `0007` buduje snapshoty wszystkich regionów profilu.
+  Zakres bierze z klas znakowych w ich kolejności, a PSM, hash i pozostałe
+  provenance z rekordu runu 0006; ten sam dokument trafia do jego checkpointów.
+  Nie ma runtime fallbacku dla pustej listy. Test 0006→0007 wstawia prawdziwy run
+  i checkpoint, wywołuje publiczne `resume` i dochodzi do `review_ready`.
+- **Zwężanie klas:** jedyna publiczna trasa, która może wyjąć znak ze zbioru klas,
+  to `PATCH /profiles/{profile}/categories/{category}`. Zarówno rename znaku, jak
+  i zmiana `kind` na `game` są atomowo odrzucane kodem 409, z listą nazw i ID
+  blokujących regionów. Dodawanie klas tylko poszerza zbiór; endpointu delete brak.
+- **Rozdział provenance:** DB na runie i checkpointach dopuszcza `NULL` wyłącznie
+  dla pary fallback `config_hash`/PSM. API pokazuje ją jako opcjonalne
+  `ocr_fallback`; manifest pokazuje neutralne `ocr_adapter`. Pełny hash i PSM są
+  zawsze w snapshotach per region. Test runu z jedynym regionem PSM `11` dowodzi,
+  że API, rekord checkpointu i manifest nie ujawniają nieużytego PSM `7` ani jego
+  hasha.
+- **Falsifikacja FIX1:** usunięcie materializacji migracji dało `[] != [snapshot]`;
+  wyłączenie blokady rename/kind dało `200 != 409`; wymuszenie zapisu fallbacku
+  dla explicit-only runu ujawniło PSM `7` zamiast `None`. Po każdej próbie plik
+  odtworzono przez `Copy-Item`, SHA-256 był identyczny, a zestaw 4 testów wrócił
+  do PASS.
+- Pełny backend po FIX1: **413 passed**, zero błędów.
 
 ### 2026-09-23 — pełna bramka
 
@@ -169,6 +195,10 @@ test, odtworzenie przez `Copy-Item` i porównanie SHA256.
   run pozostały tylko do odczytu.
 - `score_right`, whitelist `0123456789`, PSM `7`: **43 obserwacje, zero liter**.
   Dwie dawne błędne obserwacje `M` i `W` znikają zamiast być mapowane na klasy.
-- `health & armour`, whitelist `0123456789/`, wieloliniowy PSM `6`:
-  **131 obserwacji**. Wynik jest jawnie niezerowy; zmiana trybu usuwa zmierzony
-  objaw zera na tych cropach.
+- Pierwszy pomiar `health & armour` na PSM `6` dał **131 obserwacji**, ale analiza
+  jakości wykazała gubienie drugiego wiersza; PSM `6` nie jest rekomendacją dla
+  tego regionu.
+- Powtórny pomiar `health & armour`, whitelist `0123456789/`, PSM `11`:
+  **171 obserwacji**. Klatka 7 daje `88/10010/100`; jedna z 25 klatek nadal jest
+  pusta, ale wynik całego regionu jest jednoznacznie niezerowy. To ustawienie
+  należy zastosować operacyjnie bez zmiany zbioru dopuszczalnych trybów.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import threading
 import time
@@ -486,7 +487,70 @@ def test_one_frame_uses_each_regions_own_ocr_settings_and_provenance(
     assert checkpoints[0].ocr_region_config_json != "[]"
 
 
-def test_legacy_region_fallback_keeps_same_frame_ocr_result_after_migration(
+def test_explicit_only_run_and_checkpoints_do_not_publish_unused_fallback_config(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    with composition.database.session() as session:
+        region = session.scalar(select(HudRegion).where(HudRegion.profile_id == seeded.profile_id))
+        assert region is not None
+        region.ocr_allowed_chars = "0"
+        region.ocr_page_segmentation_mode = 11
+
+    ocr = PerRegionOcrEngine(default_psm=7)
+    _install_workflow(composition, StubMediaAccess(composition), ocr)
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        assert created["ocr_fallback"] is None
+        assert "ocr_config_hash" not in created
+        assert "ocr_page_segmentation_mode" not in created
+        assert created["ocr_regions"][0]["uses_profile_fallback"] is False
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+
+    unused_hash = hashlib.sha256(b"0:7").hexdigest()
+    with composition.database.session() as session:
+        run = session.get(PipelineRun, created["id"])
+        assert run is not None
+        assert run.ocr_config_hash is None
+        assert run.ocr_page_segmentation_mode is None
+        checkpoints = tuple(
+            session.scalars(
+                select(StageCheckpoint)
+                .where(
+                    StageCheckpoint.run_id == created["id"],
+                    StageCheckpoint.stage.in_(("crop", "ocr")),
+                )
+                .order_by(StageCheckpoint.stage)
+            )
+        )
+        assert checkpoints
+        assert all(checkpoint.ocr_config_hash is None for checkpoint in checkpoints)
+        assert all(checkpoint.ocr_page_segmentation_mode is None for checkpoint in checkpoints)
+
+    for checkpoint in checkpoints:
+        assert checkpoint.artifact_relpath is not None
+        manifest = json.loads(
+            composition.workspace.resolve_relpath(checkpoint.artifact_relpath).read_text(
+                encoding="utf-8"
+            )
+        )
+        assert "ocr_provenance" not in manifest
+        assert "ocr_fallback" not in manifest
+        assert "config_hash" not in manifest["ocr_adapter"]
+        assert "page_segmentation_mode" not in manifest["ocr_adapter"]
+        assert manifest["ocr_region_provenance"][0]["page_segmentation_mode"] == 11
+        assert unused_hash not in json.dumps(manifest, sort_keys=True)
+
+
+def test_legacy_and_equivalent_explicit_region_use_same_parameters_and_stub_result(
     composition: CompositionRoot,
     tmp_path: Path,
 ) -> None:
@@ -497,8 +561,10 @@ def test_legacy_region_fallback_keeps_same_frame_ocr_result_after_migration(
 
     with TestClient(app) as client:
         legacy = _create_run(client, seeded)
+        assert legacy["ocr_fallback"]["page_segmentation_mode"] == 7
         assert legacy["ocr_regions"][0]["allowed_chars"] == "0"
         assert legacy["ocr_regions"][0]["page_segmentation_mode"] == 7
+        assert legacy["ocr_regions"][0]["uses_profile_fallback"] is True
         started = client.post(
             f"/api/v1/runs/{legacy['id']}/start",
             json={"expected_version": legacy["version"]},
@@ -517,6 +583,8 @@ def test_legacy_region_fallback_keeps_same_frame_ocr_result_after_migration(
             region.ocr_page_segmentation_mode = 7
 
         explicit = _create_run(client, seeded)
+        assert explicit["ocr_fallback"] is None
+        assert explicit["ocr_regions"][0]["uses_profile_fallback"] is False
         started = client.post(
             f"/api/v1/runs/{explicit['id']}/start",
             json={"expected_version": explicit["version"]},

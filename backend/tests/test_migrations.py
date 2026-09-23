@@ -1,14 +1,25 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 from alembic import command
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, alembic_config
 from backend.app.composition import build_composition
 from backend.app.config import Settings
+from backend.app.main import create_app
 from backend.tests.conftest import AvailableResourceProbe
 from backend.tests.test_composition import EXPECTED_TABLES
+from backend.tests.test_durable_workflow import (
+    PerRegionOcrEngine,
+    StubMediaAccess,
+    _install_workflow,
+    _wait_status,
+)
 
 
 def test_initial_migration_up_down_up(settings: Settings) -> None:
@@ -128,13 +139,17 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     engine.dispose()
 
 
-def test_region_ocr_config_migration_preserves_legacy_region_as_fallback(
+def test_region_ocr_config_migration_materializes_legacy_run_and_resumes(
     settings: Settings,
 ) -> None:
     config = alembic_config(settings)
     command.upgrade(config, "0006")
     engine = create_engine(settings.database_url)
     now = "2026-09-23T08:00:00+00:00"
+    source = settings.workspace_dir.parent / "legacy.mp4"
+    source.write_bytes(b"legacy-resume-source")
+    stat = source.stat()
+    fingerprint = hashlib.sha256(f"{stat.st_size}:{stat.st_mtime_ns}".encode()).hexdigest()
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -169,6 +184,63 @@ def test_region_ocr_config_migration_preserves_legacy_region_as_fallback(
             ),
             {"now": now},
         )
+        for category_id, name, ordinal in (("c0", "0", 0), ("cw", "W", 1)):
+            connection.execute(
+                text(
+                    "INSERT INTO categories "
+                    "(id,profile_id,name,kind,ordinal,created_at,updated_at) "
+                    "VALUES (:id,'g',:name,'character',:ordinal,:now,:now)"
+                ),
+                {"id": category_id, "name": name, "ordinal": ordinal, "now": now},
+            )
+        connection.execute(
+            text(
+                "INSERT INTO video_assets "
+                "(id,project_id,local_path,size_bytes,duration_ms,width,height,fingerprint,"
+                "created_at,updated_at) "
+                "VALUES ('v','p',:source,:size,1000,1920,1080,:fingerprint,:now,:now)"
+            ),
+            {
+                "source": str(source),
+                "size": stat.st_size,
+                "fingerprint": fingerprint,
+                "now": now,
+            },
+        )
+        config_hash = hashlib.sha256(b"0W:7").hexdigest()
+        provenance_values = {
+            "runtime": "1" * 64,
+            "model": "2" * 64,
+            "config": config_hash,
+            "now": now,
+        }
+        connection.execute(
+            text(
+                "INSERT INTO pipeline_runs "
+                "(id,profile_id,video_id,interval_ms,status,error_code,last_heartbeat_at,"
+                "attempt,total_frames,current_stage,current_frame_index,control_requested,"
+                "workflow_slot,resume_token,resume_owner,ocr_engine,ocr_engine_version,"
+                "ocr_runtime_sha256,ocr_model_sha256,ocr_config_hash,ocr_language,"
+                "ocr_page_segmentation_mode,experimental,quality_gate,warning,version,"
+                "created_at,updated_at) VALUES "
+                "('run','g','v',1000,'failed','worker_stopped',NULL,1,1,'ocr',0,NULL,NULL,"
+                "NULL,NULL,'per-region-stub','1',:runtime,:model,:config,'eng',7,0,'passed',"
+                "'',1,:now,:now)"
+            ),
+            provenance_values,
+        )
+        connection.execute(
+            text(
+                "INSERT INTO stage_checkpoints "
+                "(run_id,frame_index,stage,attempt,status,artifact_relpath,artifact_hash,"
+                "error_code,ocr_engine,ocr_engine_version,ocr_runtime_sha256,ocr_model_sha256,"
+                "ocr_config_hash,ocr_language,ocr_page_segmentation_mode,experimental,"
+                "quality_gate,warning,created_at,updated_at) VALUES "
+                "('run',0,'crop',1,'failed',NULL,NULL,'worker_stopped','per-region-stub','1',"
+                ":runtime,:model,:config,'eng',7,0,'passed','',:now,:now)"
+            ),
+            provenance_values,
+        )
     engine.dispose()
 
     command.upgrade(config, "0007")
@@ -195,8 +267,54 @@ def test_region_ocr_config_migration_preserves_legacy_region_as_fallback(
             "ocr_allowed_chars": None,
             "ocr_page_segmentation_mode": None,
         }
+        run_snapshot = connection.execute(
+            text("SELECT ocr_region_config_json FROM pipeline_runs WHERE id='run'")
+        ).scalar_one()
+        checkpoint_snapshot = connection.execute(
+            text(
+                "SELECT ocr_region_config_json FROM stage_checkpoints "
+                "WHERE run_id='run' AND frame_index=0 AND stage='crop'"
+            )
+        ).scalar_one()
+        assert checkpoint_snapshot == run_snapshot
+        assert json.loads(run_snapshot) == [
+            {
+                "allowed_chars": "0W",
+                "page_segmentation_mode": 7,
+                "provenance": {
+                    "config_hash": config_hash,
+                    "engine_id": "per-region-stub",
+                    "engine_version": "1",
+                    "experimental": False,
+                    "language": "eng",
+                    "model_sha256": "2" * 64,
+                    "page_segmentation_mode": 7,
+                    "quality_gate": "passed",
+                    "runtime_sha256": "1" * 64,
+                },
+                "region_id": "r",
+                "region_name": "score_right",
+                "uses_profile_fallback": True,
+            }
+        ]
         assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
     engine.dispose()
+
+    composition = build_composition(settings, resource_probe=AvailableResourceProbe())
+    try:
+        ocr = PerRegionOcrEngine(default_psm=7)
+        _install_workflow(composition, StubMediaAccess(composition), ocr)
+        app = create_app(settings, composition=composition)
+        with TestClient(app) as client:
+            resumed = client.post("/api/v1/runs/run/resume", json={"expected_version": 1})
+            assert resumed.status_code == 202, resumed.text
+            assert resumed.json()["ocr_fallback"]["page_segmentation_mode"] == 7
+            assert resumed.json()["ocr_regions"][0]["uses_profile_fallback"] is True
+            completed = _wait_status(client, "run", "review_ready")
+            assert completed["error_code"] is None
+        assert [(allowed, psm) for _, allowed, psm in ocr.detect_calls] == [(("0", "W"), 7)]
+    finally:
+        composition.close()
 
     command.downgrade(config, "0006")
     engine = create_engine(settings.database_url)

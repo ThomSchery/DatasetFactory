@@ -14,6 +14,7 @@ class RegionOcrSnapshot:
     allowed_chars: tuple[str, ...]
     page_segmentation_mode: int
     provenance: OcrProvenance
+    uses_profile_fallback: bool = False
 
 
 def encode_region_ocr_snapshots(snapshots: tuple[RegionOcrSnapshot, ...]) -> str:
@@ -23,6 +24,7 @@ def encode_region_ocr_snapshots(snapshots: tuple[RegionOcrSnapshot, ...]) -> str
             "region_name": snapshot.region_name,
             "allowed_chars": "".join(snapshot.allowed_chars),
             "page_segmentation_mode": snapshot.page_segmentation_mode,
+            "uses_profile_fallback": snapshot.uses_profile_fallback,
             "provenance": {
                 "engine_id": snapshot.provenance.engine_id,
                 "engine_version": snapshot.provenance.engine_version,
@@ -55,12 +57,14 @@ def decode_region_ocr_snapshots(document: str) -> tuple[RegionOcrSnapshot, ...]:
         allowed_chars = raw.get("allowed_chars")
         psm = raw.get("page_segmentation_mode")
         provenance_psm = provenance.get("page_segmentation_mode")
+        uses_profile_fallback = raw.get("uses_profile_fallback", False)
         if (
             not isinstance(allowed_chars, str)
             or not allowed_chars
             or type(psm) is not int
             or type(provenance_psm) is not int
             or psm != provenance_psm
+            or type(uses_profile_fallback) is not bool
         ):
             raise ValueError("invalid region OCR snapshot")
         snapshots.append(
@@ -80,6 +84,7 @@ def decode_region_ocr_snapshots(document: str) -> tuple[RegionOcrSnapshot, ...]:
                     language=_required_string(provenance, "language"),
                     page_segmentation_mode=provenance_psm,
                 ),
+                uses_profile_fallback=uses_profile_fallback,
             )
         )
     return tuple(snapshots)

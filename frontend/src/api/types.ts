@@ -203,7 +203,13 @@ export interface RegionOcrSnapshot {
   region_name: string;
   allowed_chars: string;
   page_segmentation_mode: number;
+  uses_profile_fallback: boolean;
   provenance: OcrProvenance;
+}
+
+export interface OcrFallback {
+  config_hash: string;
+  page_segmentation_mode: number;
 }
 
 export interface PipelineRun {
@@ -225,9 +231,8 @@ export interface PipelineRun {
   ocr_engine_version: string;
   ocr_runtime_sha256: string;
   ocr_model_sha256: string;
-  ocr_config_hash: string;
   ocr_language: string;
-  ocr_page_segmentation_mode: number;
+  ocr_fallback: OcrFallback | null;
   experimental: boolean;
   quality_gate: string;
   warning: string;

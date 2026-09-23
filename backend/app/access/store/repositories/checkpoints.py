@@ -80,9 +80,9 @@ class CheckpointRecord:
     ocr_engine_version: str
     ocr_runtime_sha256: str
     ocr_model_sha256: str
-    ocr_config_hash: str
+    ocr_fallback_config_hash: str | None
     ocr_language: str
-    ocr_page_segmentation_mode: int
+    ocr_fallback_page_segmentation_mode: int | None
     experimental: bool
     quality_gate: str
     warning: str
@@ -408,9 +408,9 @@ class CheckpointRepository:
             ocr_engine_version=checkpoint.ocr_engine_version,
             ocr_runtime_sha256=checkpoint.ocr_runtime_sha256,
             ocr_model_sha256=checkpoint.ocr_model_sha256,
-            ocr_config_hash=checkpoint.ocr_config_hash,
+            ocr_fallback_config_hash=checkpoint.ocr_config_hash,
             ocr_language=checkpoint.ocr_language,
-            ocr_page_segmentation_mode=checkpoint.ocr_page_segmentation_mode,
+            ocr_fallback_page_segmentation_mode=checkpoint.ocr_page_segmentation_mode,
             experimental=checkpoint.experimental,
             quality_gate=checkpoint.quality_gate,
             warning=checkpoint.warning,

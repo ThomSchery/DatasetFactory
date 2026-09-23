@@ -25,6 +25,7 @@ from backend.app.access.store.repositories.frames import (
     ObservationWrite,
 )
 from backend.app.access.store.repositories.runs import (
+    RunRecord,
     RunRepository,
     RunSourceError,
 )
@@ -160,7 +161,7 @@ class WorkflowWorker:
                     {"relpath": artifact.relpath, "sha256": artifact.sha256}
                     for artifact in artifacts
                 ],
-                "ocr_provenance": self._provenance_payload(self._runs.provenance(run_id)),
+                **self._run_provenance_payload(run),
                 "ocr_region_provenance": [
                     self._region_provenance_payload(snapshot) for snapshot in run.ocr_regions
                 ],
@@ -172,7 +173,6 @@ class WorkflowWorker:
     def _ocr_frame(self, run_id: str, frame: FrameProcessingRecord) -> None:
         self._runs.update_progress(run_id, stage="ocr", frame_index=frame.frame_index)
         run = self._runs.get(run_id)
-        expected = self._runs.provenance(run_id)
         regions = {region.id: region for region in frame.regions}
         ocr_regions = {region.region_id: region for region in run.ocr_regions}
         observations: list[ObservationWrite] = []
@@ -230,7 +230,7 @@ class WorkflowWorker:
                 "observations": [
                     self._observation_payload(item, run.warning) for item in observations
                 ],
-                "ocr_provenance": self._provenance_payload(expected),
+                **self._run_provenance_payload(run),
                 "ocr_region_provenance": [
                     self._region_provenance_payload(snapshot) for snapshot in run.ocr_regions
                 ],
@@ -290,6 +290,29 @@ class WorkflowWorker:
             "page_segmentation_mode": provenance.page_segmentation_mode,
         }
 
+    @staticmethod
+    def _run_provenance_payload(run: RunRecord) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "ocr_adapter": {
+                "engine_id": run.ocr_engine,
+                "engine_version": run.ocr_engine_version,
+                "runtime_sha256": run.ocr_runtime_sha256,
+                "model_sha256": run.ocr_model_sha256,
+                "experimental": run.experimental,
+                "quality_gate": run.quality_gate,
+                "language": run.ocr_language,
+            }
+        }
+        if (
+            run.ocr_fallback_config_hash is not None
+            and run.ocr_fallback_page_segmentation_mode is not None
+        ):
+            payload["ocr_fallback"] = {
+                "config_hash": run.ocr_fallback_config_hash,
+                "page_segmentation_mode": run.ocr_fallback_page_segmentation_mode,
+            }
+        return payload
+
     @classmethod
     def _region_provenance_payload(cls, snapshot: RegionOcrSnapshot) -> dict[str, Any]:
         return {
@@ -297,6 +320,7 @@ class WorkflowWorker:
             "region_name": snapshot.region_name,
             "allowed_chars": "".join(snapshot.allowed_chars),
             "page_segmentation_mode": snapshot.page_segmentation_mode,
+            "uses_profile_fallback": snapshot.uses_profile_fallback,
             "ocr_provenance": cls._provenance_payload(snapshot.provenance),
         }
 

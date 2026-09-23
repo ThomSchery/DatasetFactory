@@ -157,6 +157,7 @@ class DatasetWorkflow:
             allowed_chars=allowed_chars,
             page_segmentation_mode=provenance.page_segmentation_mode,
             provenance=provenance,
+            uses_profile_fallback=region.allowed_chars is None,
         )
 
     def start(self, run_id: str, *, expected_version: int) -> RunRecord:

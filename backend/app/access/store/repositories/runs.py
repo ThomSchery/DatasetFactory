@@ -5,7 +5,7 @@ import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 from uuid import uuid4
 
 from sqlalchemy import func, or_, select
@@ -115,9 +115,9 @@ class RunRecord:
     ocr_engine_version: str
     ocr_runtime_sha256: str
     ocr_model_sha256: str
-    ocr_config_hash: str
+    ocr_fallback_config_hash: str | None
     ocr_language: str
-    ocr_page_segmentation_mode: int
+    ocr_fallback_page_segmentation_mode: int | None
     experimental: bool
     quality_gate: str
     warning: str
@@ -240,6 +240,9 @@ class RunRepository:
         region_ocr_snapshots: tuple[RegionOcrSnapshot, ...] = (),
     ) -> RunRecord:
         total_frames = max(1, math.ceil(duration_ms / interval_ms))
+        uses_profile_fallback = any(
+            snapshot.uses_profile_fallback for snapshot in region_ocr_snapshots
+        )
         with self._database.session() as session:
             run = PipelineRun(
                 id=str(uuid4()),
@@ -261,9 +264,11 @@ class RunRepository:
                 ocr_engine_version=provenance.engine_version,
                 ocr_runtime_sha256=provenance.runtime_sha256,
                 ocr_model_sha256=provenance.model_sha256,
-                ocr_config_hash=provenance.config_hash,
+                ocr_config_hash=provenance.config_hash if uses_profile_fallback else None,
                 ocr_language=provenance.language,
-                ocr_page_segmentation_mode=provenance.page_segmentation_mode,
+                ocr_page_segmentation_mode=(
+                    provenance.page_segmentation_mode if uses_profile_fallback else None
+                ),
                 experimental=provenance.experimental,
                 quality_gate=provenance.quality_gate,
                 warning=warning,
@@ -718,13 +723,6 @@ class RunRepository:
             run.current_frame_index = None
             run.version += 1
 
-    def provenance(self, run_id: str) -> OcrProvenance:
-        with self._database.session() as session:
-            run = session.get(PipelineRun, run_id)
-            if run is None:
-                raise RunNotFoundError
-            return self._provenance(run)
-
     def _request_control(
         self,
         run_id: str,
@@ -795,20 +793,6 @@ class RunRepository:
             raise RunReservationConflictError
 
     @staticmethod
-    def _provenance(run: PipelineRun) -> OcrProvenance:
-        return OcrProvenance(
-            engine_id=run.ocr_engine,
-            engine_version=run.ocr_engine_version,
-            runtime_sha256=run.ocr_runtime_sha256,
-            model_sha256=run.ocr_model_sha256,
-            config_hash=run.ocr_config_hash,
-            experimental=run.experimental,
-            quality_gate=cast(Literal["passed", "failed", "unknown"], run.quality_gate),
-            language=run.ocr_language,
-            page_segmentation_mode=run.ocr_page_segmentation_mode,
-        )
-
-    @staticmethod
     def _record(session: Session, run: PipelineRun) -> RunRecord:
         completed = int(
             session.scalar(
@@ -840,9 +824,9 @@ class RunRepository:
             ocr_engine_version=run.ocr_engine_version,
             ocr_runtime_sha256=run.ocr_runtime_sha256,
             ocr_model_sha256=run.ocr_model_sha256,
-            ocr_config_hash=run.ocr_config_hash,
+            ocr_fallback_config_hash=run.ocr_config_hash,
             ocr_language=run.ocr_language,
-            ocr_page_segmentation_mode=run.ocr_page_segmentation_mode,
+            ocr_fallback_page_segmentation_mode=run.ocr_page_segmentation_mode,
             experimental=run.experimental,
             quality_gate=run.quality_gate,
             warning=run.warning,

@@ -522,7 +522,11 @@ def test_configured_real_tesseract_runs_adapter_with_pinned_provenance(tmp_path:
     )
 
     candidates = engine.detect_characters(crop_relpath, EXPECTED["allowed_chars"])
+    explicit_default_candidates = engine.detect_characters(
+        crop_relpath, EXPECTED["allowed_chars"], 7
+    )
     provenance = engine.describe(EXPECTED["allowed_chars"])
+    explicit_default_provenance = engine.describe(EXPECTED["allowed_chars"], 7)
 
     assert provenance.engine_id == "tesseract"
     assert provenance.engine_version == settings.tesseract_version
@@ -530,5 +534,7 @@ def test_configured_real_tesseract_runs_adapter_with_pinned_provenance(tmp_path:
     assert provenance.model_sha256 == settings.tesseract_model_sha256
     assert provenance.experimental is True
     assert provenance.quality_gate == "failed"
+    assert explicit_default_provenance == provenance
+    assert explicit_default_candidates == candidates
     assert all(candidate.provenance == provenance for candidate in candidates)
     assert not tuple(crop.parent.glob(".ocr-*"))

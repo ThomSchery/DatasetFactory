@@ -39,7 +39,13 @@ class RegionOcrSnapshotResponse(StrictModel):
     region_name: str
     allowed_chars: str
     page_segmentation_mode: int
+    uses_profile_fallback: bool
     provenance: OcrProvenanceResponse
+
+
+class OcrFallbackResponse(StrictModel):
+    config_hash: str
+    page_segmentation_mode: int
 
 
 class RunResponse(StrictModel):
@@ -61,9 +67,8 @@ class RunResponse(StrictModel):
     ocr_engine_version: str
     ocr_runtime_sha256: str
     ocr_model_sha256: str
-    ocr_config_hash: str
     ocr_language: str
-    ocr_page_segmentation_mode: int
+    ocr_fallback: OcrFallbackResponse | None
     experimental: bool
     quality_gate: str
     warning: str
@@ -131,13 +136,27 @@ WorkflowProvider = Callable[[], DatasetWorkflow]
 def run_response(record: RunRecord) -> RunResponse:
     """Render one run. Public so `/dashboard` shows the same run, warning included."""
     # Persistence-only reservation ownership is deliberately not part of the public API.
-    values = {field: getattr(record, field) for field in RunResponse.model_fields}
+    values = {
+        field: getattr(record, field)
+        for field in RunResponse.model_fields
+        if field not in {"ocr_fallback", "ocr_regions"}
+    }
+    values["ocr_fallback"] = (
+        OcrFallbackResponse(
+            config_hash=record.ocr_fallback_config_hash,
+            page_segmentation_mode=record.ocr_fallback_page_segmentation_mode,
+        )
+        if record.ocr_fallback_config_hash is not None
+        and record.ocr_fallback_page_segmentation_mode is not None
+        else None
+    )
     values["ocr_regions"] = tuple(
         RegionOcrSnapshotResponse(
             region_id=snapshot.region_id,
             region_name=snapshot.region_name,
             allowed_chars="".join(snapshot.allowed_chars),
             page_segmentation_mode=snapshot.page_segmentation_mode,
+            uses_profile_fallback=snapshot.uses_profile_fallback,
             provenance=OcrProvenanceResponse(**vars(snapshot.provenance)),
         )
         for snapshot in record.ocr_regions
