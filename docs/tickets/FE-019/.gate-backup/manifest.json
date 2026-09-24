@@ -1,0 +1,162 @@
+﻿[
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/annotations-1440.png",
+        "SHA256":  "740761643DB626E1DC6BF9F3545C959394034B3477446289DAB3A76A45539B8E"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/dashboard-1440.png",
+        "SHA256":  "E2E75CAFBB143CAB7F093387466C224CDC3FD3A1955E2194D5D3580841F138C6"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/empty-1440.png",
+        "SHA256":  "4343E328B6A0829250F56EA6AD6F2F5F956AE4AAA899C4B7B100E4E01D543D6C"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/error-1440.png",
+        "SHA256":  "4ECC9B6C33A4CED2D6453497ED2CFC68B421A2A267DA66DE11AC7E8DC26FB9A1"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/exports-1440.png",
+        "SHA256":  "91AAA774FF0B0CDBCC41704F482551D7EAE4DE48455D8B6C6FF59CF46D50A008"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/loading-1440.png",
+        "SHA256":  "D58E31A2F1EBE51EBC17765F7B06CA0B9ABE80066E8E6FE8EA022123CA1EE14D"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/materials-1440.png",
+        "SHA256":  "28D48D824C62FE284F24A939FAF7356360127CCFA6598C3E7C79E67BF9C0FF1C"
+    },
+    {
+        "Path":  "docs/tickets/FE-001/screenshots/profile-1440.png",
+        "SHA256":  "041CC86BEFA5D86DD8067552E30360178ED1EFF1C4FAA5E02DA6B783603217E6"
+    },
+    {
+        "Path":  "docs/tickets/FE-010/fe-010-canvas-crosshair-1440.png",
+        "SHA256":  "6249D77E040BFDDC46C1E4F962556682E8EEBC93BBDBDA9EE458E20CDB96D98F"
+    },
+    {
+        "Path":  "docs/tickets/FE-010/fe-010-zoom-crosshair-1440.png",
+        "SHA256":  "F750B8F5A10CE1B5B92E46F7ECF18CF0B056E9881BBE64AF25C8A9FFEC49E1B1"
+    },
+    {
+        "Path":  "docs/tickets/FE-011/screenshots/annotations-pan-1440.png",
+        "SHA256":  "DA22E14AEA697C4B848943A6545365EA016F4C1559B76F7DF5C899FBC3F020E3"
+    },
+    {
+        "Path":  "docs/tickets/FE-012/screenshots/panel-without-geometry-1440.png",
+        "SHA256":  "EC4C3C2D7BF2026ADBFA690D9605D2E71723128CE7A480A73407A28F7A8979C1"
+    },
+    {
+        "Path":  "docs/tickets/FE-012/screenshots/review-1440.png",
+        "SHA256":  "024346E8EDA82B1A8F5CF1F1935D3BB542E7247CBA388FB134FE48A4C9B4477D"
+    },
+    {
+        "Path":  "docs/tickets/FE-013/screenshots/create-class-action-1440.png",
+        "SHA256":  "E2D50A4237A47F56B34C4382B44F1716CCCB12CA7A2EA31501C06B622E3D9DD4"
+    },
+    {
+        "Path":  "docs/tickets/FE-014/screenshots/review-1440x1000.png",
+        "SHA256":  "F55D60CA748BF4730CD1A65DC499398C20A27F4E5C5072818C61852D1B562B55"
+    },
+    {
+        "Path":  "docs/tickets/FE-014/screenshots/review-1920x1080.png",
+        "SHA256":  "756E048DA56B462A41E62DBDAF3F143B92167811EF3F259AA8B9D0B04A99C185"
+    },
+    {
+        "Path":  "docs/tickets/FE-015/screenshots/editor-context-menu-1440x1000.png",
+        "SHA256":  "A57A16D7D55696C8034753D2E6D1D252BFFB76B6661EFC31E255B0335F0A2A1F"
+    },
+    {
+        "Path":  "docs/tickets/FE-015/screenshots/editor-context-menu-1920x1080.png",
+        "SHA256":  "5B4197948EAD12404200F3909C0E9CCDC8028A63B415B19A38F44D84E874B4CD"
+    },
+    {
+        "Path":  "docs/tickets/FE-015/screenshots/editor-no-selection-1440x1000.png",
+        "SHA256":  "9C66A2AA03D4B69207032AE0FAA53A05257BD978D1DF55A38A4EA0C750713C56"
+    },
+    {
+        "Path":  "docs/tickets/FE-015/screenshots/editor-no-selection-1920x1080.png",
+        "SHA256":  "DE97760A35BE724F725C67217608067EA41A204B391B8A97D89C3C951B13D6F2"
+    },
+    {
+        "Path":  "docs/tickets/FE-016/screenshots/export-variant-1440x1000.png",
+        "SHA256":  "9E1531E3B0BF4C44233340D6D7E325211225D46637AB000376753C1D49B95D80"
+    },
+    {
+        "Path":  "docs/tickets/FE-016/screenshots/export-variant-1920x1080.png",
+        "SHA256":  "4AFA1DE975F6575602346177A067143967A5C7640BEA83F399EA80AFB434DD45"
+    },
+    {
+        "Path":  "docs/tickets/FE-016/screenshots/profile-rename-1440x1000.png",
+        "SHA256":  "9124122B20418EC06D810BAEB39E25572A5D22C81C6259ED318E73442CE1BE78"
+    },
+    {
+        "Path":  "docs/tickets/FE-016/screenshots/profile-rename-1920x1080.png",
+        "SHA256":  "12EFE6400A97BE1499C4FFCBB09B988624F930AA69D15F9A730C46BC3A239B3D"
+    },
+    {
+        "Path":  "docs/tickets/FE-017/screenshots/annotations-panel-1440x1000.png",
+        "SHA256":  "A3991F615C715660AE748376CD73A9C425BEC46D001623B71267559B727CA5C7"
+    },
+    {
+        "Path":  "docs/tickets/FE-017/screenshots/annotations-panel-1920x1080.png",
+        "SHA256":  "D214A1D752B6A1DEBA1AF40F3C75A89C182E6AA2992A91D3A80C9A940DBF88C9"
+    },
+    {
+        "Path":  "docs/tickets/FE-017/screenshots/copy-previous-1440x1000.png",
+        "SHA256":  "AD68480B330543662A4D98A6A5D48B04467E93C329FA89B3FD0FD5C22A33D030"
+    },
+    {
+        "Path":  "docs/tickets/FE-017/screenshots/copy-previous-1920x1080.png",
+        "SHA256":  "14AB5500CA0E2CEF8AECEC9A96CBBF1491B30F8A23A2298CCA99C381361263DD"
+    },
+    {
+        "Path":  "docs/tickets/FE-017/screenshots/drawn-box-1440x1000.png",
+        "SHA256":  "DC04564104A955054D616B40733111824B76A64F172DCE32959935470E947FCC"
+    },
+    {
+        "Path":  "docs/tickets/FE-017/screenshots/drawn-box-1920x1080.png",
+        "SHA256":  "8480505BB44BF6D70ADAF1526C80F0EFBE8B798AE776762CCC0F97AACC5EEEAB"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/annotation-groups-collapsed-1440x1000.png",
+        "SHA256":  "EB8988B2A149A6593F887B1746C17C6D0C4751A4BAF1300BB0BC77160E047F94"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/annotation-groups-collapsed-1920x1080.png",
+        "SHA256":  "C7444386B2E30333E790B8FBCD3CCBD675A82A07C7896CE23090FF05B44797EE"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/annotation-groups-expanded-1440x1000.png",
+        "SHA256":  "2BBAED0A4A7F05A8785EB0E168C401A5A204A7BA43A512B0661C7AF70303B55A"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/annotation-groups-expanded-1920x1080.png",
+        "SHA256":  "52AF12DB788AB73815FDB27D566ED4EA2B3EA9B4B1BDA361BCEE6C18A2DBFE2B"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/profile-add-region-1440x1000.png",
+        "SHA256":  "183EBD18088CF6720E3BB2E6C43BCA2C657FEC6A654C10169D7B0A570D773D06"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/profile-add-region-1920x1080.png",
+        "SHA256":  "06FD53FD52D828B73092905BBE6D52089AC62C31B395A6F086EA3217D7BB0C21"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/profile-groups-collapsed-1440x1000.png",
+        "SHA256":  "ABA920FA352FBD049D13D987845B9546AD3EEDFC0E075DF40E22BB6851E85818"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/profile-groups-collapsed-1920x1080.png",
+        "SHA256":  "A6968948BB45B0C317DBC027B22CDE701652561D13BECCFF4F9A8B2C452896E6"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/profile-groups-expanded-1440x1000.png",
+        "SHA256":  "49C032728829866B5ACEBAA5BECE841D25BD2C541F2481CA40A9FD45663068B2"
+    },
+    {
+        "Path":  "docs/tickets/FE-018/screenshots/profile-groups-expanded-1920x1080.png",
+        "SHA256":  "3CDC467C49D858246A3DFCA5D480CD02243B9BBD99C7210533C1450AFDFF1560"
+    }
+]
