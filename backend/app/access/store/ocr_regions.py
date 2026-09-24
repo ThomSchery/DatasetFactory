@@ -60,7 +60,7 @@ def decode_region_ocr_snapshots(document: str) -> tuple[RegionOcrSnapshot, ...]:
         uses_profile_fallback = raw.get("uses_profile_fallback", False)
         if (
             not isinstance(allowed_chars, str)
-            or not allowed_chars
+            or (not allowed_chars and uses_profile_fallback is not True)
             or type(psm) is not int
             or type(provenance_psm) is not int
             or psm != provenance_psm

@@ -258,6 +258,19 @@ def test_per_call_psm_reaches_tesseract_and_changes_provenance(tmp_path: Path) -
     assert described.config_hash != default_description.config_hash
 
 
+def test_empty_allowed_chars_return_no_candidates_without_running_tesseract(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    crop_relpath = _copy_crop(workspace)
+    runner = FixtureWritingRunner()
+    engine = TesseractOcrEngine(workspace, _fake_runtime(tmp_path), 30, runner)
+
+    assert engine.detect_characters(crop_relpath, (), 7) == ()
+    assert runner.calls == 0
+    assert not tuple(workspace.resolve_relpath("runs/test").glob(".ocr-*"))
+
+
 @pytest.mark.parametrize("page_segmentation_mode", (0, 1, 2, 5, 9, 14))
 def test_engine_rejects_unsupported_per_region_psm(
     page_segmentation_mode: int,

@@ -145,26 +145,22 @@ def _materialize_legacy_region_snapshots() -> None:
 
 
 def _restore_legacy_run_level_configuration() -> None:
-    """Make explicit-only 0007 rows representable by the older scalar schema."""
+    """Restore only runs whose region snapshots fit the older scalar schema."""
     connection = op.get_bind()
-    runs = connection.execute(
-        sa.text(
-            "SELECT id,ocr_region_config_json FROM pipeline_runs "
-            "WHERE ocr_config_hash IS NULL OR ocr_page_segmentation_mode IS NULL"
-        )
-    ).mappings()
-    for run in runs:
-        snapshots: Any = json.loads(run["ocr_region_config_json"])
-        if not isinstance(snapshots, list) or not snapshots:
-            raise RuntimeError("cannot downgrade OCR run without a region configuration")
-        first = snapshots[0]
-        provenance = first.get("provenance") if isinstance(first, dict) else None
-        if not isinstance(provenance, dict):
-            raise RuntimeError("cannot downgrade invalid OCR region configuration")
-        config_hash = provenance.get("config_hash")
-        page_segmentation_mode = provenance.get("page_segmentation_mode")
-        if not isinstance(config_hash, str) or type(page_segmentation_mode) is not int:
-            raise RuntimeError("cannot downgrade invalid OCR region provenance")
+    runs = list(
+        connection.execute(
+            sa.text("SELECT id,ocr_region_config_json FROM pipeline_runs ORDER BY created_at,id")
+        ).mappings()
+    )
+
+    # SQLite runs Alembic DDL without a transactional safety net. Validate every
+    # run before updating even one row so an unrepresentable run cannot leave a
+    # partially downgraded database behind.
+    restored = [
+        (run["id"], *_legacy_configuration_for_run(run["id"], run["ocr_region_config_json"]))
+        for run in runs
+    ]
+    for run_id, config_hash, page_segmentation_mode in restored:
         connection.execute(
             sa.text(
                 "UPDATE pipeline_runs SET ocr_config_hash=:config_hash,"
@@ -173,7 +169,7 @@ def _restore_legacy_run_level_configuration() -> None:
             {
                 "config_hash": config_hash,
                 "psm": page_segmentation_mode,
-                "run_id": run["id"],
+                "run_id": run_id,
             },
         )
     connection.execute(
@@ -182,7 +178,59 @@ def _restore_legacy_run_level_configuration() -> None:
             "ocr_config_hash=(SELECT ocr_config_hash FROM pipeline_runs "
             "WHERE pipeline_runs.id=stage_checkpoints.run_id),"
             "ocr_page_segmentation_mode=(SELECT ocr_page_segmentation_mode FROM pipeline_runs "
-            "WHERE pipeline_runs.id=stage_checkpoints.run_id) "
-            "WHERE ocr_config_hash IS NULL OR ocr_page_segmentation_mode IS NULL"
+            "WHERE pipeline_runs.id=stage_checkpoints.run_id)"
         )
     )
+
+
+def _legacy_configuration_for_run(run_id: str, document: str) -> tuple[str, int]:
+    try:
+        snapshots: Any = json.loads(document)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"cannot downgrade OCR run {run_id!r}: invalid region snapshot") from exc
+    if not isinstance(snapshots, list) or not snapshots:
+        raise RuntimeError(f"cannot downgrade OCR run {run_id!r} without region snapshots")
+
+    configurations: list[tuple[str, str, str, int]] = []
+    for index, snapshot in enumerate(snapshots):
+        if not isinstance(snapshot, dict):
+            raise RuntimeError(
+                f"cannot downgrade OCR run {run_id!r}: invalid region snapshot #{index + 1}"
+            )
+        region_id = snapshot.get("region_id")
+        region_name = snapshot.get("region_name")
+        provenance = snapshot.get("provenance")
+        if (
+            not isinstance(region_id, str)
+            or not region_id
+            or not isinstance(region_name, str)
+            or not region_name
+            or not isinstance(provenance, dict)
+        ):
+            raise RuntimeError(
+                f"cannot downgrade OCR run {run_id!r}: invalid region snapshot #{index + 1}"
+            )
+        config_hash = provenance.get("config_hash")
+        page_segmentation_mode = provenance.get("page_segmentation_mode")
+        if (
+            not isinstance(config_hash, str)
+            or not config_hash
+            or type(page_segmentation_mode) is not int
+            or snapshot.get("page_segmentation_mode") != page_segmentation_mode
+        ):
+            raise RuntimeError(
+                f"cannot downgrade OCR run {run_id!r}: invalid provenance for region "
+                f"{region_id!r} ({region_name!r})"
+            )
+        configurations.append((region_id, region_name, config_hash, page_segmentation_mode))
+
+    pairs = {(config_hash, psm) for _, _, config_hash, psm in configurations}
+    if len(pairs) != 1:
+        regions = ", ".join(
+            f"{region_id!r} ({region_name!r}): config_hash={config_hash}, PSM={psm}"
+            for region_id, region_name, config_hash, psm in configurations
+        )
+        raise RuntimeError(
+            f"cannot downgrade OCR run {run_id!r}: region configurations differ: {regions}"
+        )
+    return next(iter(pairs))

@@ -152,6 +152,8 @@ class PerRegionOcrEngine:
         allowed = tuple(dict.fromkeys(allowed_chars))
         provenance = self._provenance(allowed, page_segmentation_mode)
         self.detect_calls.append((crop_relpath, allowed, provenance.page_segmentation_mode))
+        if not allowed:
+            return ()
         return (OcrCandidate(allowed[0], BBox(4, 5, 12, 20), 0.91, provenance),)
 
     def cancel_current(self) -> None:

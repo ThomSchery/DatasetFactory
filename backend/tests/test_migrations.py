@@ -329,6 +329,336 @@ def test_region_ocr_config_migration_materializes_legacy_run_and_resumes(
     engine.dispose()
 
 
+def test_region_ocr_config_migration_preserves_empty_legacy_range_and_resumes(
+    settings: Settings,
+) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0006")
+    engine = create_engine(settings.database_url)
+    now = "2026-09-24T08:00:00+00:00"
+    source = settings.workspace_dir.parent / "legacy-empty.mp4"
+    source.write_bytes(b"legacy-empty-resume-source")
+    stat = source.stat()
+    fingerprint = hashlib.sha256(f"{stat.st_size}:{stat.st_mtime_ns}".encode()).hexdigest()
+    config_hash = hashlib.sha256(b":7").hexdigest()
+    provenance_values = {
+        "runtime": "1" * 64,
+        "model": "2" * 64,
+        "config": config_hash,
+        "now": now,
+    }
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id,name,workspace_path,active_profile_id,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',NULL,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reference_assets "
+                "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+                "VALUES ('a','assets/references/a.png','image/png',1,'ready',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO game_profiles "
+                "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+                "source_height,version,created_at,updated_at) "
+                "VALUES ('g','p','Game','game','a',1920,1080,1,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO hud_regions "
+                "(id,profile_id,name,x,y,width,height,created_at,updated_at) "
+                "VALUES ('r','g','status',10,20,100,40,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO categories "
+                "(id,profile_id,name,kind,ordinal,created_at,updated_at) "
+                "VALUES ('cg','g','victory','game',0,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO video_assets "
+                "(id,project_id,local_path,size_bytes,duration_ms,width,height,fingerprint,"
+                "created_at,updated_at) "
+                "VALUES ('v','p',:source,:size,1000,1920,1080,:fingerprint,:now,:now)"
+            ),
+            {
+                "source": str(source),
+                "size": stat.st_size,
+                "fingerprint": fingerprint,
+                "now": now,
+            },
+        )
+        connection.execute(
+            text(
+                "INSERT INTO pipeline_runs "
+                "(id,profile_id,video_id,interval_ms,status,error_code,last_heartbeat_at,"
+                "attempt,total_frames,current_stage,current_frame_index,control_requested,"
+                "workflow_slot,resume_token,resume_owner,ocr_engine,ocr_engine_version,"
+                "ocr_runtime_sha256,ocr_model_sha256,ocr_config_hash,ocr_language,"
+                "ocr_page_segmentation_mode,experimental,quality_gate,warning,version,"
+                "created_at,updated_at) VALUES "
+                "('run-empty','g','v',1000,'failed','worker_stopped',NULL,1,1,'ocr',0,NULL,"
+                "NULL,NULL,NULL,'per-region-stub','1',:runtime,:model,:config,'eng',7,0,"
+                "'passed','',1,:now,:now)"
+            ),
+            provenance_values,
+        )
+        connection.execute(
+            text(
+                "INSERT INTO stage_checkpoints "
+                "(run_id,frame_index,stage,attempt,status,artifact_relpath,artifact_hash,"
+                "error_code,ocr_engine,ocr_engine_version,ocr_runtime_sha256,ocr_model_sha256,"
+                "ocr_config_hash,ocr_language,ocr_page_segmentation_mode,experimental,"
+                "quality_gate,warning,created_at,updated_at) VALUES "
+                "('run-empty',0,'crop',1,'failed',NULL,NULL,'worker_stopped','per-region-stub',"
+                "'1',:runtime,:model,:config,'eng',7,0,'passed','',:now,:now)"
+            ),
+            provenance_values,
+        )
+    engine.dispose()
+
+    command.upgrade(config, "0007")
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        snapshot_document = connection.execute(
+            text("SELECT ocr_region_config_json FROM pipeline_runs WHERE id='run-empty'")
+        ).scalar_one()
+        assert json.loads(snapshot_document)[0]["allowed_chars"] == ""
+        assert json.loads(snapshot_document)[0]["uses_profile_fallback"] is True
+    engine.dispose()
+
+    composition = build_composition(settings, resource_probe=AvailableResourceProbe())
+    try:
+        ocr = PerRegionOcrEngine(default_psm=7)
+        _install_workflow(composition, StubMediaAccess(composition), ocr)
+        app = create_app(settings, composition=composition)
+        with TestClient(app) as client:
+            fetched = client.get("/api/v1/runs/run-empty")
+            assert fetched.status_code == 200, fetched.text
+            assert fetched.json()["ocr_regions"][0]["allowed_chars"] == ""
+            resumed = client.post("/api/v1/runs/run-empty/resume", json={"expected_version": 1})
+            assert resumed.status_code == 202, resumed.text
+            completed = _wait_status(client, "run-empty", "review_ready")
+            assert completed["error_code"] is None
+        assert [(allowed, psm) for _, allowed, psm in ocr.detect_calls] == [((), 7)]
+        with composition.database.session() as session:
+            assert session.execute(text("SELECT count(*) FROM ocr_observations")).scalar_one() == 0
+    finally:
+        composition.close()
+
+
+def test_region_ocr_config_downgrade_accepts_one_shared_configuration(
+    settings: Settings,
+) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0007")
+    document = _insert_explicit_only_run(
+        settings,
+        run_id="run-shared",
+        region_configs=(("r-score", "score", "a" * 64, 7), ("r-health", "health", "a" * 64, 7)),
+    )
+
+    command.downgrade(config, "0006")
+
+    engine = create_engine(settings.database_url)
+    inspector = inspect(engine)
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT ocr_config_hash,ocr_page_segmentation_mode FROM pipeline_runs")
+        ).one() == ("a" * 64, 7)
+        assert connection.execute(
+            text("SELECT ocr_config_hash,ocr_page_segmentation_mode FROM stage_checkpoints")
+        ).one() == ("a" * 64, 7)
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
+            "0006"
+        )
+    assert "ocr_region_config_json" not in {
+        column["name"] for column in inspector.get_columns("pipeline_runs")
+    }
+    assert document
+    engine.dispose()
+
+
+def test_region_ocr_config_downgrade_rejects_mixed_configuration_before_schema_change(
+    settings: Settings,
+) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0007")
+    document = _insert_explicit_only_run(
+        settings,
+        run_id="run-mixed",
+        region_configs=(("r-score", "score", "a" * 64, 7), ("r-health", "health", "b" * 64, 11)),
+    )
+
+    with pytest.raises(RuntimeError, match="cannot downgrade") as caught:
+        command.downgrade(config, "0006")
+
+    message = str(caught.value)
+    assert "run-mixed" in message
+    assert "r-score" in message and "score" in message
+    assert "r-health" in message and "health" in message
+    engine = create_engine(settings.database_url)
+    inspector = inspect(engine)
+    assert "ocr_region_config_json" in {
+        column["name"] for column in inspector.get_columns("pipeline_runs")
+    }
+    assert {"ocr_allowed_chars", "ocr_page_segmentation_mode"} <= {
+        column["name"] for column in inspector.get_columns("hud_regions")
+    }
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
+            "0007"
+        )
+        assert connection.execute(
+            text(
+                "SELECT ocr_config_hash,ocr_page_segmentation_mode,ocr_region_config_json "
+                "FROM pipeline_runs WHERE id='run-mixed'"
+            )
+        ).one() == (None, None, document)
+        assert connection.execute(
+            text(
+                "SELECT ocr_config_hash,ocr_page_segmentation_mode,ocr_region_config_json "
+                "FROM stage_checkpoints WHERE run_id='run-mixed'"
+            )
+        ).one() == (None, None, document)
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM sqlite_master WHERE name LIKE '_alembic_tmp_%'")
+            ).scalar_one()
+            == 0
+        )
+    engine.dispose()
+
+
+def _insert_explicit_only_run(
+    settings: Settings,
+    *,
+    run_id: str,
+    region_configs: tuple[tuple[str, str, str, int], ...],
+) -> str:
+    engine = create_engine(settings.database_url)
+    now = "2026-09-24T09:00:00+00:00"
+    snapshots = [
+        {
+            "allowed_chars": "0",
+            "page_segmentation_mode": psm,
+            "provenance": {
+                "config_hash": config_hash,
+                "engine_id": "per-region-stub",
+                "engine_version": "1",
+                "experimental": False,
+                "language": "eng",
+                "model_sha256": "2" * 64,
+                "page_segmentation_mode": psm,
+                "quality_gate": "passed",
+                "runtime_sha256": "1" * 64,
+            },
+            "region_id": region_id,
+            "region_name": region_name,
+            "uses_profile_fallback": False,
+        }
+        for region_id, region_name, config_hash, psm in region_configs
+    ]
+    document = json.dumps(snapshots, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id,name,workspace_path,active_profile_id,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',NULL,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reference_assets "
+                "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+                "VALUES ('a','assets/references/a.png','image/png',1,'ready',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO game_profiles "
+                "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+                "source_height,version,created_at,updated_at) "
+                "VALUES ('g','p','Game','game','a',1920,1080,1,:now,:now)"
+            ),
+            {"now": now},
+        )
+        for region_id, region_name, _, _ in region_configs:
+            connection.execute(
+                text(
+                    "INSERT INTO hud_regions "
+                    "(id,profile_id,name,x,y,width,height,ocr_allowed_chars,"
+                    "ocr_page_segmentation_mode,created_at,updated_at) "
+                    "VALUES (:id,'g',:name,10,20,100,40,'0',7,:now,:now)"
+                ),
+                {"id": region_id, "name": region_name, "now": now},
+            )
+        connection.execute(
+            text(
+                "INSERT INTO video_assets "
+                "(id,project_id,local_path,size_bytes,duration_ms,width,height,fingerprint,"
+                "created_at,updated_at) VALUES "
+                "('v','p','D:/video.mp4',1,1000,1920,1080,'fingerprint',:now,:now)"
+            ),
+            {"now": now},
+        )
+        provenance_values = {
+            "run_id": run_id,
+            "runtime": "1" * 64,
+            "model": "2" * 64,
+            "document": document,
+            "now": now,
+        }
+        connection.execute(
+            text(
+                "INSERT INTO pipeline_runs "
+                "(id,profile_id,video_id,interval_ms,status,error_code,last_heartbeat_at,"
+                "attempt,total_frames,current_stage,current_frame_index,control_requested,"
+                "workflow_slot,resume_token,resume_owner,ocr_engine,ocr_engine_version,"
+                "ocr_runtime_sha256,ocr_model_sha256,ocr_config_hash,ocr_language,"
+                "ocr_page_segmentation_mode,experimental,quality_gate,warning,"
+                "ocr_region_config_json,version,created_at,updated_at) VALUES "
+                "(:run_id,'g','v',1000,'queued',NULL,NULL,1,1,NULL,NULL,NULL,NULL,NULL,NULL,"
+                "'per-region-stub','1',:runtime,:model,NULL,'eng',NULL,0,'passed','',:document,"
+                "1,:now,:now)"
+            ),
+            provenance_values,
+        )
+        connection.execute(
+            text(
+                "INSERT INTO stage_checkpoints "
+                "(run_id,frame_index,stage,attempt,status,artifact_relpath,artifact_hash,"
+                "error_code,ocr_engine,ocr_engine_version,ocr_runtime_sha256,ocr_model_sha256,"
+                "ocr_config_hash,ocr_language,ocr_page_segmentation_mode,experimental,"
+                "quality_gate,warning,ocr_region_config_json,created_at,updated_at) VALUES "
+                "(:run_id,0,'sample',1,'failed',NULL,NULL,'worker_stopped',"
+                "'per-region-stub','1',:runtime,:model,NULL,'eng',NULL,0,'passed','',:document,"
+                ":now,:now)"
+            ),
+            provenance_values,
+        )
+    engine.dispose()
+    return document
+
+
 def test_active_profile_migration_backfills_latest_and_downgrades_without_data_loss(
     settings: Settings,
 ) -> None:
