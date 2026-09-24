@@ -6,8 +6,128 @@
 
 .df-grouped-options {
   display: grid;
-  gap: var(--size-xs);
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
+}
+
+.df-grouped-options__control {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--size-xs) / 2);
+  min-width: 0;
+  min-height: var(--control-height-md);
+  padding: calc(var(--size-xs) / 2);
+  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border-radius: var(--radius-md);
+  background: var(--color-background-primary-default);
+  flex-wrap: wrap;
+}
+
+.df-grouped-options[data-open] .df-grouped-options__control {
+  border-end-start-radius: var(--radius-none);
+  border-end-end-radius: var(--radius-none);
+}
+
+.df-grouped-options__control:focus-within {
+  outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.df-grouped-options__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--size-xs) / 2);
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--control-height-sm);
+  padding-inline-start: var(--size-xs);
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-grouped-options__tag-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.df-grouped-options__tag-remove.df-button,
+.df-grouped-options__clear.df-button,
+.df-grouped-options__toggle.df-button {
+  flex: none;
+  width: var(--control-height-sm);
+  min-width: var(--control-height-sm);
+  padding-inline: var(--size-none);
+  border-color: var(--color-surface-transparent);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-weak-default);
+}
+
+.df-grouped-options__tag-remove.df-button:hover,
+.df-grouped-options__tag-remove.df-button:active,
+.df-grouped-options__clear.df-button:hover,
+.df-grouped-options__clear.df-button:active,
+.df-grouped-options__toggle.df-button:hover,
+.df-grouped-options__toggle.df-button:active {
+  border-color: var(--color-surface-transparent);
+}
+
+.df-grouped-options__filter {
+  flex: 1 1 calc(var(--size-xxl) + var(--size-sm));
+  min-width: calc(var(--size-xxl) + var(--size-sm));
+}
+
+.df-grouped-options__filter .df-field {
+  display: contents;
+}
+
+.df-grouped-options__filter .df-field__label {
+  position: absolute;
+  width: var(--border-width-default);
+  height: var(--border-width-default);
+  padding: var(--size-none);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.df-grouped-options__filter .df-field__control {
+  min-height: var(--control-height-sm);
+  margin: var(--size-none);
+  padding: calc(var(--size-xs) / 2);
+  border-color: var(--color-surface-transparent);
+  outline: var(--border-width-default) solid var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+}
+
+.df-grouped-options__filter .df-field__control:hover:not(:disabled) {
+  border-color: var(--color-surface-transparent);
+}
+
+.df-grouped-options__filter .df-field__control:focus-visible {
+  outline-color: var(--color-surface-transparent);
+}
+
+.df-grouped-options__filter .df-field__error {
+  display: none;
+}
+
+.df-grouped-options__control-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--size-xs) / 2);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.df-grouped-options__separator {
+  width: var(--border-width-default);
+  height: var(--size-md);
+  background: var(--color-stroke-weak-default);
 }
 
 .df-grouped-options__list {
@@ -21,11 +141,19 @@
      call site. */
   max-height: calc(var(--size-xxl) * 3);
   padding: calc(var(--size-xs) / 2);
-  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  border-top: var(--size-none);
+  border-radius: var(--radius-none) var(--radius-none) var(--radius-md) var(--radius-md);
   background: var(--color-background-primary-default);
+  box-shadow: var(--shadow-elevation-high);
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-color: var(--color-stroke-strong-default) var(--color-background-primary-default);
   scrollbar-width: thin;
+}
+
+.df-grouped-options__list[hidden] {
+  display: none;
 }
 
 .df-grouped-options__list::-webkit-scrollbar {
@@ -166,7 +294,7 @@
 }
 
 .df-grouped-options__empty {
-  margin: var(--size-none);
+  margin: var(--size-xs) var(--size-none) var(--size-none);
   color: var(--color-status-warning-default);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);

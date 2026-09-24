@@ -14,18 +14,24 @@
 .df-collapsible-group__header {
   display: flex;
   align-items: center;
-  gap: var(--size-xs);
+  gap: calc(var(--size-xs) / 2);
   min-width: 0;
 }
 
-/* The triangle is a hit target, not a labelled action, so it keeps the shared
-   button chrome but drops the horizontal padding a worded label needs. */
+/* The hit target stays 32 px, while the field-like picker and the editable
+   profile list share the same quiet, unboxed disclosure marker. */
 .df-collapsible-group__toggle.df-button {
   flex: none;
   width: var(--control-height-sm);
   min-width: var(--control-height-sm);
   padding-inline: var(--size-none);
+  border-color: var(--color-surface-transparent);
   border-radius: var(--radius-sm);
+}
+
+.df-collapsible-group__toggle.df-button:hover,
+.df-collapsible-group__toggle.df-button:active {
+  border-color: var(--color-surface-transparent);
 }
 
 .df-collapsible-group__marker {

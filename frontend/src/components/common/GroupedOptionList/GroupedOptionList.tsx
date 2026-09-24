@@ -1,5 +1,14 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
+import { Button } from "../Button";
 import { CollapsibleGroup } from "../CollapsibleGroup";
 import { TextField } from "../TextField";
 import "./GroupedOptionList.css";
@@ -36,6 +45,8 @@ export interface GroupedOptionGroup {
 export interface GroupedOptionListProps {
   /** Moves focus into the filter as the list appears. */
   autoFocus?: boolean;
+  /** Opens the choices on mount; the resting form-field state stays collapsed. */
+  defaultOpen?: boolean;
   disabled?: boolean;
   /** Shown when the filter matches nothing. */
   emptyMessage: string;
@@ -149,6 +160,7 @@ function visibleGroups(
  */
 export function GroupedOptionList({
   autoFocus = false,
+  defaultOpen = false,
   disabled = false,
   emptyMessage,
   filterAction,
@@ -164,7 +176,10 @@ export function GroupedOptionList({
   onFilterChange,
   selectedIds,
 }: GroupedOptionListProps) {
+  const listId = useId();
   const [uncontrolledQuery, setUncontrolledQuery] = useState("");
+  const [open, setOpen] = useState(defaultOpen);
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [requestedActiveId, setRequestedActiveId] = useState<string | null>(null);
   // Groups open by default: the panel is autofocused and used under time
   // pressure, so nothing starts hidden. The state is per mount, which is why
@@ -212,6 +227,18 @@ export function GroupedOptionList({
   }, [filtering, mode, shown]);
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const optionsById = useMemo(
+    () => new Map(groups.flatMap((group) => group.options).map((option) => [option.id, option])),
+    [groups],
+  );
+  const selectedOptions = useMemo(
+    () =>
+      selectedIds.flatMap((id) => {
+        const option = optionsById.get(id);
+        return option === undefined ? [] : [option];
+      }),
+    [optionsById, selectedIds],
+  );
   const rowIndexById = useMemo(
     () => new Map(rows.map((row, index) => [row.id, index])),
     [rows],
@@ -223,9 +250,23 @@ export function GroupedOptionList({
   const activeId =
     rows.find((row) => row.id === requestedActiveId)?.id ?? defaultRow?.id ?? null;
 
+  useEffect(() => {
+    if (!open || pendingFocusId === null) {
+      return;
+    }
+    rowRefs.current.get(pendingFocusId)?.focus();
+    setPendingFocusId(null);
+  }, [open, pendingFocusId]);
+
   function focusRow(id: string): void {
     setRequestedActiveId(id);
     rowRefs.current.get(id)?.focus();
+  }
+
+  function openAndFocusRow(id: string): void {
+    setOpen(true);
+    setRequestedActiveId(id);
+    setPendingFocusId(id);
   }
 
   function groupIdOf(row: Row): string {
@@ -391,7 +432,7 @@ export function GroupedOptionList({
       const first =
         mode === "single" ? (rows.find((row) => row.kind === "option") ?? rows[0]) : rows[0];
       if (first !== undefined) {
-        focusRow(first.id);
+        openAndFocusRow(first.id);
       }
       return;
     }
@@ -399,7 +440,7 @@ export function GroupedOptionList({
       event.preventDefault();
       const last = rows[rows.length - 1];
       if (last !== undefined) {
-        focusRow(last.id);
+        openAndFocusRow(last.id);
       }
       return;
     }
@@ -417,28 +458,92 @@ export function GroupedOptionList({
   }
 
   return (
-    <div className="df-grouped-options" data-shortcut-scope="list">
-      <TextField
-        autoComplete="off"
-        autoFocus={autoFocus}
-        disabled={disabled}
-        label={filterLabel}
-        maxLength={filterMaxLength}
-        onChange={(event) => {
-          const nextQuery = limitCodePoints(event.target.value, filterMaxCodePoints);
-          if (filterValue === undefined) {
-            setUncontrolledQuery(nextQuery);
-          }
-          setRequestedActiveId(null);
-          onFilterChange?.(nextQuery);
-        }}
-        onKeyDown={handleFilterKeyDown}
-        ref={filterRef}
-        value={query}
-      />
+    <div className="df-grouped-options" data-open={open || undefined} data-shortcut-scope="list">
+      <div className="df-grouped-options__control">
+        {mode === "multiple"
+          ? selectedOptions.map((option) => (
+              <span className="df-grouped-options__tag" key={option.id}>
+                <span className="df-grouped-options__tag-label">{option.label}</span>
+                <Button
+                  aria-label={`Usuń klasę ${option.label} z zaznaczenia`}
+                  className="df-grouped-options__tag-remove"
+                  disabled={disabled}
+                  onClick={() => {
+                    onChange(selectedIds.filter((id) => id !== option.id));
+                  }}
+                  size="sm"
+                  variant="muted"
+                >
+                  <span aria-hidden="true">×</span>
+                </Button>
+              </span>
+            ))
+          : null}
+        <div className="df-grouped-options__filter">
+          <TextField
+            aria-controls={listId}
+            aria-expanded={open}
+            autoComplete="off"
+            autoFocus={autoFocus}
+            disabled={disabled}
+            label={filterLabel}
+            maxLength={filterMaxLength}
+            onChange={(event) => {
+              const nextQuery = limitCodePoints(event.target.value, filterMaxCodePoints);
+              if (filterValue === undefined) {
+                setUncontrolledQuery(nextQuery);
+              }
+              setOpen(true);
+              setRequestedActiveId(null);
+              onFilterChange?.(nextQuery);
+            }}
+            onFocus={() => {
+              setOpen(true);
+            }}
+            onKeyDown={handleFilterKeyDown}
+            placeholder={filterLabel}
+            ref={filterRef}
+            value={query}
+          />
+        </div>
+        <div className="df-grouped-options__control-actions">
+          {mode === "multiple" && selectedIds.length > 0 ? (
+            <Button
+              aria-label="Wyczyść zaznaczone klasy"
+              className="df-grouped-options__clear"
+              disabled={disabled}
+              onClick={() => {
+                onChange([]);
+              }}
+              size="sm"
+              variant="muted"
+            >
+              <span aria-hidden="true">×</span>
+            </Button>
+          ) : null}
+          <span aria-hidden="true" className="df-grouped-options__separator" />
+          <Button
+            aria-controls={listId}
+            aria-expanded={open}
+            aria-label={`${open ? "Zwiń" : "Rozwiń"} listę ${label}`}
+            className="df-grouped-options__toggle"
+            disabled={disabled}
+            onClick={() => {
+              setPendingFocusId(null);
+              setOpen((current) => !current);
+            }}
+            size="sm"
+            variant="muted"
+          >
+            <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+          </Button>
+        </div>
+      </div>
       <div
         aria-label={label}
         className="df-grouped-options__list"
+        hidden={!open}
+        id={listId}
         role={mode === "single" ? "listbox" : "group"}
       >
         {shown.map(({ group, open, options }) => {
@@ -518,12 +623,12 @@ export function GroupedOptionList({
           );
         })}
       </div>
-      {rows.length === 0 ? (
+      {open && rows.length === 0 ? (
         <p className="df-grouped-options__empty" role="status">
           {emptyMessage}
         </p>
       ) : null}
-      {filterAction}
+      {open ? filterAction : null}
     </div>
   );
 }
