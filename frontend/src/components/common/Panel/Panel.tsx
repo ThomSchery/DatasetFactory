@@ -11,6 +11,12 @@ export interface PanelProps {
   description?: string;
   /** Small uppercase label above the title; groups panels that belong together. */
   eyebrow?: string;
+  /**
+   * Marks this panel as one a global outside-pointerdown handler (e.g. a
+   * popover's close-on-outside-click) should treat as inside its own UI,
+   * even though this panel is not a DOM descendant of it.
+   */
+  exemptFromOutsideClick?: boolean;
   title: string;
 }
 
@@ -23,12 +29,24 @@ export interface PanelProps {
  * Always a landmark `<section>` labelled by its own heading, so the page has a
  * real outline for keyboard and screen reader users (FE-08).
  */
-export function Panel({ aside, children, className, description, eyebrow, title }: PanelProps) {
+export function Panel({
+  aside,
+  children,
+  className,
+  description,
+  exemptFromOutsideClick,
+  eyebrow,
+  title,
+}: PanelProps) {
   const titleId = useId();
   const classes = ["df-panel", className].filter(Boolean).join(" ");
 
   return (
-    <section aria-labelledby={titleId} className={classes}>
+    <section
+      aria-labelledby={titleId}
+      className={classes}
+      data-outside-click-exempt={exemptFromOutsideClick || undefined}
+    >
       <header className="df-panel__header">
         <div className="df-panel__heading">
           {eyebrow === undefined ? null : <p className="df-panel__eyebrow">{eyebrow}</p>}

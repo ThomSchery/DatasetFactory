@@ -1229,49 +1229,6 @@ function LoadedFrameEditor({
             onSelect={selectAnnotation}
             selectedId={selectedId}
           />
-          <section aria-labelledby="copy-previous-heading" className="df-review-copy">
-            <div>
-              <h3 id="copy-previous-heading">Powtórz z poprzedniej klatki</h3>
-              <p>
-                {previousFrameKnown && hasPreviousFrame
-                  ? `Źródłem jest klatka ${String(previousClasses.previous_frame_index)} — poprzednia w czasie, niezależnie od aktywnego filtra statusu.`
-                  : "Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu."}
-              </p>
-            </div>
-            {/*
-              The list appears only when the source has something to offer. An
-              empty list with a "nothing matches the filter" message would say
-              the operator mistyped, when in fact there is nothing to type
-              towards — that difference is the whole point of part C.
-            */}
-            {copyOfferedIds.length === 0 ? null : (
-              <GroupedOptionList
-                disabled={!capabilities.canEdit || mutation.isPending}
-                emptyMessage="Żadna klasa z poprzedniej klatki nie pasuje do wpisanego tekstu."
-                filterLabel="Filtruj klasy"
-                groups={copyGroups}
-                label={PREVIOUS_CLASS_LIST_LABEL}
-                mode="multiple"
-                onChange={(selection) => {
-                  setCopySelection(selection);
-                  setCopyFeedback(null);
-                }}
-                selectedIds={copyEffectiveSelection}
-              />
-            )}
-            <Button
-              disabled={copyDisabled}
-              loading={currentBusyKey === "copy-previous"}
-              onClick={copyPrevious}
-              size="sm"
-              variant="secondary"
-            >
-              Powtórz
-            </Button>
-            <p aria-live="polite" className="df-review-copy__status">
-              {copyStatus}
-            </p>
-          </section>
           {capabilities.terminal ? (
             <Notice title="Klatka zaakceptowana" tone="info">
               Zaakceptowana klatka jest terminalna i pozostaje zamrożona dla trwałości snapshotu eksportu.
@@ -1404,6 +1361,58 @@ function LoadedFrameEditor({
             removeAnnotation(popoverAnnotation.id);
           }}
         />
+
+        {/*
+          FE-019 moved this panel out from inside the annotation popover's own
+          markup, so it is no longer inside `popoverRef` there. Without
+          `exemptFromOutsideClick`, working the picker here would register as
+          an outside pointerdown and silently discard whatever the operator
+          was mid-edit on in "Anotacja" — see AnnotationPopover's outside-close
+          handler.
+        */}
+        <Panel
+          className="df-review-copy"
+          description={
+            previousFrameKnown && hasPreviousFrame
+              ? `Źródłem jest klatka ${String(previousClasses.previous_frame_index)} — poprzednia w czasie, niezależnie od aktywnego filtra statusu.`
+              : "Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu."
+          }
+          exemptFromOutsideClick
+          title="Powtórz z poprzedniej klatki"
+        >
+          {/*
+            The panel keeps the explanation that distinguishes a missing source
+            from an empty source, but the picker appears only when there is
+            something real to choose. An empty filter would imply a typo.
+          */}
+          {copyOfferedIds.length === 0 ? null : (
+            <GroupedOptionList
+              disabled={!capabilities.canEdit || mutation.isPending}
+              emptyMessage="Żadna klasa z poprzedniej klatki nie pasuje do wpisanego tekstu."
+              filterLabel="Filtruj klasy"
+              groups={copyGroups}
+              label={PREVIOUS_CLASS_LIST_LABEL}
+              mode="multiple"
+              onChange={(selection) => {
+                setCopySelection(selection);
+                setCopyFeedback(null);
+              }}
+              selectedIds={copyEffectiveSelection}
+            />
+          )}
+          <Button
+            disabled={copyDisabled}
+            loading={currentBusyKey === "copy-previous"}
+            onClick={copyPrevious}
+            size="sm"
+            variant="secondary"
+          >
+            Powtórz
+          </Button>
+          <p aria-live="polite" className="df-review-copy__status">
+            {copyStatus}
+          </p>
+        </Panel>
       </aside>
 
       <section

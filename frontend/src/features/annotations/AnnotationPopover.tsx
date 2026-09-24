@@ -237,6 +237,13 @@ export function AnnotationPopover({
       ) {
         return;
       }
+      // FE-019: "Powtórz z poprzedniej klatki" now sits in its own sibling
+      // panel outside this popover's DOM, but it works alongside an open edit
+      // rather than replacing it — engaging its picker must not discard the
+      // edit in progress here.
+      if (target instanceof Element && target.closest("[data-outside-click-exempt]") !== null) {
+        return;
+      }
       closeRef.current();
     }
 
@@ -326,6 +333,7 @@ export function AnnotationPopover({
 
       <GroupedOptionList
         autoFocus={annotation !== undefined}
+        defaultOpen
         disabled={disabled}
         emptyMessage={
           draft

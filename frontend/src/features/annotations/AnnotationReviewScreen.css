@@ -241,25 +241,17 @@
 }
 
 .df-review-copy {
+  min-width: 0;
+}
+
+.df-review-copy .df-panel__body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--size-sm);
-  margin-top: var(--size-md);
-  padding-top: var(--size-md);
-  border-top: var(--border-width-default) solid var(--color-stroke-weak-default);
 }
 
-.df-review-copy h3,
-.df-review-copy p {
-  margin: var(--size-none);
-}
-
-.df-review-copy h3 {
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-tight);
-}
-
-.df-review-copy p,
 .df-review-copy__status {
+  margin: var(--size-none);
   color: var(--color-text-weak-default);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
