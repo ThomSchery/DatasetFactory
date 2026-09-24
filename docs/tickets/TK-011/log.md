@@ -211,3 +211,43 @@ test, odtworzenie przez `Copy-Item` i porównanie SHA256.
   **171 obserwacji**. Klatka 7 daje `88/10010/100`; jedna z 25 klatek nadal jest
   pusta, ale wynik całego regionu jest jednoznacznie niezerowy. To ustawienie
   należy zastosować operacyjnie bez zmiany zbioru dopuszczalnych trybów.
+
+### 2026-09-24 — FIX2 po cold re-review
+
+- **Pusty zakres legacy:** historyczny kod adaptera był sprawdzony bezpośrednio
+  na bazie `745a1ea`: po normalizacji pusty zbiór zwracał `()` przed hashowaniem
+  runtime'u, utworzeniem katalogu tymczasowego i uruchomieniem Tesseracta. Pusty
+  zakres oznaczał więc zero kandydatów, a nie OCR bez whitelisty.
+- Format snapshotu rozróżnia opis przeszłości od jawnej konfiguracji przez
+  istniejące `uses_profile_fallback`. `allowed_chars=""` jest dozwolone wyłącznie
+  dla `uses_profile_fallback=true`; jawny snapshot nadal jest odrzucany, a
+  `ck_hud_region_ocr_config_complete` na `hud_regions` pozostaje bez zmian i nadal
+  zabrania operatorowi zapisać jawny pusty zakres.
+- Test migracji tworzy bazę 0006 z profilem zawierającym region i wyłącznie klasę
+  `game`, runem oraz checkpointem. Po upgrade publiczny `GET` działa, `resume`
+  dochodzi do `review_ready`, wywołanie OCR otrzymuje pustą krotkę, a liczba
+  obserwacji pozostaje równa zero. Osobny test adaptera potwierdza, że runner
+  Tesseracta nie jest wtedy uruchamiany.
+- **Uczciwy downgrade:** przed pierwszym `UPDATE` i przed dowolnym DDL migracja
+  odczytuje wszystkie runy i wszystkie ich snapshoty. Downgrade jest dozwolony
+  tylko wtedy, gdy każdy run ma jedną wspólną parę `(config_hash, PSM)`; wtedy ta
+  para trafia na run i jego checkpointy. Różne pary powodują `RuntimeError`
+  zawierający ID runu oraz ID, nazwę, hash i PSM każdego regionu.
+- Test pozytywny dowodzi downgrade dwóch regionów ze wspólną parą. Test negatywny
+  dowodzi, że run mieszany pozostaje na wersji `0007`, kolumny runu, checkpointu
+  i regionu nadal istnieją, dokumenty i wartości `NULL` są niezmienione, a tabela
+  tymczasowa Alembic nie powstała.
+- **Falsyfikacja FIX2:** cofnięcie warunku dekodera dało dokładnie
+  `ValueError: invalid region OCR snapshot`; usunięcie strażnika różniących się
+  par dało dokładnie `Failed: DID NOT RAISE RuntimeError`. Pliki odtworzono przez
+  `Copy-Item`; SHA-256 był identyczny (`ocr_regions.py`:
+  `E3864355BD2B61CA8FFD53E44CC593447021F2AB182F37F663725290A25223AA`, migracja:
+  `1C8D829155BA71152AF2A5FC4D1E0B3CA7F8C81D94C75B684D8C89FC0EBEFA63`). Po
+  odtworzeniu oba testy wróciły do PASS.
+- Targetowana weryfikacja: format i lint PASS, pełne mypy PASS (102 pliki), testy
+  migracji/dekodera/adaptera/workflow **66 passed**.
+- Pełna bramka FIX2, jednym nieprzerwanym wywołaniem absolutnej ścieżki:
+  **9/9 PASS, zero SKIP**. Backend: 419 testów; frontend: 43 pliki i 714
+  testów; E2E: 24 testy; root safety: 2 testy, `fail 0`, `skipped 0`.
+  E2E zmieniło dokładnie 33 historyczne PNG; wszystkie odtworzono z głównego
+  workspace przez `Copy-Item`, po czym nie pozostał żaden zmieniony PNG.
