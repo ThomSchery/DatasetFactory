@@ -119,7 +119,13 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
 
     // C: only the classes the previous frame holds, each with its count.
     // The unit the row digits are in is said once, in the list's own name.
-    const picker = page.getByRole("group", {
+    const copyPanel = page.getByRole("region", {
+      name: "Powtórz z poprzedniej klatki",
+    });
+    await copyPanel
+      .getByRole("button", { name: /Rozwiń listę Klasy z poprzedniej klatki/ })
+      .click();
+    const picker = copyPanel.getByRole("group", {
       name: "Klasy z poprzedniej klatki i liczba ich wystąpień",
     });
     await expect(picker.getByRole("checkbox", { name: "7 3" })).toBeVisible();
