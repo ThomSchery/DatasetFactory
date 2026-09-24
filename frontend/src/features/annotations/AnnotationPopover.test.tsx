@@ -79,6 +79,18 @@ function renderPopover(overrides: PopoverOverrides = {}) {
 }
 
 describe("AnnotationPopover", () => {
+  it("opens the class field expanded with the cursor already in its filter", () => {
+    renderPopover();
+
+    const field = screen.getByRole("textbox", { name: "Klasa" });
+    expect(field).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Zwiń listę Klasy profilu" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("listbox", { name: "Klasy profilu" })).toBeVisible();
+  });
+
   it("filters profile classes and saves the active result with Enter", async () => {
     const user = userEvent.setup();
     const { onCategoryChange } = renderPopover();

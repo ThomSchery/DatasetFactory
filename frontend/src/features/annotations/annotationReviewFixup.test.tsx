@@ -201,6 +201,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
   });
 
   it("loads the exact historical profile after the run resolves", async () => {
+    const user = userEvent.setup();
     const get = reviewGet();
     const fetchSpy = stubFetch((url) => requireResponse(get(url), url));
     renderApp(["/annotations/run-1"]);
@@ -214,6 +215,11 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     expect(fetchSpy.mock.calls.some(([url]) => url === "/api/v1/profiles/current")).toBe(false);
     // FE-017 C put the source's occurrence count on the row, so it is part of
     // the option's accessible name.
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Rozwiń listę Klasy z poprzedniej klatki/,
+      }),
+    );
     expect(await screen.findByRole("checkbox", { name: "health 1" })).toBeVisible();
   });
 

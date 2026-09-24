@@ -28,10 +28,12 @@ const GROUPS: readonly GroupedOptionGroup[] = [
 function Harness({
   mode,
   initial = [],
+  initialOpen = true,
   onChange,
   onConfirm,
 }: {
   initial?: readonly string[];
+  initialOpen?: boolean;
   mode: "single" | "multiple";
   onChange?: (selection: readonly string[]) => void;
   onConfirm?: (selection: readonly string[]) => void;
@@ -39,6 +41,7 @@ function Harness({
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(initial);
   return (
     <GroupedOptionList
+      defaultOpen={initialOpen}
       emptyMessage="Nic nie pasuje."
       filterLabel="Filtruj klasy"
       groups={GROUPS}
@@ -59,6 +62,62 @@ function checkbox(name: string): HTMLElement {
 }
 
 describe("GroupedOptionList in multiple mode", () => {
+  it("renders a collapsed field frame and expands the connected list with its chevron", async () => {
+    const user = userEvent.setup();
+    render(<Harness initialOpen={false} mode="multiple" />);
+
+    const filter = screen.getByLabelText("Filtruj klasy");
+    const control = filter.closest(".df-grouped-options__control");
+    const toggle = screen.getByRole("button", { name: "Rozwiń listę Klasy profilu" });
+
+    expect(control).not.toBeNull();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("group", { name: "Klasy profilu" })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(screen.getByRole("button", { name: "Zwiń listę Klasy profilu" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("group", { name: "Klasy profilu" })).toBeVisible();
+  });
+
+  it("renders selected classes as tags, removes only one, and clears all without touching the filter", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <Harness
+        initial={["score", "timer"]}
+        mode="multiple"
+        onChange={onChange}
+        onConfirm={onConfirm}
+      />,
+    );
+    const filter = screen.getByLabelText("Filtruj klasy");
+
+    await user.type(filter, "sco");
+    await user.click(screen.getByRole("button", { name: "Usuń klasę Timer z zaznaczenia" }));
+
+    expect(onChange).toHaveBeenLastCalledWith(["score"]);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(filter).toHaveValue("sco");
+    expect(screen.getByRole("button", { name: "Zwiń listę Klasy profilu" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Usuń klasę Timer z zaznaczenia" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Wyczyść zaznaczone klasy" }));
+
+    expect(onChange).toHaveBeenLastCalledWith([]);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(filter).toHaveValue("sco");
+    expect(
+      screen.queryByRole("button", { name: "Usuń klasę Score z zaznaczenia" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("selects and clears every option of a group with one click on its row", async () => {
     const user = userEvent.setup();
     render(<Harness mode="multiple" />);
@@ -180,6 +239,17 @@ describe("GroupedOptionList in multiple mode", () => {
 });
 
 describe("GroupedOptionList in single mode", () => {
+  it("does not render selection tags in single mode", () => {
+    render(<Harness initial={["score"]} mode="single" />);
+
+    expect(
+      screen.queryByRole("button", { name: "Usuń klasę Score z zaznaczenia" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Wyczyść zaznaczone klasy" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("skips disabled disclosure controls while filtering with the keyboard", async () => {
     const user = userEvent.setup();
     render(<Harness mode="single" />);
@@ -271,6 +341,7 @@ describe("GroupedOptionList boundaries", () => {
     const onChange = vi.fn();
     render(
       <GroupedOptionList
+        defaultOpen
         disabled
         emptyMessage="Nic nie pasuje."
         filterLabel="Filtruj klasy"

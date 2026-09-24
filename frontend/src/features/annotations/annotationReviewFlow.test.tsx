@@ -272,6 +272,34 @@ describe("annotation review query states", () => {
     ).toHaveLength(0);
   });
 
+  it("keeps an empty Enter in the autofocused class filter completely inert", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    expect(filter).toHaveFocus();
+    expect(within(popover).getByRole("button", { name: "Zwiń listę Klasy profilu" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    await user.clear(filter);
+    await user.keyboard("{Enter}");
+
+    const writes = fetchSpy.mock.calls.filter(([, init]) =>
+      ["POST", "PATCH", "DELETE"].includes(init?.method ?? "GET"),
+    );
+    expect(writes).toHaveLength(0);
+    expect(within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ })).not.toBeInTheDocument();
+    expect(within(popover).getByRole("option", { name: "7" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   it("deletes a bbox from its context menu through the existing mutation path", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
@@ -401,11 +429,13 @@ describe("annotation review query states", () => {
     const preview = screen.getByRole("region", { name: "Podgląd klatki 17" });
     const sideColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
     const inspector = screen.getByRole("region", { name: "Anotacje na klatce" });
+    const copyPanel = screen.getByRole("region", { name: "Powtórz z poprzedniej klatki" });
     const overlayRoot = overlay.closest(".df-region-overlay");
     expect(overlayRoot).not.toBeNull();
     expect(dialog.parentElement).toBe(sideColumn);
     expect(dialog.previousElementSibling).toBe(inspector);
-    expect(dialog.nextElementSibling).toBeNull();
+    expect(dialog.nextElementSibling).toBe(copyPanel);
+    expect(copyPanel.parentElement).toBe(sideColumn);
     expect(sideColumn.nextElementSibling).toBe(preview);
     expect(overlayRoot).not.toContainElement(dialog);
 
@@ -1571,6 +1601,11 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Rozwiń listę Klasy z poprzedniej klatki/,
+      }),
+    );
     await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
     await user.click(screen.getByRole("checkbox", { name: "Liczby" }));
     await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
@@ -2708,12 +2743,21 @@ describe("temporal frame navigation", () => {
     });
   }
 
+  async function openCopyPicker(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Rozwiń listę Klasy z poprzedniej klatki/,
+      }),
+    );
+  }
+
   it("ignores R and copies the preselected HUD level from the button instead", async () => {
     const user = userEvent.setup();
     const requests: unknown[] = [];
     copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
+    await openCopyPicker(user);
     // The default selection is the whole HUD level, and a whole level is still
     // the scope the backend has always answered.
     expect(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
@@ -2741,6 +2785,7 @@ describe("temporal frame navigation", () => {
     copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
+    await openCopyPicker(user);
     await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
     for (const name of ["Score", "Timer", "health"]) {
       expect(
@@ -2767,6 +2812,7 @@ describe("temporal frame navigation", () => {
     copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
+    await openCopyPicker(user);
     await user.click(await screen.findByRole("checkbox", { name: "Timer 1" }));
     expect(screen.getByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
       "aria-checked",
@@ -2817,6 +2863,7 @@ describe("temporal frame navigation", () => {
     copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
+    await openCopyPicker(user);
     await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
     expect(screen.getByRole("button", { name: "Powtórz" })).toBeDisabled();
     expect(
@@ -2842,6 +2889,7 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
+    await openCopyPicker(user);
     const row = await screen.findByRole("checkbox", { name: "Timer 1" });
     row.focus();
     await user.keyboard("axr");
@@ -2906,6 +2954,8 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
+    const user = userEvent.setup();
+    await openCopyPicker(user);
     expect(
       await screen.findByRole("checkbox", { name: "Score 3" }),
     ).toBeInTheDocument();
