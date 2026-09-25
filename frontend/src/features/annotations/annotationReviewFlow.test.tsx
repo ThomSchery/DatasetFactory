@@ -2184,6 +2184,103 @@ describe("annotation review query states", () => {
     });
   });
 
+  it("FE-019-FIX1: pointerdown on the Powtórz mutation button abandons an unsaved nudge, like any other outside click", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await user.click(classButton);
+    classButton.focus();
+    await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
+
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120"),
+    );
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+
+    // The button that fires the copy-previous mutation, not the picker that
+    // selects what it copies — a real "outside" target, same as `body`.
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Powtórz" }));
+
+    await waitFor(() => {
+      expect(within(overlay).getByRole("option")).toHaveAttribute(
+        "aria-label",
+        expect.stringContaining("x 100, y 120"),
+      );
+    });
+    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("FE-019-FIX1: pointerdown inside the Powtórz picker's own subtree keeps an unsaved nudge and the open edit", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await user.click(classButton);
+    classButton.focus();
+    await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+
+    const copyToggle = await screen.findByRole("button", {
+      name: /Rozwiń listę Klasy z poprzedniej klatki/,
+    });
+    fireEvent.pointerDown(copyToggle);
+
+    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(within(overlay).getByRole("option")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("x 103, y 120"),
+    );
+    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("FE-019-FIX1: a frozen frame's Powtórz list stays reachable to read, with counts, and non-editable", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = reviewApi({
+      frame: frameDetailFixture({ review_status: "accepted" }),
+    });
+    renderApp(["/annotations/run-1"]);
+
+    // Freezing blocks writes, not reads: the toggle must not inherit
+    // `disabled` from the rest of a control the operator can no longer edit.
+    const copyToggle = await screen.findByRole("button", {
+      name: /Rozwiń listę Klasy z poprzedniej klatki/,
+    });
+    expect(copyToggle).toBeEnabled();
+    await user.click(copyToggle);
+
+    const list = screen.getByRole("group", {
+      name: "Klasy z poprzedniej klatki i liczba ich wystąpień",
+    });
+    expect(list).toBeVisible();
+    const row = within(list).getByRole("checkbox", { name: /health/i });
+    const checkedBeforeClick = row.getAttribute("aria-checked");
+
+    await user.click(row);
+
+    // Non-editable: the click reaches a real, focusable row (this is a read
+    // surface, not a disabled one), but changes nothing.
+    expect(row).toHaveAttribute("aria-checked", checkedBeforeClick);
+    expect(
+      fetchSpy.mock.calls.filter(([, init]) => init?.method !== undefined && init.method !== "GET"),
+    ).toHaveLength(0);
+  });
+
   it("uses a ten-pixel step for Shift+ArrowDown", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();

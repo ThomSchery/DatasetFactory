@@ -118,6 +118,36 @@ describe("GroupedOptionList in multiple mode", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("FE-019-FIX1: moves focus to the next tag after removing one, and to the filter after the last", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={["score", "timer", "zero"]} mode="multiple" />);
+
+    const removeScore = screen.getByRole("button", { name: "Usuń klasę Score z zaznaczenia" });
+    removeScore.focus();
+    await user.click(removeScore);
+
+    expect(screen.getByRole("button", { name: "Usuń klasę Timer z zaznaczenia" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Usuń klasę Timer z zaznaczenia" }));
+
+    expect(screen.getByRole("button", { name: "Usuń klasę 0 z zaznaczenia" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Usuń klasę 0 z zaznaczenia" }));
+
+    expect(screen.getByLabelText("Filtruj klasy")).toHaveFocus();
+  });
+
+  it("FE-019-FIX1: moves focus to the filter after the clear-all button removes every tag", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={["score", "timer"]} mode="multiple" />);
+
+    const clearAll = screen.getByRole("button", { name: "Wyczyść zaznaczone klasy" });
+    clearAll.focus();
+    await user.click(clearAll);
+
+    expect(screen.getByLabelText("Filtruj klasy")).toHaveFocus();
+  });
+
   it("selects and clears every option of a group with one click on its row", async () => {
     const user = userEvent.setup();
     render(<Harness mode="multiple" />);
