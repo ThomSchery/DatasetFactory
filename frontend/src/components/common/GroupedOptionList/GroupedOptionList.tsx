@@ -50,6 +50,15 @@ export interface GroupedOptionListProps {
   disabled?: boolean;
   /** Shown when the filter matches nothing. */
   emptyMessage: string;
+  /**
+   * Marks this control's own DOM as one a global outside-pointerdown handler
+   * (e.g. a popover's close-on-outside-click) should treat as inside its own
+   * UI, even when this control renders outside that handler's subtree.
+   * Scoped to the control itself, not a container around it: a caller who
+   * wraps this in other interactive chrome (buttons, forms) does not get
+   * those exempted for free.
+   */
+  exemptFromOutsideClick?: boolean;
   /** Optional explicit action derived from the current filter value. */
   filterAction?: ReactNode;
   /** Label of the filter control; it is this component's own text input. */
@@ -163,6 +172,7 @@ export function GroupedOptionList({
   defaultOpen = false,
   disabled = false,
   emptyMessage,
+  exemptFromOutsideClick,
   filterAction,
   filterLabel,
   filterMaxCodePoints,
@@ -186,7 +196,13 @@ export function GroupedOptionList({
   // every box opens its picker the same way.
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
   const rowRefs = useRef(new Map<string, HTMLElement>());
+  const tagRefs = useRef(new Map<string, HTMLElement>());
   const filterRef = useRef<HTMLInputElement | null>(null);
+  // Index the removed tag held, so focus can land on whichever tag slides
+  // into that slot once the shorter list re-renders — or on the filter, if
+  // none is left. A ref rather than state: it is read-and-cleared inside an
+  // effect, never rendered.
+  const pendingTagFocusIndex = useRef<number | null>(null);
 
   const query = filterValue ?? uncontrolledQuery;
   const filtering = normalize(query) !== "";
@@ -257,6 +273,28 @@ export function GroupedOptionList({
     rowRefs.current.get(pendingFocusId)?.focus();
     setPendingFocusId(null);
   }, [open, pendingFocusId]);
+
+  // Removing a tag unmounts the button that held focus, which would
+  // otherwise drop it to `body` and start the next Tab over from the top of
+  // the document. The slot it left is filled by whichever tag follows, so
+  // that slot is where focus goes; past the end of the shorter list, the
+  // filter is the nearest stable control.
+  useEffect(() => {
+    const index = pendingTagFocusIndex.current;
+    if (index === null) {
+      return;
+    }
+    pendingTagFocusIndex.current = null;
+    if (index >= 0 && index < selectedOptions.length) {
+      tagRefs.current.get(selectedOptions[index].id)?.focus();
+      return;
+    }
+    if (index >= 0 && selectedOptions.length > 0) {
+      tagRefs.current.get(selectedOptions[selectedOptions.length - 1].id)?.focus();
+      return;
+    }
+    filterRef.current?.focus();
+  }, [selectedOptions]);
 
   function focusRow(id: string): void {
     setRequestedActiveId(id);
@@ -458,10 +496,15 @@ export function GroupedOptionList({
   }
 
   return (
-    <div className="df-grouped-options" data-open={open || undefined} data-shortcut-scope="list">
+    <div
+      className="df-grouped-options"
+      data-open={open || undefined}
+      data-outside-click-exempt={exemptFromOutsideClick || undefined}
+      data-shortcut-scope="list"
+    >
       <div className="df-grouped-options__control">
         {mode === "multiple"
-          ? selectedOptions.map((option) => (
+          ? selectedOptions.map((option, index) => (
               <span className="df-grouped-options__tag" key={option.id}>
                 <span className="df-grouped-options__tag-label">{option.label}</span>
                 <Button
@@ -469,7 +512,11 @@ export function GroupedOptionList({
                   className="df-grouped-options__tag-remove"
                   disabled={disabled}
                   onClick={() => {
+                    pendingTagFocusIndex.current = index;
                     onChange(selectedIds.filter((id) => id !== option.id));
+                  }}
+                  ref={(element) => {
+                    registerRow(tagRefs.current, option.id, element);
                   }}
                   size="sm"
                   variant="muted"
@@ -513,6 +560,7 @@ export function GroupedOptionList({
               className="df-grouped-options__clear"
               disabled={disabled}
               onClick={() => {
+                pendingTagFocusIndex.current = 0;
                 onChange([]);
               }}
               size="sm"
@@ -527,7 +575,10 @@ export function GroupedOptionList({
             aria-expanded={open}
             aria-label={`${open ? "Zwiń" : "Rozwiń"} listę ${label}`}
             className="df-grouped-options__toggle"
-            disabled={disabled}
+            // Freezing a frame blocks writes, not reads: the counts this
+            // list carries stay reachable even when nothing in it can be
+            // changed, so the toggle does not inherit `disabled` from the
+            // rest of the control.
             onClick={() => {
               setPendingFocusId(null);
               setOpen((current) => !current);

@@ -237,10 +237,13 @@ export function AnnotationPopover({
       ) {
         return;
       }
-      // FE-019: "Powtórz z poprzedniej klatki" now sits in its own sibling
-      // panel outside this popover's DOM, but it works alongside an open edit
-      // rather than replacing it — engaging its picker must not discard the
-      // edit in progress here.
+      // "Powtórz z poprzedniej klatki" renders outside this popover's DOM —
+      // it did before FE-019 too — but its picker works alongside an open
+      // edit rather than replacing it, so engaging it must not discard the
+      // edit in progress here. Scoped to the picker's own subtree
+      // (`GroupedOptionList`'s `exemptFromOutsideClick`), not the panel
+      // around it: the panel's "Powtórz" button is a real mutation and still
+      // has to count as an ordinary outside click (FE-019-FIX1).
       if (target instanceof Element && target.closest("[data-outside-click-exempt]") !== null) {
         return;
       }

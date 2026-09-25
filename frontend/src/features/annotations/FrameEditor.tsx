@@ -1362,14 +1362,6 @@ function LoadedFrameEditor({
           }}
         />
 
-        {/*
-          FE-019 moved this panel out from inside the annotation popover's own
-          markup, so it is no longer inside `popoverRef` there. Without
-          `exemptFromOutsideClick`, working the picker here would register as
-          an outside pointerdown and silently discard whatever the operator
-          was mid-edit on in "Anotacja" — see AnnotationPopover's outside-close
-          handler.
-        */}
         <Panel
           className="df-review-copy"
           description={
@@ -1377,7 +1369,6 @@ function LoadedFrameEditor({
               ? `Źródłem jest klatka ${String(previousClasses.previous_frame_index)} — poprzednia w czasie, niezależnie od aktywnego filtra statusu.`
               : "Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu."
           }
-          exemptFromOutsideClick
           title="Powtórz z poprzedniej klatki"
         >
           {/*
@@ -1389,6 +1380,14 @@ function LoadedFrameEditor({
             <GroupedOptionList
               disabled={!capabilities.canEdit || mutation.isPending}
               emptyMessage="Żadna klasa z poprzedniej klatki nie pasuje do wpisanego tekstu."
+              // `df-review-copy` sits outside `AnnotationPopover`'s own DOM
+              // (it always did — see FE-019-FIX1's correction to the FE-019
+              // log), so its outside-pointerdown handler would otherwise
+              // treat any click here as "outside" and discard an unrelated
+              // in-progress edit. Scoped to this control alone: the "Powtórz"
+              // button below is a real mutation and must still count as an
+              // ordinary outside click.
+              exemptFromOutsideClick
               filterLabel="Filtruj klasy"
               groups={copyGroups}
               label={PREVIOUS_CLASS_LIST_LABEL}
