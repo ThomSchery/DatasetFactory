@@ -117,12 +117,16 @@ się na E2E z dwoma prawdziwymi awariami we własnych, nowych testach FE-019 —
 
 **A. Klikanie w `Powtórz` zamykało otwartą `Anotację`.** `AnnotationPopover`
 zamyka się na dowolny `pointerdown` poza swoim drzewem DOM
-(`popoverRef.current.contains(target)`). Przeniesienie `Powtórz` do osobnego,
-sąsiadującego `Panel` (zamiast zagnieżdżonej sekcji) umieściło je poza tym
-drzewem, więc rozwinięcie listy w `Powtórz` cichо odrzucało trwającą edycję w
-`Anotacji` — dokładnie przeciwieństwo tempa pracy, o które prosił operator.
-Naprawa: `Panel` dostał opcjonalny prop `exemptFromOutsideClick`, który
-ustawia `data-outside-click-exempt` na własnej sekcji; `AnnotationPopover`
+(`popoverRef.current.contains(target)`). **Korekta względem pierwszej wersji
+tego wpisu:** to nie jest regresja wprowadzona wydzieleniem `Powtórz` do
+osobnego `Panel`. Zweryfikowane na `11ba821` (baza sprzed FE-019) — sekcja
+`df-review-copy` domykała się już wtedy wewnątrz `<Panel>` panelu „Anotacje na
+klatce", a `<AnnotationPopover>` renderuje się dopiero **po** nim, więc była
+poza poddrzewem popovera przed tym ticketem tak samo, jak jest teraz.
+Wydzielenie niczego w tej relacji nie zmieniło; nowy test FE-019 tylko
+**ujawnił** zastane zachowanie, którego wcześniej nikt nie sprawdzał w tej
+kombinacji. Naprawa: `Panel` dostał opcjonalny prop `exemptFromOutsideClick`,
+który ustawia `data-outside-click-exempt` na własnej sekcji; `AnnotationPopover`
 traktuje kliknięcie w taki element jako wewnętrzne. Panel `Powtórz` używa tego
 propu. (Pierwsza wersja naprawy owijała `Panel` w dodatkowy `<div>` — to
 złamało asercję `dialog.nextElementSibling === copyPanel` w
@@ -181,3 +185,84 @@ opisane w sekcji 7.
 
 Wszystkie cztery stany, 1440×1000 i 1920×1080 — bez ucinania, bez przewijania
 poziomego, bez artefaktów.
+
+## 8. FE-019-FIX1 — korekty z niezależnego cold review
+
+Werdykt: `CHANGES REQUESTED`, 2×P1 i 1×P2, wszystkie z reprodukcją. Żadna nie
+dotyczyła wyglądu, podziału paneli, trójkąta ani pomiaru `canvasRight` — te
+zostały potwierdzone bez zmian.
+
+**P1-A — zawężenie wyjątku od porzucania geometrii.** `exemptFromOutsideClick`
+siedział na całym `<Panel>` „Powtórz”, więc `AnnotationPopover` traktował
+kliknięcie w **cokolwiek** wewnątrz panelu — łącznie z przyciskiem `Powtórz`,
+który wykonuje realną mutację `copy-previous` — jako „wewnątrz” i nie odrzucał
+niezapisanego przesunięcia bboxa. Naprawa: prop przeniesiony z `Panel` na
+`GroupedOptionList` — atrybut `data-outside-click-exempt` siedzi teraz
+wyłącznie na korzeniu samej kontrolki wyboru, nie na panelu, który ją otacza.
+Przycisk `Powtórz` przestał być „wewnątrz” i zachowuje się jak każde inne
+kliknięcie poza popoverem.
+
+Mechanizm pozostał atrybutem `data-*` sprawdzanym przez `closest()`, zgodnie z
+dwoma istniejącymi precedensami w tym samym handlerze
+(`data-preserve-annotation-preview`, `data-annotation-selection-target`) — nie
+jest to selektor CSS klasy (nie `.df-review-copy`, nie `.df-grouped-options`),
+więc zmiana nazwy klasy stylującej nic tu nie popsuje. Granica jest teraz
+własnym korzeniem komponentu, który faktycznie potrzebuje wyjątku, a nie
+dowolnym kontenerem, w którym akurat wylądował — nie wprowadzono osobnego
+mechanizmu (np. rejestru referencji) tylko dla tego jednego wywołania, żeby nie
+rozjeżdżać się z resztą kodu.
+
+**Korekta opisu z pierwszej wersji tego logu:** wcześniejszy wpis w sekcji 6.A
+twierdził, że `exemptFromOutsideClick` naprawia regresję wprowadzoną przez
+wydzielenie panelu `Powtórz`. To było nieprawdziwe — zweryfikowane na `11ba821`
+(baza sprzed FE-019): sekcja `df-review-copy` domykała się wewnątrz `<Panel>`
+panelu „Anotacje na klatce” już wtedy, a `<AnnotationPopover>` renderuje się
+dopiero po nim, więc była poza poddrzewem popovera przed tym ticketem tak samo,
+jak jest teraz. Wydzielenie niczego w tej relacji nie zmieniło; nowy test
+FE-019 tylko **ujawnił** zastane zachowanie w kombinacji, której wcześniej
+nikt nie sprawdzał. Sekcja 6.A wyżej poprawiona w miejscu.
+
+**P1-B — lista na zamrożonej klatce.** Przycisk rozwijania/zwijania
+(`df-grouped-options__toggle`) dziedziczył `disabled` z reszty kontrolki.
+Złożone ze stanem spoczynkowym zwiniętym, dawało to listę zupełnie
+nieosiągalną na zaakceptowanej/odrzuconej klatce — licznik wystąpień z FE-017
+nie do obejrzenia w ogóle. Zamrożenie dotyczy zapisu, nie czytania.
+
+Wybrany wariant: **przycisk rozwijania przestał dziedziczyć `disabled`** —
+zostaje zawsze klikalny, więc operator może otworzyć listę do odczytu na
+dowolnej klatce. Filtr, tagi, `Wyczyść` i same wiersze zostają `disabled` jak
+dotąd (mutacje selekcji), a przycisk `Powtórz` ma własny, niezależny
+`disabled={copyDisabled}`. Odrzucony wariant: rozwinięcie startowe przy
+`disabled` — wymuszałoby stan rozwinięty niezależnie od tego, czy operator
+chce patrzeć, i tak czy inaczej dorzucałoby wyjątek do tej samej logiki, co
+przycisk. Aktywny chevron przy reszcie nieaktywnej jest uczciwszy: rozwijanie
+nie jest edycją, więc nie powinno wymagać prawa do edycji.
+
+**P2 — fokus po zdjęciu tagu.** Usunięcie tagu (lub kliknięcie `Wyczyść`)
+odmontowuje przycisk, który miał fokus. Naprawa: `GroupedOptionList` zapamiętuje
+indeks usuwanego tagu w refie (`pendingTagFocusIndex`), a efekt uruchamiany po
+zmianie `selectedOptions` przenosi fokus na tag, który wsunął się w to samo
+miejsce — a gdy usunięto ostatni (albo kliknięto `Wyczyść`), na pole filtra.
+Żaden dodatkowy tab stop, żadna pułapka — fokus po prostu nie znika z
+dokumentu.
+
+**Falsyfikowalność (obowiązkowa dla P1-A i P1-B).** Obie poprawki cofnięto
+osobno w lokalnej kopii kontrolnej pliku, uruchomiono tylko odpowiadający test
+i po każdej próbie odtworzono plik przez `cp` (bajtowa kopia, bez
+`git restore`/`git checkout`), porównując SHA256 przed i po:
+
+- `AnnotationPopover.tsx`: `.closest("[data-outside-click-exempt]")` zamieniono
+  na `.closest(".df-review-copy")` (odtworzenie starego, zbyt szerokiego
+  zakresu). Test „pointerdown on the Powtórz mutation button abandons an
+  unsaved nudge” upadł dokładnie na oczekiwanej asercji (`aria-label` bboxa
+  nigdy nie wróciło do `x 100, y 120`, `waitFor` się przeterminował).
+  SHA256 przed i po: `6E87DC7C33E815361339351A95B1A0D7FCACEF074D65CEB4ABC3F82350FE22BB`.
+- `GroupedOptionList.tsx`: przywrócono `disabled={disabled}` na przycisku
+  rozwijania. Test „a frozen frame's Powtórz list stays reachable” upadł
+  dokładnie na oczekiwanej asercji (`expect(copyToggle).toBeEnabled()`,
+  otrzymano element z atrybutem `disabled`).
+  SHA256 przed i po: `6DA537AA645FFDB716FCFBCFA52EDF95B4C66A87C721C448283A10D8164A44BD`.
+
+Po obu odtworzeniach: pełny `npx vitest run` 724/724 (5 nowych testów: dwa P1
+z falsyfikacją, jeden P1-B z falsyfikacją, dwa P2 fokusowe), `tsc --noEmit`
+czysto.
