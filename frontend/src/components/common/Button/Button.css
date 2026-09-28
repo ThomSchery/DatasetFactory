@@ -55,7 +55,7 @@
 }
 
 .df-button--secondary {
-  border-color: var(--color-stroke-weak-default);
+  border-color: var(--color-stroke-control-default);
 }
 
 .df-button--muted {

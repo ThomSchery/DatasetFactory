@@ -17,6 +17,7 @@ const palette = [
   ["Surface hover", "--color-surface-neutral-hover"],
   ["Surface transparent", "--color-surface-transparent"],
   ["Stroke weak", "--color-stroke-weak-default"],
+  ["Stroke control", "--color-stroke-control-default"],
   ["Stroke strong", "--color-stroke-strong-default"],
   ["Text strong", "--color-text-strong-default"],
   ["Text weak", "--color-text-weak-default"],

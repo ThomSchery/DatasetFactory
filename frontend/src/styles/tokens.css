@@ -73,6 +73,19 @@
   --color-surface-neutral-hover: hsl(216 18% 92% / 0.06);
   --color-surface-transparent: hsl(222 9% 10% / 0);
   --color-stroke-weak-default: hsl(216 18% 92% / 0.12);
+  /*
+   * BORDER-03/COLOR-08 — the outline of an interactive control, which has to
+   * clear 3:1 against every surface a control can sit on. Opaque on purpose:
+   * the weak stroke is a 12% wash, so its contrast follows whatever is behind
+   * it, and a control that reads at 3:1 on the page background would fall
+   * under the threshold on a raised panel. Measured here: 3.96:1 over
+   * `--color-background-primary-default`, 3.14:1 over
+   * `--color-surface-neutral-raised`.
+   *
+   * Kept distinct from `--color-stroke-strong-default` (8.97:1) because the
+   * two are a hierarchy, not a duplicate: `muted` sits above `secondary`.
+   */
+  --color-stroke-control-default: hsl(216 8% 48%);
   --color-stroke-strong-default: hsl(216 18% 82%);
   --color-text-strong-default: hsl(216 22% 96%);
   --color-text-weak-default: hsl(216 10% 70%);
