@@ -281,3 +281,7 @@ Pragmatycznej (Boring Technology):
 | FE-09 | Struktura folderów | Feature-based (`dashboard`, `profiles`, `materials`, `annotations`, `exports`) + `common` + generowany `api` | Odzwierciedla nawigację i utrzymuje komponenty wspólne poza feature'ami. |
 | FE-10 | Testy | Vitest/Testing Library dla logiki i krytycznych interakcji + jeden Playwright e2e pionowego przepływu na fixture wideo/OCR stub | Testujemy ścieżkę v1, nie wszystkie warianty; e2e jednocześnie weryfikuje baseline i routing. |
 | FE-11 | AI/ML z frontendu | Frontend nigdy nie wywołuje Tesseract ani późniejszego SAM 3; wyłącznie lokalne API FastAPI; brak streamingu, polling | Modele i filesystem pozostają po stronie backendu; OCR nie jest LLM, ale jego wynik nadal jest niezaufany. |
+
+### Rewizja kierunku UI i profili (2026-11-03, FE-021)
+
+Użytkownik wybrał wygląd i działanie z notatek projektu Figma DatasetFactory. Eksporty `designs/figma-2026-11-03/` zastępują baseline Impeccable jako źródło wizualne. Kompaktowa nawigacja Upload / Profile / Run oraz menu zachowujące dotychczasowe destynacje zastępują stałą szynę. Wymagany jest responsywny układ także poniżej 1280 px; decyzja FE-07 o blokadzie wąskich ekranów zostaje uchylona. W ramach FE-021 dopuszczono edycję istniejących profili oraz Save as (rewizja odroczenia F02), z ochroną danych i odczytów historycznych runów. Referencją profilu jest zrzut JPG/PNG; wybór momentu klatki nie należy do tej ścieżki. SAM 3 pozostaje poza zakresem. Historyczne decyzje powyżej pozostają jako zapis pierwotnych ustaleń.
