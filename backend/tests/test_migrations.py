@@ -9,8 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, alembic_config
+from backend.app.access.store.ocr_regions import decode_region_ocr_snapshots
 from backend.app.composition import build_composition
 from backend.app.config import Settings
+from backend.app.engines.definition import BBox
 from backend.app.main import create_app
 from backend.tests.conftest import AvailableResourceProbe
 from backend.tests.test_composition import EXPECTED_TABLES
@@ -903,7 +905,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0007"
+            "0008"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -1014,7 +1016,7 @@ def test_documented_cleanup_sql_actually_unblocks_the_migration(settings: Settin
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0007"
+            "0008"
         )
     engine.dispose()
 
@@ -1113,6 +1115,147 @@ def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Set
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
+            "0008"
+        )
+    engine.dispose()
+
+
+def test_region_geometry_migration_backfills_runs_and_checkpoints(settings: Settings) -> None:
+    """0008 pins every stored run to the geometry a reader would resolve today."""
+    config = alembic_config(settings)
+    command.upgrade(config, "0007")
+    legacy = _insert_explicit_only_run(
+        settings,
+        run_id="run-geo",
+        region_configs=(("r-score", "score", "a" * 64, 7),),
+    )
+    assert '"x"' not in legacy
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(settings.database_url)
+    region_columns = {column["name"] for column in inspect(engine).get_columns("hud_regions")}
+    with engine.connect() as connection:
+        run_document = connection.execute(
+            text("SELECT ocr_region_config_json FROM pipeline_runs WHERE id='run-geo'")
+        ).scalar_one()
+        checkpoint_document = connection.execute(
+            text("SELECT ocr_region_config_json FROM stage_checkpoints WHERE run_id='run-geo'")
+        ).scalar_one()
+        index_sql = connection.execute(
+            text("SELECT sql FROM sqlite_master WHERE name='uq_hud_regions_profile_name_active'")
+        ).scalar_one()
+        region_names = {
+            constraint["name"]
+            for constraint in inspect(engine).get_unique_constraints("hud_regions")
+        }
+    assert "retired_at" in region_columns
+    assert "WHERE retired_at IS NULL" in index_sql
+    # The pre-0008 name rule covered retired rows too and is replaced, not kept.
+    assert "uq_hud_regions_profile_name" not in region_names
+    snapshots = json.loads(run_document)
+    assert [
+        (snapshot["x"], snapshot["y"], snapshot["width"], snapshot["height"])
+        for snapshot in snapshots
+    ] == [(10, 20, 100, 40)]
+    assert json.loads(checkpoint_document) == snapshots
+    # The production reader, not only the raw JSON, accepts the migrated row.
+    assert decode_region_ocr_snapshots(run_document)[0].bbox == BBox(10, 20, 100, 40)
+    engine.dispose()
+
+
+def test_region_geometry_migration_refuses_a_run_whose_region_is_gone(settings: Settings) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0007")
+    _insert_explicit_only_run(
+        settings,
+        run_id="run-orphan",
+        region_configs=(("r-score", "score", "a" * 64, 7),),
+    )
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM hud_regions WHERE id='r-score'"))
+    engine.dispose()
+
+    with pytest.raises(RuntimeError, match="cannot upgrade") as caught:
+        command.upgrade(config, "head")
+
+    message = str(caught.value)
+    assert "run-orphan" in message
+    assert "r-score" in message
+    engine = create_engine(settings.database_url)
+    region_columns = {column["name"] for column in inspect(engine).get_columns("hud_regions")}
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
             "0007"
         )
+    # The refusal precedes every DDL statement, so the database is untouched.
+    assert "retired_at" not in region_columns
+    engine.dispose()
+
+
+def test_region_geometry_downgrade_strips_geometry_and_restores_the_name_rule(
+    settings: Settings,
+) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0007")
+    legacy = _insert_explicit_only_run(
+        settings,
+        run_id="run-down",
+        region_configs=(("r-score", "score", "a" * 64, 7),),
+    )
+    command.upgrade(config, "head")
+
+    command.downgrade(config, "0007")
+
+    engine = create_engine(settings.database_url)
+    inspector = inspect(engine)
+    region_columns = {column["name"] for column in inspector.get_columns("hud_regions")}
+    region_names = {
+        constraint["name"] for constraint in inspector.get_unique_constraints("hud_regions")
+    }
+    with engine.connect() as connection:
+        run_document = connection.execute(
+            text("SELECT ocr_region_config_json FROM pipeline_runs WHERE id='run-down'")
+        ).scalar_one()
+    assert "retired_at" not in region_columns
+    assert "uq_hud_regions_profile_name" in region_names
+    assert json.loads(run_document) == json.loads(legacy)
+    engine.dispose()
+
+
+def test_region_geometry_downgrade_refuses_while_a_region_is_retired(settings: Settings) -> None:
+    config = alembic_config(settings)
+    command.upgrade(config, "0007")
+    _insert_explicit_only_run(
+        settings,
+        run_id="run-retired",
+        region_configs=(("r-score", "score", "a" * 64, 7),),
+    )
+    command.upgrade(config, "head")
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE hud_regions SET retired_at='2026-11-03T09:00:00+00:00' WHERE id='r-score'")
+        )
+    engine.dispose()
+
+    with pytest.raises(RuntimeError, match="cannot downgrade") as caught:
+        command.downgrade(config, "0007")
+
+    assert "r-score" in str(caught.value)
+    engine = create_engine(settings.database_url)
+    region_columns = {column["name"] for column in inspect(engine).get_columns("hud_regions")}
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
+            "0008"
+        )
+        # Nothing was dropped, so the retired region's samples keep their anchor.
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM hud_regions WHERE retired_at IS NOT NULL")
+            ).scalar_one()
+            == 1
+        )
+    assert "retired_at" in region_columns
     engine.dispose()

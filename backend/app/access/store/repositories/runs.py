@@ -28,7 +28,7 @@ from backend.app.access.store.ocr_regions import (
     decode_region_ocr_snapshots,
     encode_region_ocr_snapshots,
 )
-from backend.app.engines.definition import OcrProvenance
+from backend.app.engines.definition import BBox, OcrProvenance
 from backend.app.managers.workflow.state_machine import (
     NONTERMINAL_RUN_STATUSES,
     InvalidTransitionError,
@@ -77,6 +77,7 @@ class RunSourceError(RuntimeError):
 class RegionOcrDraft:
     region_id: str
     region_name: str
+    bbox: BBox
     allowed_chars: tuple[str, ...] | None
     page_segmentation_mode: int | None
 
@@ -205,6 +206,7 @@ class RunRepository:
                 RegionOcrDraft(
                     region_id=region.id,
                     region_name=region.name,
+                    bbox=BBox(region.x, region.y, region.width, region.height),
                     allowed_chars=(
                         tuple(region.ocr_allowed_chars)
                         if region.ocr_allowed_chars is not None
@@ -212,9 +214,11 @@ class RunRepository:
                     ),
                     page_segmentation_mode=region.ocr_page_segmentation_mode,
                 )
+                # A retired region governs no future run: it stays only so the
+                # samples of the runs that used it keep their geometry and OCR.
                 for region in session.scalars(
                     select(HudRegion)
-                    .where(HudRegion.profile_id == profile_id)
+                    .where(HudRegion.profile_id == profile_id, HudRegion.retired_at.is_(None))
                     .order_by(HudRegion.created_at, HudRegion.id)
                 )
             )

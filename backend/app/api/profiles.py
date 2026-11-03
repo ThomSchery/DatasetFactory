@@ -12,6 +12,8 @@ from backend.app.engines.definition import CategoryDefinition, RegionDefinition
 from backend.app.managers.workflow.profile_use_cases import (
     ProfileUseCaseError,
     ProfileUseCases,
+    SavedCategory,
+    SavedRegion,
     region_definition,
 )
 
@@ -46,6 +48,38 @@ class AddRegionRequest(StrictModel):
 class UpdateRegionOcrConfigRequest(StrictModel):
     allowed_chars: str = Field(min_length=1)
     page_segmentation_mode: int
+    expected_version: int = Field(ge=1)
+
+
+class SavedRegionRequest(StrictModel):
+    """One region of a whole-profile save; `id` is absent for a new box."""
+
+    id: str | None = Field(default=None, min_length=1)
+    name: str = Field(min_length=1, max_length=200)
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    allowed_chars: str = Field(min_length=1)
+    page_segmentation_mode: int
+
+
+class SavedCategoryRequest(StrictModel):
+    id: str | None = Field(default=None, min_length=1)
+    name: str = Field(min_length=1, max_length=200)
+    kind: Literal["character", "game"]
+
+
+class SaveProfileDefinitionRequest(StrictModel):
+    """The operator's whole draft plus optimistic concurrency on the profile.
+
+    The reference image, the name and the dimensions are not here: this route
+    rewrites the definition of the selected profile, and a different name or
+    image belongs to `Save as`, which creates a separate profile.
+    """
+
+    regions: tuple[SavedRegionRequest, ...] = Field(min_length=1)
+    categories: tuple[SavedCategoryRequest, ...] = Field(min_length=1)
     expected_version: int = Field(ge=1)
 
 
@@ -239,6 +273,31 @@ def _region_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
         request,
         code=error.code,
         message="The HUD region could not be added.",
+        details=error.details,
+    )
+    return JSONResponse(status_code=status_code, content=envelope.model_dump())
+
+
+def _definition_error(request: Request, error: ProfileUseCaseError) -> JSONResponse:
+    """One mapping for a save that spans regions, classes and the profile itself."""
+    if error.code in {"profile_not_found", "region_not_found", "category_not_found"}:
+        status_code = 404
+    elif error.code in {
+        "active_run",
+        "category_in_use",
+        "category_name_exists",
+        "region_name_exists",
+        "version_conflict",
+    }:
+        status_code = 409
+    elif error.code == "profile_persistence_failed":
+        status_code = 500
+    else:
+        status_code = 400
+    envelope = error_envelope(
+        request,
+        code=error.code,
+        message="The profile definition could not be saved.",
         details=error.details,
     )
     return JSONResponse(status_code=status_code, content=envelope.model_dump())
@@ -474,6 +533,50 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
             )
         except ProfileUseCaseError as error:
             return _region_error(request, error)
+        return _response(record)
+
+    @router.put(
+        "/{profile_id}/definition",
+        response_model=GameProfileResponse,
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            500: {"model": ErrorEnvelope},
+        },
+    )
+    def save_profile_definition(
+        profile_id: str,
+        payload: SaveProfileDefinitionRequest,
+        request: Request,
+        use_cases: Annotated[ProfileUseCases, Depends(use_cases_provider)],
+    ) -> GameProfileResponse | JSONResponse:
+        # Authorization policy: local-public. One request, one transaction, one
+        # answer: the saved profile carries the version the next save must send.
+        try:
+            record = use_cases.save_profile_definition(
+                profile_id=profile_id,
+                regions=tuple(
+                    SavedRegion(
+                        id=region.id,
+                        name=region.name,
+                        x=region.x,
+                        y=region.y,
+                        width=region.width,
+                        height=region.height,
+                        allowed_chars=tuple(region.allowed_chars),
+                        page_segmentation_mode=region.page_segmentation_mode,
+                    )
+                    for region in payload.regions
+                ),
+                categories=tuple(
+                    SavedCategory(id=category.id, name=category.name, kind=category.kind)
+                    for category in payload.categories
+                ),
+                expected_version=payload.expected_version,
+            )
+        except ProfileUseCaseError as error:
+            return _definition_error(request, error)
         return _response(record)
 
     @router.patch(

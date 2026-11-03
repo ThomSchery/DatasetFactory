@@ -4,13 +4,22 @@ import json
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-from backend.app.engines.definition import OcrProvenance
+from backend.app.engines.definition import BBox, OcrProvenance
 
 
 @dataclass(frozen=True)
 class RegionOcrSnapshot:
+    """One region exactly as the owning run saw it, geometry included.
+
+    The geometry lives here rather than being read back from `hud_regions`
+    because a profile may legitimately be edited after a run finished. Cropping,
+    sample dimensions and every later read of a historical run resolve against
+    this snapshot, so a resize changes the next run and nothing before it.
+    """
+
     region_id: str
     region_name: str
+    bbox: BBox
     allowed_chars: tuple[str, ...]
     page_segmentation_mode: int
     provenance: OcrProvenance
@@ -22,6 +31,10 @@ def encode_region_ocr_snapshots(snapshots: tuple[RegionOcrSnapshot, ...]) -> str
         {
             "region_id": snapshot.region_id,
             "region_name": snapshot.region_name,
+            "x": snapshot.bbox.x,
+            "y": snapshot.bbox.y,
+            "width": snapshot.bbox.width,
+            "height": snapshot.bbox.height,
             "allowed_chars": "".join(snapshot.allowed_chars),
             "page_segmentation_mode": snapshot.page_segmentation_mode,
             "uses_profile_fallback": snapshot.uses_profile_fallback,
@@ -71,6 +84,7 @@ def decode_region_ocr_snapshots(document: str) -> tuple[RegionOcrSnapshot, ...]:
             RegionOcrSnapshot(
                 region_id=_required_string(raw, "region_id"),
                 region_name=_required_string(raw, "region_name"),
+                bbox=_required_bbox(raw),
                 allowed_chars=tuple(allowed_chars),
                 page_segmentation_mode=psm,
                 provenance=OcrProvenance(
@@ -95,6 +109,20 @@ def _required_string(payload: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError("invalid region OCR snapshot")
     return value
+
+
+def _required_bbox(payload: dict[str, Any]) -> BBox:
+    """Geometry is mandatory: migration 0008 backfills every pre-existing run."""
+    values: list[int] = []
+    for key in ("x", "y", "width", "height"):
+        value = payload.get(key)
+        if type(value) is not int:
+            raise ValueError("invalid region OCR snapshot")
+        values.append(value)
+    x, y, width, height = values
+    if x < 0 or y < 0 or width <= 0 or height <= 0:
+        raise ValueError("invalid region OCR snapshot")
+    return BBox(x=x, y=y, width=width, height=height)
 
 
 def _required_bool(payload: dict[str, Any], key: str) -> bool:

@@ -19,6 +19,7 @@ from backend.app.access.store.models import (
     PipelineRun,
     RegionSample,
 )
+from backend.app.access.store.ocr_regions import decode_region_ocr_snapshots
 from backend.app.access.store.repositories.checkpoints import (
     CheckpointArtifact,
     CheckpointRepository,
@@ -394,33 +395,64 @@ class FrameRepository:
         return run, frame
 
     @staticmethod
+    def _run_regions(session: Session, run: PipelineRun) -> tuple[RegionRecord, ...]:
+        """Resolve this run's regions from the geometry the run itself recorded.
+
+        `hud_regions` holds the *current* definition, which the operator may
+        edit once a run is no longer active. Reading it here would silently
+        re-interpret finished work, so the per-run snapshot decides instead. A
+        run created before the snapshot carried geometry cannot exist: migration
+        0008 backfills every row, and a run with no regions at all keeps the
+        empty document it was created with.
+        """
+        snapshots = decode_region_ocr_snapshots(run.ocr_region_config_json)
+        if snapshots:
+            return tuple(RegionRecord(snapshot.region_id, snapshot.bbox) for snapshot in snapshots)
+        return tuple(
+            RegionRecord(region.id, BBox(region.x, region.y, region.width, region.height))
+            for region in session.scalars(
+                select(HudRegion)
+                .where(HudRegion.profile_id == run.profile_id, HudRegion.retired_at.is_(None))
+                .order_by(HudRegion.created_at, HudRegion.id)
+            )
+        )
+
+    @classmethod
     def _processing_record(
+        cls,
         session: Session,
         run: PipelineRun,
         frame: Frame,
     ) -> FrameProcessingRecord:
-        regions = tuple(
-            RegionRecord(region.id, BBox(region.x, region.y, region.width, region.height))
-            for region in session.scalars(
-                select(HudRegion)
-                .where(HudRegion.profile_id == run.profile_id)
-                .order_by(HudRegion.created_at, HudRegion.id)
+        regions = cls._run_regions(session, run)
+        bbox_by_region_id = {region.id: region.bbox for region in regions}
+        stored_samples = tuple(
+            session.scalars(
+                select(RegionSample)
+                .where(RegionSample.frame_id == frame.id)
+                .order_by(RegionSample.region_id)
             )
         )
-        region_by_id = {region.id: region for region in regions}
+        for sample in stored_samples:
+            if sample.region_id not in bbox_by_region_id:
+                # Only reachable if a region row vanished without retirement,
+                # which no write path does. Failing loudly beats reporting a
+                # crop under the wrong dimensions.
+                region = session.get(HudRegion, sample.region_id)
+                if region is None:
+                    raise FrameNotFoundError
+                bbox_by_region_id[sample.region_id] = BBox(
+                    region.x, region.y, region.width, region.height
+                )
         samples = tuple(
             SampleRecord(
                 sample.id,
                 sample.region_id,
                 Path(sample.crop_relpath),
-                region_by_id[sample.region_id].bbox.width,
-                region_by_id[sample.region_id].bbox.height,
+                bbox_by_region_id[sample.region_id].width,
+                bbox_by_region_id[sample.region_id].height,
             )
-            for sample in session.scalars(
-                select(RegionSample)
-                .where(RegionSample.frame_id == frame.id)
-                .order_by(RegionSample.region_id)
-            )
+            for sample in stored_samples
         )
         category_ids = {
             category.name: category.id

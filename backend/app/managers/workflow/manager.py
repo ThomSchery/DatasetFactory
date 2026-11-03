@@ -154,6 +154,7 @@ class DatasetWorkflow:
         return RegionOcrSnapshot(
             region_id=region.region_id,
             region_name=region.region_name,
+            bbox=region.bbox,
             allowed_chars=allowed_chars,
             page_segmentation_mode=provenance.page_segmentation_mode,
             provenance=provenance,

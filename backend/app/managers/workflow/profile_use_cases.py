@@ -25,12 +25,14 @@ from backend.app.access.store.repositories.materials import (
 from backend.app.access.store.repositories.profiles import (
     AssetPublication,
     CategoryDraft,
+    CategoryInUseError,
     CategoryNameExistsError,
     CategoryNotFoundError,
     CategoryUsedByRegionsError,
     NewCategoryDraft,
     NewRegionDraft,
     ProfileAggregateDraft,
+    ProfileDefinitionDraft,
     ProfileNameExistsError,
     ProfileNotFoundError,
     ProfilePersistenceError,
@@ -45,6 +47,8 @@ from backend.app.access.store.repositories.profiles import (
     RegionNotFoundError,
     RegionOcrConfigDraft,
     RenamedCategoryDraft,
+    SavedCategoryDraft,
+    SavedRegionDraft,
 )
 from backend.app.access.store.repositories.projects import ProjectRepository
 from backend.app.engines.definition import (
@@ -63,6 +67,27 @@ class ProfileUseCaseError(RuntimeError):
         super().__init__(code)
         self.code = code
         self.details = details or {}
+
+
+@dataclass(frozen=True)
+class SavedRegion:
+    """One region as the operator's draft states it; `id` is None when new."""
+
+    id: str | None
+    name: str
+    x: int
+    y: int
+    width: int
+    height: int
+    allowed_chars: tuple[str, ...]
+    page_segmentation_mode: int
+
+
+@dataclass(frozen=True)
+class SavedCategory:
+    id: str | None
+    name: str
+    kind: str
 
 
 @dataclass(frozen=True)
@@ -224,7 +249,16 @@ class ProfileUseCases:
         if reference_asset_id is not None:
             preview = self._reference_previews.get(reference_asset_id)
             if preview is None:
-                raise ProfileUseCaseError("asset_not_found")
+                # `Save as` starts from a profile that is already stored, so the
+                # reference image is a durable asset rather than a preview. The
+                # file is copied under a fresh identifier: the new profile must
+                # never share a durable row with the profile it was copied from.
+                return self._create_profile_from_stored_asset(
+                    name=name,
+                    reference_asset_id=reference_asset_id,
+                    regions=regions,
+                    categories=categories,
+                )
             asset = self._assets.get_ephemeral_reference(
                 relpath=preview.relpath,
                 content_type=preview.content_type,
@@ -272,6 +306,45 @@ class ProfileUseCases:
         finally:
             # An unexpected probe failure must not leave the staged temp file
             # behind either, so the cleanup hangs off the flag, not the handler.
+            if not inspected:
+                staged_asset.discard()
+        return self._create_profile(
+            name=name,
+            publication=staged_asset,
+            source_width=metadata.width,
+            source_height=metadata.height,
+            regions=regions,
+            categories=categories,
+        )
+
+    def _create_profile_from_stored_asset(
+        self,
+        *,
+        name: str,
+        reference_asset_id: str,
+        regions: tuple[RegionDefinition, ...],
+        categories: tuple[CategoryDefinition, ...],
+    ) -> ProfileRecord:
+        try:
+            source = self._assets.get_reference(reference_asset_id)
+        except AssetNotFoundError as exc:
+            raise ProfileUseCaseError("asset_not_found") from exc
+        asset_id = str(uuid4())
+        try:
+            staged_asset = self._asset_store.stage(source.path, asset_id=asset_id)
+        except ReferenceAssetWriteError as exc:
+            raise ProfileUseCaseError("reference_asset_copy_failed") from exc
+        inspected = False
+        try:
+            metadata = self._image_probe.inspect(staged_asset.temporary_path)
+            staged_asset.configure(
+                extension=metadata.extension,
+                content_type=metadata.content_type,
+            )
+            inspected = True
+        except ImageProbeError as exc:
+            raise ProfileUseCaseError(str(exc), details={"field": "reference_asset_id"}) from exc
+        finally:
             if not inspected:
                 staged_asset.discard()
         return self._create_profile(
@@ -500,6 +573,108 @@ class ProfileUseCases:
             raise ProfileUseCaseError("active_run") from exc
         except ProfilePersistenceError as exc:
             raise ProfileUseCaseError("region_persistence_failed") from exc
+
+    def save_profile_definition(
+        self,
+        *,
+        profile_id: str,
+        regions: tuple[SavedRegion, ...],
+        categories: tuple[SavedCategory, ...],
+        expected_version: int,
+    ) -> ProfileRecord:
+        """Validate and persist a whole profile draft as one atomic save.
+
+        The draft is validated exactly as a new profile is, against the stored
+        reference image's dimensions, so a region cannot be saved outside the
+        frame and a whitelist cannot name a class the draft does not define.
+        The identifiers the draft carries decide what is updated, appended or
+        retired, so no sample, observation or annotation loses its anchor.
+        """
+        profile = self.get_profile(profile_id)
+        definition = ProfileDefinition(
+            name=profile.name,
+            source_width=profile.source_width,
+            source_height=profile.source_height,
+            regions=tuple(
+                RegionDefinition(
+                    name=region.name,
+                    bbox=BBox(region.x, region.y, region.width, region.height),
+                    allowed_chars=region.allowed_chars,
+                    page_segmentation_mode=region.page_segmentation_mode,
+                )
+                for region in regions
+            ),
+            categories=tuple(
+                CategoryDefinition(name=category.name, kind=category.kind)  # type: ignore[arg-type]
+                for category in categories
+            ),
+        )
+        try:
+            validated = self._engine.validate_profile(definition)
+        except DefinitionValidationError as exc:
+            details: dict[str, Any] = {"field": exc.field}
+            if exc.index is not None:
+                details["index"] = exc.index
+            raise ProfileUseCaseError(exc.code, details=details) from exc
+
+        region_drafts: list[SavedRegionDraft] = []
+        for draft, validated_region in zip(regions, validated.regions, strict=True):
+            whitelist, mode = self._required_ocr_config(validated_region)
+            region_drafts.append(
+                SavedRegionDraft(
+                    id=draft.id,
+                    name=validated_region.name,
+                    x=validated_region.bbox.x,
+                    y=validated_region.bbox.y,
+                    width=validated_region.bbox.width,
+                    height=validated_region.bbox.height,
+                    ocr_allowed_chars=whitelist,
+                    ocr_page_segmentation_mode=mode,
+                )
+            )
+        category_drafts = tuple(
+            SavedCategoryDraft(
+                id=draft.id,
+                name=validated_category.name,
+                kind=validated_category.kind,
+            )
+            for draft, validated_category in zip(categories, validated.categories, strict=True)
+        )
+        try:
+            return self._profiles.save_definition(
+                profile_id,
+                ProfileDefinitionDraft(
+                    regions=tuple(region_drafts),
+                    categories=category_drafts,
+                    expected_version=expected_version,
+                ),
+            )
+        except ProfileNotFoundError as exc:
+            raise ProfileUseCaseError("profile_not_found") from exc
+        except RegionNotFoundError as exc:
+            raise ProfileUseCaseError("region_not_found") from exc
+        except CategoryNotFoundError as exc:
+            raise ProfileUseCaseError("category_not_found") from exc
+        except ProfileVersionConflictError as exc:
+            raise ProfileUseCaseError("version_conflict") from exc
+        except ProfileRegionBlockedError as exc:
+            raise ProfileUseCaseError("active_run") from exc
+        except CategoryInUseError as exc:
+            raise ProfileUseCaseError(
+                "category_in_use",
+                details={
+                    "categories": [
+                        {"id": category_id, "name": category_name}
+                        for category_id, category_name in exc.categories
+                    ]
+                },
+            ) from exc
+        except RegionNameExistsError as exc:
+            raise self._region_name_conflict(exc) from exc
+        except CategoryNameExistsError as exc:
+            raise self._category_name_conflict(exc) from exc
+        except ProfilePersistenceError as exc:
+            raise ProfileUseCaseError("profile_persistence_failed") from exc
 
     def rename_category(
         self,

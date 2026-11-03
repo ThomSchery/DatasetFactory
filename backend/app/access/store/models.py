@@ -84,7 +84,17 @@ class GameProfile(TimestampMixin, Base):
 class HudRegion(TimestampMixin, Base):
     __tablename__ = "hud_regions"
     __table_args__ = (
-        UniqueConstraint("profile_id", "name", name="uq_hud_regions_profile_name"),
+        # A retired region keeps its row and its identifier so `region_samples`
+        # and their OCR observations stay reachable, which is why the name rule
+        # covers active regions only: removing a region and drawing a new one
+        # under the same name must work without rewriting old samples.
+        Index(
+            "uq_hud_regions_profile_name_active",
+            "profile_id",
+            "name",
+            unique=True,
+            sqlite_where=text("retired_at IS NULL"),
+        ),
         CheckConstraint("x >= 0 AND y >= 0", name="ck_hud_region_origin"),
         CheckConstraint("width > 0 AND height > 0", name="ck_hud_region_size"),
         CheckConstraint(
@@ -111,6 +121,7 @@ class HudRegion(TimestampMixin, Base):
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     ocr_allowed_chars: Mapped[str | None] = mapped_column(Text)
     ocr_page_segmentation_mode: Mapped[int | None] = mapped_column(Integer)
+    retired_at: Mapped[datetime | None] = mapped_column(index=True)
 
 
 class Category(TimestampMixin, Base):

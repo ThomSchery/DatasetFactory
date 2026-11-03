@@ -37,6 +37,12 @@ class OcrProvenanceResponse(StrictModel):
 class RegionOcrSnapshotResponse(StrictModel):
     region_id: str
     region_name: str
+    # The geometry this run used, not the profile's current definition: a
+    # profile may legitimately be edited after the run finished.
+    x: int
+    y: int
+    width: int
+    height: int
     allowed_chars: str
     page_segmentation_mode: int
     uses_profile_fallback: bool
@@ -154,6 +160,10 @@ def run_response(record: RunRecord) -> RunResponse:
         RegionOcrSnapshotResponse(
             region_id=snapshot.region_id,
             region_name=snapshot.region_name,
+            x=snapshot.bbox.x,
+            y=snapshot.bbox.y,
+            width=snapshot.bbox.width,
+            height=snapshot.bbox.height,
             allowed_chars="".join(snapshot.allowed_chars),
             page_segmentation_mode=snapshot.page_segmentation_mode,
             uses_profile_fallback=snapshot.uses_profile_fallback,
