@@ -1,8 +1,9 @@
 import { Outlet, useMatches } from "react-router";
 
+import { AppMenu } from "../components/common/AppMenu";
+import { Icon } from "../components/common/Icon";
 import { NavItem } from "../components/common/NavItem";
-import { StatusBadge } from "../components/common/StatusBadge";
-import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
+import { NAV_DESTINATIONS, WORKSPACE_DESTINATIONS } from "./navigation";
 import "./AppShell.css";
 
 const MAIN_CONTENT_ID = "df-main";
@@ -23,9 +24,17 @@ function useRouteHeading(): string {
 }
 
 /**
- * Application shell: the five FE-04 destinations, the five pipeline stages and
- * the routed region. It renders no data of its own — the `runId` it links to
- * comes from the URL, never from local state.
+ * Application shell: a compact bar, the three-way workspace switch from the
+ * Figma document, the menu that holds every other destination, and the routed
+ * region.
+ *
+ * FE-021 replaced the fixed 280 px rail with this. The rail spent a quarter of
+ * a 1200 px window on navigation that the design puts in one row, and the
+ * screens underneath need that width for the image they are built around. No
+ * destination was dropped: what the switch does not show, the menu does.
+ *
+ * The shell renders no data of its own — the `runId` it links to comes from
+ * the URL, never from local state.
  */
 export function AppShell() {
   const heading = useRouteHeading();
@@ -35,47 +44,34 @@ export function AppShell() {
         Przejdź do treści
       </a>
 
-      <nav aria-label="Nawigacja główna" className="df-shell__rail">
+      <header className="df-shell__bar">
         <p className="df-shell__brand">DatasetFactory</p>
+        <h1 className="df-shell__heading">{heading}</h1>
+        {/* The complete destination map, so the switch below can stay at the
+            three steps the design draws without hiding anything. */}
+        <nav aria-label="Nawigacja główna">
+          <AppMenu destinations={NAV_DESTINATIONS} label="Wszystkie sekcje" />
+        </nav>
+      </header>
 
-        <ul className="df-shell__destinations">
-          {NAV_DESTINATIONS.map((destination) => {
-            return (
-              <li key={destination.label}>
-                <NavItem
-                  description={destination.description}
-                  end={destination.end}
-                  to={destination.path}
-                >
-                  {destination.label}
-                </NavItem>
-              </li>
-            );
-          })}
+      <nav aria-label="Kroki workspace'u" className="df-shell__switch">
+        <ul className="df-shell__segments">
+          {WORKSPACE_DESTINATIONS.map((destination) => (
+            <li key={destination.path}>
+              <NavItem
+                end={destination.end}
+                icon={destination.icon === undefined ? undefined : <Icon name={destination.icon} />}
+                to={destination.path}
+                variant="segment"
+              >
+                {destination.label}
+              </NavItem>
+            </li>
+          ))}
         </ul>
-
-        <section aria-labelledby="df-shell-stages" className="df-shell__stages">
-          <h2 className="df-shell__stages-title" id="df-shell-stages">
-            Etapy pipeline&apos;u
-          </h2>
-          <ol className="df-shell__stage-list">
-            {PIPELINE_STAGES.map((stage) => (
-              <li className="df-shell__stage" key={stage.label}>
-                <span className="df-shell__stage-label">{stage.label}</span>
-                {stage.inV1 ? null : (
-                  <StatusBadge srLabel="Zakres:" tone="muted">
-                    Poza v1
-                  </StatusBadge>
-                )}
-                <span className="df-shell__stage-description">{stage.description}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
       </nav>
 
       <main className="df-shell__main" id={MAIN_CONTENT_ID}>
-        <h1 className="df-shell__heading">{heading}</h1>
         <Outlet />
       </main>
     </div>

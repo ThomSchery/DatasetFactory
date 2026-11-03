@@ -1,0 +1,13 @@
+.df-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  /* The glyph must keep its drawn weight at every control size, exactly as the
+     region outline does in `RegionOverlay` (BWIDTH-14). */
+  vector-effect: non-scaling-stroke;
+}

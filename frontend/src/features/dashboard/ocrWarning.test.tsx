@@ -14,9 +14,21 @@ import { renderApp, stubFetch } from "../../test/harness";
  */
 
 const WARNING_TITLE = "Propozycje OCR wymagają sprawdzenia";
+/*
+ * Every screen the operator works on has to carry the warning. FE-021 added
+ * `/run`, which is where starting a run moved to, so the list grew rather than
+ * shrank: the warning must survive the split, not follow the run panel.
+ */
 const SCREENS: readonly [string, string][] = [
   ["dashboard", "/"],
   ["materials", "/materials"],
+  ["run setup", "/run"],
+];
+
+/** The subset that renders the active-run panel, and so can assert around it. */
+const RUN_SCREENS: readonly [string, string][] = [
+  ["dashboard", "/"],
+  ["run setup", "/run"],
 ];
 
 function stubWith(run: ReturnType<typeof runFixture> | null) {
@@ -93,7 +105,7 @@ describe("the OCR quality warning", () => {
     expect(screen.getByRole("status", { name: WARNING_TITLE })).toBeInTheDocument();
   });
 
-  it.each(SCREENS)(
+  it.each(RUN_SCREENS)(
     "stays out of the way on the %s screen when the OCR cleared the gate",
     async (_name, path) => {
       stubWith(runFixture({ experimental: false, quality_gate: "passed" }));
@@ -105,7 +117,7 @@ describe("the OCR quality warning", () => {
     },
   );
 
-  it.each(SCREENS)("shows nothing to warn about on the %s screen with no run", async (_name, path) => {
+  it.each(RUN_SCREENS)("shows nothing to warn about on the %s screen with no run", async (_name, path) => {
     stubWith(null);
     renderApp([path]);
 

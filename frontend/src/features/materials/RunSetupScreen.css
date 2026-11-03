@@ -1,0 +1,23 @@
+.df-run-setup {
+  display: grid;
+  gap: var(--size-md); /* SPACING-01: between sections, one step up from inside. */
+}
+
+.df-run-setup__workspace {
+  display: grid;
+  gap: var(--size-md);
+}
+
+.df-run-setup__controls,
+.df-run-setup__canvas {
+  min-width: 0;
+}
+
+@media (min-width: 992px) {
+  .df-run-setup__workspace {
+    /* The Figma layout: a column of controls that stays narrow, and an image
+       that takes every pixel left over. */
+    grid-template-columns: var(--workspace-panel-width) minmax(0, 1fr);
+    align-items: start;
+  }
+}

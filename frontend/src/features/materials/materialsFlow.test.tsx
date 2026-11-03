@@ -116,6 +116,12 @@ describe("materials: from a file to a started run", () => {
       local_path: "D:\\wideo\\mecz.mp4",
     });
 
+    // --- walk to the run step --------------------------------------------
+    // FE-021 split CF-02 across the two steps the Figma switch draws, so the
+    // flow now crosses a navigation boundary rather than scrolling one page.
+    await user.click(screen.getByRole("link", { name: "Run" }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Run Setup");
+
     // --- create the run --------------------------------------------------
     await user.selectOptions(await screen.findByLabelText("Materiał"), "video-1");
     await user.selectOptions(screen.getByLabelText("Profil gry"), "profile-1");

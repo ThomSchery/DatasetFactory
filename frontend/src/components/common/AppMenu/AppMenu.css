@@ -1,0 +1,28 @@
+.df-app-menu {
+  position: relative;
+}
+
+.df-app-menu__list {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: calc(100% + var(--size-xs));
+  inset-inline-end: 0;
+  display: grid;
+  gap: var(--size-xxs);
+  width: max-content;
+  min-width: calc(var(--size-xxl) * 3);
+  max-width: calc(100vw - var(--size-lg));
+  margin: var(--size-none);
+  padding: var(--size-xs);
+  /* OVERLAY-04: a layer that covers the page states itself with an outline and
+     an elevation, never by colour alone. */
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-raised);
+  box-shadow: var(--shadow-elevation-high);
+  list-style: none;
+}
+
+.df-app-menu__list[hidden] {
+  display: none;
+}

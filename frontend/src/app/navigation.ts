@@ -1,7 +1,15 @@
 /*
- * The five FE-04 destinations and the five pipeline stages, in one place, so
+ * The product's destinations and the five pipeline stages, in one place, so
  * the shell and the router cannot drift apart.
+ *
+ * FE-021 splits the list in two. The Figma document puts three destinations in
+ * a switch at the top of the workspace — Upload, Profil, Run — and everything
+ * else behind a menu. Both lists are navigation, both are rendered by the
+ * shell, and `NAV_DESTINATIONS` stays the complete map: a destination that
+ * exists must be reachable, whether or not the design drew a tab for it.
  */
+
+export type NavDestinationIcon = "upload" | "profile" | "run";
 
 export interface NavDestination {
   path: string;
@@ -9,8 +17,36 @@ export interface NavDestination {
   description: string;
   /** Match the path exactly rather than by prefix. */
   end?: boolean;
+  icon?: NavDestinationIcon;
 }
 
+/** The three workspace steps the Figma switch shows, in its order. */
+export const WORKSPACE_DESTINATIONS: readonly NavDestination[] = [
+  {
+    path: "/materials",
+    label: "Upload",
+    description: "Import wideo i lista materiałów",
+    icon: "upload",
+  },
+  {
+    path: "/profiles",
+    label: "Profil",
+    description: "Zrzut referencyjny, regiony HUD i klasy",
+    icon: "profile",
+  },
+  {
+    path: "/run",
+    label: "Run",
+    description: "Wybór materiału, profilu i interwału",
+    icon: "run",
+  },
+];
+
+/**
+ * Every destination the application serves. The three above are repeated here
+ * on purpose: this is the list the menu renders, and leaving them out would
+ * make the menu an incomplete answer to "where can I go".
+ */
 export const NAV_DESTINATIONS: readonly NavDestination[] = [
   {
     path: "/",
@@ -18,16 +54,7 @@ export const NAV_DESTINATIONS: readonly NavDestination[] = [
     description: "Aktywny run i stan systemu",
     end: true,
   },
-  {
-    path: "/profiles",
-    label: "Profil gry",
-    description: "Obraz referencyjny, regiony HUD i klasy",
-  },
-  {
-    path: "/materials",
-    label: "Materiały",
-    description: "Import wideo i uruchomienie runu",
-  },
+  ...WORKSPACE_DESTINATIONS,
   {
     path: "/annotations",
     label: "Anotacje",

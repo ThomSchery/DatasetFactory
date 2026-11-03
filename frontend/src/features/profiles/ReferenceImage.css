@@ -1,0 +1,22 @@
+.df-reference-image {
+  display: grid;
+  gap: var(--size-xs);
+  margin: var(--size-none);
+}
+
+.df-reference-image__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* OVERLAY-03: an image is content, so it is separated from the page by a
+     border rather than by a shadow that would imply it floats. */
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-default);
+}
+
+.df-reference-image__caption {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}

@@ -1,36 +1,23 @@
-import { useNavigate } from "react-router";
-
-import { describeApiError } from "../../api";
-import type { PipelineRun, RunAction } from "../../api";
-import { annotationsPath } from "../../app/navigation";
-import { Panel } from "../../components/common/Panel";
-import { Empty, FatalError, Loading } from "../../components/common/UiStates";
 import { OcrQualityWarning } from "../dashboard/OcrQualityWarning";
-import { RunPanel } from "../dashboard/RunPanel";
 import { useDashboard } from "../dashboard/dashboardQuery";
 import { MaterialImportForm } from "./MaterialImportForm";
 import { MaterialList } from "./MaterialList";
-import { RunLaunchForm } from "./RunLaunchForm";
 import "./MaterialsScreen.css";
 
 /**
- * The path from a video file to a running, observable run (CF-02).
+ * Upload: bringing a video into the workspace and seeing what is already there.
  *
- * The run panel and the OCR warning are imported from the dashboard feature
- * rather than reimplemented: the dashboard owns the view of the active run
- * (CF-07), and a second copy is exactly how the persistent warning would go
- * missing on one screen.
+ * FE-021 split CF-02 in two along the line the Figma document draws. Starting
+ * a run moved to `RunSetupScreen`, which is what the `Run` step of the switch
+ * opens; this screen stops at the material list. Nothing was removed — the
+ * same forms run, one step apart.
+ *
+ * The OCR warning stays here even though the run does not: it has to be
+ * visible wherever the operator works, and a screen that quietly drops it is
+ * exactly how an `experimental` engine gets forgotten (FE-06).
  */
 export function MaterialsScreen() {
-  const navigate = useNavigate();
   const dashboard = useDashboard();
-
-  const onTransitioned = (run: PipelineRun, action: RunAction) => {
-    // Starting a run is what puts `runId` in the URL (FE-04, ticket §Logika.2).
-    if (action === "start") {
-      void navigate(annotationsPath(run.id));
-    }
-  };
 
   return (
     <div className="df-materials">
@@ -39,40 +26,6 @@ export function MaterialsScreen() {
       <MaterialImportForm />
 
       <MaterialList />
-
-      <RunLaunchForm />
-
-      {dashboard.isPending ? (
-        <Panel eyebrow="Run" title="Aktywny run">
-          <Loading label="Ładowanie stanu runu…" />
-        </Panel>
-      ) : null}
-
-      {dashboard.isError ? (
-        <Panel eyebrow="Run" title="Aktywny run">
-          <FatalError
-            description={(() => {
-              const failure = describeApiError(dashboard.error);
-              return `${failure.message} ${failure.action}`;
-            })()}
-            onRetry={() => void dashboard.refetch()}
-            title="Nie udało się wczytać stanu runu"
-          />
-        </Panel>
-      ) : null}
-
-      {dashboard.isSuccess && dashboard.data.run === null ? (
-        <Panel eyebrow="Run" title="Aktywny run">
-          <Empty
-            description="Utwórz run powyżej, a potem uruchom go tutaj. Uruchomienie przenosi na ekran anotacji."
-            title="Brak aktywnego runu"
-          />
-        </Panel>
-      ) : null}
-
-      {dashboard.isSuccess && dashboard.data.run !== null ? (
-        <RunPanel onTransitioned={onTransitioned} run={dashboard.data.run} />
-      ) : null}
     </div>
   );
 }

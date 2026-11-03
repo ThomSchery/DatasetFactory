@@ -4,7 +4,7 @@ import { lazy, Suspense } from "react";
 import { Empty, Loading } from "../components/common/UiStates";
 import { AnnotationReviewScreen, RunListScreen } from "../features/annotations";
 import { DashboardScreen } from "../features/dashboard";
-import { MaterialsScreen } from "../features/materials";
+import { MaterialsScreen, RunSetupScreen } from "../features/materials";
 import { ProfilesScreen } from "../features/profiles";
 import { AppShell } from "./AppShell";
 
@@ -13,9 +13,10 @@ const ExportsScreen = lazy(() =>
 );
 
 /*
- * Exactly the five FE-04 routes plus a catch-all for unknown paths. The
- * All five product routes now render their real screens. The catch-all keeps a
- * named empty state for addresses outside the product map.
+ * The FE-04 routes plus `/run`, which FE-021 split out of `/materials` so the
+ * Upload and Run steps of the Figma switch open different screens, plus a
+ * catch-all for unknown paths. Every earlier address still resolves, so deep
+ * links kept from before the redesign keep working.
  *
  * `handle.heading` feeds the shell's `<h1>` so the heading and the route stay
  * defined in one place.
@@ -54,6 +55,7 @@ export const appRoutes: RouteObject[] = [
         handle: { heading: "Nowy profil gry" },
       },
       { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },
+      { path: "run", element: <RunSetupScreen />, handle: { heading: "Run Setup" } },
       { path: "annotations", element: <RunListScreen />, handle: { heading: "Anotacje" } },
       {
         path: "annotations/:runId",

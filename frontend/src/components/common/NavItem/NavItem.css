@@ -4,15 +4,18 @@
   align-content: center;
   min-height: var(--control-height-md); /* GRID-05: desktop hit area >= 32px. */
   padding: var(--size-xs) var(--size-sm);
-  /* BWIDTH-13: the inactive item reserves the same 2px accent in a transparent
-     colour, so activation never shifts the 8-point grid. */
-  border-inline-start: var(--border-width-emphasis) solid var(--color-surface-transparent);
-  border-radius: var(--radius-md);
   color: var(--color-text-weak-default);
   font-family: var(--font-family-ui);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-standard);
   text-decoration: none; /* TYPO-19: structurally interactive, no underline. */
+}
+
+.df-nav-item--rail {
+  /* BWIDTH-13: the inactive item reserves the same 2px accent in a transparent
+     colour, so activation never shifts the 8-point grid. */
+  border-inline-start: var(--border-width-emphasis) solid var(--color-surface-transparent);
+  border-radius: var(--radius-md);
 }
 
 .df-nav-item:hover {
@@ -25,10 +28,42 @@
   text-decoration: underline; /* TYPO-20 Logic B. */
 }
 
-.df-nav-item--active {
+.df-nav-item--rail.df-nav-item--active {
   border-inline-start-color: var(--color-fill-brand-impeccable); /* BORDER-08. */
   background: var(--color-fill-brand-impeccable-soft);
   color: var(--color-text-strong-default);
+}
+
+/*
+ * The Figma switch: a pill inside a grouped track. The active pill is a
+ * lighter surface with a visible outline, and it keeps `aria-current`, so the
+ * state is never carried by the surface alone (COLOR-09).
+ */
+.df-nav-item--segment {
+  display: inline-flex;
+  gap: var(--size-xs);
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height-md);
+  padding: var(--size-xs) var(--size-md);
+  border: var(--border-width-default) solid var(--color-surface-transparent);
+  border-radius: var(--radius-lg);
+  white-space: nowrap;
+}
+
+.df-nav-item--segment.df-nav-item--active {
+  border-color: var(--color-stroke-control-default);
+  background: var(--color-surface-neutral-selected);
+  color: var(--color-text-strong-default);
+}
+
+.df-nav-item__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-sm);
+  height: var(--size-sm);
 }
 
 .df-nav-item__label {

@@ -1,4 +1,5 @@
 @import "./tokens.css";
+@import "./fonts.css";
 
 *,
 *::before,
@@ -23,10 +24,9 @@ html {
 }
 
 body {
-  /* FE-07: the minimum working width belongs to the application shell, not to
-     the document. Below it `WidthGuard` replaces the shell with a message, and
-     that message must lay out at the real viewport width instead of forcing a
-     horizontal scroll. */
+  /* FE-021 reverses FE-07: there is no minimum working width any more. The
+     shell lays out from 360 px up, so the document never forces a horizontal
+     scroll and never replaces the application with a width message. */
   min-height: 100vh;
   margin: var(--size-none);
   background: var(--color-background-primary-default);

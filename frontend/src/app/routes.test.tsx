@@ -11,18 +11,27 @@ import {
   runSummaryFixture,
 } from "../test/fixtures";
 import { renderApp, stubFetch } from "../test/harness";
-import { NAV_DESTINATIONS, PIPELINE_STAGES } from "./navigation";
+import { NAV_DESTINATIONS, WORKSPACE_DESTINATIONS } from "./navigation";
 
 /*
- * FE-04 fixes the route set at five. Dashboard and Materiały render their real
- * screens since FE-001-F2, Nowy profil gry since FE-001-F3, and Anotacje since
- * FE-001-F4 and Eksporty in FE-001-F5.
+ * FE-04 fixed the route set at five; FE-021 added `/run` when it split Upload
+ * from Run, and kept every earlier address resolving.
+ *
+ * The navigation itself changed shape: three steps in a switch, everything
+ * else behind a named menu. These tests follow that shape but assert the same
+ * properties as before — every destination reachable, the active one carrying
+ * `aria-current`, and the whole thing operable from the keyboard.
  */
 
 const BUILT_ROUTES: readonly [string, string][] = [
   ["/", "Dashboard"],
-  ["/materials", "Materiały"],
+  ["/run", "Run Setup"],
 ];
+
+/** Opens the menu that holds the complete destination map. */
+async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Wszystkie sekcje" }));
+}
 
 beforeEach(() => {
   // The built screens query the API on mount; an empty install is the
@@ -62,7 +71,7 @@ afterEach(() => {
 });
 
 describe("the five FE-04 routes", () => {
-  it.each(BUILT_ROUTES)("renders the %s screen built in FE-001-F2", async (path, heading) => {
+  it.each(BUILT_ROUTES)("renders the %s screen with its run panel", async (path, heading) => {
     renderApp([path]);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(heading);
@@ -70,6 +79,16 @@ describe("the five FE-04 routes", () => {
       await screen.findByRole("region", { name: "Aktywny run" }, { timeout: 3000 }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+  });
+
+  it("renders Upload as import and material list, without the run controls", async () => {
+    renderApp(["/materials"]);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Materiały");
+    expect(await screen.findByRole("region", { name: "Import materiału" })).toBeInTheDocument();
+    // FE-021 moved starting a run to `/run`; Upload stops at the list.
+    expect(screen.queryByRole("region", { name: "Aktywny run" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Uruchomienie runu" })).toBeNull();
   });
 
   it("renders the profile creation screen built in FE-001-F3", () => {
@@ -121,43 +140,68 @@ describe("the five FE-04 routes", () => {
 });
 
 describe("navigation shell", () => {
-  it("lists all five destinations", () => {
+  it("offers the three workspace steps as a switch", () => {
+    renderApp(["/"]);
+    const steps = screen.getByRole("navigation", { name: "Kroki workspace'u" });
+    for (const destination of WORKSPACE_DESTINATIONS) {
+      expect(within(steps).getByRole("link", { name: destination.label })).toBeInTheDocument();
+    }
+  });
+
+  it("keeps every destination reachable through the menu", async () => {
+    const user = userEvent.setup();
     renderApp(["/"]);
     const nav = screen.getByRole("navigation", { name: "Nawigacja główna" });
+
+    // Collapsed, the links are present but out of the tab order.
+    expect(within(nav).queryByRole("link", { name: /Eksporty/ })).toBeNull();
+
+    await openMenu(user);
+
     for (const destination of NAV_DESTINATIONS) {
-      expect(within(nav).getByText(destination.label)).toBeInTheDocument();
+      expect(
+        within(nav).getByRole("link", { name: new RegExp(destination.label) }),
+      ).toBeInTheDocument();
     }
   });
 
-  it("lists all five pipeline stages and marks SAM 3 as out of v1", () => {
+  it("closes the menu on Escape and gives focus back to its toggle", async () => {
+    const user = userEvent.setup();
     renderApp(["/"]);
-    for (const stage of PIPELINE_STAGES) {
-      expect(screen.getByText(stage.label)).toBeInTheDocument();
-    }
+    const toggle = screen.getByRole("button", { name: "Wszystkie sekcje" });
 
-    const samStage = screen.getByText("SAM 3").closest("li");
-    expect(samStage).not.toBeNull();
-    expect(within(samStage as HTMLElement).getByText("Poza v1")).toBeInTheDocument();
+    await openMenu(user);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await user.keyboard("{Escape}");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
   });
 
-  it("does not fake SAM 3 as a working destination", () => {
+  it("does not fake SAM 3 as a working destination", async () => {
+    const user = userEvent.setup();
     renderApp(["/"]);
+    await openMenu(user);
     expect(screen.queryByRole("link", { name: /SAM 3/ })).toBeNull();
   });
 
-  it("marks the active destination with aria-current", () => {
+  it("marks the active step with aria-current", () => {
     renderApp(["/materials"]);
-    const active = screen.getByRole("link", { name: /Materiały/ });
-    expect(active).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Upload" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("does not mark the dashboard active on a nested route", () => {
+  it("does not mark the dashboard active on a nested route", async () => {
+    const user = userEvent.setup();
     renderApp(["/materials"]);
+    await openMenu(user);
     expect(screen.getByRole("link", { name: /Dashboard/ })).not.toHaveAttribute("aria-current");
   });
 
-  it("links Anotacje to the global run list from every route", () => {
+  it("links Anotacje to the global run list from every route", async () => {
+    const user = userEvent.setup();
     renderApp(["/annotations/run-7"]);
+    await openMenu(user);
     expect(screen.getByRole("link", { name: /Anotacje/ })).toHaveAttribute(
       "href",
       "/annotations",
@@ -172,25 +216,30 @@ describe("navigation shell", () => {
     expect(screen.getByRole("link", { name: "Przejdź do treści" })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("link", { name: /Dashboard/ })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Wszystkie sekcje" })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("link", { name: /Profil gry/ })).toHaveFocus();
+    expect(screen.getByRole("link", { name: "Upload" })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("link", { name: "Profil" })).toHaveFocus();
 
     await user.keyboard("{Enter}");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Profile gier");
   });
 
-  it("navigates between routes by activating a destination", async () => {
+  it("navigates between routes by activating a destination in the menu", async () => {
     const user = userEvent.setup();
     renderApp(["/"]);
 
+    await openMenu(user);
     await user.click(screen.getByRole("link", { name: /Eksporty/ }));
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Eksporty");
-    expect(screen.getByRole("link", { name: /Eksporty/ })).toHaveAttribute(
-      "aria-current",
-      "page",
+    // Navigating is the menu's whole job, so it closes behind the choice.
+    expect(screen.getByRole("button", { name: "Wszystkie sekcje" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
     );
   });
 });

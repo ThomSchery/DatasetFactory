@@ -2,14 +2,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { RouterProvider } from "react-router";
 
-import { WidthGuard } from "./WidthGuard";
 import { createQueryClient } from "./queryClient";
 import { createAppRouter } from "./routes";
 
 /**
- * Composition root of the frontend: cache, width guard and router, in that
- * order. The guard sits above the router so a narrow window states the
- * problem instead of rendering a squeezed shell behind it (FE-07).
+ * Composition root of the frontend: cache and router.
+ *
+ * FE-021 removed the width guard that used to sit between them. FE-07 refused
+ * anything under 1280 px rather than squeezing the layout; the user's design
+ * specifies 360 px upwards, so the shell now lays out at every width instead
+ * of replacing itself with a message.
  */
 export function App() {
   const [queryClient] = useState(createQueryClient);
@@ -17,9 +19,7 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WidthGuard>
-        <RouterProvider router={router} />
-      </WidthGuard>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }
