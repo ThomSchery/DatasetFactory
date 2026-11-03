@@ -10,8 +10,9 @@ const python = path.join(
   ".venv",
   process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
 );
-const backendHealthUrl = "http://127.0.0.1:8000/api/v1/health";
-const controlPort = 8001;
+const backendPort = process.env.DF_E2E_BACKEND_PORT ?? "8000";
+const backendHealthUrl = `http://127.0.0.1:${backendPort}/api/v1/health`;
+const controlPort = Number(process.env.DF_E2E_CONTROL_PORT ?? 8001);
 let backend;
 let restarting = false;
 let shuttingDown = false;
@@ -19,7 +20,7 @@ let shuttingDown = false;
 function startBackend() {
   const child = spawn(python, ["-m", "backend.tests.e2e_server"], {
     cwd: repositoryRoot,
-    env: process.env,
+    env: { ...process.env, DF_PORT: backendPort },
     stdio: "inherit",
   });
   child.on("exit", (code) => {

@@ -5,11 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: Number(process.env.DF_E2E_FRONTEND_PORT ?? 5173),
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: `http://127.0.0.1:${process.env.DF_E2E_BACKEND_PORT ?? 8000}`,
         changeOrigin: false,
       },
     },

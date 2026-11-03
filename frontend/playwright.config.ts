@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const frontendPort = process.env.DF_E2E_FRONTEND_PORT ?? "5173";
+const backendPort = process.env.DF_E2E_BACKEND_PORT ?? "8000";
 const cacheRoot = process.env.DATASETFACTORY_CACHE_ROOT ?? "D:/DatasetFactory/cache";
 
 export default defineConfig({
@@ -12,7 +14,7 @@ export default defineConfig({
   reporter: [["line"], ["html", { open: "never", outputFolder: `${cacheRoot}/playwright/report` }]],
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: `http://127.0.0.1:${frontendPort}`,
     browserName: "chromium",
     launchOptions: {
       args: ["--disable-gpu", "--disable-lcd-text", "--font-render-hinting=none"],
@@ -23,13 +25,13 @@ export default defineConfig({
   webServer: [
     {
       command: "node scripts/e2e-backend.mjs",
-      url: "http://127.0.0.1:8000/api/v1/health",
+      url: `http://127.0.0.1:${backendPort}/api/v1/health`,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
       command: "npm run dev",
-      url: "http://127.0.0.1:5173",
+      url: `http://127.0.0.1:${frontendPort}`,
       reuseExistingServer: false,
       timeout: 120_000,
     },

@@ -10,6 +10,7 @@ const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../docs/tickets/FE-001/screenshots",
 );
+const frontendOrigin = `http://127.0.0.1:${process.env.DF_E2E_FRONTEND_PORT ?? "5173"}`;
 
 async function assertNoOverflow(page: Page): Promise<void> {
   for (const width of [1440, 1280]) {
@@ -288,7 +289,7 @@ async function capture(
   const externalFonts: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (request.resourceType() === "font" && url.origin !== "http://127.0.0.1:5173") {
+    if (request.resourceType() === "font" && url.origin !== frontendOrigin) {
       externalFonts.push(request.url());
     }
   });

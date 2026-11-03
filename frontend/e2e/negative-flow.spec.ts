@@ -10,7 +10,7 @@ const referenceImage = path.join(
   "backend/tests/fixtures/video/synthetic-frame.png",
 );
 const fixtureVideo = path.join(repositoryRoot, "backend/tests/fixtures/video/synthetic-hud.mkv");
-const apiBase = "http://127.0.0.1:8000/api/v1";
+const apiBase = `http://127.0.0.1:${process.env.DF_E2E_BACKEND_PORT ?? "8000"}/api/v1`;
 
 interface RunSnapshot {
   id: string;
