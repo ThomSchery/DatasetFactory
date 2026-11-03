@@ -160,3 +160,37 @@ export function regionOcrBlockersFromError(error: unknown): RegionOcrBlocker[] {
       region.name !== "",
   );
 }
+
+export interface CategoryInUse {
+  id: string;
+  name: string;
+}
+
+/**
+ * The classes a whole-profile save asked to drop while annotations still point
+ * at them.
+ *
+ * `409 category_in_use` is not a transient failure, so the UI must name the
+ * classes rather than offer a retry: either they stay, or the draft is saved
+ * under a new profile.
+ */
+export function categoriesInUseFromError(error: unknown): CategoryInUse[] {
+  if (!isApiError(error) || error.code !== "category_in_use") {
+    return [];
+  }
+  const categories = error.details.categories;
+  if (!Array.isArray(categories)) {
+    return [];
+  }
+  return categories.filter(
+    (category): category is CategoryInUse =>
+      typeof category === "object" &&
+      category !== null &&
+      "id" in category &&
+      typeof category.id === "string" &&
+      category.id !== "" &&
+      "name" in category &&
+      typeof category.name === "string" &&
+      category.name !== "",
+  );
+}

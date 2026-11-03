@@ -12,7 +12,7 @@ export const API_BASE_PATH = "/api/v1";
 export type QueryParams = Record<string, string | number | boolean | undefined>;
 
 export interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   query?: QueryParams;
   signal?: AbortSignal;

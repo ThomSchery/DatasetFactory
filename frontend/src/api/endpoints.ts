@@ -31,6 +31,7 @@ import type {
   RenameCategoryRequest,
   RunSummary,
   ReviewFrameRequest,
+  SaveProfileDefinitionRequest,
   UpdateAnnotationRequest,
   UpdateRegionOcrConfigRequest,
   VersionedMutationRequest,
@@ -128,6 +129,27 @@ export function updateProfileRegionOcrConfig(
     `/profiles/${encodeURIComponent(profileId)}/regions/${encodeURIComponent(regionId)}/ocr-config`,
     { method: "PATCH", body },
   );
+}
+
+/**
+ * `PUT /profiles/{profile_id}/definition` → the saved profile.
+ *
+ * One request, one transaction, one answer. The response carries the version
+ * the next save has to send, so a successful save is also what refreshes the
+ * client's optimistic-concurrency token.
+ *
+ * `409 category_in_use` lists the classes annotations still point at, and is
+ * the backend refusing to destroy review work rather than a transient failure:
+ * the way forward is `Save as`, not a retry.
+ */
+export function saveProfileDefinition(
+  profileId: string,
+  body: SaveProfileDefinitionRequest,
+): Promise<GameProfile> {
+  return apiRequest<GameProfile>(`/profiles/${encodeURIComponent(profileId)}/definition`, {
+    method: "PUT",
+    body,
+  });
 }
 
 /** `POST /profiles/{profile_id}/categories` → `201` with the new category. */

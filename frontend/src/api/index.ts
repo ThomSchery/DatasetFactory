@@ -13,6 +13,7 @@ export {
   ApiTransportError,
   annotationIdsFromError,
   apiErrorFromBody,
+  categoriesInUseFromError,
   categoryNameConflictFromError,
   isApiError,
   isApiTransportError,
@@ -21,6 +22,7 @@ export {
   regionOcrBlockersFromError,
 } from "./errors";
 export type {
+  CategoryInUse,
   CategoryNameConflict,
   ErrorDetails,
   RegionNameConflict,

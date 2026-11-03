@@ -98,6 +98,44 @@ export interface UpdateRegionOcrConfigRequest {
   expected_version: number;
 }
 
+/**
+ * One region inside a whole-profile save.
+ *
+ * `id` is what decides the row's fate: present means "this existing region,
+ * updated in place", absent means "a region that did not exist until now". It
+ * is never position or name, so a rename and a reorder leave every
+ * `region_sample` pointing where it did.
+ */
+export interface SavedRegionInput {
+  id?: string | null;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  allowed_chars: string;
+  page_segmentation_mode: number;
+}
+
+export interface SavedCategoryInput {
+  id?: string | null;
+  name: string;
+  kind: CategoryKind;
+}
+
+/**
+ * The operator's whole draft, saved atomically.
+ *
+ * Absent on purpose: the name, the reference image and the dimensions. This
+ * route rewrites the definition of the profile that is open; a different name
+ * or image is a new profile, created through the `Save as` flow.
+ */
+export interface SaveProfileDefinitionRequest {
+  regions: SavedRegionInput[];
+  categories: SavedCategoryInput[];
+  expected_version: number;
+}
+
 export interface CreateProfileRequest {
   name: string;
   reference_image_path?: string;

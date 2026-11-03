@@ -26,6 +26,7 @@ const IMPLEMENTED_ENDPOINTS: readonly [string, keyof typeof endpoints][] = [
   ["POST /profiles", "createProfile"],
   ["POST /profiles/{profile_id}/categories", "createProfileCategory"],
   ["POST /profiles/{profile_id}/regions", "addProfileRegion"],
+  ["PUT /profiles/{profile_id}/definition", "saveProfileDefinition"],
   [
     "PATCH /profiles/{profile_id}/regions/{region_id}/ocr-config",
     "updateProfileRegionOcrConfig",
@@ -63,7 +64,7 @@ describe("TECH_PLAN §5 coverage", () => {
   });
 
   it("leaves no §5 endpoint without a client function", () => {
-    const documented = [...techPlan.matchAll(/^\| `((?:GET|POST|PATCH|DELETE) [^`]+)`/gm)].map(
+    const documented = [...techPlan.matchAll(/^\| `((?:GET|POST|PUT|PATCH|DELETE) [^`]+)`/gm)].map(
       (match) => match[1],
     );
     const covered = new Set(IMPLEMENTED_ENDPOINTS.map(([endpoint]) => endpoint));

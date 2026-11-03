@@ -124,6 +124,14 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Nie można zmienić tej klasy, bo używają jej jawne zakresy OCR regionów.",
     action: "Najpierw zmień zakres znaków w regionach wskazanych przy polu nazwy.",
   },
+  // A whole-profile save that asked to drop a class `annotations` still point
+  // at. `Annotation.category_id` is RESTRICT, so there is no version of this
+  // that keeps both the deletion and the review work; the copy says so rather
+  // than suggesting a retry.
+  category_in_use: {
+    message: "Nie można usunąć tej klasy, bo używają jej zapisane anotacje.",
+    action: "Zostaw klasę w profilu albo zapisz definicję jako nowy profil przez Save as.",
+  },
   // The add-a-region twin of `category_name_exists`. `hud_regions` carries
   // `UniqueConstraint(profile_id, name)` and the backend names the region that
   // already holds the name, so the screen can point at it.

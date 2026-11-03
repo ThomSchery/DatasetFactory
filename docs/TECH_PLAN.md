@@ -113,6 +113,7 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /profiles/{profile_id}/categories` | `{name,kind:character\|game}` | `201 Category` | `400 validation_error`, `404 profile_not_found`, `409 category_name_exists`, `500 category_persistence_failed` |
 | `POST /profiles/{profile_id}/regions` | `{name,x,y,width,height,allowed_chars,page_segmentation_mode,expected_version}` | `201 GameProfile` | `400 invalid_region_name/invalid_region_bbox/region_out_of_bounds/region_allowed_chars_not_in_profile/invalid_region_page_segmentation_mode`, `404 profile_not_found`, `409 region_name_exists/version_conflict/active_run`, `500 region_persistence_failed` |
 | `PATCH /profiles/{profile_id}/regions/{region_id}/ocr-config` | `{allowed_chars,page_segmentation_mode,expected_version}` | `200 GameProfile` | `400 region_allowed_chars_not_in_profile/invalid_region_page_segmentation_mode`, `404 profile_not_found/region_not_found`, `409 version_conflict/active_run`, `500 region_persistence_failed` |
+| `PUT /profiles/{profile_id}/definition` | `{regions[{id?,name,x,y,width,height,allowed_chars,page_segmentation_mode}],categories[{id?,name,kind}],expected_version}` | `200 GameProfile` | `400 walidacja definicji`, `404 profile_not_found/region_not_found/category_not_found`, `409 version_conflict/active_run/region_name_exists/category_name_exists/category_in_use`, `500 profile_persistence_failed` |
 | `GET /profiles` | — | lista podsumowań profili z licznikami i `active` | `500` |
 | `GET /profiles/current` | — | profil albo `null` | `500` |
 | `POST /profiles/{profile_id}/activate` | — | wybrany `GameProfile` | `404 profile_not_found`, `409 active_run` |
@@ -240,6 +241,22 @@ wejść w etap kadrowania (`queued`, `running`, `paused`, `failed`, `cancelled`)
 kadrowania czyta regiony na żywo, więc sprawdzanie wyłącznie `workflow_slot` nie
 wystarcza: pauza lub błąd zwalnia slot, ale taki run można wznowić. `review_ready` i
 `completed` nie wracają do kadrowania i nie blokują zmiany.
+
+`PUT /profiles/{profile_id}/definition` zapisuje cały draft profilu w jednej
+transakcji. Walidacja jest ta sama co przy tworzeniu profilu
+(`validate_profile`): granice obrazu, unikalność nazw i whitelist wyłącznie z
+klas znajdujących się w drafcie. O losie wiersza decyduje identyfikator, nigdy
+pozycja ani nazwa — znane `id` aktualizuje wiersz w miejscu, brak `id` wstawia
+nowy, a aktywny region pominięty w drafcie przechodzi w stan `retired`
+(`hud_regions.retired_at`). Nic nie jest kasowane i wstawiane ponownie, bo
+`region_samples.region_id` kaskaduje, a `annotations.category_id` jest
+`RESTRICT`. Zmiany nazw idą dwufazowo przez nazwę techniczną, więc zamiana nazw
+dwóch regionów mieści się w jednym zapisie mimo częściowego indeksu
+`uq_hud_regions_profile_name_active`. Blokada `409 active_run` obowiązuje
+dokładnie jak w `POST .../regions`. Usunięcie klasy, do której odwołują się
+anotacje, zwraca `409 category_in_use` z listą `details.categories`; drogą
+dalej jest `Save as`, nie kasowanie danych weryfikacji. `ordinal` kategorii nie
+jest nigdy odtwarzany ani przesuwany.
 
 `POST /profiles/{profile_id}/categories` waliduje pojedynczą kategorię tym samym
 silnikiem definicji co tworzenie profilu. Nazwy są unikalne po `strip().casefold()`.
