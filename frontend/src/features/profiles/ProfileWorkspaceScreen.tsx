@@ -78,6 +78,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   const [wantedProfileId, setWantedProfileId] = useState<string | null>(null);
   const [startedBlank, setStartedBlank] = useState(initialCreate);
   const [selectedRegionKey, setSelectedRegionKey] = useState<string | null>(null);
+  const [drawMode, setDrawMode] = useState(false);
   const [sketch, setSketch] = useState<SourceRect | null>(null);
   const [sketchName, setSketchName] = useState("");
   const [sketchError, setSketchError] = useState<string | undefined>(undefined);
@@ -207,6 +208,15 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [hasUnsavedWork, busy]);
+
+  useEffect(() => {
+    if (!drawMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawMode(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawMode]);
 
   function requestSwitch(next: PendingSwitch) {
     if (next.kind === "profile" && next.profileId === openProfileId && !hasUnsavedWork) return;
@@ -640,7 +650,11 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             eyebrow="Profil"
             title="Zrzut referencyjny"
           >
+            <Button aria-pressed={drawMode} disabled={editingDisabled} onClick={() => setDrawMode((active) => !active)} size="sm" variant="secondary">
+              Draw region
+            </Button>
             <RegionOverlay
+              interactionMode={drawMode ? "draw" : "select"}
               disabled={editingDisabled}
               imageAlt={
                 draft.profileId === null

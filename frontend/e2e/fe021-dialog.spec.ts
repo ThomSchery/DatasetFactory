@@ -100,3 +100,31 @@ test("FE-021: profile overlay draws at mobile, tablet and desktop sizes", async 
     await page.getByRole("button", { name: "Reject" }).click();
   }
 });
+
+test("FE-021 FIX1: draw inside a full-frame existing region with real hit testing", async ({ page }) => {
+  const api = new ApiHarness({ phase: "profile" });
+  await api.install(page);
+  await page.route("**/api/v1/profiles", (route) => route.fulfill({ json: [profileSummaryFixture({ active: true })] }));
+  const profile = profileFixture();
+  profile.regions[0] = { ...profile.regions[0], x: 0, y: 0, width: 1920, height: 1080 };
+  await page.route("**/api/v1/profiles/profile-1", (route) => route.fulfill({ json: profile }));
+  await page.goto("/profiles");
+  const toggle = page.getByRole("button", { name: "Draw region" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
+  await surface.scrollIntoViewIfNeeded();
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("No surface");
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.getByLabel("Nazwa narysowanego regionu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+});
