@@ -88,6 +88,15 @@
   .df-button { min-height: var(--control-height-lg); }
 }
 
+/* FE-021: `Icon` is a block so it never sits on a text baseline. Inside the
+   inline content span that block broke the line and stacked the glyph above
+   its label, so a button carrying an icon lays its content out in one row. */
+.df-button__content:has(> .df-icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
 .df-button[data-loading="true"] {
   cursor: wait;
 }

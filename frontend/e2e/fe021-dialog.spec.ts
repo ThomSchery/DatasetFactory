@@ -77,6 +77,16 @@ test("FE-021: profile overlay draws at mobile, tablet and desktop sizes", async 
     await page.goto("/profiles");
     const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
     await expect(surface).toBeVisible();
+    // An icon is a block; it once stacked above its label inside the button.
+    for (const name of ["Nowy profil", "Save profile", "Save as"]) {
+      const offset = await page.getByRole("button", { exact: true, name }).evaluate((button) => {
+        const icon = button.querySelector(".df-icon")?.getBoundingClientRect();
+        const content = button.querySelector(".df-button__content")?.getBoundingClientRect();
+        if (icon === undefined || content === undefined) throw new Error("Brak ikony przycisku");
+        return Math.abs(icon.top + icon.height / 2 - (content.top + content.height / 2));
+      });
+      expect(offset, `icon of „${name}” is not in line with its label at ${String(width)} px`).toBeLessThanOrEqual(2);
+    }
     await surface.scrollIntoViewIfNeeded();
     const box = await surface.boundingBox();
     if (box === null) throw new Error("Brak powierzchni obrazu");
