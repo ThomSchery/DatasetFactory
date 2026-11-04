@@ -79,6 +79,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   const [startedBlank, setStartedBlank] = useState(initialCreate);
   const [selectedRegionKey, setSelectedRegionKey] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
+  const [geometryPreview, setGeometryPreview] = useState<{ id: string; rect: SourceRect } | null>(null);
   const [sketch, setSketch] = useState<SourceRect | null>(null);
   const [sketchName, setSketchName] = useState("");
   const [sketchError, setSketchError] = useState<string | undefined>(undefined);
@@ -116,6 +117,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     setBaseline(next);
     setOpenProfileId(profile.id);
     setSelectedRegionKey(null);
+    setGeometryPreview(null);
     setSketch(null);
     setSketchName("");
     setSketchError(undefined);
@@ -297,25 +299,19 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     ...draft.regions.map(
       (region): OverlayShape => ({
         displayLabel: region.name,
-        height: region.height,
+        ...(geometryPreview?.id === region.key ? geometryPreview.rect : region),
         id: region.key,
         label: region.name,
-        width: region.width,
-        x: region.x,
-        y: region.y,
       }),
     ),
     ...(sketch === null
       ? []
       : [
           {
-            height: sketch.height,
+            ...(geometryPreview?.id === SKETCH_ID ? geometryPreview.rect : sketch),
             id: SKETCH_ID,
             label: "Nowy region, czeka na nazwę",
             tone: "draft" as const,
-            width: sketch.width,
-            x: sketch.x,
-            y: sketch.y,
           },
         ]),
   ];
@@ -691,7 +687,10 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
                   setSelectedRegionKey(id);
                 }
               }}
+              onShapeChange={drawMode ? undefined : (id, rect) => setGeometryPreview({ id, rect })}
+              onShapeChangeCancel={() => setGeometryPreview(null)}
               onShapeChangeEnd={(id, rect) => {
+                setGeometryPreview(null);
                 if (id === SKETCH_ID) {
                   setSketch(rect);
                   return;

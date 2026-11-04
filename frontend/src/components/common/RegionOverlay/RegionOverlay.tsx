@@ -705,6 +705,18 @@ export function RegionOverlay({
     }
   }
 
+  useEffect(() => {
+    if (manipulation === null) return;
+    const cancelOnBlur = () => {
+      onShapeChange?.(manipulation.shapeId, manipulation.originRect);
+      onShapeChangeCancel?.(manipulation.shapeId);
+      setManipulation(null);
+      setDraft(null);
+    };
+    window.addEventListener("blur", cancelOnBlur);
+    return () => window.removeEventListener("blur", cancelOnBlur);
+  }, [manipulation, onShapeChange, onShapeChangeCancel]);
+
   function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
     if (panGestureRef.current?.pointerId === event.pointerId) {
       finishPanGesture(true);
