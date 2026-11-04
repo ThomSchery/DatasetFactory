@@ -31,6 +31,7 @@ export default defineConfig({
     },
     {
       command: "npm run dev",
+      env: { ...process.env, DF_E2E_BACKEND_PORT: backendPort, DF_E2E_FRONTEND_PORT: frontendPort },
       url: `http://127.0.0.1:${frontendPort}`,
       reuseExistingServer: false,
       timeout: 120_000,

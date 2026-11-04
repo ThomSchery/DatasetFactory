@@ -9,7 +9,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: `http://127.0.0.1:${process.env.DF_E2E_BACKEND_PORT ?? 8000}`,
+        target: `http://127.0.0.1:${process.env.DF_E2E_BACKEND_PORT ?? process.env.DF_PORT ?? 8000}`,
         changeOrigin: false,
       },
     },
