@@ -324,8 +324,10 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
 }) => {
   await capture(page, "dashboard", "/", { phase: "queued" }, (current) =>
     current.getByRole("button", { name: "Uruchom" }));
+  // FE-021: a new profile starts from its screenshot and is named in the
+  // "Save as" dialog, so the route's first own input is the screenshot path.
   await capture(page, "profile", "/profiles/new", {}, (current) =>
-    current.getByLabel("Nazwa profilu"));
+    current.getByLabel("Ścieżka zrzutu ekranu"));
   await capture(page, "materials", "/materials", { phase: "review" }, (current) =>
     current.getByLabel("Ścieżka pliku wideo"));
   await capture(
@@ -406,12 +408,15 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
       await expect(current.getByText("exports/export-1", { exact: true })).toBeVisible();
     },
   );
+  // These states have no control of their own, so the checkpoint is the shell
+  // navigation. FE-021 moved the Dashboard link from a rail into the menu that
+  // holds every destination; its trigger is the reachable navigation control.
   await capture(page, "loading", "/", { dashboardMode: "loading" }, (current) =>
-    current.getByRole("link", { name: /Dashboard/ }), async (current) => {
+    current.getByRole("button", { name: "Wszystkie sekcje" }), async (current) => {
       await expect(current.getByText("Ładowanie stanu systemu…")).toBeVisible();
     });
   await capture(page, "empty", "/", { dashboardMode: "empty" }, (current) =>
-    current.getByRole("link", { name: /Dashboard/ }), async (current) => {
+    current.getByRole("button", { name: "Wszystkie sekcje" }), async (current) => {
       await expect(current.getByText("Brak aktywnego projektu")).toBeVisible();
     });
   await capture(page, "error", "/", { dashboardMode: "error" }, (current) =>

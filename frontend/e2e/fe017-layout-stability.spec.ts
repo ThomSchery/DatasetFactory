@@ -68,6 +68,22 @@ async function measureLayout(page: Page): Promise<LayoutMeasurement> {
   });
 }
 
+/**
+ * Grows the viewport until it holds the whole document. The annotation panel
+ * sizes itself to the viewport room, so one resize can change the document
+ * height again; a handful of passes settles it.
+ */
+async function fitViewportToDocument(page: Page, width: number): Promise<void> {
+  for (let pass = 0; pass < 6; pass += 1) {
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    if (page.viewportSize()?.height === height) {
+      return;
+    }
+    await page.setViewportSize({ height, width });
+  }
+  throw new Error(`the document height did not settle at ${String(width)} px`);
+}
+
 test("FE-017 A: prawa krawędź kanwy nie drgnie przy plakietce „Niezapisane”", async ({
   page,
 }) => {
@@ -84,21 +100,19 @@ test("FE-017 A: prawa krawędź kanwy nie drgnie przy plakietce „Niezapisane�
 
   /*
    * Whether the notice tips the document into overflow depends on the viewport
-   * height, so the trigger is not live on every one of the three required
-   * viewports: measured on `main`, 1440×1000 flips from "fits" to "overflows"
-   * while 1920×1080 never overflows and 1920×1000 always does. The stability
-   * assertion runs on all three; the run fails if the trigger fired on none,
-   * which is the guard against this test quietly proving nothing.
+   * height. Fixed heights stopped working with FE-021: the Figma side column is
+   * taller than 1000 px on its own, so at 1280×1000, 1440×1000 and 1920×1080
+   * the document already scrolled before the notice appeared and the trigger
+   * never fired. Like FE-019, each required width therefore fits the viewport
+   * to the document with the annotation open and no notice, so the notice is
+   * the one change that makes the scrollbar appear — at every width, not just
+   * the one a fixed height happens to hit.
    */
-  let triggerObserved = false;
-
-  for (const viewport of [
-    { height: 1000, width: 1280 },
-    { height: 1000, width: 1440 },
-    { height: 1080, width: 1920 },
-  ]) {
-    const suffix = `${String(viewport.width)}x${String(viewport.height)}`;
-    await page.setViewportSize(viewport);
+  for (const width of [1280, 1440, 1920]) {
+    const suffix = `${String(width)} px`;
+    // Start below the content height: `body` is at least 100vh tall, so a
+    // taller viewport would make the document "fit" without measuring it.
+    await page.setViewportSize({ height: 600, width });
     await page.goto("/annotations/run-1");
 
     const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
@@ -107,8 +121,6 @@ test("FE-017 A: prawa krawędź kanwy nie drgnie przy plakietce „Niezapisane�
       name: "Niezapisane przesunięcie bboxa",
     });
 
-    const before = await measureLayout(page);
-
     const classButton = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
     await classButton.click();
     await classButton.evaluate((element) => {
@@ -116,13 +128,21 @@ test("FE-017 A: prawa krawędź kanwy nie drgnie przy plakietce „Niezapisane�
         element.focus({ preventScroll: true });
       }
     });
+    await expect(page.getByRole("dialog", { name: /Edytuj anotację/ })).toBeVisible();
+    await fitViewportToDocument(page, width);
+    await expect(classButton).toBeFocused();
+
+    const before = await measureLayout(page);
+    expect(before.documentOverflows, `fitted document already overflows at ${suffix}`).toBe(false);
+
     await page.keyboard.press("ArrowRight");
     await expect(unsavedNotice).toBeVisible();
 
     const during = await measureLayout(page);
-    if (!before.documentOverflows && during.documentOverflows) {
-      triggerObserved = true;
-    }
+    expect(
+      during.documentOverflows,
+      `„Niezapisane” did not tip the document into overflow at ${suffix}, so nothing was tested`,
+    ).toBe(true);
 
     await page.evaluate(() => {
       if (document.activeElement instanceof HTMLElement) {
@@ -146,9 +166,4 @@ test("FE-017 A: prawa krawędź kanwy nie drgnie przy plakietce „Niezapisane�
       `the canvas moved when „Niezapisane” disappeared at ${suffix}`,
     ).toBe(before.canvasRight);
   }
-
-  expect(
-    triggerObserved,
-    "no viewport tipped the document into overflow, so nothing above was tested",
-  ).toBe(true);
 });
