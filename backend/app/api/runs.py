@@ -223,6 +223,7 @@ def _workflow_error(request: Request, error: WorkflowError) -> JSONResponse:
     elif error.code in {
         "active_run",
         "version_conflict",
+        "profile_changed_during_run_creation",
         "invalid_transition",
         "source_missing",
         "source_changed",
@@ -248,7 +249,11 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
         "",
         response_model=RunResponse,
         status_code=201,
-        responses={400: {"model": ErrorEnvelope}, 404: {"model": ErrorEnvelope}},
+        responses={
+            400: {"model": ErrorEnvelope},
+            404: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+        },
     )
     def create_run(
         payload: CreateRunRequest,

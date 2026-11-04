@@ -82,6 +82,10 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Interwał próbkowania jest poza dozwolonym zakresem.",
     action: "Podaj interwał większy od zera.",
   },
+  profile_changed_during_run_creation: {
+    message: "Profil zmieni\u0142 si\u0119 podczas tworzenia runu.",
+    action: "Spr\u00f3buj ponownie.",
+  },
   profile_resolution_mismatch: {
     message: "Rozdzielczość materiału nie zgadza się z rozdzielczością profilu.",
     action: "Wybierz materiał o rozdzielczości profilu albo utwórz profil dla tej rozdzielczości.",

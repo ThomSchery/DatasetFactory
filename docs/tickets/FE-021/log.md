@@ -95,3 +95,15 @@ Elementy: przyciski Save profile i Save as oraz widoczny powód ich blokady przy
 - `283dd0c`: zapis i kopia zablokowane z widocznym powodem przy szkicu; odrzucenie przy wyborze tego samego profilu przywraca baseline i usuwa szkic. Obie regresje odtworzone przed poprawką.
 - `59a0793`: przełącznik Draw region z aria-pressed i Escape; Chromium przeciąga myszą wewnątrz istniejącego regionu na całą klatkę. Test był czerwony przed zmianą i zielony po zmianie.
 - Bramka końcowa: porty 5193/8033/8034, basetemp `D:/tmp/fe021-gate-pytest`; wynik w raporcie wykonania.
+
+## FIX2 — Design Plan (2026-11-04)
+
+Elementy: komunikat błędu Run Setup po konflikcie profilu, przycisk Draw region i jego widoczny stan, kanwa RegionOverlay z podglądem, przesuwaniem i uchwytami zmiany rozmiaru, zapis Save profile i wskazanie niezapisanego draftu.
+
+- [x] Układ: GRID-01..14, SPACING-01..13, istniejące odstępy i tokeny --size-xs/sm/md.
+- [x] Typografia: TYPO-01..21, FONTSIZE-01..11, LHEIGHT-01..14, LSPACE-01..09; istniejące style Button i InlineError.
+- [x] Kolor: COLOR-01..10; stan przełącznika jak pan z kontrastem i dodatkowym oznaczeniem tekstowym.
+- [x] Obramowania: BORDER-01..03/05..09, BWIDTH-01..14, RADIUS-01..05; istniejące obrysy i tokeny przycisku.
+- [x] Nakładki i cienie: OVERLAY-01..07, SHADOW-01..05; bez nowej warstwy wizualnej, użycie RegionOverlay.
+- [x] Interakcje: COLOR-07, OPACITY-01..02; aria-pressed, fokus, Escape, anulowanie gestu, granice obrazu i stan dirty.
+- [x] Komponenty: istniejące Button, InlineError, Panel, RegionOverlay i Notice, bez nowych prymitywów.

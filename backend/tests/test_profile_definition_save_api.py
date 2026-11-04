@@ -927,3 +927,48 @@ def test_run_creation_retries_when_profile_is_saved_after_context_read(
     snapshot = next(region for region in record.ocr_regions if region.region_name == "HUD")
     assert snapshot.bbox.width == 20
     assert snapshot.allowed_chars == ("1",)
+
+
+def test_run_creation_stops_after_repeated_profile_conflicts(
+    composition: CompositionRoot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from backend.app.access.store.repositories.runs import RunProfileChangedError
+
+    source = tmp_path / "reference.png"
+    _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+    ocr = PerRegionOcrEngine()
+    _, runs, _ = _install_workflow(composition, StubMediaAccess(composition), ocr)
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
+        ids = _seed_run(composition, profile=profile, tmp_path=tmp_path)
+        with composition.database.session() as session:
+            before = session.scalar(select(func.count()).select_from(PipelineRun))
+        calls = 0
+        descriptions = 0
+        original_describe = ocr.describe
+
+        def describe(*args: Any, **kwargs: Any) -> OcrProvenance:
+            nonlocal descriptions
+            descriptions += 1
+            return original_describe(*args, **kwargs)
+
+        def conflict(**kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            if calls > 3:
+                raise AssertionError("run creation retried beyond the budget")
+            raise RunProfileChangedError
+
+        monkeypatch.setattr(ocr, "describe", describe)
+        monkeypatch.setattr(runs, "create", conflict)
+        response = client.post(
+            "/api/v1/runs",
+            json={"profile_id": profile["id"], "video_id": ids["video"], "interval_ms": 1000},
+        )
+        with composition.database.session() as session:
+            after = session.scalar(select(func.count()).select_from(PipelineRun))
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "profile_changed_during_run_creation"
+    assert calls == 3
+    assert descriptions == 9
+    assert before == after

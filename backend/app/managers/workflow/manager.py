@@ -102,12 +102,13 @@ class DatasetWorkflow:
     def create_run(self, *, profile_id: str, video_id: str, interval_ms: int) -> RunRecord:
         if interval_ms <= 0:
             raise WorkflowError("invalid_interval", details={"field": "interval_ms"})
-        while True:
+        for _ in range(3):
             record = self._try_create_run(
                 profile_id=profile_id, video_id=video_id, interval_ms=interval_ms
             )
             if record is not None:
                 return record
+        raise WorkflowError("profile_changed_during_run_creation")
 
     def _try_create_run(
         self, *, profile_id: str, video_id: str, interval_ms: int

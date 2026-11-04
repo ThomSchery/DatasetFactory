@@ -96,6 +96,23 @@ afterEach(() => {
 });
 
 describe("materials: from a file to a started run", () => {
+  it("explains a profile conflict while creating a run", async () => {
+    const user = userEvent.setup();
+    stubFetch((url, init) => {
+      if (url.endsWith("/runs") && init?.method === "POST") return { status: 409, body: errorEnvelope("profile_changed_during_run_creation") };
+      if (url.endsWith("/profiles")) return { status: 200, body: [profileSummaryFixture()] };
+      if (url.includes("/profiles/current") || url.includes("/profiles/profile-1")) return { status: 200, body: profileFixture() };
+      if (url.includes("/materials")) return { status: 200, body: { items: [materialFixture()], page: 1, page_size: 100, total: 1 } };
+      return { status: 200, body: emptyDashboard() };
+    });
+    renderApp(["/run"]);
+    await user.selectOptions(await screen.findByLabelText("Materia\u0142"), "video-1");
+    await user.selectOptions(await screen.findByLabelText("Profil gry"), "profile-1");
+    await user.click(screen.getByRole("button", { name: "Utw\u00f3rz run" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Profil zmieni\u0142 si\u0119 podczas tworzenia runu");
+    expect(screen.getByRole("alert")).toHaveTextContent("Spr\u00f3buj ponownie");
+  });
+
   it("offers saved profiles and shows the selected profile's reference image", async () => {
     const user = userEvent.setup();
     stubFetch((url) => {
