@@ -432,7 +432,8 @@ class ProfileRepository:
                 # observe the same maximum ordinal or pass the duplicate check
                 # concurrently and then race at INSERT time.
                 session.connection().exec_driver_sql("BEGIN IMMEDIATE")
-                if session.get(GameProfile, profile_id) is None:
+                profile = session.get(GameProfile, profile_id)
+                if profile is None:
                     raise ProfileNotFoundError
 
                 duplicate = self._duplicate_category(session, profile_id, draft.name)
@@ -455,6 +456,7 @@ class ProfileRepository:
                         ordinal=ordinal,
                     )
                 )
+                profile.version += 1
                 session.flush()
                 return CategoryDraft(draft.id, draft.name, draft.kind, ordinal)
         except (CategoryNameExistsError, ProfileNotFoundError):

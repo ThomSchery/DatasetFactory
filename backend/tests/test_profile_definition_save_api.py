@@ -871,3 +871,21 @@ def test_a_legacy_run_without_snapshots_still_resolves_live_geometry(
         region["id"] for region in profile["regions"]
     ]
     assert (record.samples[0].width, record.samples[0].height) == (16, 12)
+
+
+def test_adding_category_invalidates_a_stale_whole_definition(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
+        stale = _definition(profile)
+        added = client.post(
+            f"/api/v1/profiles/{profile['id']}/categories", json={"name": "shield", "kind": "game"}
+        )
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=stale)
+        latest = client.get(f"/api/v1/profiles/{profile['id']}").json()
+    assert added.status_code == 201
+    assert response.status_code == 409
+    assert any(category["name"] == "shield" for category in latest["categories"])
