@@ -114,3 +114,9 @@ Elementy: komunikat błędu Run Setup po konflikcie profilu, przycisk Draw regio
 - `0281236`: podgląd geometrii podczas gestu, zatwierdzenie do draftu po pointerup, przywrócenie przy pointercancel i blur; tryb Draw ma pierwszeństwo nad manipulacją. Chromium prawdziwą myszą przesuwa i zmienia rozmiar, weryfikuje podgląd, anulowanie, dirty oraz zapis i GET z rzeczywistego backendu. Test przed poprawką wykazał brak uchwytów; test blur wykazał dodatkowy brak cleanupu.
 - `10db637`: widoczny stan Draw region jak pan, dodatkowy znacznik oraz aria-pressed. Test Chromium sprawdza znacznik, zmianę tła i kontrast co najmniej 3:1 wobec panelu; przed poprawką stan był niewidoczny.
 - Pełna bramka końcowa: porty 5193/8033/8034, basetemp `D:/tmp/fe021-gate-pytest`; wynik w raporcie wykonania.
+
+## FIX3 — integracja portów i test kontrastu (2026-11-04)
+
+- `975be98`: Vite wybiera backend w kolejności `DF_E2E_BACKEND_PORT`, `DF_PORT`, 8000; port frontu nadal `DF_E2E_FRONTEND_PORT` albo 5173. Playwright przekazuje Vite jawne wartości obu portów przy zachowaniu środowiska. `e2e-backend.mjs` już nadpisuje `DF_PORT` portem E2E i korzysta z osobnego `DF_E2E_CONTROL_PORT`. Testy uruchamiają rzeczywiste konfiguracje w osobnych procesach: trzy warianty proxy i przekazanie portów przy obecnym `DF_PORT`; przed poprawką obie nowe asercje były czerwone. Ręcznie: wyłącznie `DF_PORT=8033`, Vite 5193, izolowany backend 8033 — GET `/api/v1/health` przez proxy 200.
+- `b81fe13`: kontrola kontrastu mierzy stan wyłączony i włączony po odsunięciu myszy oraz usunięciu fokusu, komponuje kanał alfa tła przycisku z nieprzezroczystym panelem i osobno sprawdza kontrast aktywnego hovera. Po tymczasowym zdjęciu obu aktywnych reguł CSS test padł; styl przywrócony byte-for-byte.
+- Bramka końcowa: porty 5193/8033/8034, basetemp `D:/tmp/fe021-gate-pytest`; wynik w raporcie wykonania.
