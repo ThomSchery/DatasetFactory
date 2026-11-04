@@ -51,6 +51,10 @@ class RunVideoNotFoundError(LookupError):
     pass
 
 
+class RunProfileChangedError(RuntimeError):
+    pass
+
+
 class RunVersionConflictError(RuntimeError):
     pass
 
@@ -84,6 +88,7 @@ class RegionOcrDraft:
 
 @dataclass(frozen=True)
 class RunCreationContext:
+    profile_version: int
     profile_width: int
     profile_height: int
     video_width: int
@@ -189,6 +194,7 @@ class RunRepository:
 
     def creation_context(self, profile_id: str, video_id: str) -> RunCreationContext:
         with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN")
             profile = session.get(GameProfile, profile_id)
             if profile is None:
                 raise RunProfileNotFoundError
@@ -223,6 +229,7 @@ class RunRepository:
                 )
             )
             return RunCreationContext(
+                profile.version,
                 profile.source_width,
                 profile.source_height,
                 video.width,
@@ -242,12 +249,20 @@ class RunRepository:
         provenance: OcrProvenance,
         warning: str,
         region_ocr_snapshots: tuple[RegionOcrSnapshot, ...] = (),
+        expected_profile_version: int | None = None,
     ) -> RunRecord:
         total_frames = max(1, math.ceil(duration_ms / interval_ms))
         uses_profile_fallback = any(
             snapshot.uses_profile_fallback for snapshot in region_ocr_snapshots
         )
         with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            if expected_profile_version is not None:
+                profile = session.get(GameProfile, profile_id)
+                if profile is None:
+                    raise RunProfileNotFoundError
+                if profile.version != expected_profile_version:
+                    raise RunProfileChangedError
             run = PipelineRun(
                 id=str(uuid4()),
                 profile_id=profile_id,

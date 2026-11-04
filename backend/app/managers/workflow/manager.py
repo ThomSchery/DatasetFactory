@@ -20,6 +20,7 @@ from backend.app.access.store.repositories.runs import (
     RunCompletionPreconditionError,
     RunNotFoundError,
     RunPage,
+    RunProfileChangedError,
     RunProfileNotFoundError,
     RunRecord,
     RunRepository,
@@ -101,6 +102,16 @@ class DatasetWorkflow:
     def create_run(self, *, profile_id: str, video_id: str, interval_ms: int) -> RunRecord:
         if interval_ms <= 0:
             raise WorkflowError("invalid_interval", details={"field": "interval_ms"})
+        while True:
+            record = self._try_create_run(
+                profile_id=profile_id, video_id=video_id, interval_ms=interval_ms
+            )
+            if record is not None:
+                return record
+
+    def _try_create_run(
+        self, *, profile_id: str, video_id: str, interval_ms: int
+    ) -> RunRecord | None:
         try:
             context = self._runs.creation_context(profile_id, video_id)
         except RunProfileNotFoundError as exc:
@@ -126,15 +137,19 @@ class DatasetWorkflow:
         except (OcrProcessError, ValueError) as exc:
             code = exc.code if isinstance(exc, OcrProcessError) else "ocr_configuration_invalid"
             raise WorkflowError(code) from exc
-        return self._runs.create(
-            profile_id=profile_id,
-            video_id=video_id,
-            interval_ms=interval_ms,
-            duration_ms=context.duration_ms,
-            provenance=provenance,
-            region_ocr_snapshots=region_snapshots,
-            warning=quality_warning(provenance),
-        )
+        try:
+            return self._runs.create(
+                profile_id=profile_id,
+                video_id=video_id,
+                interval_ms=interval_ms,
+                duration_ms=context.duration_ms,
+                provenance=provenance,
+                region_ocr_snapshots=region_snapshots,
+                expected_profile_version=context.profile_version,
+                warning=quality_warning(provenance),
+            )
+        except RunProfileChangedError:
+            return None
 
     def _region_ocr_snapshot(
         self,

@@ -889,3 +889,41 @@ def test_adding_category_invalidates_a_stale_whole_definition(
     assert added.status_code == 201
     assert response.status_code == 409
     assert any(category["name"] == "shield" for category in latest["categories"])
+
+
+def test_run_creation_retries_when_profile_is_saved_after_context_read(
+    composition: CompositionRoot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+    workflow, runs, _ = _install_workflow(
+        composition, StubMediaAccess(composition), PerRegionOcrEngine()
+    )
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
+        ids = _seed_run(composition, profile=profile, tmp_path=tmp_path)
+        draft = _definition(profile)
+        hud = _named(draft["regions"], "HUD")
+        hud.update(width=20, allowed_chars="1")
+        draft["categories"] = [
+            category for category in draft["categories"] if category["name"] != "0"
+        ]
+        original = runs.creation_context
+        saved = False
+
+        def read_then_save(profile_id: str, video_id: str) -> Any:
+            nonlocal saved
+            context = original(profile_id, video_id)
+            if not saved:
+                saved = True
+                response = client.put(f"/api/v1/profiles/{profile_id}/definition", json=draft)
+                assert response.status_code == 200, response.text
+            return context
+
+        monkeypatch.setattr(runs, "creation_context", read_then_save)
+        record = workflow.create_run(
+            profile_id=profile["id"], video_id=ids["video"], interval_ms=1000
+        )
+    snapshot = next(region for region in record.ocr_regions if region.region_name == "HUD")
+    assert snapshot.bbox.width == 20
+    assert snapshot.allowed_chars == ("1",)
