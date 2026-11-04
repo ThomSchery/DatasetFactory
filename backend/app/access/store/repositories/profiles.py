@@ -179,8 +179,8 @@ class SavedRegionDraft:
     y: int
     width: int
     height: int
-    ocr_allowed_chars: str
-    ocr_page_segmentation_mode: int
+    ocr_allowed_chars: str | None
+    ocr_page_segmentation_mode: int | None
 
 
 @dataclass(frozen=True)

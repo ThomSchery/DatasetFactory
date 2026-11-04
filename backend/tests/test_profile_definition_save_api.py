@@ -274,6 +274,98 @@ def _seed_run(
     return ids
 
 
+def test_inherited_ocr_survives_edit_and_copy(composition: CompositionRoot, tmp_path: Path) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        payload = _create_payload(source)
+        payload["regions"][0]["allowed_chars"] = None
+        payload["regions"][0]["page_segmentation_mode"] = None
+        profile = client.post("/api/v1/profiles", json=payload).json()
+        draft = _definition(profile)
+        hud = _named(draft["regions"], "HUD")
+        hud.update(name="renamed", x=2, width=12)
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+        assert response.status_code == 200, response.text
+        saved = client.get(f"/api/v1/profiles/{profile['id']}").json()
+        region = _named(saved["regions"], "renamed")
+        assert (region["allowed_chars"], region["page_segmentation_mode"]) == (None, None)
+        assert (region["x"], region["width"]) == (2, 12)
+        copy_payload = _definition(saved)
+        copy_payload.pop("expected_version")
+        for item in copy_payload["regions"] + copy_payload["categories"]:
+            item.pop("id")
+        copy_payload.update(name="copy", reference_asset_id=saved["reference_asset_id"])
+        copy = client.post("/api/v1/profiles", json=copy_payload)
+        assert copy.status_code == 201, copy.text
+        copied = _named(
+            client.get(f"/api/v1/profiles/{copy.json()['id']}").json()["regions"], "renamed"
+        )
+        assert (copied["allowed_chars"], copied["page_segmentation_mode"]) == (None, None)
+        assert copied["id"] != region["id"]
+        explicit = _definition(saved)
+        _named(explicit["regions"], "renamed").update(allowed_chars="01", page_segmentation_mode=6)
+        changed = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=explicit)
+        assert changed.status_code == 200, changed.text
+        changed_region = _named(changed.json()["regions"], "renamed")
+        assert (changed_region["allowed_chars"], changed_region["page_segmentation_mode"]) == (
+            "01",
+            6,
+        )
+
+
+def test_inherited_ocr_keeps_old_run_snapshot_and_new_run_uses_fallback(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+    workflow, _, _ = _install_workflow(
+        composition, StubMediaAccess(composition), PerRegionOcrEngine()
+    )
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
+        ids = _seed_run(composition, profile=profile, tmp_path=tmp_path)
+        hud_id = _named(profile["regions"], "HUD")["id"]
+        before = FrameRepository(composition.database).processing(ids["run"], 0)
+        with composition.database.session() as session:
+            region = session.get(HudRegion, hud_id)
+            assert region is not None
+            region.ocr_allowed_chars = None
+            region.ocr_page_segmentation_mode = None
+            session.flush()
+        legacy = client.get(f"/api/v1/profiles/{profile['id']}").json()
+        draft = _definition(legacy)
+        _named(draft["regions"], "HUD").update(width=12, name="renamed")
+        saved = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+        assert saved.status_code == 200, saved.text
+        after = FrameRepository(composition.database).processing(ids["run"], 0)
+        fresh = workflow.create_run(
+            profile_id=profile["id"], video_id=ids["video"], interval_ms=1000
+        )
+        snapshot = next(item for item in fresh.ocr_regions if item.region_id == hud_id)
+        assert snapshot.bbox.width == 12
+        assert snapshot.allowed_chars == ("0", "1")
+        assert snapshot.page_segmentation_mode == fresh.ocr_fallback_page_segmentation_mode == 7
+        assert after.regions == before.regions
+        assert after.samples == before.samples
+
+
+@pytest.mark.parametrize("chars,mode", [(None, 7), ("0", None), ("", 7)])
+def test_save_rejects_partial_or_empty_ocr_configuration(
+    composition: CompositionRoot, tmp_path: Path, chars: str | None, mode: int | None
+) -> None:
+    source = tmp_path / "reference.png"
+    _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
+        draft = _definition(profile)
+        draft["regions"][0].update(allowed_chars=chars, page_segmentation_mode=mode)
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+        assert response.status_code in (400, 422), response.text
+        assert client.get(f"/api/v1/profiles/{profile['id']}").json() == profile
+
+
 def test_resizing_a_region_leaves_an_existing_run_reading_its_own_geometry(
     composition: CompositionRoot,
     tmp_path: Path,

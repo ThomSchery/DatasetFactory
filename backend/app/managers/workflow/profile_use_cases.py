@@ -79,8 +79,8 @@ class SavedRegion:
     y: int
     width: int
     height: int
-    allowed_chars: tuple[str, ...]
-    page_segmentation_mode: int
+    allowed_chars: tuple[str, ...] | None
+    page_segmentation_mode: int | None
 
 
 @dataclass(frozen=True)
@@ -619,7 +619,12 @@ class ProfileUseCases:
 
         region_drafts: list[SavedRegionDraft] = []
         for draft, validated_region in zip(regions, validated.regions, strict=True):
-            whitelist, mode = self._required_ocr_config(validated_region)
+            whitelist = (
+                "".join(validated_region.allowed_chars)
+                if validated_region.allowed_chars is not None
+                else None
+            )
+            mode = validated_region.page_segmentation_mode
             region_drafts.append(
                 SavedRegionDraft(
                     id=draft.id,

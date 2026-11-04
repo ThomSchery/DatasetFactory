@@ -60,8 +60,8 @@ class SavedRegionRequest(StrictModel):
     y: int = Field(ge=0)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
-    allowed_chars: str = Field(min_length=1)
-    page_segmentation_mode: int
+    allowed_chars: str | None = Field(min_length=1)
+    page_segmentation_mode: int | None
 
 
 class SavedCategoryRequest(StrictModel):
@@ -564,7 +564,11 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                         y=region.y,
                         width=region.width,
                         height=region.height,
-                        allowed_chars=tuple(region.allowed_chars),
+                        allowed_chars=(
+                            tuple(region.allowed_chars)
+                            if region.allowed_chars is not None
+                            else None
+                        ),
                         page_segmentation_mode=region.page_segmentation_mode,
                     )
                     for region in payload.regions
