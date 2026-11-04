@@ -107,3 +107,10 @@ Elementy: komunikat błędu Run Setup po konflikcie profilu, przycisk Draw regio
 - [x] Nakładki i cienie: OVERLAY-01..07, SHADOW-01..05; bez nowej warstwy wizualnej, użycie RegionOverlay.
 - [x] Interakcje: COLOR-07, OPACITY-01..02; aria-pressed, fokus, Escape, anulowanie gestu, granice obrazu i stan dirty.
 - [x] Komponenty: istniejące Button, InlineError, Panel, RegionOverlay i Notice, bez nowych prymitywów.
+
+### FIX2 — wykonanie
+
+- `f0f196a`: trzy próby tworzenia runu, a następnie `profile_changed_during_run_creation` (HTTP 409) i komunikat Run Setup zachęcający do ponowienia. Test wymusza konflikt w każdej próbie, ogranicza go do trzech INSERT-ów i dziewięciu wywołań describe oraz sprawdza brak nowego runu; istniejący test jednorazowego konfliktu przechodzi. Przed poprawką test zatrzymał nieograniczony retry na czwartej próbie, komunikat UI był ogólny.
+- `0281236`: podgląd geometrii podczas gestu, zatwierdzenie do draftu po pointerup, przywrócenie przy pointercancel i blur; tryb Draw ma pierwszeństwo nad manipulacją. Chromium prawdziwą myszą przesuwa i zmienia rozmiar, weryfikuje podgląd, anulowanie, dirty oraz zapis i GET z rzeczywistego backendu. Test przed poprawką wykazał brak uchwytów; test blur wykazał dodatkowy brak cleanupu.
+- `10db637`: widoczny stan Draw region jak pan, dodatkowy znacznik oraz aria-pressed. Test Chromium sprawdza znacznik, zmianę tła i kontrast co najmniej 3:1 wobec panelu; przed poprawką stan był niewidoczny.
+- Pełna bramka końcowa: porty 5193/8033/8034, basetemp `D:/tmp/fe021-gate-pytest`; wynik w raporcie wykonania.
