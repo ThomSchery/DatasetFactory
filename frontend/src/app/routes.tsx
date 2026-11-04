@@ -5,7 +5,7 @@ import { Empty, Loading } from "../components/common/UiStates";
 import { AnnotationReviewScreen, RunListScreen } from "../features/annotations";
 import { DashboardScreen } from "../features/dashboard";
 import { MaterialsScreen, RunSetupScreen } from "../features/materials";
-import { ProfilesScreen } from "../features/profiles";
+import { ProfileWorkspaceScreen } from "../features/profiles";
 import { AppShell } from "./AppShell";
 
 const ExportsScreen = lazy(() =>
@@ -46,12 +46,12 @@ export const appRoutes: RouteObject[] = [
       { index: true, element: <DashboardScreen />, handle: { heading: "Dashboard" } },
       {
         path: "profiles",
-        element: <ProfilesScreen />,
+        element: <ProfileWorkspaceScreen />,
         handle: { heading: "Profile gier" },
       },
       {
         path: "profiles/new",
-        element: <ProfilesScreen initialCreate />,
+        element: <ProfileWorkspaceScreen initialCreate />,
         handle: { heading: "Nowy profil gry" },
       },
       { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },

@@ -1,0 +1,619 @@
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
+import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
+import type { GameProfile } from "../../api";
+import { createRequestFrom, draftFromProfile, isDirty, saveRequestFrom } from "./profileDraft";
+
+/*
+ * FE-021: the one workspace that opens a saved profile and defines a new one.
+ *
+ * These are the regressions the ticket names, and each of them is about a way
+ * work can be lost rather than about a widget: a late answer landing on the
+ * wrong profile, a save that silently drops a region, a conflict that throws
+ * away the draft, a switch that discards it without asking.
+ *
+ * The stub answers what the FastAPI routers answer and decides nothing of its
+ * own. Where a test needs the backend's state to move, the test moves it.
+ */
+
+const SOURCE = { width: 1920, height: 1080 };
+
+function alpha(): GameProfile {
+  return profileFixture({
+    id: "profile-alpha",
+    name: "Alpha",
+    version: 3,
+    regions: [
+      {
+        id: "region-hp",
+        name: "Pasek zdrowia",
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 40,
+        allowed_chars: "7",
+        page_segmentation_mode: 7,
+      },
+    ],
+    categories: [
+      { id: "category-7", name: "7", kind: "character" },
+      { id: "category-hud", name: "health", kind: "game" },
+    ],
+  });
+}
+
+function beta(): GameProfile {
+  return profileFixture({
+    id: "profile-beta",
+    name: "Beta",
+    version: 1,
+    reference_asset_id: "asset-beta",
+    reference_asset_url: "/api/v1/assets/references/asset-beta",
+    regions: [
+      {
+        id: "region-timer",
+        name: "Zegar",
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 20,
+        allowed_chars: "7",
+        page_segmentation_mode: 7,
+      },
+    ],
+    categories: [{ id: "category-7b", name: "7", kind: "character" }],
+  });
+}
+
+interface StubOptions {
+  /** `PUT /profiles/{id}/definition`. */
+  save?: StubbedResponse;
+  /** `POST /profiles`. */
+  create?: StubbedResponse;
+  /** `POST /profiles/reference-preview`. */
+  preview?: StubbedResponse;
+  /** Resolves a detail request only once the test lets it. */
+  holdDetail?: Record<string, Promise<void>>;
+  holdSave?: Promise<void>;
+  profiles?: GameProfile[];
+}
+
+function stubProfiles({ create, holdDetail, holdSave, preview, profiles, save }: StubOptions = {}) {
+  const known = profiles ?? [alpha(), beta()];
+  const spy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    const answer = async (): Promise<StubbedResponse> => {
+      if (url.includes("/profiles/reference-preview") && method === "POST") {
+        return (
+          preview ?? {
+            status: 201,
+            body: { asset_id: "preview-asset", width: SOURCE.width, height: SOURCE.height },
+          }
+        );
+      }
+      if (url.endsWith("/definition") && method === "PUT") {
+        await holdSave;
+        return save ?? { status: 200, body: { ...alpha(), version: 4 } };
+      }
+      if (url.endsWith("/api/v1/profiles") && method === "POST") {
+        return create ?? { status: 201, body: profileFixture({ id: "profile-copy" }) };
+      }
+      if (url.endsWith("/api/v1/profiles")) {
+        return {
+          status: 200,
+          body: known.map((profile, index) =>
+            profileSummaryFixture({
+              active: index === 0,
+              id: profile.id,
+              name: profile.name,
+              region_count: profile.regions.length,
+            }),
+          ),
+        };
+      }
+      const detail = known.find((profile) => url.endsWith(`/profiles/${profile.id}`));
+      if (detail !== undefined) {
+        await holdDetail?.[detail.id];
+        return { status: 200, body: detail };
+      }
+      return { status: 200, body: null };
+    };
+    const { status, body } = await answer();
+    const payload = body === undefined ? "" : JSON.stringify(body);
+    return new Response(payload === "" ? null : payload, {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  vi.stubGlobal("fetch", spy);
+  return spy;
+}
+
+/** Completes the image load so the overlay has a coordinate system. */
+async function loadScreenshot(): Promise<HTMLElement> {
+  const image = await screen.findByAltText(/Zrzut/);
+  Object.defineProperty(image, "naturalWidth", { configurable: true, value: SOURCE.width });
+  Object.defineProperty(image, "naturalHeight", { configurable: true, value: SOURCE.height });
+  fireEvent.load(image);
+  return screen.getByRole("listbox", { name: /Regiony HUD/ });
+}
+
+/** Lays the surface out at `width` CSS px and drags a rectangle across it. */
+function drawRegion(
+  surface: HTMLElement,
+  from: { xRatio: number; yRatio: number },
+  to: { xRatio: number; yRatio: number },
+  width = 960,
+): void {
+  const height = (width * SOURCE.height) / SOURCE.width;
+  vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+    left: 0,
+    top: 0,
+    width,
+    height,
+    right: width,
+    bottom: height,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect);
+
+  const at = (ratios: { xRatio: number; yRatio: number }) => ({
+    clientX: width * ratios.xRatio,
+    clientY: height * ratios.yRatio,
+  });
+  fireEvent.pointerDown(surface, { ...at(from), pointerId: 1 });
+  fireEvent.pointerMove(surface, { ...at(to), pointerId: 1 });
+  fireEvent.pointerUp(surface, { ...at(to), pointerId: 1 });
+}
+
+async function chooseProfile(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+): Promise<void> {
+  await user.click(await screen.findByLabelText("Search profile"));
+  await user.click(await screen.findByRole("option", { name: new RegExp(name) }));
+}
+
+function savedBody(spy: ReturnType<typeof vi.fn>): Record<string, unknown> {
+  const call = spy.mock.calls.find(
+    ([url, init]) => String(url).endsWith("/definition") && init?.method === "PUT",
+  );
+  return JSON.parse(String(call?.[1]?.body)) as Record<string, unknown>;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("the profile workspace", () => {
+  it("preserves inherited OCR on edits and copies, and distinguishes an empty whitelist", () => {
+    const profile = alpha();
+    profile.regions[0].allowed_chars = null;
+    profile.regions[0].page_segmentation_mode = null;
+    const baseline = draftFromProfile(profile);
+    const edited = { ...baseline, regions: baseline.regions.map((region) => ({ ...region, name: "Nowa", x: 15 })) };
+    expect(saveRequestFrom(edited).regions[0]).toMatchObject({ name: "Nowa", x: 15, allowed_chars: null, page_segmentation_mode: null });
+    expect(createRequestFrom(edited, "Kopia").regions[0]).toMatchObject({ allowed_chars: null, page_segmentation_mode: null });
+    expect(createRequestFrom(edited, "Kopia").regions[0]).not.toHaveProperty("id");
+    const empty = { ...baseline, regions: baseline.regions.map((region) => ({ ...region, allowed_chars: "" })) };
+    expect(isDirty(empty, baseline)).toBe(true);
+  });
+
+  it("sends a complete explicit OCR pair after editing an inherited region", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.regions[0].allowed_chars = null;
+    profile.regions[0].page_segmentation_mode = null;
+    const spy = stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }, { timeout: 5000 }));
+    await user.selectOptions(screen.getByLabelText("Układ tekstu OCR"), "6");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", page_segmentation_mode: 6 }] }));
+  });
+
+  it("opens the active profile with its regions, classes and screenshot", async () => {
+    stubProfiles();
+    renderApp(["/profiles"]);
+
+    expect(await screen.findByRole("heading", { name: "Alpha" })).toBeInTheDocument();
+    const annotations = screen.getByRole("region", { name: "Annotations" });
+    expect(within(annotations).getByText("Pasek zdrowia")).toBeInTheDocument();
+    const classes = screen.getByRole("region", { name: "Klasy" });
+    expect(within(classes).getByText("health")).toBeInTheDocument();
+    expect(await screen.findByAltText(/Zrzut referencyjny profilu Alpha/)).toBeInTheDocument();
+  });
+
+  it("keeps Save profile inactive until the draft says something new", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+
+    const save = await screen.findByRole("button", { name: "Save profile" });
+    expect(save).toBeDisabled();
+
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    const name = await screen.findByLabelText(/Nazwa regionu/);
+    await user.clear(name);
+    await user.type(name, "Zdrowie");
+
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled();
+    // The state is not carried by the button alone.
+    expect(screen.getByText("Niezapisane zmiany", { selector: ".df-status-badge" })).toBeVisible();
+    expect(screen.getByText(/Draft różni się od zapisanego profilu/)).toHaveAttribute("role", "status");
+  });
+
+  it("sends every region with the identity it already had", async () => {
+    const user = userEvent.setup();
+    const spy = stubProfiles();
+    renderApp(["/profiles"]);
+
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    const name = await screen.findByLabelText(/Nazwa regionu/);
+    await user.clear(name);
+    await user.type(name, "Zdrowie");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => {
+      expect(savedBody(spy)).toEqual({
+        expected_version: 3,
+        regions: [
+          {
+            allowed_chars: "7",
+            height: 40,
+            id: "region-hp",
+            name: "Zdrowie",
+            page_segmentation_mode: 7,
+            width: 100,
+            x: 10,
+            y: 20,
+          },
+        ],
+        categories: [
+          { id: "category-7", kind: "character", name: "7" },
+          { id: "category-hud", kind: "game", name: "health" },
+        ],
+      });
+    });
+    // A successful save is also what refreshes the concurrency token.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
+    });
+  });
+
+  it("renames a custom class without changing its durable identifier", async () => {
+    const user = userEvent.setup();
+    const spy = stubProfiles();
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zmień nazwę klasy health" }));
+    const field = screen.getByLabelText("Nowa nazwa klasy health");
+    await user.clear(field);
+    await user.type(field, "armour");
+    await user.click(screen.getByRole("button", { name: "Gotowe" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(savedBody(spy)).toMatchObject({
+      categories: expect.arrayContaining([{ id: "category-hud", kind: "game", name: "armour" }]),
+    }));
+  });
+
+  it("keeps a renamed class when the server rejects a duplicate name", async () => {
+    const user = userEvent.setup();
+    stubProfiles({ save: { status: 409, body: errorEnvelope("category_name_exists") } });
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zmień nazwę klasy health" }));
+    const field = screen.getByLabelText("Nowa nazwa klasy health");
+    await user.clear(field);
+    await user.type(field, "armour");
+    await user.click(screen.getByRole("button", { name: "Gotowe" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Zmień nazwę klasy armour" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled();
+  });
+
+  it("allows renaming an OCR class and warns when it changes group", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.regions[0].allowed_chars = null;
+    profile.regions[0].page_segmentation_mode = null;
+    const spy = stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Rozwiń grupę Nazwy klas OCR" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę klasy 7" }));
+    const field = screen.getByLabelText("Nowa nazwa klasy 7");
+    await user.clear(field);
+    await user.type(field, "score");
+    expect(screen.getByText(/Klasa zmieni grupę: OCR → Custom/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Gotowe" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(savedBody(spy)).toMatchObject({
+      categories: expect.arrayContaining([{ id: "category-7", kind: "game", name: "score" }]),
+    }));
+  });
+
+  it("names regions whose explicit OCR whitelist still uses a renamed class", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Rozwiń grupę Nazwy klas OCR" }));
+    await user.click(screen.getByRole("button", { name: "Zmień nazwę klasy 7" }));
+    const field = screen.getByLabelText("Nowa nazwa klasy 7");
+    await user.clear(field);
+    await user.type(field, "8");
+    await user.click(screen.getByRole("button", { name: "Gotowe" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Najpierw zmień zakres znaków OCR w regionach: „Pasek zdrowia”");
+  });
+
+  it("names a drawn box, accepts it, and files the name under Custom", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+
+    const surface = await loadScreenshot();
+    drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.3, yRatio: 0.25 });
+
+    const field = await screen.findByLabelText("Nazwa narysowanego regionu");
+    await waitFor(() => {
+      expect(field).toHaveFocus();
+    });
+    await user.clear(field);
+    await user.type(field, "Amunicja");
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+
+    const annotations = screen.getByRole("region", { name: "Annotations" });
+    expect(within(annotations).getByText("Amunicja")).toBeInTheDocument();
+    const classes = screen.getByRole("region", { name: "Klasy" });
+    expect(within(classes).getByText("Amunicja")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Nazwa narysowanego regionu")).toBeNull();
+  });
+
+  it("rejects a drawn box without touching the profile", async () => {
+    const user = userEvent.setup();
+    const spy = stubProfiles();
+    renderApp(["/profiles"]);
+
+    const surface = await loadScreenshot();
+    drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.3, yRatio: 0.25 });
+    await screen.findByLabelText("Nazwa narysowanego regionu");
+    await user.click(screen.getByRole("button", { name: "Reject" }));
+
+    expect(screen.queryByLabelText("Nazwa narysowanego regionu")).toBeNull();
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
+    expect(
+      spy.mock.calls.some(([, init]) => (init?.method ?? "GET") !== "GET"),
+    ).toBe(false);
+  });
+
+  it("refuses to name two regions the same", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+
+    const surface = await loadScreenshot();
+    drawRegion(surface, { xRatio: 0.1, yRatio: 0.1 }, { xRatio: 0.3, yRatio: 0.25 });
+    const field = await screen.findByLabelText("Nazwa narysowanego regionu");
+    await user.clear(field);
+    await user.type(field, "Pasek zdrowia");
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Region o tej nazwie już istnieje",
+    );
+    expect(screen.getByLabelText("Nazwa narysowanego regionu")).toBeInTheDocument();
+  });
+
+  it("asks before dropping a draft when another profile is chosen", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    const name = await screen.findByLabelText(/Nazwa regionu/);
+    await user.clear(name);
+    await user.type(name, "Zdrowie");
+
+    await chooseProfile(user, "Beta");
+
+    expect(await screen.findByRole("heading", { name: "Niezapisane zmiany" })).toBeVisible();
+    // Backing out leaves the draft exactly where it was.
+    await user.click(screen.getByRole("button", { name: "Wróć do draftu" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Alpha" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nazwa regionu/)).toHaveValue("Zdrowie");
+
+    await chooseProfile(user, "Beta");
+    await user.click(await screen.findByRole("button", { name: "Odrzuć zmiany" }));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Beta" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Annotations" })).getByText("Zegar")).toBeInTheDocument();
+  });
+
+  it("blocks route navigation until the operator discards the draft", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    const { router } = renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    await user.clear(screen.getByLabelText(/Nazwa regionu/));
+    await user.type(screen.getByLabelText(/Nazwa regionu/), "Zdrowie");
+    await user.click(screen.getByRole("link", { name: "Run" }));
+    expect(await screen.findByRole("dialog", { name: "Niezapisane zmiany" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Wróć do draftu" }));
+    expect(router.state.location.pathname).toBe("/profiles");
+    expect(screen.getByLabelText(/Nazwa regionu/)).toHaveValue("Zdrowie");
+    await user.click(screen.getByRole("link", { name: "Run" }));
+    await user.click(screen.getByRole("button", { name: "Odrzuć zmiany" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/run"));
+  });
+
+  it("prevents a pending save from replacing work in another context", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    stubProfiles({ holdSave: held });
+    const { router } = renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    await user.clear(screen.getByLabelText(/Nazwa regionu/));
+    await user.type(screen.getByLabelText(/Nazwa regionu/), "Zdrowie");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(screen.getByLabelText("Search profile")).toBeDisabled();
+    await user.click(screen.getByRole("link", { name: "Run" }));
+    expect(await screen.findByRole("dialog", { name: "Niezapisane zmiany" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Odrzuć zmiany" })).toBeDisabled();
+    expect(router.state.location.pathname).toBe("/profiles");
+    release();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Odrzuć zmiany" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Odrzuć zmiany" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/run"));
+  });
+
+  it("does not let a late answer for one profile land on another", async () => {
+    const user = userEvent.setup();
+    let releaseAlpha!: () => void;
+    const alphaHeld = new Promise<void>((resolve) => {
+      releaseAlpha = resolve;
+    });
+    stubProfiles({ holdDetail: { "profile-alpha": alphaHeld } });
+    renderApp(["/profiles"]);
+
+    // Alpha is the active profile and is still in flight; switch to Beta.
+    await chooseProfile(user, "Beta");
+    expect(await screen.findByRole("heading", { level: 2, name: "Beta" })).toBeInTheDocument();
+
+    releaseAlpha();
+
+    // Beta stays open, with Beta's regions, and no Alpha region appears.
+    await waitFor(() => {
+      expect(within(screen.getByRole("region", { name: "Annotations" })).getByText("Zegar")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Pasek zdrowia")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Beta" })).toBeInTheDocument();
+  });
+
+  it("does not allow editing the previous draft while the selected profile loads", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    stubProfiles({ holdDetail: { "profile-beta": held } });
+    renderApp(["/profiles"]);
+    await screen.findByRole("heading", { name: "Alpha" });
+    await chooseProfile(user, "Beta");
+    expect(screen.getByRole("button", { name: "Zaznacz region Pasek zdrowia" })).toBeDisabled();
+    release();
+    expect(await screen.findByRole("heading", { name: "Beta" })).toBeVisible();
+  });
+
+  it("keeps the draft when the backend reports a version conflict", async () => {
+    const user = userEvent.setup();
+    stubProfiles({
+      save: { status: 409, body: errorEnvelope("version_conflict") },
+    });
+    renderApp(["/profiles"]);
+
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    const name = await screen.findByLabelText(/Nazwa regionu/);
+    await user.clear(name);
+    await user.type(name, "Zdrowie");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Profil zmienił się w innej karcie");
+    expect(screen.getByLabelText(/Nazwa regionu/)).toHaveValue("Zdrowie");
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled();
+  });
+
+  it("names the classes a save cannot drop and points at Save as", async () => {
+    const user = userEvent.setup();
+    stubProfiles({
+      save: {
+        status: 409,
+        body: errorEnvelope("category_in_use", "Operacja odrzucona.", {
+          categories: [{ id: "category-hud", name: "health" }],
+        }),
+      },
+    });
+    renderApp(["/profiles"]);
+
+    const classes = await screen.findByRole("region", { name: "Klasy" });
+    await user.click(await within(classes).findByRole("button", { name: "Usuń klasę health z profilu" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    const notice = await screen.findByRole("status", { name: "Klasy są używane przez anotacje" });
+    expect(notice).toHaveTextContent("health");
+    expect(notice).toHaveTextContent("Save as");
+    // The draft survives the refusal, so Save as has something to save.
+    expect(within(classes).queryByText("health")).toBeNull();
+  });
+
+  it("copies the draft into a new profile without inheriting its identifiers", async () => {
+    const user = userEvent.setup();
+    const spy = stubProfiles({
+      create: { status: 201, body: profileFixture({ id: "profile-copy", name: "Alpha kopia" }) },
+    });
+    renderApp(["/profiles"]);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save as" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Save as" }));
+    const name = await screen.findByLabelText("Nazwa nowego profilu");
+    await user.clear(name);
+    await user.type(name, "Alpha kopia");
+    await user.click(screen.getByRole("button", { name: "Zapisz jako nowy profil" }));
+
+    await waitFor(() => {
+      const call = spy.mock.calls.find(
+        ([url, init]) => String(url).endsWith("/api/v1/profiles") && init?.method === "POST",
+      );
+      expect(call).toBeDefined();
+      const body = JSON.parse(String(call?.[1]?.body)) as Record<string, unknown>;
+      expect(body.name).toBe("Alpha kopia");
+      expect(body.reference_asset_id).toBe("asset-1");
+      expect(JSON.stringify(body)).not.toContain("region-hp");
+      expect(JSON.stringify(body)).not.toContain("category-hud\"");
+    });
+  });
+
+  it("refuses a Save as name the project already uses, before any request", async () => {
+    const user = userEvent.setup();
+    const spy = stubProfiles();
+    renderApp(["/profiles"]);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save as" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Save as" }));
+    const name = await screen.findByLabelText("Nazwa nowego profilu");
+    await user.clear(name);
+    await user.type(name, "  beta ");
+    await user.click(screen.getByRole("button", { name: "Zapisz jako nowy profil" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Profil o tej nazwie już istnieje");
+    expect(
+      spy.mock.calls.some(
+        ([url, init]) => String(url).endsWith("/api/v1/profiles") && init?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
+  it("starts a blank draft with the base character groups and an empty Custom", async () => {
+    stubProfiles();
+    renderApp(["/profiles/new"]);
+
+    expect(await screen.findByRole("region", { name: "Dodaj zrzut ekranu" })).toBeInTheDocument();
+    const classes = screen.getByRole("region", { name: "Klasy" });
+    expect(within(classes).getByText("Custom jest puste")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
+  });
+
+  it("keeps an invalid image path for correction when preview fails", async () => {
+    const user = userEvent.setup();
+    stubProfiles({ preview: { status: 404, body: errorEnvelope("source_missing") } });
+    renderApp(["/profiles/new"]);
+    const path = await screen.findByLabelText("Ścieżka zrzutu ekranu");
+    await user.type(path, "D:\\missing.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj zrzut" }));
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(path).toHaveValue("D:\\missing.png");
+    expect(screen.getByRole("region", { name: "Dodaj zrzut ekranu" })).toBeVisible();
+  });
+});

@@ -1,0 +1,63 @@
+/*
+ * The Figma profile workspace: controls in a column, the screenshot beside
+ * them. Below 992 px the two stack and the image comes first, exactly as the
+ * mobile frame draws it — on a phone the picture is the thing being worked on
+ * and the controls follow it.
+ */
+
+.df-profile-workspace {
+  display: grid;
+  gap: var(--size-md);
+}
+
+.df-profile-workspace__controls,
+.df-profile-workspace__canvas {
+  display: grid;
+  gap: var(--size-md);
+  align-content: start;
+  min-width: 0;
+}
+
+.df-profile-workspace__canvas {
+  order: -1;
+}
+
+.df-profile-workspace__profile-actions,
+.df-profile-workspace__save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+}
+
+.df-profile-workspace__image-swap {
+  display: grid;
+  gap: var(--size-xs);
+}
+
+.df-profile-workspace__dirty {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-profile-workspace__confirm {
+  max-width: var(--measure-copy);
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+@media (min-width: 992px) {
+  .df-profile-workspace {
+    grid-template-columns: var(--workspace-panel-width) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .df-profile-workspace__canvas {
+    /* On a wide screen the controls are on the left, as the desktop frame
+       has them, and the image takes everything that is left. */
+    order: 0;
+  }
+}

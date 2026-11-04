@@ -1,2 +1,2 @@
-export { ProfileCreateScreen } from "./ProfileCreateScreen";
-export { ProfilesScreen } from "./ProfilesScreen";
+export { ProfileWorkspaceScreen } from "./ProfileWorkspaceScreen";
+export { ReferenceImage } from "./ReferenceImage";

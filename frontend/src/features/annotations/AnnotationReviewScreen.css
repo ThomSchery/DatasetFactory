@@ -5,7 +5,7 @@
 }
 
 .df-review-workspace {
-  --df-review-side-column-width: calc(var(--size-xxl) * 4 + var(--size-lg));
+  --df-review-side-column-width: clamp(188px, 24vw, 280px);
 
   display: grid;
   grid-template-areas:
@@ -16,6 +16,7 @@
   gap: var(--size-md);
   min-width: 0;
 }
+
 
 .df-review-workspace > * {
   min-width: 0;
@@ -473,4 +474,22 @@
 .df-review-workspace .df-region-overlay {
   margin-block: var(--size-none);
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
+}
+
+@media (max-width: 1000px) {
+  .df-review-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .df-review-toolbar__navigation, .df-review-toolbar__decisions { justify-self: stretch; }
+  .df-review-toolbar__frame-select { width: auto; flex: 1; min-width: 0; }
+}
+
+@media (max-width: 700px) {
+  .df-review-workspace {
+    grid-template-areas: "toolbar" "preview" "side-column";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .df-review-workspace__side-column > .df-review-workspace__inspector {
+    max-height: none;
+    overflow-y: visible;
+  }
 }

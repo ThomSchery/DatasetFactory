@@ -1,0 +1,48 @@
+.df-dialog {
+  width: min(calc(100vw - var(--size-lg)), calc(var(--size-3xl) * 6));
+  max-width: 100%;
+  padding: var(--size-none);
+  /* OVERLAY-04/SHADOW-05: a layer above the page states itself with an
+     outline and an elevation, not with colour alone. */
+  border: var(--border-width-default) solid var(--color-stroke-weak-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-neutral-default);
+  box-shadow: var(--shadow-elevation-high);
+  color: var(--color-text-strong-default);
+}
+
+.df-dialog::backdrop {
+  /* OVERLAY-01: the page behind a modal is dimmed, so it reads as out of
+     reach rather than merely covered. */
+  background: var(--color-overlay-scrim);
+}
+
+.df-dialog__body {
+  display: grid;
+  gap: var(--size-sm);
+  padding: var(--size-md);
+}
+
+.df-dialog__title {
+  margin: var(--size-none);
+  color: var(--color-text-strong-default);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.df-dialog__description {
+  max-width: var(--measure-copy);
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-standard);
+}
+
+.df-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+  justify-content: flex-end;
+}

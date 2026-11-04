@@ -57,6 +57,12 @@
   color: var(--color-text-strong-default);
 }
 
+@media (max-width: 576px) {
+  .df-nav-item--segment {
+    padding-inline: var(--size-xs);
+  }
+}
+
 .df-nav-item__icon {
   display: inline-flex;
   flex: none;

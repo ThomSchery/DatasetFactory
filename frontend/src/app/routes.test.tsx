@@ -91,13 +91,25 @@ describe("the five FE-04 routes", () => {
     expect(screen.queryByRole("region", { name: "Uruchomienie runu" })).toBeNull();
   });
 
-  it("renders the profile creation screen built in FE-001-F3", () => {
+  it("opens the profile workspace on a blank draft at /profiles/new", () => {
     renderApp(["/profiles/new"]);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nowy profil gry");
-    expect(screen.getByRole("region", { name: "Obraz referencyjny" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Regiony HUD" })).toBeInTheDocument();
+    // The same panels as a loaded profile; only the screenshot is missing.
+    expect(screen.getByRole("region", { name: "Dodaj zrzut ekranu" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Annotations" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Klasy" })).toBeInTheDocument();
     expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+  });
+
+  it("opens the active profile in the same workspace at /profiles", async () => {
+    renderApp(["/profiles"]);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Profile gier");
+    expect(
+      await screen.findByRole("region", { name: "Zrzut referencyjny" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Annotations" })).toBeInTheDocument();
   });
 
   it("renders the annotation review screen built in FE-001-F4", async () => {

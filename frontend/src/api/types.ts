@@ -113,8 +113,8 @@ export interface SavedRegionInput {
   y: number;
   width: number;
   height: number;
-  allowed_chars: string;
-  page_segmentation_mode: number;
+  allowed_chars: string | null;
+  page_segmentation_mode: number | null;
 }
 
 export interface SavedCategoryInput {

@@ -1,0 +1,71 @@
+.df-annotations__sketch,
+.df-annotations__selected {
+  display: grid;
+  gap: var(--size-xs);
+  padding: var(--size-xs);
+  /* The sketch is unsaved, so it is set apart by a dashed outline — a
+     difference in shape rather than only in colour (COLOR-09). */
+  border: var(--border-width-default) dashed var(--color-stroke-control-default);
+  border-radius: var(--radius-md);
+}
+
+.df-annotations__selected {
+  border-style: solid;
+}
+
+.df-annotations__sketch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+  justify-content: flex-end;
+}
+
+.df-annotations__list {
+  display: grid;
+  gap: var(--size-xxs);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+.df-annotations__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--size-xs);
+  align-items: center;
+}
+
+.df-annotations__row-select {
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+}
+
+.df-annotations__row-select .df-button__content {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+}
+
+.df-annotations__row[data-selected] .df-annotations__row-select {
+  background: var(--color-surface-neutral-selected);
+}
+
+.df-annotations__row-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-annotations__row-detail {
+  /* TYPO-07: the count is a second kind of information, carried by colour and
+     a tabular face rather than by a second font size. */
+  padding-inline-start: var(--size-xs);
+  color: var(--color-text-weak-default);
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}

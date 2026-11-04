@@ -37,3 +37,17 @@ Save profile pozostaje dostępny dla profilu z ukończoną historią: snapshot I
 - Nowe komponenty wspólne: `Icon` (dekoracyjne glify inline, `aria-hidden`) i `AppMenu`. `NavItem` dostał wariant `segment` oraz slot `icon` — zapisane tutaj, bo `new-component.md` jest plikiem chronionym i jego sekcja 5 nie może zostać uzupełniona przez wykonawcę.
 - Rozdział Upload/Run zgodnie z makietami: `MaterialsScreen` kończy się na liście materiałów, nowa trasa `/run` (`RunSetupScreen`) niesie wąski panel kontrolek i duży obraz profilu po prawej. Ostrzeżenie OCR jest na obu ekranach. Stare adresy działają bez zmian.
 - Bramka etapu lokalnie: `tsc --noEmit`, `vitest run` 734/734, `vite build`.
+
+## Kontynuacja — testy workspace (2026-11-04)
+
+- Naprawiono fixture `category_in_use` oraz dodano shim metod dialogu dla jsdom; rzeczywista modalność i fokus nadal wymagają sprawdzenia w przeglądarce.
+- Dodano blokowanie nawigacji i ostrzeżenie `beforeunload` dla draftu/szkicu i aktywnych mutacji; test obejmuje powrót i odrzucenie zmian przy nawigacji.
+- Typecheck PASS; testy punktowe 33/33; pełny Vitest 721/721. Nie jest to pełna bramka 9/9.
+- Otwarte: starsze regiony z nullable OCR są ładowane jako pusty whitelist / domyślny PSM, lecz nowy endpoint save wymaga obu wartości niepustych. Trzeba zachować semantykę tych ustawień przy nadpisaniu i Save as oraz dodać regresję. Trzeba także odtworzyć pokrycie usuniętych testów, zbadać późne mutacje, sprawdzić dialog w prawdziwej przeglądarce i dokończyć review/responsywność/QA.
+
+## Kontynuacja — OCR, draft i responsywność (2026-11-04)
+
+- `null/null` OCR pozostaje dziedziczone przez zapis i kopię; jawna zmiana kontrolki tworzy pełną konfigurację. Odrzucane są puste lub częściowe konfiguracje. Backend: 27 testów modułu, w tym stary i nowy run; mypy i ruff PASS. Commit `300e543`.
+- Przywrócono edycję nazw klas OCR i Custom z ostrzeżeniem o zmianie grupy; nazwy regionów blokujących zmianę są widoczne. Testy obejmują wersję, konflikty, nieudany obraz, kopiowanie i przełączanie kontekstu.
+- Chromium: dialog Save as, zamknięcie Escape, powrót i pułapka fokusu; rysowanie profilu 360/768/1440; pomiary review 360–1920. Obejrzano porównanie z PNG: naprawiono rozciągniętą ikonę menu i nachodzący toolbar; na telefonie kontrolki zoomu przeniesiono pod obraz. Makieta review nadal wymaga dalszej oceny względem Figmy i zachowania całego edytora.
+- Próba pełnej bramki została celowo przerwana podczas pytest po odkryciu brakującej edycji nazw klas OCR; wynik nie jest PASS i wymaga ponownego uruchomienia po zakończeniu zmian.

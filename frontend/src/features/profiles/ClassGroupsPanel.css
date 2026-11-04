@@ -1,0 +1,30 @@
+.df-class-groups__custom {
+  display: grid;
+  gap: var(--size-xxs);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+.df-class-groups__custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--size-xs);
+  align-items: center;
+  min-height: var(--control-height-sm); /* GRID-05. */
+  padding-inline-start: var(--size-xs);
+}
+
+.df-class-groups__custom-name {
+  overflow: hidden;
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-class-groups__custom-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xxs);
+}

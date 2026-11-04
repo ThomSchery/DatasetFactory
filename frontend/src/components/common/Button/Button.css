@@ -84,6 +84,10 @@
   cursor: not-allowed;
 }
 
+@media (pointer: coarse) {
+  .df-button { min-height: var(--control-height-lg); }
+}
+
 .df-button[data-loading="true"] {
   cursor: wait;
 }

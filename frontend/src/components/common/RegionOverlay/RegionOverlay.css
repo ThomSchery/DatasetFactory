@@ -241,6 +241,15 @@
   text-align: center;
 }
 
+@media (max-width: 700px) {
+  .df-region-overlay__zoom-controls {
+    position: static;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+  }
+}
+
 .df-region-overlay__zoom-controls .df-button {
   min-width: var(--control-height-sm);
   min-height: var(--control-height-sm);

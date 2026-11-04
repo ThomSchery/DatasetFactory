@@ -1,1 +1,0 @@
-export { ProfileRegionAdder } from "./ProfileRegionAdder";
