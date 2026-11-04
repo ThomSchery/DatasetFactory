@@ -68,15 +68,31 @@ async function measureLayout(page: Page): Promise<LayoutMeasurement> {
   });
 }
 
+/** The document height once the frames queued by a resize have run. */
+async function settledDocumentHeight(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve(document.documentElement.scrollHeight);
+          });
+        });
+      }),
+  );
+}
+
 /**
  * Grows the viewport until it holds the whole document. The annotation panel
- * sizes itself to the viewport room, so one resize can change the document
- * height again; a handful of passes settles it.
+ * sizes itself to the viewport room after a resize, so a height read straight
+ * after `setViewportSize` can be stale — the full gate caught exactly that at
+ * 1440 px. Each read waits for the resize's frames, and the fit only counts
+ * once two consecutive settled reads agree with the viewport.
  */
 async function fitViewportToDocument(page: Page, width: number): Promise<void> {
-  for (let pass = 0; pass < 6; pass += 1) {
-    const height = await page.evaluate(() => document.documentElement.scrollHeight);
-    if (page.viewportSize()?.height === height) {
+  for (let pass = 0; pass < 10; pass += 1) {
+    const height = await settledDocumentHeight(page);
+    if (page.viewportSize()?.height === height && (await settledDocumentHeight(page)) === height) {
       return;
     }
     await page.setViewportSize({ height, width });
