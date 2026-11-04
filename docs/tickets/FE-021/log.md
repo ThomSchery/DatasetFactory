@@ -87,3 +87,11 @@ Elementy: przyciski Save profile i Save as oraz widoczny powód ich blokady przy
 - [x] Cienie i nakładki: SHADOW-01..05, OVERLAY-01..07; istniejące Panel i RegionOverlay.
 - [x] Interakcje: COLOR-07, OPACITY-01..02, fokus klawiatury, Escape, disabled z widocznym powodem.
 - [x] Komponenty: Button, Notice, Panel, RegionOverlay i istniejący Dialog; bez nowych prymitywów.
+
+### FIX1 — wykonanie
+
+- `64173d2`: dopisanie kategorii atomowo podbija wersję profilu; test API potwierdził czerwony 200 przed zmianą i konflikt 409 po zmianie. Custom w workspace pozostaje lokalny do whole-definition save; edytor anotacji odświeża profil po dodaniu kategorii.
+- `3144ff2`: spójny odczyt kontekstu i kontrola wersji pod `BEGIN IMMEDIATE` przed INSERT; po zmianie definicji ponowny odczyt i ponowne przygotowanie OCR poza blokadą. Test deterministycznie zapisuje profil po odczycie; przed poprawką run miał width 16 i whitelistę 0, po poprawce width 20 i whitelistę 1.
+- `283dd0c`: zapis i kopia zablokowane z widocznym powodem przy szkicu; odrzucenie przy wyborze tego samego profilu przywraca baseline i usuwa szkic. Obie regresje odtworzone przed poprawką.
+- `59a0793`: przełącznik Draw region z aria-pressed i Escape; Chromium przeciąga myszą wewnątrz istniejącego regionu na całą klatkę. Test był czerwony przed zmianą i zielony po zmianie.
+- Bramka końcowa: porty 5193/8033/8034, basetemp `D:/tmp/fe021-gate-pytest`; wynik w raporcie wykonania.
