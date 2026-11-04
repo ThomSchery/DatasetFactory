@@ -209,6 +209,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   }, [hasUnsavedWork, busy]);
 
   function requestSwitch(next: PendingSwitch) {
+    if (next.kind === "profile" && next.profileId === openProfileId && !hasUnsavedWork) return;
     if (hasUnsavedWork) {
       setPending(next);
       return;
@@ -223,6 +224,13 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     activate.reset();
     preview.reset();
     if (next.kind === "profile") {
+      if (next.profileId === openProfileId) {
+        setDraft(baseline);
+        setSketch(null);
+        setSketchName("");
+        setSketchError(undefined);
+        setSelectedRegionKey(null);
+      }
       setStartedBlank(false);
       setWantedProfileId(next.profileId);
       return;
@@ -470,7 +478,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
 
         <div className="df-profile-workspace__save">
           <Button
-            disabled={!canSave || editingDisabled}
+            disabled={!canSave || editingDisabled || sketch !== null}
             loading={save.isPending}
             loadingLabel="Zapisywanie profilu…"
             onClick={() => {
@@ -481,7 +489,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             Save profile
           </Button>
           <Button
-            disabled={editingDisabled || draft.referenceAssetId === null}
+            disabled={editingDisabled || draft.referenceAssetId === null || sketch !== null}
             onClick={() => {
               setSaveAsName(draft.profileId === null ? draft.name : `${draft.name} (kopia)`);
               setSaveAsError(undefined);
@@ -494,6 +502,10 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             Save as
           </Button>
         </div>
+
+        {sketch !== null ? (
+          <Notice title="Niezatwierdzony szkic">{"Zatwierd\u017a lub odrzu\u0107 szkic, aby zapisa\u0107 profil."}</Notice>
+        ) : null}
 
         {draft.profileId === null && draft.referenceAssetId !== null ? (
           <Notice title="Ten profil jeszcze nie istnieje">

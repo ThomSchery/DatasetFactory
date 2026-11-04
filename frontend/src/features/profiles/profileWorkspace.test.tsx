@@ -222,6 +222,38 @@ describe("the profile workspace", () => {
     await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", page_segmentation_mode: 6 }] }));
   });
 
+  it("blocks both saves while an unaccepted sketch exists", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    await user.clear(screen.getByLabelText(/Nazwa regionu/));
+    await user.type(screen.getByLabelText(/Nazwa regionu/), "Zdrowie");
+    const surface = await loadScreenshot();
+    drawRegion(surface, { xRatio: 0.2, yRatio: 0.2 }, { xRatio: 0.4, yRatio: 0.4 });
+    expect(await screen.findByLabelText("Nazwa narysowanego regionu")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save as" })).toBeDisabled();
+    expect(screen.getByText(/Zatwierd\u017a lub odrzu\u0107 szkic/)).toBeVisible();
+  });
+
+  it("discards draft and sketch when reselecting the current profile", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Zaznacz region Pasek zdrowia" }));
+    await user.clear(screen.getByLabelText(/Nazwa regionu/));
+    await user.type(screen.getByLabelText(/Nazwa regionu/), "Zdrowie");
+    const surface = await loadScreenshot();
+    drawRegion(surface, { xRatio: 0.2, yRatio: 0.2 }, { xRatio: 0.4, yRatio: 0.4 });
+    await chooseProfile(user, "Alpha");
+    await user.click(await screen.findByRole("button", { name: "Odrzu\u0107 zmiany" }));
+    expect(screen.queryByLabelText("Nazwa narysowanego regionu")).toBeNull();
+    expect(within(screen.getByRole("region", { name: "Annotations" })).getByText("Pasek zdrowia")).toBeInTheDocument();
+    await chooseProfile(user, "Alpha");
+    expect(screen.queryByRole("dialog", { name: "Niezapisane zmiany" })).toBeNull();
+  });
+
   it("opens the active profile with its regions, classes and screenshot", async () => {
     stubProfiles();
     renderApp(["/profiles"]);

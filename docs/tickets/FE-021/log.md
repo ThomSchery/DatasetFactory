@@ -75,3 +75,15 @@ Ocena review względem `review.png` (768) i `review-mobile.png` (360):
 - Świadome odstępstwa od makiety (bez zmian): decyzje Zaakceptuj/Odrzuć i filtry zostają w pasku nad obrazem zamiast w panelu Annotations — asercje geometrii FE-010..FE-019 (pasek przed kanwą, kanwa kończy się z paskiem, panel po lewej) chronią ten układ, a wymaganie 10 ticketu każe zachować pełny edytor. Pasek FE-021 Upload/Profil/Run jest też na review, bo powłoka jest wspólna. Etykieta „Klatka NN” w rogu kanwy pochodzi z wcześniejszych ticketów i została.
 
 Bramka końcowa na `b41113b` (porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe021-gate-pytest`): **9/9 PASS, 0 SKIP** — ruff format, ruff check, mypy, pytest 455/455, tsc, Vitest 733/733, vite build, Playwright 29/29, E2E root safety 2/2 (skipped 0). Commity etapu: `d1eeb5f` (E2E na nową powłokę i FE-017), `f0b7c92` (selektor klatki i zoom), `b746eb2` (stabilne dopasowanie FE-017), `b41113b` (ikona w przycisku). Po bramce 44 historyczne PNG FE-001…FE-019 przywrócone z HEAD (`git checkout`, byte-for-byte); zrzuty FE-021 z tej bramki zacommitowane razem z tym wpisem. Commit z logiem zmienia wyłącznie `docs/tickets/FE-021/`.
+
+## FIX1 — Design Plan (2026-11-04)
+
+Elementy: przyciski Save profile i Save as oraz widoczny powód ich blokady przy szkicu; przycisk trybu rysowania na panelu obrazu, jego stan aria-pressed i Escape; istniejące RegionOverlay, panel szkicu accept/reject oraz potwierdzenie odrzucenia przy ponownym wyborze profilu.
+
+- [x] Layout i odstępy: GRID-01..14, SPACING-01..13; istniejący układ panelu i tokeny --size-xs/sm/md.
+- [x] Typografia: TYPO-01..21, FONTSIZE-01..11, LHEIGHT-01..14, LSPACE-01..09; istniejące semantyczne style i tokeny tekstu.
+- [x] Kolory: COLOR-01..10; istniejące semantyczne kolory, stan trybu także przez aria-pressed.
+- [x] Obramowania: BORDER-01..03/05..09, BWIDTH-01..14, RADIUS-01..05; istniejący Button.
+- [x] Cienie i nakładki: SHADOW-01..05, OVERLAY-01..07; istniejące Panel i RegionOverlay.
+- [x] Interakcje: COLOR-07, OPACITY-01..02, fokus klawiatury, Escape, disabled z widocznym powodem.
+- [x] Komponenty: Button, Notice, Panel, RegionOverlay i istniejący Dialog; bez nowych prymitywów.
