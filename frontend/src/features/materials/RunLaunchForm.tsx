@@ -6,9 +6,9 @@ import { useForm } from "react-hook-form";
 import {
   createRun,
   describeApiError,
-  getCurrentProfile,
   invalidateFor,
   listMaterials,
+  listProfiles,
   queryKeys,
 } from "../../api";
 import type { PipelineRun } from "../../api";
@@ -27,12 +27,10 @@ import "./MaterialsScreen.css";
  * it, because starting is what acquires the single global run slot and can
  * answer `409 active_run`.
  *
- * Profile choice is limited by the contract, not by this screen: TECH_PLAN §5
- * exposes `GET /profiles/current` and no list endpoint, so there is exactly one
- * profile to offer. The control is still a select so F3 can widen it without
- * reshaping the form.
+ * The profile collection supplies the choices; selection also drives the
+ * adjacent reference image in Run Setup.
  */
-export function RunLaunchForm({ onCreated }: { onCreated?: (run: PipelineRun) => void }) {
+export function RunLaunchForm({ onCreated, onProfileChange }: { onCreated?: (run: PipelineRun) => void; onProfileChange?: (profileId: string) => void }) {
   const queryClient = useQueryClient();
 
   const materials = useQuery({
@@ -40,8 +38,8 @@ export function RunLaunchForm({ onCreated }: { onCreated?: (run: PipelineRun) =>
     queryFn: ({ signal }) => listMaterials({ page: 1, page_size: 100 }, signal),
   });
   const profile = useQuery({
-    queryKey: queryKeys.currentProfile(),
-    queryFn: ({ signal }) => getCurrentProfile(signal),
+    queryKey: queryKeys.profiles(),
+    queryFn: ({ signal }) => listProfiles(signal),
   });
 
   const form = useForm<RunLaunchValues>({
@@ -57,6 +55,9 @@ export function RunLaunchForm({ onCreated }: { onCreated?: (run: PipelineRun) =>
         interval_ms: values.interval_ms,
       }),
     onSuccess: async (run) => {
+      // A dashboard request started before POST can still be in flight. With
+      // no cached result Query may otherwise reuse it and publish old state.
+      await queryClient.cancelQueries({ queryKey: queryKeys.dashboard(), exact: true });
       await invalidateFor(queryClient, { type: "run-created" });
       onCreated?.(run);
     },
@@ -92,8 +93,7 @@ export function RunLaunchForm({ onCreated }: { onCreated?: (run: PipelineRun) =>
     label: `${material.basename} — ${String(material.width)}×${String(material.height)}`,
     value: material.id,
   }));
-  const profileOptions =
-    profile.data === null ? [] : [{ label: profile.data.name, value: profile.data.id }];
+  const profileOptions = profile.data.map((item) => ({ label: item.name, value: item.id }));
 
   if (materialOptions.length === 0 || profileOptions.length === 0) {
     return (
@@ -132,6 +132,10 @@ export function RunLaunchForm({ onCreated }: { onCreated?: (run: PipelineRun) =>
 
         <SelectField
           {...form.register("profile_id")}
+          onChange={(event) => {
+            void form.register("profile_id").onChange(event);
+            onProfileChange?.(event.target.value);
+          }}
           description="W v1 rozdzielczość materiału musi zgadzać się z rozdzielczością profilu."
           error={form.formState.errors.profile_id?.message}
           label="Profil gry"

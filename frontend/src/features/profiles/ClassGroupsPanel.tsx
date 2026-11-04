@@ -4,11 +4,12 @@ import { Button } from "../../components/common/Button";
 import { CollapsibleGroup } from "../../components/common/CollapsibleGroup";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Panel } from "../../components/common/Panel";
+import { Notice } from "../../components/common/Notice";
 import { SelectField } from "../../components/common/SelectField";
 import { TextField } from "../../components/common/TextField";
 import { Empty, InlineError } from "../../components/common/UiStates";
 import type { DraftCategory, DraftRegion } from "./profileDraft";
-import { CHARACTER_CLASS_ALPHABET } from "../../api";
+import { CHARACTER_CLASS_ALPHABET, categoryGroupIdOf, categoryGroupLabelOf } from "../../api";
 import { OCR_PAGE_SEGMENTATION_OPTIONS } from "./schemas";
 import { DEFAULT_REGION_PAGE_SEGMENTATION_MODE } from "./schemas";
 import "./ClassGroupsPanel.css";
@@ -94,8 +95,10 @@ export function ClassGroupsPanel({
               }}
               value={editingName}
             />
-            {editingName.trim() !== "" && nextKind !== category.kind ? (
-              <p>Klasa zmieni grupę: {category.kind === "game" ? "Custom → OCR" : "OCR → Custom"}.</p>
+            {editingName.trim() !== "" && categoryGroupIdOf({ name: editingName.trim(), kind: nextKind }) !== categoryGroupIdOf(category) ? (
+              <Notice title="Klasa zmieni grupę" tone="warning">
+                {categoryGroupLabelOf(category)} → {categoryGroupLabelOf({ name: editingName.trim(), kind: nextKind })}.
+              </Notice>
             ) : null}
           </div>
         ) : <span className="df-class-groups__custom-name">{category.name}</span>}

@@ -9,6 +9,7 @@ import {
   framePageFixture,
   materialFixture,
   profileFixture,
+  profileSummaryFixture,
   runFixture,
 } from "../../test/fixtures";
 import { renderApp, stubFetch } from "../../test/harness";
@@ -57,6 +58,9 @@ function stubBackend(state: BackendState) {
     if (url.includes("/api/v1/profiles/profile-1")) {
       return { status: 200, body: profileFixture() };
     }
+    if (url.endsWith("/api/v1/profiles")) {
+      return { status: 200, body: [profileSummaryFixture()] };
+    }
     if (url.includes("/api/v1/runs") && url.endsWith("/start")) {
       return state.startResponse ?? { status: 202, body: state.run };
     }
@@ -92,6 +96,21 @@ afterEach(() => {
 });
 
 describe("materials: from a file to a started run", () => {
+  it("offers saved profiles and shows the selected profile's reference image", async () => {
+    const user = userEvent.setup();
+    stubFetch((url) => {
+      if (url.endsWith("/profiles")) return { status: 200, body: [profileSummaryFixture(), profileSummaryFixture({ id: "profile-2", name: "Druga gra" })] };
+      if (url.endsWith("/profiles/profile-2")) return { status: 200, body: profileFixture({ id: "profile-2", name: "Druga gra", reference_asset_url: "/api/v1/assets/references/asset-2" }) };
+      if (url.endsWith("/profiles/current")) return { status: 200, body: profileFixture() };
+      if (url.includes("/materials")) return { status: 200, body: { items: [materialFixture()], page: 1, page_size: 100, total: 1 } };
+      return { status: 200, body: emptyDashboard() };
+    });
+    renderApp(["/run"]);
+    const selector = await screen.findByRole("combobox", { name: "Profil gry" });
+    await user.selectOptions(selector, "profile-2");
+    expect(await screen.findByAltText("Zrzut referencyjny profilu Druga gra")).toHaveAttribute("src", "/api/v1/assets/references/asset-2");
+  });
+
   it("imports a material, creates a run and starts it", async () => {
     const user = userEvent.setup();
     const fetchSpy = stubBackend(state);

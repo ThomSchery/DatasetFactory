@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createProfileInWorkspace } from "./profileFlow";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const referenceImage = path.join(
@@ -61,28 +62,9 @@ function restoreWorkspaceWrites(workspaceRoot: string, identity: string): void {
 }
 
 async function createProfile(page: Page): Promise<void> {
-  await page.goto("/profiles/new");
-  await page.getByLabel("Nazwa profilu").fill("Gra testowa E2E błędy");
-  await page.getByRole("button", { name: "Użyj ścieżki ręcznej" }).click();
-  await page.getByLabel("Ścieżka obrazu referencyjnego").fill(referenceImage);
-  await page.getByRole("button", { name: "Wczytaj podgląd" }).click();
-  const surface = page.getByRole("listbox", {
-    name: "Regiony HUD na obrazie referencyjnym",
-  });
-  const bounds = await surface.boundingBox();
-  expect(bounds).not.toBeNull();
-  if (bounds === null) {
-    throw new Error("Region drawing surface has no browser geometry");
-  }
-  const from = { clientX: bounds.x + bounds.width * 0.2, clientY: bounds.y + bounds.height * 0.2 };
-  const to = { clientX: bounds.x + bounds.width * 0.8, clientY: bounds.y + bounds.height * 0.6 };
-  await surface.dispatchEvent("pointerdown", { ...from, pointerId: 11 });
-  await surface.dispatchEvent("pointermove", { ...to, pointerId: 11 });
-  await surface.dispatchEvent("pointerup", { ...to, pointerId: 11 });
-  await page.getByRole("button", { name: "7", exact: true }).click();
-  await page.getByLabel("Dozwolone znaki OCR").fill("7");
+  await createProfileInWorkspace(page, referenceImage, "Gra testowa E2E błędy");
   const initialDashboardResponse = page.waitForResponse(isDashboardGet);
-  await page.getByRole("button", { name: "Utwórz profil" }).click();
+  await page.goto("/materials");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
   expect((await initialDashboardResponse).ok()).toBe(true);
 }
@@ -152,6 +134,8 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
     await createProfile(page);
     await page.getByLabel("Ścieżka pliku wideo").fill(fixtureVideo);
     await page.getByRole("button", { name: "Zaimportuj materiał" }).click();
+    await expect(page.getByText("synthetic-hud.mkv").first()).toBeVisible();
+    await page.goto("/run");
     const materialSelect = page.getByRole("combobox", { name: "Materiał", exact: true });
     await expect(materialSelect).toContainText("synthetic-hud.mkv");
     await materialSelect.selectOption({ index: 1 });
@@ -163,17 +147,15 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
         response.request().method() === "POST" &&
         new URL(response.url()).pathname === "/api/v1/runs",
     );
-    const createdDashboardResponse = page.waitForResponse(isDashboardGet);
     await page.getByRole("button", { name: "Utwórz run" }).click();
     const createdRunResponse = await createRunResponse;
     expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
     const queuedRun = (await createdRunResponse.json()) as RunSnapshot;
+    await expect(page.getByRole("button", { name: "Utwórz run" })).toBeEnabled({ timeout: 15000 });
     queuedRunId = queuedRun.id;
-    const dashboardAfterCreate = await createdDashboardResponse;
-    expect(dashboardAfterCreate.ok(), await dashboardAfterCreate.text()).toBe(true);
-    expect((await dashboardAfterCreate.json()) as { run: RunSnapshot | null }).toMatchObject({
-      run: { id: queuedRunId, status: "queued" },
-    });
+    await expect.poll(async () => (await apiJson<{ run: RunSnapshot | null }>(request, "/dashboard")).run)
+      .toMatchObject({ id: queuedRunId, status: "queued" });
+    await expect(page.getByRole("region", { name: "Aktywny run" })).toContainText(queuedRunId, { timeout: 15000 });
     const visibleStart = page.getByRole("button", { name: "Uruchom" });
     await expect(visibleStart).toBeVisible();
 

@@ -169,10 +169,12 @@ test("FE-019 pokazuje dwa stany pickerów, trzy panele i wspólny trójkąt prof
 
     await page.goto("/profiles");
     await freezeMotion(page);
-    const profileGroups = page.locator(".df-profile-collection__categories");
+    await page.getByRole("button", { name: "Zaznacz region Pasek zdrowia" }).click();
+    await page.getByLabel("Filtruj znaki").focus();
+    const profileGroups = page.getByRole("region", { name: "Klasy" });
     await expect(profileGroups).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Zwiń grupę Liczby" }).click();
-    await expect(page.getByRole("button", { name: "Rozwiń grupę Liczby" })).toBeVisible();
+    await page.getByRole("button", { name: "Zwiń grupę Numbers" }).click();
+    await expect(page.getByRole("button", { name: "Rozwiń grupę Numbers" })).toBeVisible();
     await profileGroups.scrollIntoViewIfNeeded();
     await shoot(page, `profile-triangles-${suffix}`);
   }

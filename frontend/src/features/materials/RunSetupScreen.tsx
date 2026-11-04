@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
+import { useState } from "react";
 
-import { describeApiError, getCurrentProfile, queryKeys } from "../../api";
+import { describeApiError, getCurrentProfile, getProfile, queryKeys } from "../../api";
 import type { PipelineRun, RunAction } from "../../api";
 import { annotationsPath } from "../../app/navigation";
 import { Panel } from "../../components/common/Panel";
@@ -24,10 +25,11 @@ import "./RunSetupScreen.css";
  */
 export function RunSetupScreen() {
   const navigate = useNavigate();
+  const [selectedProfileId, setSelectedProfileId] = useState("");
   const dashboard = useDashboard();
   const profile = useQuery({
-    queryKey: queryKeys.currentProfile(),
-    queryFn: ({ signal }) => getCurrentProfile(signal),
+    queryKey: selectedProfileId === "" ? queryKeys.currentProfile() : queryKeys.profile(selectedProfileId),
+    queryFn: ({ signal }) => selectedProfileId === "" ? getCurrentProfile(signal) : getProfile(selectedProfileId, signal),
   });
 
   const onTransitioned = (run: PipelineRun, action: RunAction) => {
@@ -43,7 +45,7 @@ export function RunSetupScreen() {
 
       <div className="df-run-setup__workspace">
         <div className="df-run-setup__controls">
-          <RunLaunchForm />
+          <RunLaunchForm onProfileChange={setSelectedProfileId} />
         </div>
 
         <div className="df-run-setup__canvas">

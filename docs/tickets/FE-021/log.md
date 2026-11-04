@@ -51,3 +51,10 @@ Save profile pozostaje dostępny dla profilu z ukończoną historią: snapshot I
 - Przywrócono edycję nazw klas OCR i Custom z ostrzeżeniem o zmianie grupy; nazwy regionów blokujących zmianę są widoczne. Testy obejmują wersję, konflikty, nieudany obraz, kopiowanie i przełączanie kontekstu.
 - Chromium: dialog Save as, zamknięcie Escape, powrót i pułapka fokusu; rysowanie profilu 360/768/1440; pomiary review 360–1920. Obejrzano porównanie z PNG: naprawiono rozciągniętą ikonę menu i nachodzący toolbar; na telefonie kontrolki zoomu przeniesiono pod obraz. Makieta review nadal wymaga dalszej oceny względem Figmy i zachowania całego edytora.
 - Próba pełnej bramki została celowo przerwana podczas pytest po odkryciu brakującej edycji nazw klas OCR; wynik nie jest PASS i wymaga ponownego uruchomienia po zakończeniu zmian.
+
+## Kontynuacja — pełna ścieżka (2026-11-04)
+
+- Chromium ujawnił błąd Strict Mode: klucz nowego regionu był generowany wewnątrz updatera stanu, przez co wybór OCR trafiał w inny klucz. Generowanie i wybór są teraz jedną spójną akcją; asercję wyboru dodano do testu workspace.
+- Run Setup wybiera dowolny zapisany profil i pokazuje jego obraz. Przed odświeżeniem dashboardu po utworzeniu runu anulowany jest starszy odczyt w locie; rzeczywisty E2E wykrył wyścig w którym stary odczyt zasłaniał nowy run.
+- Pionowy test Chromium przeszedł: utworzenie profilu, import, run, restart backendu, wznowienie, korekta anotacji i eksport. Scenariusz błędów również przeszedł w przebiegu wspólnym; trzy historyczne testy wizualne FE-016/018/019 przeszły po przeniesieniu asercji do nowego flow. Historyczne PNG przywrócono byte-for-byte. Typecheck i Vitest 731/731 PASS.
+- Druga próba bramki 9/9 została przerwana przed ukończeniem, ponieważ testy E2E nadal zawierały usunięty flow. Konieczne jest nowe pełne uruchomienie po zmianach.

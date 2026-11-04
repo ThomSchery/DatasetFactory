@@ -102,7 +102,13 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
     await page.goto("/profiles");
     await freezeMotion(page);
 
-    await page.getByRole("button", { name: "Dodaj region" }).click();
+    const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
+    await expect(surface).toBeVisible();
+    const bounds = await surface.boundingBox();
+    if (bounds === null) throw new Error("Brak powierzchni regionów");
+    await surface.dispatchEvent("pointerdown", { clientX: bounds.x + bounds.width * 0.2, clientY: bounds.y + bounds.height * 0.2, pointerId: 1 });
+    await surface.dispatchEvent("pointermove", { clientX: bounds.x + bounds.width * 0.4, clientY: bounds.y + bounds.height * 0.4, pointerId: 1 });
+    await surface.dispatchEvent("pointerup", { clientX: bounds.x + bounds.width * 0.4, clientY: bounds.y + bounds.height * 0.4, pointerId: 1 });
     const nextRunNotice = page.getByRole("status", {
       name: "Ustawienia regionu obowiązują od kolejnego runu",
     });
@@ -110,20 +116,24 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
     await expect(nextRunNotice).toContainText(
       "nie przelicza istniejących klatek, próbek ani obserwacji",
     );
-    await expect(page.getByRole("textbox", { name: "Nazwa nowego regionu" })).toBeVisible();
-    await expect(page.getByLabel("Dozwolone znaki OCR")).toHaveValue("78A-");
+    await expect(page.getByRole("textbox", { name: "Nazwa narysowanego regionu" })).toBeVisible();
+    await page.getByRole("button", { name: "Accept", exact: true }).click();
+    await page.getByLabel("Filtruj znaki").focus();
+    for (const character of ["7", "8", "A", "-"]) {
+      await expect(page.getByRole("checkbox", { name: character, exact: true })).toHaveAttribute("aria-checked", "true");
+    }
     await expect(page.getByLabel("Układ tekstu OCR")).toHaveValue("7");
     await nextRunNotice.scrollIntoViewIfNeeded();
     await shoot(page, `profile-add-region-${suffix}`);
 
-    const profileClasses = page.getByRole("group", { name: "Liczby" });
+    const profileClasses = page.getByRole("group", { name: "Numbers" });
     await profileClasses.scrollIntoViewIfNeeded();
-    for (const label of ["Pola HUD (gra)", "Liczby", "Litery", "Symbole"]) {
+    for (const label of ["Custom", "Numbers", "Letters", "Symbols"]) {
       await expect(page.getByRole("group", { name: label })).toBeVisible();
     }
     await shoot(page, `profile-groups-expanded-${suffix}`);
 
-    for (const label of ["Liczby", "Litery", "Symbole"]) {
+    for (const label of ["Numbers", "Letters", "Symbols"]) {
       await page.getByRole("button", { name: `Zwiń grupę ${label}` }).click();
       await expect(page.getByRole("button", { name: `Rozwiń grupę ${label}` })).toBeVisible();
     }

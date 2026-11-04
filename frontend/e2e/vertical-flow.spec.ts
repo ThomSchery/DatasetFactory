@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { createProfileInWorkspace } from "./profileFlow";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const referenceImage = path.join(
@@ -160,6 +161,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   page,
   request,
 }, testInfo) => {
+  test.setTimeout(120_000);
   expect(fs.existsSync(referenceImage)).toBe(true);
   expect(fs.existsSync(fixtureVideo)).toBe(true);
   const runtimeRoot = configuredRuntimeRoot();
@@ -186,43 +188,16 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     }
   });
 
-  await page.goto("/profiles/new");
-  await page.getByLabel("Nazwa profilu").fill("Gra testowa E2E restart");
-  await page.getByRole("button", { name: "Użyj ścieżki ręcznej" }).click();
-  await page.getByLabel("Ścieżka obrazu referencyjnego").fill(referenceImage);
-  await page.getByRole("button", { name: "Wczytaj podgląd" }).click();
-
-  const image = page.getByAltText(/Obraz referencyjny profilu/);
-  await expect(image).toBeVisible();
-  const profileSurface = page.getByRole("listbox", {
-    name: "Regiony HUD na obrazie referencyjnym",
-  });
-  const profileBounds = await profileSurface.boundingBox();
-  expect(profileBounds).not.toBeNull();
-  if (profileBounds === null) {
-    throw new Error("Region drawing surface has no browser geometry");
-  }
-  const profileFrom = {
-    clientX: profileBounds.x + profileBounds.width * 0.2,
-    clientY: profileBounds.y + profileBounds.height * 0.2,
-  };
-  const profileTo = {
-    clientX: profileBounds.x + profileBounds.width * 0.8,
-    clientY: profileBounds.y + profileBounds.height * 0.6,
-  };
-  await profileSurface.dispatchEvent("pointerdown", { ...profileFrom, pointerId: 1 });
-  await profileSurface.dispatchEvent("pointermove", { ...profileTo, pointerId: 1 });
-  await profileSurface.dispatchEvent("pointerup", { ...profileTo, pointerId: 1 });
-  await expect(profileSurface.getByRole("option", { name: /Region 1/ })).toBeVisible();
-  await page.getByRole("button", { name: "7", exact: true }).click();
-  await page.getByLabel("Dozwolone znaki OCR").fill("7");
+  await createProfileInWorkspace(page, referenceImage, "Gra testowa E2E restart");
   const initialDashboardResponse = page.waitForResponse(isDashboardGet);
-  await page.getByRole("button", { name: "Utwórz profil" }).click();
+  await page.goto("/materials");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
   expect((await initialDashboardResponse).ok()).toBe(true);
 
   await page.getByLabel("Ścieżka pliku wideo").fill(fixtureVideo);
   await page.getByRole("button", { name: "Zaimportuj materiał" }).click();
+  await expect(page.getByText("synthetic-hud.mkv").first()).toBeVisible();
+  await page.goto("/run");
   const materialSelect = page.getByRole("combobox", { name: "Materiał", exact: true });
   await expect(materialSelect).toContainText("synthetic-hud.mkv");
   await materialSelect.selectOption({ index: 1 });
@@ -233,16 +208,14 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === "/api/v1/runs",
   );
-  const createdDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.getByRole("button", { name: "Utwórz run" }).click();
   const createdRunResponse = await createRunResponse;
   expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
   const createdRun = (await createdRunResponse.json()) as RunSnapshot;
-  const dashboardAfterCreate = await createdDashboardResponse;
-  expect(dashboardAfterCreate.ok(), await dashboardAfterCreate.text()).toBe(true);
-  expect((await dashboardAfterCreate.json()) as { run: RunSnapshot | null }).toMatchObject({
-    run: { id: createdRun.id, status: "queued" },
-  });
+  await expect(page.getByRole("button", { name: "Utwórz run" })).toBeEnabled({ timeout: 15000 });
+  await expect.poll(async () => (await apiJson<{ run: RunSnapshot | null }>(request, "/dashboard")).run)
+    .toMatchObject({ id: createdRun.id, status: "queued" });
+  await expect(page.getByRole("region", { name: "Aktywny run" })).toContainText(createdRun.id, { timeout: 15000 });
   const startRun = page.getByRole("button", { name: "Uruchom" });
   await expect(startRun).toBeVisible();
 
@@ -658,9 +631,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.down();
   await page.mouse.move(abandonTo.x, abandonTo.y, { steps: 4 });
   await page.mouse.up();
-  const savedPopover = page.getByRole("dialog", { name: "Edytuj anotację 7" });
+  const savedPopover = page.getByRole("dialog", { name: "Edytuj anotację -" });
   await expect(savedPopover).toBeVisible();
-  await expect(savedPopover.getByText("przypisano: 7")).toBeVisible();
+  await expect(savedPopover.getByText("przypisano: -")).toBeVisible();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
@@ -677,7 +650,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.move(manualTo.clientX, manualTo.clientY, { steps: 4 });
   await page.mouse.up();
   await expect(savedPopover).toBeVisible();
-  await expect(savedPopover.getByText("przypisano: 7")).toBeVisible();
+  await expect(savedPopover.getByText("przypisano: -")).toBeVisible();
 
   // FE-017 D persists both gestures immediately with the profile's first class.
   // Abandoning the second box therefore has to issue a real DELETE and leave
@@ -730,6 +703,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     )
     .toBe("accepted");
 
+  await page.getByRole("button", { name: "Wszystkie sekcje" }).click();
   await page.getByRole("link", { name: /Eksporty/ }).click();
   await expect(page.getByRole("button", { name: "Uruchom eksport" })).toBeVisible();
   await page.getByRole("button", { name: "Uruchom eksport" }).click();

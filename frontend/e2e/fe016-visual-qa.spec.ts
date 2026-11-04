@@ -121,6 +121,7 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
     await page.goto("/profiles");
     await freezeMotion(page);
 
+    await page.getByRole("button", { name: "Rozwiń grupę Nazwy klas OCR" }).click();
     await page.getByRole("button", { name: "Zmień nazwę klasy 7" }).click();
     const renameInput = page.getByRole("textbox", { name: "Nowa nazwa klasy 7" });
     await renameInput.fill("osiem");
@@ -129,17 +130,15 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
       name: "Ukończone eksporty pozostają niezmienne",
     });
     const kindWarning = page.getByRole("status", { name: "Klasa zmieni grupę" });
-    const profilePanel = page.getByRole("region", { name: visualProfile.name });
-    const profileBody = profilePanel.locator(".df-panel__body");
+    const profileBody = page.getByRole("region", { name: "Klasy" }).locator(".df-panel__body");
     await kindWarning.scrollIntoViewIfNeeded();
-    await expect(immutableNotice).toBeInViewport();
     await expect(kindWarning).toBeInViewport();
     await expect(kindWarning).toContainText("Liczby");
     await expect(kindWarning).toContainText("Pola HUD (gra)");
-    await expectInsideViewport(immutableNotice, viewport, `immutable notice at ${suffix}`);
     await expectInsideViewport(kindWarning, viewport, `kind warning at ${suffix}`);
-    await expectInsideContainer(immutableNotice, profileBody, `immutable notice at ${suffix}`);
     await expectInsideContainer(kindWarning, profileBody, `kind warning at ${suffix}`);
+    await immutableNotice.scrollIntoViewIfNeeded();
+    await expectInsideViewport(immutableNotice, viewport, `immutable notice at ${suffix}`);
 
     await writeFile(
       path.join(screenshotDirectory, `profile-rename-${suffix}.png`),

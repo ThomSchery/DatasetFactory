@@ -329,7 +329,7 @@ describe("the profile workspace", () => {
     const field = screen.getByLabelText("Nowa nazwa klasy 7");
     await user.clear(field);
     await user.type(field, "score");
-    expect(screen.getByText(/Klasa zmieni grupę: OCR → Custom/)).toBeVisible();
+    expect(screen.getByRole("status", { name: "Klasa zmieni grupę" })).toHaveTextContent("Liczby → Pola HUD (gra)");
     await user.click(screen.getByRole("button", { name: "Gotowe" }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(savedBody(spy)).toMatchObject({
@@ -370,6 +370,7 @@ describe("the profile workspace", () => {
     expect(within(annotations).getByText("Amunicja")).toBeInTheDocument();
     const classes = screen.getByRole("region", { name: "Klasy" });
     expect(within(classes).getByText("Amunicja")).toBeInTheDocument();
+    expect(within(classes).getByLabelText("Układ tekstu OCR")).toBeEnabled();
     expect(screen.queryByLabelText("Nazwa narysowanego regionu")).toBeNull();
   });
 

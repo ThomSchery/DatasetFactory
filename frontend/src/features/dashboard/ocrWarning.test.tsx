@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { dashboardFixture, emptyDashboard, materialFixture, runFixture } from "../../test/fixtures";
+import { dashboardFixture, emptyDashboard, materialFixture, profileSummaryFixture, runFixture } from "../../test/fixtures";
 import { renderApp, stubFetch } from "../../test/harness";
 
 /*
@@ -41,6 +41,9 @@ function stubWith(run: ReturnType<typeof runFixture> | null) {
     }
     if (url.includes("/api/v1/profiles/current")) {
       return { status: 200, body: dashboardFixture().profile };
+    }
+    if (url.endsWith("/api/v1/profiles")) {
+      return { status: 200, body: [profileSummaryFixture()] };
     }
     return {
       status: 200,

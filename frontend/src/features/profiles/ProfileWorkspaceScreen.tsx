@@ -260,11 +260,9 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
       setSketchError("Region o tej nazwie już istnieje w tym profilu.");
       return;
     }
-    setDraft((current) => {
-      const next = withAcceptedSketch(current, sketch, name);
-      setSelectedRegionKey(next.regions[next.regions.length - 1].key);
-      return next;
-    });
+    const next = withAcceptedSketch(draft, sketch, name);
+    setDraft(next);
+    setSelectedRegionKey(next.regions[next.regions.length - 1].key);
     setSketch(null);
     setSketchName("");
     setSketchError(undefined);
@@ -463,6 +461,12 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           sketchError={sketchError}
           sketchName={sketchName}
         />
+
+        {draft.profileId !== null ? (
+          <Notice title="Ustawienia regionu obowiązują od kolejnego runu">
+            Zapis nie przelicza istniejących klatek, próbek ani obserwacji. Ukończone runy zachowują swoją geometrię.
+          </Notice>
+        ) : null}
 
         <div className="df-profile-workspace__save">
           <Button
