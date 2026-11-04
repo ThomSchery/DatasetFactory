@@ -128,3 +128,26 @@ test("FE-021 FIX1: draw inside a full-frame existing region with real hit testin
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
 });
+
+test("FIX2: draw mode has a visible high-contrast pressed state", async ({ page }) => {
+  const api = new ApiHarness({ phase: "profile" });
+  await api.install(page);
+  await page.route("**/api/v1/profiles", (route) => route.fulfill({ json: [profileSummaryFixture({ active: true })] }));
+  await page.route("**/api/v1/profiles/profile-1", (route) => route.fulfill({ json: profileFixture() }));
+  await page.goto("/profiles");
+  const toggle = page.getByRole("button", { name: "Draw region" });
+  const off = await toggle.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle.locator('[aria-hidden="true"]')).toBeVisible();
+  const styles = await toggle.evaluate((el) => ({ active: getComputedStyle(el).backgroundColor, parent: getComputedStyle(el.closest("section")!).backgroundColor }));
+  expect(styles.active).not.toBe(off);
+  const luminance = (color: string) => {
+    const rgb = color.match(/\d+(?:\.\d+)?/g)?.slice(0, 3).map(Number);
+    if (!rgb || rgb.length !== 3) throw new Error(`Not an RGB color: ${color}`);
+    return rgb.map((n) => n / 255).map((n) => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
+      .reduce((sum, n, index) => sum + n * [0.2126, 0.7152, 0.0722][index], 0);
+  };
+  const values = [luminance(styles.active), luminance(styles.parent)].sort((a, b) => a - b);
+  expect((values[1] + 0.05) / (values[0] + 0.05)).toBeGreaterThanOrEqual(3);
+});

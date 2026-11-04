@@ -61,3 +61,15 @@
     order: 0;
   }
 }
+
+.df-profile-workspace__draw-toggle[aria-pressed="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable);
+  color: var(--color-text-on-brand);
+}
+
+.df-profile-workspace__draw-toggle[aria-pressed="true"]:hover,
+.df-profile-workspace__draw-toggle[aria-pressed="true"]:active {
+  border-color: var(--color-fill-brand-impeccable-hover);
+  background: var(--color-fill-brand-impeccable-hover);
+}

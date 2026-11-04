@@ -646,7 +646,8 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             eyebrow="Profil"
             title="Zrzut referencyjny"
           >
-            <Button aria-pressed={drawMode} disabled={editingDisabled} onClick={() => setDrawMode((active) => !active)} size="sm" variant="secondary">
+            <Button className="df-profile-workspace__draw-toggle" aria-pressed={drawMode} disabled={editingDisabled} onClick={() => setDrawMode((active) => !active)} size="sm" variant="secondary">
+              {drawMode ? <span aria-hidden="true">{"\u2713"}</span> : null}
               Draw region
             </Button>
             <RegionOverlay
