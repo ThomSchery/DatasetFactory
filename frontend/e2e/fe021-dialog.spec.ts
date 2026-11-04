@@ -136,18 +136,40 @@ test("FIX2: draw mode has a visible high-contrast pressed state", async ({ page 
   await page.route("**/api/v1/profiles/profile-1", (route) => route.fulfill({ json: profileFixture() }));
   await page.goto("/profiles");
   const toggle = page.getByRole("button", { name: "Draw region" });
-  const off = await toggle.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const clearInteraction = async () => {
+    await page.mouse.move(0, 0);
+    await toggle.evaluate((element) => element.blur());
+  };
+  const colors = () => toggle.evaluate((element) => ({
+    button: getComputedStyle(element).backgroundColor,
+    panel: getComputedStyle(element.closest("section")!).backgroundColor,
+  }));
+  const parse = (color: string) => {
+    const parts = color.match(/[\d.]+/g)?.map(Number);
+    if (!parts || parts.length < 3) throw new Error(`Not an RGB color: ${color}`);
+    return [parts[0], parts[1], parts[2], parts[3] ?? 1];
+  };
+  const composite = (foreground: number[], background: number[]) => {
+    if (background[3] !== 1) throw new Error("Expected an opaque panel background");
+    return foreground.slice(0, 3).map((value, i) => value * foreground[3] + background[i] * (1 - foreground[3]));
+  };
+  const luminance = (rgb: number[]) => rgb.slice(0, 3).map((n) => n / 255)
+    .map((n) => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, n, index) => sum + n * [0.2126, 0.7152, 0.0722][index], 0);
+  const contrast = ({ button, panel }: { button: string; panel: string }) => {
+    const background = parse(panel);
+    const values = [luminance(composite(parse(button), background)), luminance(background)].sort((a, b) => a - b);
+    return (values[1] + 0.05) / (values[0] + 0.05);
+  };
+  await clearInteraction();
+  const off = await colors();
   await toggle.click();
+  await clearInteraction();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await expect(toggle.locator('[aria-hidden="true"]')).toBeVisible();
-  const styles = await toggle.evaluate((el) => ({ active: getComputedStyle(el).backgroundColor, parent: getComputedStyle(el.closest("section")!).backgroundColor }));
-  expect(styles.active).not.toBe(off);
-  const luminance = (color: string) => {
-    const rgb = color.match(/\d+(?:\.\d+)?/g)?.slice(0, 3).map(Number);
-    if (!rgb || rgb.length !== 3) throw new Error(`Not an RGB color: ${color}`);
-    return rgb.map((n) => n / 255).map((n) => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
-      .reduce((sum, n, index) => sum + n * [0.2126, 0.7152, 0.0722][index], 0);
-  };
-  const values = [luminance(styles.active), luminance(styles.parent)].sort((a, b) => a - b);
-  expect((values[1] + 0.05) / (values[0] + 0.05)).toBeGreaterThanOrEqual(3);
+  const active = await colors();
+  expect(active.button).not.toBe(off.button);
+  expect(contrast(active)).toBeGreaterThanOrEqual(3);
+  await toggle.hover();
+  expect(contrast(await colors())).toBeGreaterThanOrEqual(3);
 });
