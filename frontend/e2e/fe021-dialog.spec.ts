@@ -33,15 +33,36 @@ test("FE-021: review remains usable across mobile, tablet and desktop widths", a
     await page.goto("/annotations/run-1");
     const preview = page.locator(".df-review-workspace__preview");
     await expect(preview).toBeVisible();
-    const geometry = await page.evaluate(() => ({
-      width: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-      preview: document.querySelector(".df-review-workspace__preview")?.getBoundingClientRect().width,
-      headerHeight: document.querySelector(".df-shell__bar")?.getBoundingClientRect().height,
-    }));
+    await expect(page.getByRole("img", { name: /Klatka .* runu/ })).toBeVisible();
+    const geometry = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (element === null) throw new Error(`Brak ${selector}`);
+        return element.getBoundingClientRect();
+      };
+      const image = rect(".df-region-overlay__image");
+      const zoom = rect(".df-region-overlay__zoom-controls");
+      return {
+        width: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        preview: rect(".df-review-workspace__preview").width,
+        headerHeight: rect(".df-shell__bar").height,
+        picker: rect(".df-review-toolbar__frame-select select").width,
+        zoomOverlapsImage: zoom.top < image.bottom && zoom.bottom > image.top,
+      };
+    });
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
     expect(geometry.preview).toBeGreaterThan(200);
     expect(geometry.headerHeight).toBeLessThan(80);
+    // The picker has to show at least "Klatka NN" next to its arrow; it once
+    // collapsed to the arrow alone at 360 px.
+    expect(geometry.picker, `frame picker too narrow at ${String(width)} px`).toBeGreaterThanOrEqual(128);
+    // Below the `lg` frame the image is too small for floating zoom controls
+    // to sit on it without covering the HUD under review (FE-015 keeps them on
+    // the image from 992 px up).
+    if (width < 992) {
+      expect(geometry.zoomOverlapsImage, `zoom controls cover the frame at ${String(width)} px`).toBe(false);
+    }
     await page.screenshot({ path: `../docs/tickets/FE-021/review-${width}.png`, fullPage: false });
   }
 });

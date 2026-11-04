@@ -477,9 +477,20 @@
 }
 
 @media (max-width: 1000px) {
-  .df-review-toolbar { grid-template-columns: minmax(0, 1fr); }
-  .df-review-toolbar__navigation, .df-review-toolbar__decisions { justify-self: stretch; }
-  .df-review-toolbar__frame-select { width: auto; flex: 1; min-width: 0; }
+  .df-review-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .df-review-toolbar__navigation,
+  .df-review-toolbar__decisions {
+    justify-self: stretch;
+  }
+
+  .df-review-toolbar__frame-select {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 700px) {
@@ -491,5 +502,35 @@
   .df-review-workspace__side-column > .df-review-workspace__inspector {
     max-height: none;
     overflow-y: visible;
+  }
+
+  /*
+   * One row left the frame picker the width of its own arrow at 360 px: two
+   * touch-size arrows and the counter took the rest. The Figma mobile frame
+   * keeps arrow, picker, arrow in one row, so the counter moves under it. The
+   * DOM order is untouched, so Tab still runs previous, picker, next.
+   */
+  .df-review-toolbar__navigation {
+    display: grid;
+    grid-template-areas:
+      "previous picker next"
+      "position position position";
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .df-review-toolbar__navigation > :first-child {
+    grid-area: previous;
+  }
+
+  .df-review-toolbar__navigation > .df-review-toolbar__frame-select {
+    grid-area: picker;
+  }
+
+  .df-review-toolbar__navigation > strong {
+    grid-area: position;
+  }
+
+  .df-review-toolbar__navigation > :last-child {
+    grid-area: next;
   }
 }

@@ -241,7 +241,10 @@
   text-align: center;
 }
 
-@media (max-width: 700px) {
+/* Below the Figma `lg` frame the floating controls covered most of the top
+   row of the HUD — at 768 px about three quarters of it, which is exactly where
+   the regions under review sit. There they go under the image instead. */
+@media (max-width: 991px) {
   .df-region-overlay__zoom-controls {
     position: static;
     flex-wrap: wrap;
