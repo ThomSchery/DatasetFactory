@@ -78,16 +78,19 @@ interface StubOptions {
   /** Resolves a detail request only once the test lets it. */
   holdDetail?: Record<string, Promise<void>>;
   holdSave?: Promise<void>;
+  holdCreate?: Promise<void>;
+  holdPreview?: Promise<void>;
   profiles?: GameProfile[];
 }
 
-function stubProfiles({ create, holdDetail, holdSave, preview, profiles, save }: StubOptions = {}) {
+function stubProfiles({ create, holdCreate, holdDetail, holdPreview, holdSave, preview, profiles, save }: StubOptions = {}) {
   const known = profiles ?? [alpha(), beta()];
   const spy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     const answer = async (): Promise<StubbedResponse> => {
       if (url.includes("/profiles/reference-preview") && method === "POST") {
+        await holdPreview;
         return (
           preview ?? {
             status: 201,
@@ -100,6 +103,7 @@ function stubProfiles({ create, holdDetail, holdSave, preview, profiles, save }:
         return save ?? { status: 200, body: { ...alpha(), version: 4 } };
       }
       if (url.endsWith("/api/v1/profiles") && method === "POST") {
+        await holdCreate;
         return create ?? { status: 201, body: profileFixture({ id: "profile-copy" }) };
       }
       if (url.endsWith("/api/v1/profiles")) {
@@ -470,6 +474,42 @@ describe("the profile workspace", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Odrzuć zmiany" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Odrzuć zmiany" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/run"));
+  });
+
+  it("blocks leaving while a Save as request is pending", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    stubProfiles({ holdCreate: held });
+    const { router } = renderApp(["/profiles"]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save as" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Save as" }));
+    await user.click(screen.getByRole("button", { name: "Zapisz jako nowy profil" }));
+    expect(screen.getByRole("button", { name: "Tworzenie profilu…" })).toBeDisabled();
+    const dialog = screen.getByRole("dialog", { name: "Save as" });
+    fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    expect(dialog).toBeVisible();
+    expect(router.state.location.pathname).toBe("/profiles");
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Save as" })).toBeNull());
+  });
+
+  it("blocks navigation while a reference preview request is pending", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    stubProfiles({ holdPreview: held });
+    const { router } = renderApp(["/profiles/new"]);
+    await user.type(await screen.findByLabelText("Ścieżka zrzutu ekranu"), "D:\\hud.png");
+    await user.click(screen.getByRole("button", { name: "Wczytaj zrzut" }));
+    await user.click(screen.getByRole("link", { name: "Run" }));
+    expect(await screen.findByRole("dialog", { name: "Niezapisane zmiany" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Odrzuć zmiany" })).toBeDisabled();
+    expect(router.state.location.pathname).toBe("/profiles/new");
+    release();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Odrzuć zmiany" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Wróć do draftu" }));
+    expect(await screen.findByAltText(/Zrzut ekranu nowego profilu/)).toBeInTheDocument();
   });
 
   it("does not let a late answer for one profile land on another", async () => {
