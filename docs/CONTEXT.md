@@ -285,3 +285,7 @@ Pragmatycznej (Boring Technology):
 ### Rewizja kierunku UI i profili (2026-11-03, FE-021)
 
 Użytkownik wybrał wygląd i działanie z notatek projektu Figma DatasetFactory. Eksporty `designs/figma-2026-11-03/` zastępują baseline Impeccable jako źródło wizualne. Kompaktowa nawigacja Upload / Profile / Run oraz menu zachowujące dotychczasowe destynacje zastępują stałą szynę. Wymagany jest responsywny układ także poniżej 1280 px; decyzja FE-07 o blokadzie wąskich ekranów zostaje uchylona. W ramach FE-021 dopuszczono edycję istniejących profili oraz Save as (rewizja odroczenia F02), z ochroną danych i odczytów historycznych runów. Referencją profilu jest zrzut JPG/PNG; wybór momentu klatki nie należy do tej ścieżki. SAM 3 pozostaje poza zakresem. Historyczne decyzje powyżej pozostają jako zapis pierwotnych ustaleń.
+
+### Rewizja wyglądu jak w Figmie (2026-11-05, FE-022)
+
+Użytkownik zdecydował: aplikacja ma wyglądać jak Figma 05.11 (`designs/figma-2026-11-05/`). Dashboard znika, `/` prowadzi do Upload; nawigacja to panel boczny z czterema sekcjami (Upload, Setup for scan, Review for scan, Annotations) i menu ⋮. Interfejs jest po angielsku. Bloki ostrzeżeń OCR znikają z ekranów: wymóg z rewizji OCR po Gate 2 (ujawnienie `engine_id`, wersji/hashy, `quality_gate` i konieczności pełnej ręcznej weryfikacji) spełnia pozycja „OCR engine” w menu ⋮ oraz status „Pending” propozycji OCR w Review. Upload wybiera plik systemowym oknem przez lokalny endpoint backendu; plik nadal czytany w miejscu, bez kopiowania.

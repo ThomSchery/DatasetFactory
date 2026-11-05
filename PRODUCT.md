@@ -47,6 +47,10 @@ recording.
   works around, not an implementation detail.
 - Interface language is Polish; technical terms (OCR, SAM 3, HUD, class names)
   stay in English.
+- Revision 2026-11-05 (FE-022, user decision "ma być taka jak w Figmie"): the
+  interface language is English, as in the Figma document — labels, messages,
+  errors, accessible names and empty states. The Polish rule above is kept as
+  the record of the original decision.
 
 ## Capabilities and Constraints
 

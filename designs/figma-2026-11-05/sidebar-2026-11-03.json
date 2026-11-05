@@ -1,0 +1,212 @@
+{
+ "id": "1248:991",
+ "name": "sidebar",
+ "type": "COMPONENT",
+ "width": 69,
+ "height": 749,
+ "layoutMode": "VERTICAL",
+ "itemSpacing": 0,
+ "paddingTop": 44,
+ "paddingLeft": 0,
+ "fills": [
+  {
+   "blendMode": "NORMAL",
+   "boundVariables": {
+    "color": {
+     "id": "VariableID:1190:1003",
+     "type": "VARIABLE_ALIAS"
+    }
+   },
+   "color": {
+    "b": 0.22745098173618317,
+    "g": 0.1882352977991104,
+    "r": 0.16862745583057404
+   },
+   "opacity": 1,
+   "type": "SOLID",
+   "visible": true
+  }
+ ],
+ "strokes": [
+  {
+   "blendMode": "NORMAL",
+   "boundVariables": {
+    "color": {
+     "id": "VariableID:1190:1025",
+     "type": "VARIABLE_ALIAS"
+    }
+   },
+   "color": {
+    "b": 0.3960784375667572,
+    "g": 0.3294117748737335,
+    "r": 0.29411765933036804
+   },
+   "opacity": 1,
+   "type": "SOLID",
+   "visible": true
+  }
+ ],
+ "cornerRadius": 0,
+ "children": [
+  {
+   "id": "1007:836",
+   "name": "sidebar-menu",
+   "type": "FRAME",
+   "width": 68,
+   "height": 168,
+   "layoutMode": "VERTICAL",
+   "itemSpacing": 24,
+   "paddingTop": 0,
+   "paddingLeft": 0,
+   "fills": [],
+   "strokes": [],
+   "cornerRadius": 0,
+   "children": [
+    {
+     "id": "1028:791",
+     "name": "Folder",
+     "type": "INSTANCE",
+     "width": 24,
+     "height": 24,
+     "layoutMode": "NONE",
+     "itemSpacing": 0,
+     "paddingTop": 0,
+     "paddingLeft": 0,
+     "fills": [
+      {
+       "blendMode": "NORMAL",
+       "boundVariables": {},
+       "color": {
+        "b": 1,
+        "g": 1,
+        "r": 1
+       },
+       "opacity": 1,
+       "type": "SOLID",
+       "visible": false
+      }
+     ],
+     "strokes": [],
+     "cornerRadius": 0,
+     "children": [
+      {
+       "id": "I1028:791;1008:978",
+       "name": "Folder",
+       "type": "GROUP",
+       "width": 19.19610595703125,
+       "height": 19.16872215270996
+      }
+     ]
+    },
+    {
+     "id": "1008:1539",
+     "name": "Setting",
+     "type": "INSTANCE",
+     "width": 24,
+     "height": 24,
+     "layoutMode": "NONE",
+     "itemSpacing": 0,
+     "paddingTop": 0,
+     "paddingLeft": 0,
+     "fills": [
+      {
+       "blendMode": "NORMAL",
+       "boundVariables": {},
+       "color": {
+        "b": 1,
+        "g": 1,
+        "r": 1
+       },
+       "opacity": 1,
+       "type": "SOLID",
+       "visible": false
+      }
+     ],
+     "strokes": [],
+     "cornerRadius": 0,
+     "children": [
+      {
+       "id": "I1008:1539;1008:1156",
+       "name": "Setting",
+       "type": "GROUP",
+       "width": 17.78692626953125,
+       "height": 19.221967697143555
+      }
+     ]
+    },
+    {
+     "id": "1028:829",
+     "name": "Scan",
+     "type": "INSTANCE",
+     "width": 24,
+     "height": 24,
+     "layoutMode": "NONE",
+     "itemSpacing": 0,
+     "paddingTop": 0,
+     "paddingLeft": 0,
+     "fills": [
+      {
+       "blendMode": "NORMAL",
+       "boundVariables": {},
+       "color": {
+        "b": 1,
+        "g": 1,
+        "r": 1
+       },
+       "opacity": 1,
+       "type": "SOLID",
+       "visible": false
+      }
+     ],
+     "strokes": [],
+     "cornerRadius": 0,
+     "children": [
+      {
+       "id": "I1028:829;1008:1065",
+       "name": "Scan",
+       "type": "GROUP",
+       "width": 21.13152313232422,
+       "height": 17.370466232299805
+      }
+     ]
+    },
+    {
+     "id": "1028:836",
+     "name": "Paper Download",
+     "type": "INSTANCE",
+     "width": 24,
+     "height": 24,
+     "layoutMode": "NONE",
+     "itemSpacing": 0,
+     "paddingTop": 0,
+     "paddingLeft": 0,
+     "fills": [
+      {
+       "blendMode": "NORMAL",
+       "boundVariables": {},
+       "color": {
+        "b": 1,
+        "g": 1,
+        "r": 1
+       },
+       "opacity": 1,
+       "type": "SOLID",
+       "visible": false
+      }
+     ],
+     "strokes": [],
+     "cornerRadius": 0,
+     "children": [
+      {
+       "id": "I1028:836;1008:1223",
+       "name": "Paper Download",
+       "type": "GROUP",
+       "width": 15.552000045776367,
+       "height": 18.364700317382812
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
