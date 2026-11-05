@@ -8,7 +8,7 @@ import { CollapsibleGroup } from "./CollapsibleGroup";
 function Harness({ initialOpen = true }: { initialOpen?: boolean }) {
   const [open, setOpen] = useState(initialOpen);
   return (
-    <CollapsibleGroup label="Liczby" onToggle={() => setOpen((current) => !current)} open={open}>
+    <CollapsibleGroup label="Numbers" onToggle={() => setOpen((current) => !current)} open={open}>
       <p>osiem</p>
     </CollapsibleGroup>
   );
@@ -19,14 +19,14 @@ describe("CollapsibleGroup", () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    const toggle = screen.getByRole("button", { name: "Zwiń grupę Liczby" });
+    const toggle = screen.getByRole("button", { name: "Collapse group Numbers" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("group", { name: "Liczby" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Numbers" })).toBeInTheDocument();
     expect(screen.getByText("osiem")).toBeVisible();
 
     await user.click(toggle);
 
-    const collapsed = screen.getByRole("button", { name: "Rozwiń grupę Liczby" });
+    const collapsed = screen.getByRole("button", { name: "Expand group Numbers" });
     expect(collapsed).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("osiem")).not.toBeVisible();
   });
@@ -34,7 +34,7 @@ describe("CollapsibleGroup", () => {
   it("keeps aria-controls pointing at an element that exists while collapsed", () => {
     render(<Harness initialOpen={false} />);
 
-    const toggle = screen.getByRole("button", { name: "Rozwiń grupę Liczby" });
+    const toggle = screen.getByRole("button", { name: "Expand group Numbers" });
     const controlled = toggle.getAttribute("aria-controls");
     expect(controlled).not.toBeNull();
     expect(document.getElementById(controlled as string)).not.toBeNull();
@@ -46,16 +46,16 @@ describe("CollapsibleGroup", () => {
   it("lets a caller own the header row instead of the default heading", () => {
     render(
       <CollapsibleGroup
-        label="Litery"
+        label="Letters"
         onToggle={() => undefined}
         open
-        summary={<span>Litery · 26</span>}
+        summary={<span>Letters · 26</span>}
       >
         <p>A</p>
       </CollapsibleGroup>,
     );
 
-    expect(screen.getByText("Litery · 26")).toBeVisible();
+    expect(screen.getByText("Letters · 26")).toBeVisible();
   });
 
   it("leaves the triangle out of the tab order when the caller rovers focus", async () => {
@@ -63,7 +63,7 @@ describe("CollapsibleGroup", () => {
     render(
       <>
         <button type="button">przed</button>
-        <CollapsibleGroup label="Liczby" onToggle={() => undefined} open toggleTabIndex={-1}>
+        <CollapsibleGroup label="Numbers" onToggle={() => undefined} open toggleTabIndex={-1}>
           <p>osiem</p>
         </CollapsibleGroup>
         <button type="button">po</button>

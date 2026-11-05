@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 
 import { Button } from "../Button";
@@ -27,11 +27,16 @@ export interface AppMenuDestination {
 
 export interface AppMenuProps {
   destinations: readonly AppMenuDestination[];
-  /** Accessible name of the toggle, e.g. "Wszystkie sekcje". */
+  /** Accessible name of the toggle, e.g. "More". */
   label: string;
+  /**
+   * Menu rows that are not routes (FE-022: "OCR engine"). Each receives a
+   * `close` callback so it can dismiss the menu before opening its own layer.
+   */
+  actions?: (close: () => void) => ReactNode;
 }
 
-export function AppMenu({ destinations, label }: AppMenuProps) {
+export function AppMenu({ actions, destinations, label }: AppMenuProps) {
   const [open, setOpen] = useState(false);
   const listId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,6 +86,7 @@ export function AppMenu({ destinations, label }: AppMenuProps) {
         }}
         ref={toggleRef}
         size="sm"
+        title={label}
         variant="muted"
       >
         <Icon name="menu" />
@@ -97,6 +103,11 @@ export function AppMenu({ destinations, label }: AppMenuProps) {
             </NavItem>
           </li>
         ))}
+        {actions === undefined
+          ? null
+          : actions(() => {
+              setOpen(false);
+            })}
       </ul>
     </div>
   );

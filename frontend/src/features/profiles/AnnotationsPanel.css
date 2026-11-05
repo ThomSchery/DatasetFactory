@@ -1,59 +1,61 @@
-.df-annotations__sketch,
-.df-annotations__selected {
-  display: grid;
-  gap: var(--size-xs);
-  padding: var(--size-xs);
-  /* The sketch is unsaved, so it is set apart by a dashed outline — a
-     difference in shape rather than only in colour (COLOR-09). */
-  border: var(--border-width-default) dashed var(--color-stroke-control-default);
-  border-radius: var(--radius-md);
-}
-
-.df-annotations__selected {
-  border-style: solid;
-}
-
-.df-annotations__sketch-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-xs);
-  justify-content: flex-end;
+/*
+ * Figma `Frame 53` (Annotations): the 12/400 label, a 35 px field, a list box
+ * of 35 px rows on `surface/page`, and Reject / Accept in one row.
+ */
+.df-annotations .df-field__control {
+  min-height: var(--list-row-height);
 }
 
 .df-annotations__list {
   display: grid;
-  gap: var(--size-xxs);
+  align-content: start;
+  /* A fixed box: drawing or removing a region never moves what is below. */
+  height: calc(var(--list-row-height) * 4);
   margin: var(--size-none);
-  padding: var(--size-none);
+  padding: var(--element-padding-y-lg) var(--size-none);
+  overflow-y: auto;
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-primary-default);
   list-style: none;
+}
+
+.df-annotations__empty {
+  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+  color: var(--color-text-placeholder-default);
+  font-size: var(--font-size-xs);
 }
 
 .df-annotations__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--size-xs);
   align-items: center;
+  min-height: var(--list-row-height);
 }
 
-.df-annotations__row-select {
+.df-annotations__row[data-selected] {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-annotations__row-select.df-button {
   justify-content: space-between;
   width: 100%;
   min-width: 0;
+  min-height: var(--list-row-height);
+  border-radius: var(--radius-none);
+  color: var(--color-text-weak-default);
+  font-weight: var(--font-weight-regular);
 }
 
 .df-annotations__row-select .df-button__content {
   display: flex;
-  min-width: 0;
   width: 100%;
-}
-
-.df-annotations__row[data-selected] .df-annotations__row-select {
-  background: var(--color-surface-neutral-selected);
+  min-width: 0;
 }
 
 .df-annotations__row-name {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-align: start;
   text-overflow: ellipsis;
@@ -61,11 +63,19 @@
 }
 
 .df-annotations__row-detail {
-  /* TYPO-07: the count is a second kind of information, carried by colour and
-     a tabular face rather than by a second font size. */
-  padding-inline-start: var(--size-xs);
-  color: var(--color-text-weak-default);
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
   flex: none;
+  padding-inline-start: var(--element-gap-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.df-annotations__row-delete.df-button {
+  min-width: var(--list-row-height);
+  min-height: var(--list-row-height);
+  padding: var(--size-none);
+}
+
+.df-annotations__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--element-gap-md);
 }

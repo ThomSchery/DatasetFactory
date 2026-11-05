@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { Button } from "../Button/Button";
+import { Icon } from "../Icon";
 
 import {
   clampRectToSource,
@@ -54,6 +55,16 @@ export interface RegionOverlayProps {
   cornerLabel?: ReactNode;
   /** Disables drawing, selection and removal without unmounting the picture. */
   disabled?: boolean;
+  /**
+   * FE-022: the picture fills a box whose size the consumer sets, the way
+   * Figma's `IMAGE FILL` crops it, and Reset shows the whole frame. Without it
+   * the box takes the picture's own proportion, as before.
+   */
+  fill?: boolean;
+  /** Controls placed before the zoom tools in the row under the picture. */
+  tools?: ReactNode;
+  /** Controls placed at the end of the row under the picture, e.g. Run. */
+  trailing?: ReactNode;
   imageAlt: string;
   /** Opaque asset URL from the API layer. Never a filesystem path. */
   imageUrl: string;
@@ -158,18 +169,86 @@ function rounded(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-function clampPan(
-  point: SourcePoint,
+/**
+ * Where the picture sits in the viewport at scale 1. Without `fill` it is the
+ * whole viewport. With `fill` it is the largest box of the picture's
+ * proportion that fits ("contain"), centred — scale 1 is then the whole frame,
+ * and the starting view zooms that box until it covers the viewport.
+ */
+interface StageLayout {
+  baseHeight: number;
+  baseWidth: number;
+  offsetX: number;
+  offsetY: number;
+  viewportHeight: number;
+  viewportWidth: number;
+}
+
+function clampAxis(
+  requested: number,
   scale: number,
-  viewport: { width: number; height: number },
-): SourcePoint {
-  if (scale <= 1 || viewport.width <= 0 || viewport.height <= 0) {
+  viewport: number,
+  base: number,
+  offset: number,
+): number {
+  const content = base * scale;
+  if (content <= viewport) {
+    // Smaller than the box: centred, never dragged off to one side.
+    return rounded((viewport - content) / 2 - offset);
+  }
+  return rounded(Math.min(-offset, Math.max(viewport - offset - content, requested)));
+}
+
+function clampPan(point: SourcePoint, scale: number, layout: StageLayout): SourcePoint {
+  if (layout.viewportWidth <= 0 || layout.viewportHeight <= 0) {
     return { x: 0, y: 0 };
   }
   return {
-    x: rounded(Math.min(0, Math.max(viewport.width * (1 - scale), point.x))),
-    y: rounded(Math.min(0, Math.max(viewport.height * (1 - scale), point.y))),
+    x: clampAxis(point.x, scale, layout.viewportWidth, layout.baseWidth, layout.offsetX),
+    y: clampAxis(point.y, scale, layout.viewportHeight, layout.baseHeight, layout.offsetY),
   };
+}
+
+function legacyLayout(bounds: { width: number; height: number }): StageLayout {
+  return {
+    baseHeight: bounds.height,
+    baseWidth: bounds.width,
+    offsetX: 0,
+    offsetY: 0,
+    viewportHeight: bounds.height,
+    viewportWidth: bounds.width,
+  };
+}
+
+function fillLayout(viewport: { width: number; height: number }, source: SourceSize): StageLayout {
+  const ratio = source.width / source.height;
+  const baseWidth = Math.min(viewport.width, viewport.height * ratio);
+  const baseHeight = baseWidth / ratio;
+  return {
+    baseHeight,
+    baseWidth,
+    offsetX: (viewport.width - baseWidth) / 2,
+    offsetY: (viewport.height - baseHeight) / 2,
+    viewportHeight: viewport.height,
+    viewportWidth: viewport.width,
+  };
+}
+
+/** `IMAGE FILL`: the smallest zoom at which the picture covers the box. */
+function coverView(layout: StageLayout): ViewTransform {
+  if (layout.baseWidth <= 0 || layout.baseHeight <= 0) {
+    return FIT_VIEW;
+  }
+  const scale = rounded(
+    Math.min(
+      MAX_ZOOM,
+      Math.max(1, layout.viewportWidth / layout.baseWidth, layout.viewportHeight / layout.baseHeight),
+    ),
+  );
+  if (scale === 1) {
+    return FIT_VIEW;
+  }
+  return { scale, ...clampPan({ x: 0, y: 0 }, scale, layout) };
 }
 
 const RESIZE_CORNERS: readonly ResizeCorner[] = [
@@ -242,6 +321,7 @@ function capturePointer(surface: SVGSVGElement, pointerId: number, capture: bool
 export function RegionOverlay({
   cornerLabel,
   disabled = false,
+  fill = false,
   imageAlt,
   imageUrl,
   interactionMode = "select",
@@ -257,6 +337,8 @@ export function RegionOverlay({
   selectedId = null,
   shapes = [],
   source,
+  tools,
+  trailing,
 }: RegionOverlayProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -276,6 +358,29 @@ export function RegionOverlay({
   const [spacePressed, setSpacePressed] = useState(false);
   const [panning, setPanning] = useState(false);
   const [view, setView] = useState<ViewTransform>(FIT_VIEW);
+  const [viewportSize, setViewportSize] = useState<{ width: number; height: number } | null>(null);
+  const fillLayoutValue =
+    fill && source !== null && viewportSize !== null && viewportSize.width > 0 && viewportSize.height > 0
+      ? fillLayout(viewportSize, source)
+      : null;
+  const fillLayoutRef = useRef<StageLayout | null>(fillLayoutValue);
+  fillLayoutRef.current = fillLayoutValue;
+  /** The view is still the starting cover, so a resize may recompute it. */
+  const atStartViewRef = useRef(true);
+
+  /** The geometry every pan and zoom is clamped against, read at call time. */
+  function currentLayout(): StageLayout | null {
+    if (fillLayoutRef.current !== null) {
+      return fillLayoutRef.current;
+    }
+    const viewport = viewportRef.current;
+    return viewport === null ? null : legacyLayout(viewport.getBoundingClientRect());
+  }
+
+  function startView(): ViewTransform {
+    const layout = fillLayoutRef.current;
+    return layout === null ? FIT_VIEW : coverView(layout);
+  }
   const [contextMenu, setContextMenu] = useState<ShapeContextMenu | null>(null);
 
   const canDraw = onDraw !== undefined && !disabled && source !== null;
@@ -284,7 +389,8 @@ export function RegionOverlay({
     onShapeChange !== undefined && onShapeChangeEnd !== undefined && canInteract && source !== null;
   const canGuide = canDraw || canEditShapes;
 
-  function updateView(next: ViewTransform): void {
+  function updateView(next: ViewTransform, atStart = false): void {
+    atStartViewRef.current = atStart;
     viewRef.current = next;
     setView(next);
   }
@@ -312,29 +418,30 @@ export function RegionOverlay({
     finishPanGesture(true);
   }
 
+  /** Reset shows the whole frame (FE-022), not the starting crop. */
   function resetView(): void {
     invalidatePanInteraction();
     updateView(FIT_VIEW);
   }
 
+  function restartView(): void {
+    invalidatePanInteraction();
+    updateView(startView(), true);
+  }
+
   function zoomAtViewportCenter(direction: "in" | "out"): void {
-    const viewport = viewportRef.current;
-    if (viewport === null) {
+    const layout = currentLayout();
+    if (layout === null) {
       return;
     }
-    const bounds = viewport.getBoundingClientRect();
     applyZoom(
       direction === "in" ? viewRef.current.scale * ZOOM_STEP : viewRef.current.scale / ZOOM_STEP,
-      { x: bounds.width / 2, y: bounds.height / 2 },
-      bounds,
+      { x: layout.viewportWidth / 2, y: layout.viewportHeight / 2 },
+      layout,
     );
   }
 
-  function applyZoom(
-    requestedScale: number,
-    anchor: SourcePoint,
-    bounds: { width: number; height: number },
-  ): void {
+  function applyZoom(requestedScale: number, anchor: SourcePoint, layout: StageLayout): void {
     const current = viewRef.current;
     const scale = rounded(Math.min(MAX_ZOOM, Math.max(1, requestedScale)));
     if (scale === current.scale) {
@@ -345,16 +452,16 @@ export function RegionOverlay({
       return;
     }
     const contentPoint = {
-      x: (anchor.x - current.x) / current.scale,
-      y: (anchor.y - current.y) / current.scale,
+      x: (anchor.x - layout.offsetX - current.x) / current.scale,
+      y: (anchor.y - layout.offsetY - current.y) / current.scale,
     };
     const pan = clampPan(
       {
-        x: anchor.x - contentPoint.x * scale,
-        y: anchor.y - contentPoint.y * scale,
+        x: anchor.x - layout.offsetX - contentPoint.x * scale,
+        y: anchor.y - layout.offsetY - contentPoint.y * scale,
       },
       scale,
-      bounds,
+      layout,
     );
     updateView({ scale, ...pan });
   }
@@ -368,8 +475,55 @@ export function RegionOverlay({
   }, [selectedId]);
 
   useEffect(() => {
-    resetView();
+    restartView();
   }, [imageUrl, source?.height, source?.width]);
+
+  // `fill` sizes the stage from the viewport, so the viewport is measured.
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!fill || viewport === null) {
+      return;
+    }
+    const measure = () => {
+      const bounds = viewport.getBoundingClientRect();
+      setViewportSize((current) =>
+        current !== null && current.width === bounds.width && current.height === bounds.height
+          ? current
+          : { width: bounds.width, height: bounds.height },
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+    };
+  }, [fill]);
+
+  // A new box size keeps an untouched view at its cover crop and keeps a
+  // chosen view inside the picture.
+  useLayoutEffect(() => {
+    if (fillLayoutValue === null) {
+      return;
+    }
+    if (atStartViewRef.current) {
+      updateView(coverView(fillLayoutValue), true);
+      return;
+    }
+    const current = viewRef.current;
+    const pan = clampPan(current, current.scale, fillLayoutValue);
+    if (pan.x !== current.x || pan.y !== current.y) {
+      updateView({ ...current, ...pan });
+    }
+  }, [
+    fillLayoutValue?.baseWidth,
+    fillLayoutValue?.baseHeight,
+    fillLayoutValue?.viewportWidth,
+    fillLayoutValue?.viewportHeight,
+  ]);
 
   useEffect(() => {
     const surface = surfaceRef.current;
@@ -381,7 +535,8 @@ export function RegionOverlay({
         return;
       }
       const viewport = viewportRef.current;
-      if (viewport === null) {
+      const layout = currentLayout();
+      if (viewport === null || layout === null) {
         return;
       }
       const bounds = viewport.getBoundingClientRect();
@@ -400,7 +555,7 @@ export function RegionOverlay({
         x: event.clientX - bounds.left,
         y: event.clientY - bounds.top,
       };
-      applyZoom(scale, anchor, bounds);
+      applyZoom(scale, anchor, layout);
     };
     surface.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
@@ -511,12 +666,12 @@ export function RegionOverlay({
 
   useEffect(() => {
     const constrainView = () => {
-      const viewport = viewportRef.current;
+      const layout = currentLayout();
       const current = viewRef.current;
-      if (viewport === null || current.scale === 1) {
+      if (layout === null || fillLayoutRef.current !== null || current.scale === 1) {
         return;
       }
-      const pan = clampPan(current, current.scale, viewport.getBoundingClientRect());
+      const pan = clampPan(current, current.scale, layout);
       if (pan.x !== current.x || pan.y !== current.y) {
         updateView({ ...current, ...pan });
       }
@@ -675,15 +830,15 @@ export function RegionOverlay({
         finishPanGesture(true);
         return;
       }
-      const viewport = viewportRef.current;
-      if (viewport !== null) {
+      const layout = currentLayout();
+      if (layout !== null) {
         const pan = clampPan(
           {
             x: panGesture.originView.x + event.clientX - panGesture.originClient.x,
             y: panGesture.originView.y + event.clientY - panGesture.originClient.y,
           },
           panGesture.originView.scale,
-          viewport.getBoundingClientRect(),
+          layout,
         );
         updateView({ ...panGesture.originView, ...pan });
       }
@@ -904,10 +1059,24 @@ export function RegionOverlay({
     .filter(Boolean)
     .join(" ");
 
+  const stageStyle: CSSProperties & Record<string, string> = {
+    "--df-overlay-inverse-zoom": String(1 / view.scale),
+    transform: `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.scale)})`,
+  };
+  if (fillLayoutValue !== null) {
+    stageStyle.left = `${String(fillLayoutValue.offsetX)}px`;
+    stageStyle.top = `${String(fillLayoutValue.offsetY)}px`;
+    stageStyle.width = `${String(fillLayoutValue.baseWidth)}px`;
+    stageStyle.height = `${String(fillLayoutValue.baseHeight)}px`;
+  }
+  const showToolbar = source !== null || tools !== undefined || trailing !== undefined;
+
   return (
+    <div className={fill ? "df-region-canvas df-region-canvas--fill" : "df-region-canvas"}>
     <div
       className="df-region-overlay"
       data-disabled={disabled || undefined}
+      data-fill={fill || undefined}
       data-interaction-mode={interactionMode}
       data-pan-mode={panMode || undefined}
       data-panning={panning || undefined}
@@ -917,12 +1086,8 @@ export function RegionOverlay({
       <div
         className="df-region-overlay__zoom-stage"
         data-overlay-zoom-stage="true"
-        style={
-          {
-            "--df-overlay-inverse-zoom": String(1 / view.scale),
-            transform: `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.scale)})`,
-          } as CSSProperties
-        }
+        data-placed={fillLayoutValue !== null || undefined}
+        style={stageStyle}
       >
       <img
         alt={imageAlt}
@@ -1076,58 +1241,9 @@ export function RegionOverlay({
           {cornerLabel}
         </span>
       )}
-      {source === null ? null : (
-        <div className="df-region-overlay__zoom-controls" data-preserve-annotation-preview="true">
-          <Button
-            aria-label="Pomniejsz kanwę"
-            disabled={view.scale <= 1}
-            onClick={() => {
-              zoomAtViewportCenter("out");
-            }}
-            size="sm"
-            variant="muted"
-          >
-            −
-          </Button>
-          <output aria-label="Powiększenie kanwy" className="df-region-overlay__zoom-value">
-            {String(Math.round(view.scale * 100))}%
-          </output>
-          <Button
-            aria-label="Powiększ kanwę"
-            disabled={view.scale >= MAX_ZOOM}
-            onClick={() => {
-              zoomAtViewportCenter("in");
-            }}
-            size="sm"
-            variant="muted"
-          >
-            +
-          </Button>
-          <Button
-            aria-pressed={panMode}
-            disabled={view.scale === 1}
-            onClick={() => {
-              setPanMode((current) => !current);
-            }}
-            size="sm"
-            variant={panMode ? "primary" : "muted"}
-          >
-            {panMode ? "Zakończ przesuwanie" : "Przesuwaj kadr"}
-          </Button>
-          <Button
-            aria-label="Dopasuj kanwę do widoku"
-            disabled={view.scale === 1}
-            onClick={resetView}
-            size="sm"
-            variant="muted"
-          >
-            RESET
-          </Button>
-        </div>
-      )}
       {contextMenu === null ? null : (
         <div
-          aria-label="Akcje bboxa"
+          aria-label="Box actions"
           className="df-region-overlay__context-menu"
           data-preserve-annotation-preview="true"
           onBlur={(event) => {
@@ -1146,10 +1262,74 @@ export function RegionOverlay({
             size="sm"
             variant="muted"
           >
-            Usuń
+            <Icon name="trash" />
+            Delete
           </Button>
         </div>
       )}
+    </div>
+    {showToolbar ? (
+      <div className="df-region-overlay__toolbar" data-preserve-annotation-preview="true">
+        {tools}
+        {source === null ? null : (
+          <div aria-label="Canvas view" className="df-region-overlay__zoom-controls" role="group">
+            <Button
+              aria-label="Zoom out"
+              disabled={view.scale <= 1}
+              onClick={() => {
+                zoomAtViewportCenter("out");
+              }}
+              size="sm"
+              title="Zoom out"
+              variant="secondary"
+            >
+              <Icon name="zoom-out" />
+            </Button>
+            <output aria-label="Canvas zoom" className="df-region-overlay__zoom-value">
+              {String(Math.round(view.scale * 100))}%
+            </output>
+            <Button
+              aria-label="Zoom in"
+              disabled={view.scale >= MAX_ZOOM}
+              onClick={() => {
+                zoomAtViewportCenter("in");
+              }}
+              size="sm"
+              title="Zoom in"
+              variant="secondary"
+            >
+              <Icon name="zoom-in" />
+            </Button>
+            <Button
+              aria-label="Pan"
+              aria-pressed={panMode}
+              disabled={view.scale === 1}
+              onClick={() => {
+                setPanMode((current) => !current);
+              }}
+              size="sm"
+              title="Pan the picture (or hold Space)"
+              variant="secondary"
+            >
+              <Icon name="arrow-right" />
+            </Button>
+            <Button
+              aria-label="Reset view"
+              disabled={view.scale === 1 && view.x === 0 && view.y === 0}
+              onClick={resetView}
+              size="sm"
+              title="Reset view — show the whole frame"
+              variant="secondary"
+            >
+              <Icon name="reset" />
+            </Button>
+          </div>
+        )}
+        {trailing === undefined ? null : (
+          <div className="df-region-overlay__trailing">{trailing}</div>
+        )}
+      </div>
+    ) : null}
     </div>
   );
 }
@@ -1169,7 +1349,7 @@ interface ShapeOptionProps {
 /** Geometry belongs in the name: a rectangle is not describable by its label alone. */
 function shapeName(shape: OverlayShape): string {
   const detail = shape.detailLabel === undefined ? "" : `. ${shape.detailLabel}`;
-  return `${shape.label}: x ${shape.x}, y ${shape.y}, szerokość ${shape.width}, wysokość ${shape.height}${detail}`;
+  return `${shape.label}: x ${shape.x}, y ${shape.y}, width ${shape.width}, height ${shape.height}${detail}`;
 }
 
 function ShapeOption({

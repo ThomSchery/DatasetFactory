@@ -15,6 +15,20 @@ import {
 } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 
+/** FE-022: ← n/N → — the counter opens the frame picker. */
+function frameCounter(): HTMLElement {
+  return screen.getByRole("button", { name: /choose a frame/ });
+}
+
+async function chooseFrame(user: ReturnType<typeof userEvent.setup>, frameId: string) {
+  await user.click(frameCounter());
+  const option = document.querySelector(`[data-option-id="${frameId}"]`);
+  if (!(option instanceof HTMLElement)) {
+    throw new Error(`Frame option ${frameId} is missing`);
+  }
+  await user.click(option);
+}
+
 const PROFILE = profileFixture({
   id: "profile-history",
   categories: [
@@ -85,7 +99,7 @@ function requireResponse(response: StubbedResponse | undefined, url: string): St
 }
 
 function overlayOptions(): HTMLElement[] {
-  return within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getAllByRole(
+  return within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getAllByRole(
     "option",
   );
 }
@@ -123,13 +137,13 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     expect(screen.queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Class health, 1 annotations" }));
 
-    const surface = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const surface = screen.getByRole("listbox", { name: "Annotation boxes on the frame" });
     layOut(surface);
     fireEvent.pointerDown(surface, { clientX: 10, clientY: 10, pointerId: 1 });
     fireEvent.pointerMove(surface, { clientX: 30, clientY: 30, pointerId: 1 });
@@ -143,7 +157,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
             init?.method === "PATCH",
         ),
       ).toBe(false);
-      expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
+      expect(screen.getByRole("dialog", { name: "Choose a class for the new box" })).toBeVisible();
       expect(
         fetchSpy.mock.calls.some(
           ([url, init]) =>
@@ -179,13 +193,13 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Zaakceptuj klatkę" }));
+    await user.click(await screen.findByRole("button", { name: "Accept frame" }));
     await waitFor(() => {
       expect(overlayOptions()[0]).toHaveClass("df-region-overlay__shape--error");
       expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
     });
 
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}{Enter}");
@@ -196,7 +210,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
 
     classButton.focus();
     await user.keyboard("{ArrowRight}{Enter}");
-    expect(await screen.findByText(/Kod: version_conflict/)).toBeInTheDocument();
+    expect(await screen.findByText(/Code: version_conflict/)).toBeInTheDocument();
     expect(overlayOptions()[1]).toHaveClass("df-region-overlay__shape--error");
   });
 
@@ -207,7 +221,7 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     renderApp(["/annotations/run-1"]);
 
     expect(
-      await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" }),
+      await screen.findByRole("listbox", { name: "Annotation boxes on the frame" }),
     ).toBeInTheDocument();
     expect(
       fetchSpy.mock.calls.some(([url]) => url === `/api/v1/profiles/${PROFILE.id}`),
@@ -215,11 +229,6 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     expect(fetchSpy.mock.calls.some(([url]) => url === "/api/v1/profiles/current")).toBe(false);
     // FE-017 C put the source's occurrence count on the row, so it is part of
     // the option's accessible name.
-    await user.click(
-      await screen.findByRole("button", {
-        name: /Rozwiń listę Klasy z poprzedniej klatki/,
-      }),
-    );
     expect(await screen.findByRole("checkbox", { name: "health 1" })).toBeVisible();
   });
 
@@ -234,8 +243,8 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     renderApp(["/annotations/run-1"]);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Nie znaleziono profilu");
-    expect(alert).toHaveTextContent("Kod: profile_not_found");
+    expect(alert).toHaveTextContent("Profile not found");
+    expect(alert).toHaveTextContent("Code: profile_not_found");
   });
 
   it("aggregates every backend page into the frame dropdown", async () => {
@@ -260,13 +269,15 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     stubFetch((url) => requireResponse(get(url), url));
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("img", { name: "Klatka 1 runu run-1" });
-    const select = screen.getByRole("combobox", { name: "Wybierz klatkę" });
-    expect(within(select).getAllByRole("option")).toHaveLength(2);
+    await screen.findByRole("img", { name: "Frame 1 of run run-1" });
+    await user.click(frameCounter());
+    expect(
+      within(screen.getByRole("listbox", { name: "Frames of this run" })).getAllByRole("option"),
+    ).toHaveLength(2);
     expect(requestedPages).toEqual(["1", "2"]);
-    await user.selectOptions(select, "frame-page-101");
+    await user.click(screen.getByRole("option", { name: /^Frame 101 / }));
 
-    expect(await screen.findByRole("img", { name: "Klatka 101 runu run-1" })).toBeVisible();
+    expect(await screen.findByRole("img", { name: "Frame 101 of run run-1" })).toBeVisible();
   });
 
   it("serializes the whole run screen while a write is pending", async () => {
@@ -294,25 +305,25 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classField = screen.getByLabelText("Klasa");
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classField = screen.getByLabelText("Class");
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    const save = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
+    const save = screen.getByRole("button", { name: "Change class: assign another class to this box" });
     await user.click(save);
 
     expect(save).toHaveAttribute("aria-busy", "true");
     for (const filterButton of within(
-      screen.getByRole("group", { name: "Filtr statusu klatek" }),
+      screen.getByRole("group", { name: "Frame status filter" }),
     ).getAllByRole("button")) {
       expect(filterButton).toBeDisabled();
     }
-    expect(screen.getByRole("button", { name: "Następna klatka" })).toBeDisabled();
-    const frameSelect = screen.getByRole("combobox", { name: "Wybierz klatkę" });
+    expect(screen.getByRole("button", { name: "Next frame" })).toBeDisabled();
+    const frameSelect = frameCounter();
     expect(frameSelect).toBeDisabled();
-    expect(frameSelect).toHaveValue("frame-1");
+    expect(frameSelect).toHaveAttribute("data-frame-id", "frame-1");
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
 
     resolveMutation?.(
@@ -330,24 +341,24 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     stubFetch((url) => requireResponse(get(url), url));
     renderApp(["/annotations/run-1"]);
 
-    const originalImage = await screen.findByRole("img", { name: /Klatka 17 runu run-1/ });
-    const originalSurface = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const originalImage = await screen.findByRole("img", { name: /Frame 17 of run run-1/ });
+    const originalSurface = screen.getByRole("listbox", { name: "Annotation boxes on the frame" });
     expect(originalSurface).toHaveAttribute("viewBox", "0 0 1920 1080");
     fireEvent.error(originalImage);
-    expect(await screen.findByText(/Kod: frame_image_not_found/)).toBeInTheDocument();
+    expect(await screen.findByText(/Code: frame_image_not_found/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Spróbuj ponownie załadować obraz" }));
-    const retryImage = screen.getByRole("img", { name: /Klatka 17 runu run-1/ });
+    await user.click(screen.getByRole("button", { name: "Load the image again" }));
+    const retryImage = screen.getByRole("img", { name: /Frame 17 of run run-1/ });
     expect(retryImage).not.toBe(originalImage);
     expect(retryImage).toHaveAttribute("src", "/api/v1/frames/frame-1/image?attempt=1");
     fireEvent.load(retryImage);
 
-    expect(screen.queryByText(/Kod: frame_image_not_found/)).not.toBeInTheDocument();
-    expect(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).toHaveAttribute(
+    expect(screen.queryByText(/Code: frame_image_not_found/)).not.toBeInTheDocument();
+    expect(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).toHaveAttribute(
       "viewBox",
       "0 0 1920 1080",
     );
-    expect(screen.getByRole("option", { name: /^7, źródło OCR:/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /^7, source OCR:/ })).toBeInTheDocument();
   });
 });
 
@@ -378,25 +389,25 @@ describe("success refetches authoritative versions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classField = screen.getByLabelText("Klasa");
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classField = screen.getByLabelText("Class");
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(screen.getByRole("button", { name: "Change class: assign another class to this box" }));
 
     const conflict = await screen.findByRole("alert");
-    expect(conflict).toHaveTextContent("Kod: version_conflict");
+    expect(conflict).toHaveTextContent("Code: version_conflict");
     await waitFor(() => {
       expect(frameRead).toBeGreaterThanOrEqual(2);
-      expect(screen.getByLabelText("Klasa")).toBeEnabled();
+      expect(screen.getByLabelText("Class")).toBeEnabled();
     });
 
-    await user.clear(screen.getByLabelText("Klasa"));
-    await user.type(screen.getByLabelText("Klasa"), "health");
+    await user.clear(screen.getByLabelText("Class"));
+    await user.type(screen.getByLabelText("Class"), "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(screen.getByRole("button", { name: "Change class: assign another class to this box" }));
 
     await waitFor(() => {
       const patchBodies = fetchSpy.mock.calls
@@ -435,21 +446,21 @@ describe("success refetches authoritative versions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classField = screen.getByLabelText("Klasa");
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classField = screen.getByLabelText("Class");
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    const save = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
+    const save = screen.getByRole("button", { name: "Change class: assign another class to this box" });
     await user.click(save);
     await waitFor(() => {
       expect(frameRead).toBeGreaterThanOrEqual(2);
       expect(save).not.toHaveAttribute("aria-busy");
     });
 
-    await user.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
-    await user.click(screen.getByRole("button", { name: "Usuń" }));
+    await user.click(screen.getByRole("button", { name: "Class health, 1 annotations" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => {
       expect(
         fetchSpy.mock.calls.some(
@@ -462,8 +473,8 @@ describe("success refetches authoritative versions", () => {
   });
 
   it.each([
-    ["Zaakceptuj klatkę", "accept"],
-    ["Odrzuć klatkę", "reject"],
+    ["Accept frame", "accept"],
+    ["Reject frame", "reject"],
   ] as const)(
     "uses frame.version + 1 after create before %s",
     async (decisionButton, decision) => {
@@ -501,7 +512,7 @@ describe("success refetches authoritative versions", () => {
       });
       renderApp(["/annotations/run-1"]);
 
-      const surface = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+      const surface = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
       layOut(surface);
       // FE-017 D: the draw is the create. No class is chosen here, and that is
       // the point — the default class is what the box is saved with.
@@ -580,10 +591,10 @@ describe("success refetches authoritative versions", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Odrzuć klatkę" }));
-    expect(await screen.findByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Odrzucone/ }));
-    await user.click(await screen.findByRole("button", { name: "Otwórz ponownie" }));
+    await user.click(await screen.findByRole("button", { name: "Reject frame" }));
+    expect(await screen.findByText("No frames for this filter")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Rejected/ }));
+    await user.click(await screen.findByRole("button", { name: "Reopen" }));
 
     await waitFor(() => {
       const decisions = fetchSpy.mock.calls

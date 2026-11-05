@@ -47,7 +47,7 @@ function ReviewPanel() {
           mutation.mutate();
         }}
       >
-        Zaakceptuj klatkę
+        Accept frame
       </Button>
       {presentation === null ? null : (
         <>
@@ -77,7 +77,7 @@ describe("error envelope details reaching the UI layer", () => {
     const user = userEvent.setup();
     renderWithQueryClient(<ReviewPanel />);
 
-    await user.click(screen.getByRole("button", { name: "Zaakceptuj klatkę" }));
+    await user.click(screen.getByRole("button", { name: "Accept frame" }));
 
     await waitFor(() => {
       expect(screen.getAllByTestId("offending-annotation")).toHaveLength(OFFENDING_IDS.length);
@@ -93,7 +93,7 @@ describe("error envelope details reaching the UI layer", () => {
     const user = userEvent.setup();
     renderWithQueryClient(<ReviewPanel />);
 
-    await user.click(screen.getByRole("button", { name: "Zaakceptuj klatkę" }));
+    await user.click(screen.getByRole("button", { name: "Accept frame" }));
 
     const details = await screen.findByTestId("raw-details");
     expect(JSON.parse(details.textContent ?? "{}")).toEqual(BBOX_INVALID_ENVELOPE.error.details);
@@ -104,11 +104,11 @@ describe("error envelope details reaching the UI layer", () => {
     const user = userEvent.setup();
     renderWithQueryClient(<ReviewPanel />);
 
-    await user.click(screen.getByRole("button", { name: "Zaakceptuj klatkę" }));
+    await user.click(screen.getByRole("button", { name: "Accept frame" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Część boksów wykracza poza granice klatki.");
-    expect(alert).toHaveTextContent("Popraw geometrię wskazanych boksów");
+    expect(alert).toHaveTextContent("Some boxes extend beyond the frame.");
+    expect(alert).toHaveTextContent("Fix the geometry of the marked boxes");
     expect(await screen.findByTestId("request-id")).toHaveTextContent(
       BBOX_INVALID_ENVELOPE.error.request_id,
     );
@@ -133,13 +133,13 @@ describe("error envelope details reaching the UI layer", () => {
     const user = userEvent.setup();
     renderWithQueryClient(<ReviewPanel />);
 
-    const button = screen.getByRole("button", { name: "Zaakceptuj klatkę" });
+    const button = screen.getByRole("button", { name: "Accept frame" });
     await user.click(button);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Ładowanie…" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
     });
-    expect(screen.getByRole("button", { name: "Ładowanie…" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Loading…" })).toHaveAttribute(
       "aria-busy",
       "true",
     );

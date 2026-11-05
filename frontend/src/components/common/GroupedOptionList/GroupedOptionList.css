@@ -15,10 +15,10 @@
   align-items: center;
   gap: calc(var(--size-xs) / 2);
   min-width: 0;
-  min-height: var(--control-height-md);
-  padding: calc(var(--size-xs) / 2);
-  border: var(--border-width-default) solid var(--color-stroke-strong-default);
-  border-radius: var(--radius-md);
+  min-height: var(--field-height);
+  padding: var(--size-none) var(--element-padding-y-md) var(--size-none) var(--element-padding-x-md);
+  border: var(--border-width-default) solid var(--color-stroke-control-default);
+  border-radius: var(--radius-sm);
   background: var(--color-background-primary-default);
   flex-wrap: wrap;
 }
@@ -74,6 +74,12 @@
 .df-grouped-options__toggle.df-button:hover,
 .df-grouped-options__toggle.df-button:active {
   border-color: var(--color-surface-transparent);
+}
+
+.df-grouped-options__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-placeholder-default);
 }
 
 .df-grouped-options__filter {
@@ -143,7 +149,7 @@
   padding: calc(var(--size-xs) / 2);
   border: var(--border-width-default) solid var(--color-stroke-strong-default);
   border-top: var(--size-none);
-  border-radius: var(--radius-none) var(--radius-none) var(--radius-md) var(--radius-md);
+  border-radius: var(--radius-none) var(--radius-none) var(--radius-sm) var(--radius-sm);
   background: var(--color-background-primary-default);
   box-shadow: var(--shadow-elevation-high);
   overflow-x: hidden;
@@ -215,7 +221,8 @@
   color: var(--color-text-strong-default);
   cursor: pointer;
   font-family: var(--font-family-ui);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
   line-height: var(--line-height-standard);
 }
 
@@ -298,4 +305,12 @@
   color: var(--color-status-warning-default);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
+}
+
+/* FE-022 inline variant: the Figma class groups, always on screen. */
+.df-grouped-options--inline .df-grouped-options__list {
+  max-height: none;
+  padding: var(--size-none);
+  border: var(--size-none);
+  background: var(--color-surface-transparent);
 }

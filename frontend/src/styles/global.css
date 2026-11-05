@@ -48,6 +48,19 @@ select {
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Text for assistive technology only (a panel label Figma does not draw). */
+.df-visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 ::selection {
   background: var(--color-fill-brand-impeccable-soft);
   color: var(--color-text-strong-default);

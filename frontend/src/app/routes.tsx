@@ -1,9 +1,8 @@
-import { createBrowserRouter, type RouteObject } from "react-router";
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
 import { lazy, Suspense } from "react";
 
 import { Empty, Loading } from "../components/common/UiStates";
 import { AnnotationReviewScreen, RunListScreen } from "../features/annotations";
-import { DashboardScreen } from "../features/dashboard";
 import { MaterialsScreen, RunSetupScreen } from "../features/materials";
 import { ProfileWorkspaceScreen } from "../features/profiles";
 import { AppShell } from "./AppShell";
@@ -13,27 +12,27 @@ const ExportsScreen = lazy(() =>
 );
 
 /*
- * The FE-04 routes plus `/run`, which FE-021 split out of `/materials` so the
- * Upload and Run steps of the Figma switch open different screens, plus a
- * catch-all for unknown paths. Every earlier address still resolves, so deep
- * links kept from before the redesign keep working.
+ * FE-022 removed the Dashboard: `/` opens Upload. Every other address that
+ * existed before still resolves, so deep links keep working, and unknown
+ * paths get a named empty state.
  *
- * `handle.heading` feeds the shell's `<h1>` so the heading and the route stay
- * defined in one place.
+ * `handle.heading` names the page for assistive technology; `headingInScreen`
+ * marks the two screens that draw their own visible heading (Figma: "Run
+ * Setup", "Review frames").
  */
 
 function NotFoundRoute() {
   return (
     <Empty
-      description="Ten adres nie należy do żadnej z pięciu tras aplikacji. Wybierz destynację z nawigacji."
-      title="Nie ma takiej trasy"
+      description="This address does not belong to any screen. Choose a section from the side bar."
+      title="No such page"
     />
   );
 }
 
 function ExportsRoute() {
   return (
-    <Suspense fallback={<Loading label="Ładowanie ekranu eksportów…" />}>
+    <Suspense fallback={<Loading label="Loading the exports screen…" />}>
       <ExportsScreen />
     </Suspense>
   );
@@ -43,27 +42,31 @@ export const appRoutes: RouteObject[] = [
   {
     element: <AppShell />,
     children: [
-      { index: true, element: <DashboardScreen />, handle: { heading: "Dashboard" } },
+      { index: true, element: <Navigate replace to="/materials" /> },
       {
         path: "profiles",
         element: <ProfileWorkspaceScreen />,
-        handle: { heading: "Profile gier" },
+        handle: { heading: "Setup for scan" },
       },
       {
         path: "profiles/new",
         element: <ProfileWorkspaceScreen initialCreate />,
-        handle: { heading: "Nowy profil gry" },
+        handle: { heading: "New profile" },
       },
-      { path: "materials", element: <MaterialsScreen />, handle: { heading: "Materiały" } },
-      { path: "run", element: <RunSetupScreen />, handle: { heading: "Run Setup" } },
-      { path: "annotations", element: <RunListScreen />, handle: { heading: "Anotacje" } },
+      { path: "materials", element: <MaterialsScreen />, handle: { heading: "Upload" } },
+      {
+        path: "run",
+        element: <RunSetupScreen />,
+        handle: { heading: "Run Setup", headingInScreen: true },
+      },
+      { path: "annotations", element: <RunListScreen />, handle: { heading: "Annotations" } },
       {
         path: "annotations/:runId",
         element: <AnnotationReviewScreen />,
-        handle: { heading: "Anotacje" },
+        handle: { heading: "Review frames", headingInScreen: true },
       },
-      { path: "exports", element: <ExportsRoute />, handle: { heading: "Eksporty" } },
-      { path: "*", element: <NotFoundRoute />, handle: { heading: "Nieznana trasa" } },
+      { path: "exports", element: <ExportsRoute />, handle: { heading: "Exports" } },
+      { path: "*", element: <NotFoundRoute />, handle: { heading: "Unknown page" } },
     ],
   },
 ];

@@ -1,59 +1,46 @@
+/*
+ * The Figma panel (FE-022): `surface/panel` with one `border/default` outline,
+ * 8 px above and below, 16 px at the sides (`element/padding/U-D/L`,
+ * `element/padding/L-R/L`), a 12/400 label and 8 px between rows
+ * (`element/gap/L`).
+ */
 .df-panel {
-  padding: var(--size-md);
-  border: var(--border-width-default) solid var(--color-stroke-weak-default);
-  border-radius: var(--radius-lg);
+  display: grid;
+  gap: var(--element-gap-lg);
+  min-width: 0;
+  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
   background: var(--color-surface-neutral-default);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-ui);
-  line-height: var(--line-height-standard);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+  line-height: var(--line-height-tight);
+}
+
+.df-panel--radius-sm {
+  border-radius: var(--radius-sm);
+}
+
+.df-panel--radius-md {
+  border-radius: var(--radius-md);
 }
 
 .df-panel__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--size-sm);
-}
-
-.df-panel__heading {
+  gap: var(--element-gap-lg);
   min-width: 0;
 }
 
-.df-panel__eyebrow,
-.df-panel__title,
-.df-panel__description {
+.df-panel__title {
+  min-width: 0;
   margin: var(--size-none);
-}
-
-/* CASING-02 + LSPACE-07: the only uppercase text here, so it carries the
-   mandatory tracking, a small size and a strong weight. */
-.df-panel__eyebrow {
   color: var(--color-text-weak-default);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-tight);
-  text-transform: uppercase;
-}
-
-.df-panel__eyebrow + .df-panel__title {
-  margin-top: var(--size-xs);
-}
-
-.df-panel__title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-tight);
-  line-height: var(--line-height-tight);
-}
-
-/* PARASPACE-02: less space under the heading than above it, so the description
-   visibly belongs to the title rather than floating between blocks. */
-.df-panel__description {
-  max-width: var(--measure-copy);
-  margin-top: var(--size-xs);
-  color: var(--color-text-weak-default);
-  font-size: var(--font-size-sm);
 }
 
 .df-panel__aside {
@@ -61,5 +48,7 @@
 }
 
 .df-panel__body {
-  margin-top: var(--size-md);
+  display: grid;
+  gap: var(--element-gap-lg);
+  min-width: 0;
 }

@@ -10,6 +10,7 @@ import {
 
 import { Button } from "../Button";
 import { CollapsibleGroup } from "../CollapsibleGroup";
+import { Icon, type IconName } from "../Icon";
 import { TextField } from "../TextField";
 import "./GroupedOptionList.css";
 
@@ -47,6 +48,14 @@ export interface GroupedOptionListProps {
   autoFocus?: boolean;
   /** Opens the choices on mount; the resting form-field state stays collapsed. */
   defaultOpen?: boolean;
+  /** Groups that start collapsed (by group id). */
+  initiallyCollapsedGroupIds?: readonly string[];
+  /**
+   * FE-022: the rows are always on screen, with no filter control above them —
+   * the Figma class groups of the profile screen. Keyboard entry is the first
+   * row; Tab leaves the list as before.
+   */
+  inline?: boolean;
   disabled?: boolean;
   /** Shown when the filter matches nothing. */
   emptyMessage: string;
@@ -63,6 +72,11 @@ export interface GroupedOptionListProps {
   filterAction?: ReactNode;
   /** Label of the filter control; it is this component's own text input. */
   filterLabel: string;
+  /** 24 px glyph at the start of the control (Figma `search-profile`). */
+  icon?: IconName;
+  /** Text in the empty filter; defaults to `filterLabel`. A single choice
+   * passes the chosen name here, so the closed control shows the selection. */
+  placeholder?: string;
   /** Maximum Unicode code points; unlike native maxLength, astral characters count once. */
   filterMaxCodePoints?: number;
   filterMaxLength?: number;
@@ -126,6 +140,7 @@ function visibleGroups(
   groups: readonly GroupedOptionGroup[],
   query: string,
   collapsed: ReadonlySet<string>,
+  keepEmpty = false,
 ): readonly VisibleGroup[] {
   const needle = normalize(query);
   const filtering = needle !== "";
@@ -145,7 +160,9 @@ function visibleGroups(
        */
       return { group, open: filtering || !collapsed.has(group.id), options };
     })
-    .filter((entry) => entry.options.length > 0);
+    // The inline class groups are always on screen, even with nothing in them
+    // (FE-022); an empty group is still a place the operator can look for.
+    .filter((entry) => keepEmpty || entry.options.length > 0);
 }
 
 /**
@@ -170,6 +187,8 @@ function visibleGroups(
 export function GroupedOptionList({
   autoFocus = false,
   defaultOpen = false,
+  initiallyCollapsedGroupIds,
+  inline = false,
   disabled = false,
   emptyMessage,
   exemptFromOutsideClick,
@@ -179,22 +198,27 @@ export function GroupedOptionList({
   filterMaxLength,
   filterValue,
   groups,
+  icon,
   label,
   mode,
   onChange,
   onConfirm,
   onFilterChange,
+  placeholder,
   selectedIds,
 }: GroupedOptionListProps) {
   const listId = useId();
   const [uncontrolledQuery, setUncontrolledQuery] = useState("");
-  const [open, setOpen] = useState(defaultOpen);
+  const [openState, setOpen] = useState(defaultOpen);
+  const open = inline || openState;
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [requestedActiveId, setRequestedActiveId] = useState<string | null>(null);
   // Groups open by default: the panel is autofocused and used under time
   // pressure, so nothing starts hidden. The state is per mount, which is why
   // every box opens its picker the same way.
-  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
+    () => new Set(initiallyCollapsedGroupIds ?? []),
+  );
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const tagRefs = useRef(new Map<string, HTMLElement>());
   const filterRef = useRef<HTMLInputElement | null>(null);
@@ -207,8 +231,8 @@ export function GroupedOptionList({
   const query = filterValue ?? uncontrolledQuery;
   const filtering = normalize(query) !== "";
   const shown = useMemo(
-    () => visibleGroups(groups, query, collapsedIds),
-    [collapsedIds, groups, query],
+    () => visibleGroups(groups, query, collapsedIds, inline),
+    [collapsedIds, groups, inline, query],
   );
   const rows = useMemo(() => {
     const collected: Row[] = [];
@@ -497,18 +521,19 @@ export function GroupedOptionList({
 
   return (
     <div
-      className="df-grouped-options"
+      className={inline ? "df-grouped-options df-grouped-options--inline" : "df-grouped-options"}
       data-open={open || undefined}
       data-outside-click-exempt={exemptFromOutsideClick || undefined}
       data-shortcut-scope="list"
     >
+      {inline ? null : (
       <div className="df-grouped-options__control">
         {mode === "multiple"
           ? selectedOptions.map((option, index) => (
               <span className="df-grouped-options__tag" key={option.id}>
                 <span className="df-grouped-options__tag-label">{option.label}</span>
                 <Button
-                  aria-label={`Usuń klasę ${option.label} z zaznaczenia`}
+                  aria-label={`Remove ${option.label} from the selection`}
                   className="df-grouped-options__tag-remove"
                   disabled={disabled}
                   onClick={() => {
@@ -526,6 +551,11 @@ export function GroupedOptionList({
               </span>
             ))
           : null}
+        {icon === undefined ? null : (
+          <span aria-hidden="true" className="df-grouped-options__icon">
+            <Icon name={icon} />
+          </span>
+        )}
         <div className="df-grouped-options__filter">
           <TextField
             aria-controls={listId}
@@ -544,11 +574,14 @@ export function GroupedOptionList({
               setRequestedActiveId(null);
               onFilterChange?.(nextQuery);
             }}
+            onClick={() => {
+              setOpen(true);
+            }}
             onFocus={() => {
               setOpen(true);
             }}
             onKeyDown={handleFilterKeyDown}
-            placeholder={filterLabel}
+            placeholder={placeholder ?? filterLabel}
             ref={filterRef}
             value={query}
           />
@@ -556,7 +589,7 @@ export function GroupedOptionList({
         <div className="df-grouped-options__control-actions">
           {mode === "multiple" && selectedIds.length > 0 ? (
             <Button
-              aria-label="Wyczyść zaznaczone klasy"
+              aria-label="Clear the selection"
               className="df-grouped-options__clear"
               disabled={disabled}
               onClick={() => {
@@ -573,7 +606,7 @@ export function GroupedOptionList({
           <Button
             aria-controls={listId}
             aria-expanded={open}
-            aria-label={`${open ? "Zwiń" : "Rozwiń"} listę ${label}`}
+            aria-label={`${open ? "Collapse" : "Expand"} list ${label}`}
             className="df-grouped-options__toggle"
             // Freezing a frame blocks writes, not reads: the counts this
             // list carries stay reachable even when nothing in it can be
@@ -590,6 +623,7 @@ export function GroupedOptionList({
           </Button>
         </div>
       </div>
+      )}
       <div
         aria-label={label}
         className="df-grouped-options__list"
@@ -755,6 +789,7 @@ function OptionRowElement({
       aria-selected={single ? checked === "true" : undefined}
       className={classes}
       data-checked={checked}
+      data-option-id={row.id}
       onClick={() => {
         onActivate(row, false);
       }}

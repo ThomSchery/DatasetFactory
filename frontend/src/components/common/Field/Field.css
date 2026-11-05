@@ -1,50 +1,59 @@
+/*
+ * The Figma field (FE-022): an optional 24 px icon and a 12/300 label, then a
+ * 34–42 px control on `surface/page` with radius 4 and 16 px side padding.
+ */
 .df-field {
-  display: block;
+  display: grid;
+  gap: var(--element-gap-lg);
+  min-width: 0;
   font-family: var(--font-family-ui);
-  line-height: var(--line-height-standard);
+  line-height: var(--line-height-tight);
 }
 
 .df-field--full {
-  max-width: var(--measure-copy);
+  width: 100%;
 }
 
-/* GRID-10: an interval in milliseconds is a handful of digits, so the control
-   must not be as wide as a filesystem path. */
+/* GRID-10: an interval in milliseconds is a handful of digits. */
 .df-field--short {
   max-width: 12ch;
 }
 
 .df-field__label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--element-padding-x-md);
+  min-width: 0;
   color: var(--color-text-strong-default);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.df-field__description {
-  margin: var(--size-none);
-  color: var(--color-text-weak-default);
   font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+  white-space: nowrap;
 }
 
-/* BWIDTH-03: form controls are the only elements that carry a visible border in
-   their default state. BWIDTH-13: the 2px error border is reserved up front by
-   an equally thick transparent inner outline, so the state change moves nothing.
-   SPACING-03: the label sits closer to its control than the control does to the
-   next field. */
+.df-field__label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* BWIDTH-03: form controls carry a visible border by default; the outline
+   reserves the error stroke so the state change moves nothing (BWIDTH-13). */
 .df-field__control {
   display: block;
   width: 100%;
-  min-height: var(--control-height-md);
-  margin-top: var(--size-xs);
-  padding: var(--size-xs) var(--size-sm);
-  border: var(--border-width-default) solid var(--color-stroke-strong-default);
-  border-radius: var(--radius-md);
+  min-height: var(--field-height);
+  padding: var(--element-padding-y-md) var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-stroke-control-default);
+  border-radius: var(--radius-sm);
   outline: var(--border-width-default) solid var(--color-surface-transparent);
   outline-offset: calc(-1 * var(--border-width-default));
   background: var(--color-background-primary-default);
   color: var(--color-text-strong-default);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+}
+
+.df-field__control::placeholder {
+  color: var(--color-text-placeholder-default);
 }
 
 .df-field__control:hover:not(:disabled) {
@@ -62,8 +71,33 @@
 }
 
 .df-field__error {
-  min-height: calc(var(--font-size-xs) * var(--line-height-standard));
-  margin: var(--size-xs) var(--size-none) var(--size-none);
+  margin: var(--size-none);
   color: var(--color-status-error-default);
   font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-field__error[hidden] {
+  display: none;
+}
+
+/* A unit drawn inside the control, after the value (`1000 ms`). */
+.df-field__affix {
+  position: relative;
+}
+
+.df-field__affix > .df-field__control {
+  padding-inline-end: calc(var(--element-padding-x-lg) * 2 + 2ch);
+}
+
+.df-field__suffix {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--element-padding-x-lg);
+  display: flex;
+  align-items: center;
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-light);
+  pointer-events: none;
 }

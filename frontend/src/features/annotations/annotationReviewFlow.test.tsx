@@ -22,6 +22,20 @@ import {
 } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 
+/** FE-022: ← n/N → — the counter opens the frame picker. */
+function frameCounter(): HTMLElement {
+  return screen.getByRole("button", { name: /choose a frame/ });
+}
+
+async function chooseFrame(user: ReturnType<typeof userEvent.setup>, frameId: string) {
+  await user.click(frameCounter());
+  const option = document.querySelector(`[data-option-id="${frameId}"]`);
+  if (!(option instanceof HTMLElement)) {
+    throw new Error(`Frame option ${frameId} is missing`);
+  }
+  await user.click(option);
+}
+
 const PROFILE = profileFixture({
   categories: [
     { id: "category-1", name: "7", kind: "character" },
@@ -168,7 +182,7 @@ afterEach(() => {
 });
 
 async function drawDraft(): Promise<HTMLElement> {
-  const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
   vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
     left: 0,
     top: 0,
@@ -190,15 +204,15 @@ describe("annotation review query states", () => {
   it("renders loading while the run query is pending", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     renderApp(["/annotations/run-1"]);
-    expect(screen.getByRole("status")).toHaveTextContent("Ładowanie runu i profilu anotacji");
+    expect(screen.getByRole("status")).toHaveTextContent("Loading the run and its annotation profile");
   });
 
   it("renders the explicit empty state without hiding the rejected filter", async () => {
     reviewApi({ frames: framePageFixture({ items: [], total: 0 }) });
     renderApp(["/annotations/run-1"]);
 
-    expect(await screen.findByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Odrzucone/ })).toBeInTheDocument();
+    expect(await screen.findByText("No frames for this filter")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Rejected/ })).toBeInTheDocument();
   });
 
   it("renders a central Polish error with its code", async () => {
@@ -214,8 +228,8 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Nie znaleziono runu");
-    expect(alert).toHaveTextContent("Kod: run_not_found");
+    expect(alert).toHaveTextContent("Run not found");
+    expect(alert).toHaveTextContent("Code: run_not_found");
   });
 
   it("renders one opaque image, natural viewBox and the unified OCR/manual collection", async () => {
@@ -229,24 +243,22 @@ describe("annotation review query states", () => {
     reviewApi({ frame: frameDetailFixture({ annotations: [annotationFixture(), manual] }) });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     expect(overlay).toHaveAttribute("viewBox", "0 0 1920 1080");
-    expect(screen.getByRole("img", { name: /Klatka 17 runu run-1/ })).toHaveAttribute(
+    expect(screen.getByRole("img", { name: /Frame 17 of run run-1/ })).toHaveAttribute(
       "src",
       "/api/v1/frames/frame-1/image",
     );
-    expect(screen.getByText("Klatka 17", { selector: ".df-region-overlay__corner-label" })).toHaveAttribute(
-      "aria-hidden",
-      "true",
-    );
+    // FE-022: the "Klatka NN" corner label is gone; the counter names the frame.
+    expect(document.querySelector(".df-region-overlay__corner-label")).toBeNull();
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     /*
      * The collection is unified because both classes are listed, not because a
      * badge names the provenance — FE-017 B removed those. `source` still
      * reaches the shape's accessible name and the export.
      */
-    expect(screen.getByRole("button", { name: "Klasa health, 1 anotacji" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Class health, 1 annotations" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Class 7, 1 annotations" })).toBeInTheDocument();
     expect(screen.queryByText("Ręczna")).not.toBeInTheDocument();
     expect(screen.getByText("7 · 91%")).toBeInTheDocument();
   });
@@ -256,16 +268,20 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const panel = screen.getByRole("region", { name: "Anotacja bez zaznaczenia" });
-    expect(within(panel).getByRole("textbox", { name: "Klasa" })).toHaveValue("");
-    for (const option of within(panel).getAllByRole("option")) {
-      expect(option).toHaveAttribute("aria-selected", "false");
-    }
-    expect(within(panel).getByRole("button", { name: "Usuń" })).toBeDisabled();
-    expect(within(panel).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const panel = screen.getByRole("region", { name: "Annotation — nothing selected" });
+    // FE-022: the class field rests closed (35 px) and inert until a box is
+    // selected; nothing in it can reach the API.
+    const field = within(panel).getByRole("textbox", { name: "Class" });
+    expect(field).toHaveValue("");
+    expect(field).toBeDisabled();
+    expect(within(panel).queryAllByRole("option")).toHaveLength(0);
+    expect(within(panel).queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(
+      within(panel).queryByRole("button", { name: "Change class: assign another class to this box" }),
+    ).toBeNull();
 
-    await user.click(within(panel).getByRole("option", { name: "health" }));
+    await user.click(field);
     await user.keyboard("{Enter}");
     expect(
       fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH" || init?.method === "DELETE"),
@@ -277,11 +293,11 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     expect(filter).toHaveFocus();
-    expect(within(popover).getByRole("button", { name: "Zwiń listę Klasy profilu" })).toHaveAttribute(
+    expect(within(popover).getByRole("button", { name: "Collapse list Profile classes" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -293,7 +309,7 @@ describe("annotation review query states", () => {
       ["POST", "PATCH", "DELETE"].includes(init?.method ?? "GET"),
     );
     expect(writes).toHaveLength(0);
-    expect(within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ })).not.toBeInTheDocument();
+    expect(within(popover).queryByRole("button", { name: /Create and assign class/ })).not.toBeInTheDocument();
     expect(within(popover).getByRole("option", { name: "7" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -305,21 +321,21 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const option = within(overlay).getByRole("option", { name: /^7, źródło OCR:/ });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const option = within(overlay).getByRole("option", { name: /^7, source OCR:/ });
     const before = option.getAttribute("aria-label");
     fireEvent.contextMenu(option.querySelector(".df-region-overlay__shape-fill") as Element, {
       clientX: 120,
       clientY: 140,
     });
-    await user.click(screen.getByRole("menuitem", { name: "Usuń" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     await waitFor(() => {
       expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
     });
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
-    expect(before).toContain("x 100, y 120, szerokość 40, wysokość 32");
+    expect(before).toContain("x 100, y 120, width 40, height 32");
   });
 
   it("opens the bbox menu without drawing, moving or losing an unsaved nudge", async () => {
@@ -327,31 +343,31 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
     const nudged = within(overlay).getByRole("option").getAttribute("aria-label");
-    expect(nudged).toContain("x 103, y 120, szerokość 40, wysokość 32");
+    expect(nudged).toContain("x 103, y 120, width 40, height 32");
 
     fireEvent.contextMenu(
       within(overlay).getByRole("option").querySelector(".df-region-overlay__shape-fill") as Element,
       { clientX: 120, clientY: 140 },
     );
 
-    expect(screen.getByRole("menu", { name: "Akcje bboxa" })).toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Box actions" })).toBeInTheDocument();
     // One shape, still where the nudge left it, and the preview still pending.
     expect(within(overlay).getAllByRole("option")).toHaveLength(1);
     expect(within(overlay).getByRole("option")).toHaveAttribute("aria-label", nudged);
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method !== undefined && init.method !== "GET")).toHaveLength(0);
 
     fireEvent.keyDown(document, { key: "Escape" });
 
-    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Box actions" })).not.toBeInTheDocument();
     expect(within(overlay).getByRole("option")).toHaveAttribute("aria-label", nudged);
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
   });
 
   it("orders the side column before the canvas and keeps operational notices in the inspector", async () => {
@@ -360,11 +376,11 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const preview = await screen.findByRole("region", { name: "Podgląd klatki 17" });
-    const overlay = within(preview).getByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const sideColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
-    const inspector = screen.getByRole("region", { name: "Anotacje na klatce" });
-    const terminalNotice = screen.getByRole("status", { name: "Klatka zaakceptowana" });
+    const preview = await screen.findByRole("region", { name: "Frame 17 preview" });
+    const overlay = within(preview).getByRole("listbox", { name: "Annotation boxes on the frame" });
+    const sideColumn = screen.getByRole("complementary", { name: "Current frame panels" });
+    const inspector = screen.getByRole("region", { name: "Annotations" });
+    const terminalNotice = screen.getByRole("status", { name: "Frame accepted" });
 
     expect(sideColumn).toContainElement(inspector);
     expect(screen.queryByRole("region", { name: "Dane klatki" })).not.toBeInTheDocument();
@@ -374,9 +390,7 @@ describe("annotation review query states", () => {
     ).toBeTruthy();
     expect(preview).not.toContainElement(terminalNotice);
     expect(inspector).toContainElement(terminalNotice);
-    expect(overlay.closest(".df-region-overlay")).toContainElement(
-      screen.getByText("Klatka 17", { selector: ".df-region-overlay__corner-label" }),
-    );
+    expect(overlay.closest(".df-region-overlay")).not.toContainElement(terminalNotice);
   });
 
   /*
@@ -395,16 +409,17 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const inspector = await screen.findByRole("region", { name: "Anotacje na klatce" });
+    const inspector = await screen.findByRole("region", { name: "Annotations" });
     expect(within(inspector).queryByText("Bieżąca klatka")).not.toBeInTheDocument();
     expect(inspector.querySelector(".df-panel__eyebrow")).toBeNull();
     expect(within(inspector).queryByText("OCR")).not.toBeInTheDocument();
     expect(within(inspector).queryByText("Ręczna")).not.toBeInTheDocument();
+    // FE-022: the count lives on each class row, as Figma draws it.
     expect(
-      within(inspector).getByText("2", { selector: ".df-status-badge" }),
+      within(inspector).getByRole("button", { name: "Class 7, 1 annotations" }),
     ).toBeVisible();
     expect(
-      within(inspector).getByRole("button", { name: "Klasa 7, 1 anotacji" }),
+      within(inspector).getByRole("button", { name: "Class health, 1 annotations" }),
     ).toBeVisible();
   });
 
@@ -414,27 +429,28 @@ describe("annotation review query states", () => {
     reviewApi({ frame: frameDetailFixture({ annotations: [annotationFixture(), second] }) });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     const options = within(overlay).getAllByRole("option");
-    const classSeven = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
-    const classHealth = screen.getByRole("button", { name: "Klasa health, 1 anotacji" });
+    const classSeven = screen.getByRole("button", { name: "Class 7, 1 annotations" });
+    const classHealth = screen.getByRole("button", { name: "Class health, 1 annotations" });
     const firstFill = options[0]?.querySelector(".df-region-overlay__shape-fill");
     expect(firstFill).not.toBeNull();
 
     fireEvent.click(firstFill as Element);
     expect(options[0]).toHaveAttribute("aria-selected", "true");
     expect(classSeven).toHaveAttribute("aria-pressed", "true");
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
     expect(dialog).toBeVisible();
-    const preview = screen.getByRole("region", { name: "Podgląd klatki 17" });
-    const sideColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
-    const inspector = screen.getByRole("region", { name: "Anotacje na klatce" });
-    const copyPanel = screen.getByRole("region", { name: "Powtórz z poprzedniej klatki" });
+    const preview = screen.getByRole("region", { name: "Frame 17 preview" });
+    const sideColumn = screen.getByRole("complementary", { name: "Current frame panels" });
+    const inspector = screen.getByRole("region", { name: "Annotations" });
+    const copyPanel = screen.getByRole("region", { name: "Repeat Previous" });
     const overlayRoot = overlay.closest(".df-region-overlay");
     expect(overlayRoot).not.toBeNull();
-    expect(dialog.parentElement).toBe(sideColumn);
-    expect(dialog.previousElementSibling).toBe(inspector);
-    expect(dialog.nextElementSibling).toBe(copyPanel);
+    // FE-022: the class field and its actions live inside Annotations.
+    expect(inspector).toContainElement(dialog);
+    expect(inspector.parentElement).toBe(sideColumn);
+    expect(inspector.nextElementSibling).toBe(copyPanel);
     expect(copyPanel.parentElement).toBe(sideColumn);
     expect(sideColumn.nextElementSibling).toBe(preview);
     expect(overlayRoot).not.toContainElement(dialog);
@@ -457,7 +473,7 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi({ profile: RICH_PROFILE });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -469,11 +485,8 @@ describe("annotation review query states", () => {
       y: 0,
       toJSON: () => ({}),
     } as DOMRect);
-    const inspector = screen.getByRole("heading", { name: "Anotacje na klatce" }).closest("section");
+    const inspector = screen.getByRole("heading", { name: "Annotations" }).closest("section");
     expect(inspector).not.toBeNull();
-    expect(
-      within(inspector as HTMLElement).getByText("1", { selector: ".df-status-badge" }),
-    ).toBeVisible();
 
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
@@ -496,9 +509,9 @@ describe("annotation review query states", () => {
 
     // The assigned class is stated outright in the panel header, which is the
     // counterweight to saving without being asked.
-    expect(await screen.findByText("przypisano: Score")).toBeVisible();
-    expect(screen.getByText("Klasa wybrana automatycznie:")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Porzuć box" })).toBeEnabled();
+    expect(await screen.findByText("assigned: Score")).toBeVisible();
+    expect(screen.getByText("Class chosen automatically:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard box" })).toBeEnabled();
   });
 
   it("corrects an automatically assigned class in one click", async () => {
@@ -507,8 +520,8 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
 
     await drawDraft();
-    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await screen.findByText("przypisano: Score");
+    const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await screen.findByText("assigned: Score");
 
     // One click on the class the operator actually wants. No confirmation step:
     // there is no considered choice here to protect, only one the editor made.
@@ -579,8 +592,8 @@ describe("annotation review query states", () => {
     // The request still belongs to the draft, but the operator has already
     // left it. Its eventual id must not reopen the panel or become the active
     // selection in this newer context (FE-015-FIX2 applied to FE-017 D).
-    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje na klatce" }));
-    expect(screen.getByRole("region", { name: "Anotacja bez zaznaczenia" })).toBeVisible();
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Annotations" }));
+    expect(screen.getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
 
     await act(async () => {
       created = true;
@@ -596,8 +609,8 @@ describe("annotation review query states", () => {
     await waitFor(() => {
       expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     });
-    expect(screen.getByRole("region", { name: "Anotacja bez zaznaczenia" })).toBeVisible();
-    expect(screen.queryByText(/^przypisano: /)).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
+    expect(screen.queryByText(/^assigned: /)).not.toBeInTheDocument();
   });
 
   it("creates a character class and assigns it to the box the draw already saved", async () => {
@@ -635,10 +648,10 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
     await drawDraft();
 
-    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
+    const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "8");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
 
     await waitFor(() => {
@@ -703,11 +716,11 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "Score");
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "Score");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Score”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “Score”" }),
     );
 
     await waitFor(() => {
@@ -764,18 +777,18 @@ describe("annotation review query states", () => {
 
     const overlay = await drawDraft();
     const draftPopover = await screen.findByRole("dialog", {
-      name: "Wybierz klasę dla nowego bbox",
+      name: "Choose a class for the new box",
     });
-    expect(await within(draftPopover).findByRole("alert")).toHaveTextContent("Kod: internal_error");
-    await user.type(within(draftPopover).getByRole("textbox", { name: "Klasa" }), "8");
+    expect(await within(draftPopover).findByRole("alert")).toHaveTextContent("Code: internal_error");
+    await user.type(within(draftPopover).getByRole("textbox", { name: "Class" }), "8");
     await user.click(
-      within(draftPopover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+      within(draftPopover).getByRole("button", { name: "Create and assign class “8”" }),
     );
 
     await waitFor(() => {
       expect(mutations).toHaveLength(3);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: "Klasa" })).toBeEnabled();
+      expect(screen.getByRole("textbox", { name: "Class" })).toBeDisabled();
     });
 
     fireEvent.pointerDown(overlay, { clientX: 500, clientY: 200, pointerId: 2 });
@@ -822,29 +835,29 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    let popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    let popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
     await user.click(within(popover).getByRole("option", { name: "health" }));
     await user.click(
       within(popover).getByRole("button", {
-        name: "Zmień nazwę: przypisz inną klasę do tego boxa",
+        name: "Change class: assign another class to this box",
       }),
     );
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "8");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
-    expect(await within(popover).findByRole("alert")).toHaveTextContent("Kod: internal_error");
+    expect(await within(popover).findByRole("alert")).toHaveTextContent("Code: internal_error");
 
     fireEvent.pointerDown(document.body);
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Klasa" })).toBeEnabled();
+      expect(screen.getByRole("textbox", { name: "Class" })).toBeDisabled();
     });
     await drawDraft();
 
@@ -897,26 +910,26 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    let popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    let popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
     await user.click(within(popover).getByRole("option", { name: "health" }));
     await user.click(
       within(popover).getByRole("button", {
-        name: "Zmień nazwę: przypisz inną klasę do tego boxa",
+        name: "Change class: assign another class to this box",
       }),
     );
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "8");
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "8");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
     fireEvent.pointerDown(document.body);
-    expect(screen.getByRole("region", { name: "Anotacja bez zaznaczenia" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
 
     evolvingProfile.categories = [
       ...evolvingProfile.categories,
@@ -939,7 +952,7 @@ describe("annotation review query states", () => {
             (item.body as { category_id?: string }).category_id === "category-8",
         ),
       ).toBe(true);
-      expect(screen.getByRole("textbox", { name: "Klasa" })).toBeEnabled();
+      expect(screen.getByRole("textbox", { name: "Class" })).toBeDisabled();
     });
 
     await drawDraft();
@@ -971,16 +984,16 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
     const overlay = await drawDraft();
-    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "8");
 
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „8”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
 
     expect(await within(popover).findByRole("alert")).toHaveTextContent(
-      "Nie udało się zapisać nowej klasy",
+      "The new class could not be saved",
     );
     expect(filter).toHaveValue("8");
     // The box is not lost by the failure: it was saved by the draw, so it is on
@@ -1027,24 +1040,24 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
     await drawDraft();
-    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
+    const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
 
-    // "Porzuć box" now deletes a saved annotation, not a client-side draft.
-    await user.click(within(popover).getByRole("button", { name: "Porzuć box" }));
+    // "Discard box" now deletes a saved annotation, not a client-side draft.
+    await user.click(within(popover).getByRole("button", { name: "Discard box" }));
 
-    const empty = await screen.findByRole("region", { name: "Anotacja bez zaznaczenia" });
+    const empty = await screen.findByRole("region", { name: "Annotation — nothing selected" });
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
     await drawDraft();
-    const nextPopover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await user.type(within(nextPopover).getByRole("textbox", { name: "Klasa" }), "s");
+    const nextPopover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await user.type(within(nextPopover).getByRole("textbox", { name: "Class" }), "s");
     expect(
-      within(nextPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(nextPopover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
     expect(writes).toEqual([
       { method: "POST", url: "/api/v1/frames/frame-1/annotations" },
@@ -1079,14 +1092,14 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
     await drawDraft();
-    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
+    const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
 
     fireEvent.pointerDown(document.body);
-    const empty = await screen.findByRole("region", { name: "Anotacja bez zaznaczenia" });
+    const empty = await screen.findByRole("region", { name: "Annotation — nothing selected" });
 
     resolveCategory?.(
       new Response(JSON.stringify(errorEnvelope("category_name_exists")), {
@@ -1104,10 +1117,10 @@ describe("annotation review query states", () => {
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
     await drawDraft();
-    const nextPopover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await user.type(within(nextPopover).getByRole("textbox", { name: "Klasa" }), "s");
+    const nextPopover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await user.type(within(nextPopover).getByRole("textbox", { name: "Class" }), "s");
     expect(
-      within(nextPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(nextPopover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
   });
 
@@ -1133,10 +1146,10 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
     await drawDraft();
-    const popover = await screen.findByRole("dialog", { name: /Edytuj anotację/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Klasa" }), "s");
+    const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
+    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
 
     resolveCategory?.(
@@ -1147,10 +1160,10 @@ describe("annotation review query states", () => {
     );
 
     expect(await within(popover).findByRole("alert")).toHaveTextContent(
-      "Klasa o tej nazwie już istnieje w profilu",
+      "A class with this name already exists in the profile",
     );
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “S”" }),
     ).not.toBeInTheDocument();
   });
 
@@ -1196,13 +1209,13 @@ describe("annotation review query states", () => {
       });
       renderApp(["/annotations/run-1"]);
 
-      await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-      const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-      const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+      await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+      const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+      const filter = within(popover).getByRole("textbox", { name: "Class" });
       await user.type(filter, typed);
       await user.click(
         within(popover).getByRole("button", {
-          name: `Utwórz i przypisz klasę „${proposedName}”`,
+          name: `Create and assign class “${proposedName}”`,
         }),
       );
 
@@ -1212,7 +1225,7 @@ describe("annotation review query states", () => {
       expect(filter).toHaveValue(existingName);
       expect(recoveredOption).toHaveAttribute("aria-selected", "true");
       expect(within(popover).getByRole("alert")).toHaveTextContent(
-        "Klasa o tej nazwie już istnieje w profilu.",
+        "A class with this name already exists in the profile.",
       );
       expect(writes).toHaveLength(1);
       expect(
@@ -1223,7 +1236,7 @@ describe("annotation review query states", () => {
         ).length,
       ).toBeGreaterThanOrEqual(2);
 
-      await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+      await user.click(within(popover).getByRole("button", { name: "Change class: assign another class to this box" }));
       await waitFor(() => {
         expect(writes).toHaveLength(2);
       });
@@ -1261,15 +1274,15 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "s");
-    await user.click(within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }));
+    await user.click(within(popover).getByRole("button", { name: "Create and assign class “S”" }));
 
     const alert = await within(popover).findByRole("alert");
-    expect(alert).toHaveTextContent("Klasa o tej nazwie już istnieje w profilu.");
-    expect(alert).toHaveTextContent("Wskaż istniejącą klasę na liście");
+    expect(alert).toHaveTextContent("A class with this name already exists in the profile.");
+    expect(alert).toHaveTextContent("Pick the existing class from the list");
     expect(alert).not.toHaveTextContent("wybrana");
     await waitFor(() => {
       expect(filter).toHaveValue("");
@@ -1281,14 +1294,14 @@ describe("annotation review query states", () => {
     for (const option of within(popover).getAllByRole("option")) {
       expect(option).toHaveAttribute("aria-selected", "false");
     }
-    expect(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
+    expect(within(popover).getByRole("button", { name: "Change class: assign another class to this box" })).toBeDisabled();
     expect(
-      within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+      within(popover).queryByRole("button", { name: /Create and assign class/ }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(1);
 
     await user.click(blocking);
-    await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(within(popover).getByRole("button", { name: "Change class: assign another class to this box" }));
     await waitFor(() => {
       expect(writes).toHaveLength(2);
     });
@@ -1324,12 +1337,12 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
     await waitFor(() => {
@@ -1343,14 +1356,14 @@ describe("annotation review query states", () => {
     await user.type(filter, "s");
     expect(filter).toHaveValue("s");
     expect(
-      within(popover).queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+      within(popover).queryByRole("button", { name: /Create and assign class/ }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(1);
 
     await user.clear(filter);
     await user.type(filter, "Mana");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Mana”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “Mana”" }),
     );
 
     await waitFor(() => {
@@ -1377,12 +1390,12 @@ describe("annotation review query states", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const reopened = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const reopenedFilter = within(reopened).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const reopened = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const reopenedFilter = within(reopened).getByRole("textbox", { name: "Class" });
     await user.type(reopenedFilter, "s");
     expect(
-      within(reopened).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(reopened).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
   });
 
@@ -1407,13 +1420,13 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
 
     await user.type(filter, "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
     await waitFor(() => {
@@ -1422,7 +1435,7 @@ describe("annotation review query states", () => {
 
     await user.type(filter, "Timer");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Timer”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “Timer”" }),
     );
     await waitFor(() => {
       expect(writes).toHaveLength(2);
@@ -1444,7 +1457,7 @@ describe("annotation review query states", () => {
     await user.type(filter, "s");
     expect(filter).toHaveValue("s");
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “S”" }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(2);
   });
@@ -1476,13 +1489,13 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
 
     await user.type(filter, "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
     await waitFor(() => {
@@ -1508,7 +1521,7 @@ describe("annotation review query states", () => {
     await user.type(filter, "s");
     expect(filter).toHaveValue("s");
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “S”" }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(2);
   });
@@ -1535,13 +1548,13 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
 
     await user.type(filter, "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
     await waitFor(() => {
@@ -1563,11 +1576,11 @@ describe("annotation review query states", () => {
       method: "PATCH",
       url: "/api/v1/annotations/ann-1",
     });
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeInTheDocument();
 
     await user.type(filter, "s");
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “S”" }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(2);
   });
@@ -1601,19 +1614,14 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(
-      await screen.findByRole("button", {
-        name: /Rozwiń listę Klasy z poprzedniej klatki/,
-      }),
-    );
-    await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
-    await user.click(screen.getByRole("checkbox", { name: "Liczby" }));
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const oldPopover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const oldFilter = within(oldPopover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("checkbox", { name: "Custom" }));
+    await user.click(screen.getByRole("checkbox", { name: "Numbers" }));
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const oldPopover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const oldFilter = within(oldPopover).getByRole("textbox", { name: "Class" });
     await user.type(oldFilter, "s");
     await user.click(
-      within(oldPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(oldPopover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(oldPopover).findByRole("alert");
     await waitFor(() => {
@@ -1622,7 +1630,7 @@ describe("annotation review query states", () => {
 
     // `R` carried this copy until FE-015 A3 retired it; the button takes over,
     // reached from the keyboard so the open panel is not dismissed on the way.
-    screen.getByRole("button", { name: "Powtórz" }).focus();
+    screen.getByRole("button", { name: "Accept — repeat the previous frame" }).focus();
     await user.keyboard("{Enter}");
     await waitFor(() => {
       expect(writes).toHaveLength(2);
@@ -1633,14 +1641,14 @@ describe("annotation review query states", () => {
       url: "/api/v1/frames/frame-1/annotations/copy-previous",
     });
     await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Edit annotation 7" })).not.toBeInTheDocument();
     });
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const copiedPopover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(copiedPopover).getByRole("textbox", { name: "Klasa" }), "s");
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const copiedPopover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(copiedPopover).getByRole("textbox", { name: "Class" }), "s");
     expect(
-      within(copiedPopover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(copiedPopover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
     expect(writes).toHaveLength(2);
   });
@@ -1677,12 +1685,12 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
     await waitFor(() => {
@@ -1695,7 +1703,7 @@ describe("annotation review query states", () => {
      * close it by the FE-014 boundary and clear the conflict gate along with
      * it, which is the very thing this regression is here to watch survive.
      */
-    screen.getByRole("button", { name: "Powtórz" }).focus();
+    screen.getByRole("button", { name: "Accept — repeat the previous frame" }).focus();
     await user.keyboard("{Enter}");
     await waitFor(() => {
       expect(writes).toHaveLength(2);
@@ -1705,11 +1713,11 @@ describe("annotation review query states", () => {
       method: "POST",
       url: "/api/v1/frames/frame-1/annotations/copy-previous",
     });
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeInTheDocument();
 
     await user.type(filter, "s");
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “S”" }),
     ).not.toBeInTheDocument();
     expect(writes).toHaveLength(2);
   });
@@ -1779,17 +1787,17 @@ describe("annotation review query states", () => {
   async function rejectCategoryOnSelected(
     user: ReturnType<typeof userEvent.setup>,
   ): Promise<void> {
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "s");
-    await user.click(within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }));
+    await user.click(within(popover).getByRole("button", { name: "Create and assign class “S”" }));
     await within(popover).findByRole("alert");
     await waitFor(() => {
       expect(filter).toHaveValue("");
     });
     await user.type(filter, "s");
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “S”" }),
     ).not.toBeInTheDocument();
   }
 
@@ -1799,12 +1807,12 @@ describe("annotation review query states", () => {
     conflictGateApi(writes);
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     await rejectCategoryOnSelected(user);
-    const column = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
+    const column = screen.getByRole("complementary", { name: "Current frame panels" });
 
-    await user.click(screen.getByRole("button", { name: "Następna klatka" }));
-    await screen.findByRole("img", { name: "Klatka 18 runu run-1" });
+    await user.click(screen.getByRole("button", { name: "Next frame" }));
+    await screen.findByRole("img", { name: "Frame 18 of run run-1" });
 
     /*
      * Nothing scoped to the previous frame reaches this one, because the
@@ -1817,18 +1825,18 @@ describe("annotation review query states", () => {
      * Asserted on the side column: the panel itself is keyed by its target
      * and would be a new node either way.
      */
-    const nextColumn = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
+    const nextColumn = screen.getByRole("complementary", { name: "Current frame panels" });
     expect(column).not.toBeInTheDocument();
     expect(nextColumn).not.toBe(column);
-    const empty = within(nextColumn).getByRole("region", { name: "Anotacja bez zaznaczenia" });
-    expect(within(empty).getByRole("textbox", { name: "Klasa" })).toHaveValue("");
+    const empty = within(nextColumn).getByRole("region", { name: "Annotation — nothing selected" });
+    expect(within(empty).getByRole("textbox", { name: "Class" })).toHaveValue("");
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const reopened = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(reopened).getByRole("textbox", { name: "Klasa" }), "s");
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const reopened = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(reopened).getByRole("textbox", { name: "Class" }), "s");
     expect(
-      within(reopened).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(reopened).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
     expect(writes).toEqual([
       { method: "POST", url: "/api/v1/profiles/profile-1/categories" },
@@ -1841,26 +1849,26 @@ describe("annotation review query states", () => {
     conflictGateApi(writes);
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     await rejectCategoryOnSelected(user);
-    const column = screen.getByRole("complementary", { name: "Panele bieżącej klatki" });
+    const column = screen.getByRole("complementary", { name: "Current frame panels" });
 
-    await user.click(screen.getByRole("heading", { name: "Anotacje na klatce" }));
+    await user.click(screen.getByRole("heading", { name: "Annotations" }));
 
     /*
      * Same editor, same column: the click landed outside the dialog, so the
      * FE-014 boundary closed the selection and took the gate with it. Nothing
      * was unmounted to make that happen — which is exactly what A1 changed.
      */
-    expect(screen.getByRole("complementary", { name: "Panele bieżącej klatki" })).toBe(column);
-    const empty = within(column).getByRole("region", { name: "Anotacja bez zaznaczenia" });
+    expect(screen.getByRole("complementary", { name: "Current frame panels" })).toBe(column);
+    const empty = within(column).getByRole("region", { name: "Annotation — nothing selected" });
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const reopened = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(reopened).getByRole("textbox", { name: "Klasa" }), "s");
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const reopened = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(reopened).getByRole("textbox", { name: "Class" }), "s");
     expect(
-      within(reopened).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(reopened).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
     expect(writes).toEqual([
       { method: "POST", url: "/api/v1/profiles/profile-1/categories" },
@@ -1906,7 +1914,7 @@ describe("annotation review query states", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
     await drawDraft();
-    await screen.findByText("przypisano: 7");
+    await screen.findByText("assigned: 7");
     const frameGetsBefore = fetchSpy.mock.calls.filter(
       ([input, init]) =>
         String(input) === "/api/v1/frames/frame-1" &&
@@ -1924,8 +1932,8 @@ describe("annotation review query states", () => {
           (init?.method === undefined || init.method === "GET"),
       ).length,
     ).toBeGreaterThan(frameGetsBefore);
-    expect(screen.getByRole("dialog", { name: /Edytuj anotację/ })).toBeInTheDocument();
-    expect(screen.getByText("przypisano: 7")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /Edit annotation/ })).toBeInTheDocument();
+    expect(screen.getByText("assigned: 7")).toBeInTheDocument();
   });
 
   it("replaces the rejected proposal when another category name also conflicts", async () => {
@@ -1947,14 +1955,14 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     for (const name of ["s", "Timer"]) {
       await user.type(filter, name);
       await user.click(
         within(popover).getByRole("button", {
-          name: `Utwórz i przypisz klasę „${name === "s" ? "S" : name}”`,
+          name: `Create and assign class “${name === "s" ? "S" : name}”`,
         }),
       );
       await waitFor(() => {
@@ -1965,12 +1973,12 @@ describe("annotation review query states", () => {
 
     await user.type(filter, "Timer");
     expect(
-      within(popover).queryByRole("button", { name: "Utwórz i przypisz klasę „Timer”" }),
+      within(popover).queryByRole("button", { name: "Create and assign class “Timer”" }),
     ).not.toBeInTheDocument();
     await user.clear(filter);
     await user.type(filter, "s");
     expect(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
     expect(writes).toHaveLength(2);
   });
@@ -2000,12 +2008,12 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    let popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    let filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    let popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    let filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
     await within(popover).findByRole("alert");
     await waitFor(() => {
@@ -2013,7 +2021,7 @@ describe("annotation review query states", () => {
     });
 
     await user.click(within(popover).getByRole("option", { name: "health" }));
-    await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(within(popover).getByRole("button", { name: "Change class: assign another class to this box" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -2024,12 +2032,12 @@ describe("annotation review query states", () => {
       url: "/api/v1/annotations/ann-1",
     });
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "s");
     expect(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „S”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
   });
 
@@ -2062,19 +2070,19 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const popover = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Klasa" });
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const filter = within(popover).getByRole("textbox", { name: "Class" });
     await user.type(filter, "Score");
     await user.click(
-      within(popover).getByRole("button", { name: "Utwórz i przypisz klasę „Score”" }),
+      within(popover).getByRole("button", { name: "Create and assign class “Score”" }),
     );
 
     const recovered = await within(popover).findByRole("option", { name: "Score" });
     expect(filter).toHaveValue("Score");
     expect(recovered).toHaveAttribute("aria-selected", "true");
 
-    await user.click(within(popover).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(within(popover).getByRole("button", { name: "Change class: assign another class to this box" }));
     await waitFor(() => {
       expect(writes).toHaveLength(2);
     });
@@ -2104,7 +2112,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -2120,7 +2128,7 @@ describe("annotation review query states", () => {
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
 
-    expect(await screen.findByText(/Kod: version_conflict/)).toBeInTheDocument();
+    expect(await screen.findByText(/Code: version_conflict/)).toBeInTheDocument();
     const writesAfterRejection = fetchSpy.mock.calls.filter(
       ([, init]) => init?.method !== undefined && init.method !== "GET",
     ).length;
@@ -2136,7 +2144,7 @@ describe("annotation review query states", () => {
     await user.keyboard("{ArrowRight}{Shift>}{ArrowDown}{/Shift}");
 
     expect(
-      within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ }),
+      within(overlay).getByRole("option", { name: /^Box — choose a class:/ }),
     ).toHaveAttribute("aria-label", expect.stringContaining("x 601, y 510"));
 
     await user.keyboard("{Enter}");
@@ -2153,17 +2161,17 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
 
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 103, y 120, width 40, height 32"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(
       fetchSpy.mock.calls.filter(
         ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
@@ -2189,8 +2197,8 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
@@ -2199,11 +2207,11 @@ describe("annotation review query states", () => {
       "aria-label",
       expect.stringContaining("x 103, y 120"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
 
     // The button that fires the copy-previous mutation, not the picker that
     // selects what it copies — a real "outside" target, same as `body`.
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Powtórz" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Accept — repeat the previous frame" }));
 
     await waitFor(() => {
       expect(within(overlay).getByRole("option")).toHaveAttribute(
@@ -2211,7 +2219,7 @@ describe("annotation review query states", () => {
         expect.stringContaining("x 100, y 120"),
       );
     });
-    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
     expect(
       fetchSpy.mock.calls.filter(
         ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
@@ -2224,24 +2232,25 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
 
-    const copyToggle = await screen.findByRole("button", {
-      name: /Rozwiń listę Klasy z poprzedniej klatki/,
-    });
-    fireEvent.pointerDown(copyToggle);
+    // FE-022: the list is always open (Figma), so a row is the inner target.
+    const copyRow = within(
+      await screen.findByRole("group", { name: "Classes of the previous frame and their counts" }),
+    ).getAllByRole("checkbox")[0];
+    fireEvent.pointerDown(copyRow as HTMLElement);
 
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 103, y 120"),
     );
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
     expect(
       fetchSpy.mock.calls.filter(
         ([url, init]) => url === "/api/v1/annotations/ann-1" && init?.method === "PATCH",
@@ -2256,16 +2265,10 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    // Freezing blocks writes, not reads: the toggle must not inherit
-    // `disabled` from the rest of a control the operator can no longer edit.
-    const copyToggle = await screen.findByRole("button", {
-      name: /Rozwiń listę Klasy z poprzedniej klatki/,
-    });
-    expect(copyToggle).toBeEnabled();
-    await user.click(copyToggle);
-
-    const list = screen.getByRole("group", {
-      name: "Klasy z poprzedniej klatki i liczba ich wystąpień",
+    // Freezing blocks writes, not reads: the list stays on screen (FE-022:
+    // always open) with its counts.
+    const list = await screen.findByRole("group", {
+      name: "Classes of the previous frame and their counts",
     });
     expect(list).toBeVisible();
     const row = within(list).getByRole("checkbox", { name: /health/i });
@@ -2286,8 +2289,8 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
@@ -2304,17 +2307,17 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi({ frame: frameDetailFixture({ annotations: [edge] }) });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     fireEvent.click(classButton);
     classButton.focus();
 
     expect(fireEvent.keyDown(classButton, { key: "ArrowRight" })).toBe(true);
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 1880, y 120, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 1880, y 120, width 40, height 32"),
     );
-    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
     fireEvent.keyDown(classButton, { key: "Enter" });
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
   });
@@ -2324,10 +2327,10 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    within(dialog).getByRole("textbox", { name: "Klasa" }).focus();
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    within(dialog).getByRole("textbox", { name: "Class" }).focus();
     await user.keyboard("{ArrowRight}");
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
@@ -2341,9 +2344,9 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi({ profile: RICH_PROFILE });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
     const classOption = within(dialog).getByRole("option", { name: "7" });
     classOption.focus();
     await user.keyboard("{ArrowDown}");
@@ -2360,7 +2363,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     const option = within(overlay).getByRole("option");
     fireEvent.click(option.querySelector(".df-region-overlay__shape-fill") as Element);
     fireEvent.keyDown(window, { key: "ArrowRight" });
@@ -2374,7 +2377,7 @@ describe("annotation review query states", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -2390,7 +2393,7 @@ describe("annotation review query states", () => {
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
-    await screen.findByText(/^przypisano: /);
+    await screen.findByText(/^assigned: /);
 
     // One gesture, both effects: the panel closes and the very same pointerdown
     // begins the next drawing. Losing it would leave the operator unable to
@@ -2419,7 +2422,7 @@ describe("annotation review query states", () => {
     reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -2431,20 +2434,20 @@ describe("annotation review query states", () => {
       y: 0,
       toJSON: () => ({}),
     } as DOMRect);
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     const fill = within(overlay)
       .getByRole("option")
       .querySelector(".df-region-overlay__shape-fill");
 
     fireEvent.pointerDown(fill as Element, { clientX: 55, clientY: 65, pointerId: 1 });
 
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
   });
 
   /*
    * A create the backend refuses leaves the rectangle on screen as a draft, and
    * the panel becomes the old "choose a class, then save" surface — the one
-   * path where "Zapisz" still means what it used to. Losing the box here would
+   * path where "Save class" still means what it used to. Losing the box here would
    * make the operator redraw work the backend merely rejected once.
    */
   it("keeps the box on screen and retriable after the create fails", async () => {
@@ -2457,7 +2460,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -2473,15 +2476,15 @@ describe("annotation review query states", () => {
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
 
-    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
-    expect(screen.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toBeVisible();
-    expect(within(overlay).getByRole("option", { name: /^Box — wybierz klasę:/ })).toBeVisible();
+    expect(await screen.findByText(/Code: internal_error/)).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Choose a class for the new box" })).toBeVisible();
+    expect(within(overlay).getByRole("option", { name: /^Box — choose a class:/ })).toBeVisible();
 
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
     await user.clear(field);
     await user.type(field, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    await user.click(screen.getByRole("button", { name: "Save class" }));
 
     await waitFor(() => {
       const posts = fetchSpy.mock.calls.filter(
@@ -2537,7 +2540,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -2552,14 +2555,14 @@ describe("annotation review query states", () => {
     fireEvent.pointerDown(overlay, { clientX: 300, clientY: 250, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
-    await screen.findByText("przypisano: 7");
+    await screen.findByText("assigned: 7");
     await waitFor(() => {
       expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     });
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 2 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Class 7, 2 annotations" }));
 
-    expect(screen.queryByText(/^przypisano: /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^assigned: /)).not.toBeInTheDocument();
     // Both boxes are still there, and nothing was deleted to get here.
     expect(within(overlay).getAllByRole("option")).toHaveLength(2);
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
@@ -2573,7 +2576,7 @@ describe("annotation review query states", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 0,
@@ -2585,7 +2588,7 @@ describe("annotation review query states", () => {
       y: 0,
       toJSON: () => ({}),
     } as DOMRect);
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     const fill = within(overlay)
       .getByRole("option")
       .querySelector(".df-region-overlay__shape-fill");
@@ -2598,9 +2601,9 @@ describe("annotation review query states", () => {
 
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 300, y 220, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 300, y 220, width 40, height 32"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
 
     fireEvent.pointerUp(overlay, { clientX: 155, clientY: 115, pointerId: 1 });
 
@@ -2632,12 +2635,12 @@ describe("annotation review query states", () => {
       profile: RICH_PROFILE,
     });
     renderApp(["/annotations/run-1"]);
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
 
-    const firstClassButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const firstClassButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(firstClassButton);
-    const firstDialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    await user.type(within(firstDialog).getByLabelText("Klasa"), "sco");
+    const firstDialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    await user.type(within(firstDialog).getByLabelText("Class"), "sco");
     await user.click(within(firstDialog).getByRole("option", { name: "Score" }));
     firstClassButton.focus();
     await user.keyboard("{ArrowRight}");
@@ -2650,8 +2653,8 @@ describe("annotation review query states", () => {
     overlayOptions[0]?.focus();
     await user.keyboard("{ArrowDown}");
 
-    const secondDialog = screen.getByRole("dialog", { name: "Edytuj anotację health" });
-    expect(within(secondDialog).getByLabelText("Klasa")).toHaveValue("");
+    const secondDialog = screen.getByRole("dialog", { name: "Edit annotation health" });
+    expect(within(secondDialog).getByLabelText("Class")).toHaveValue("");
     expect(within(secondDialog).getByRole("option", { name: "health" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -2662,9 +2665,9 @@ describe("annotation review query states", () => {
     );
     expect(within(overlay).getAllByRole("option")[1]).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 500, y 320, szerokość 60, wysokość 48"),
+      expect.stringContaining("x 500, y 320, width 60, height 48"),
     );
-    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
   });
 
@@ -2684,8 +2687,8 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Nie znaleziono klatki");
-    expect(screen.getByRole("button", { name: "Spróbuj ponownie" })).toBeInTheDocument();
+    expect(alert).toHaveTextContent("Frame not found");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });
 
@@ -2731,17 +2734,17 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
-    expect(screen.getByLabelText("Pozycja 1 z 2")).toHaveTextContent("1 / 2");
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    await screen.findByRole("img", { name: "Frame 0 of run run-1" });
+    expect(screen.getByLabelText("Frame 1 of 2 — choose a frame")).toHaveTextContent("1/2");
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "Wybierz klatkę" }), "frame-2");
+    await chooseFrame(user, "frame-2");
 
-    expect(await screen.findByLabelText("Pozycja 2 z 2")).toHaveTextContent("2 / 2");
+    expect(await screen.findByLabelText("Frame 2 of 2 — choose a frame")).toHaveTextContent("2/2");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Poprzednia klatka" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Następna klatka" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous frame" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Next frame" })).toBeDisabled();
   });
 
   /*
@@ -2752,8 +2755,8 @@ describe("temporal frame navigation", () => {
    * where the review path broke altogether.
    */
   it.each([
-    ["a", "accept", "Zaakceptuj klatkę"],
-    ["x", "reject", "Odrzuć klatkę"],
+    ["a", "accept", "Accept frame"],
+    ["x", "reject", "Reject frame"],
   ])(
     "no longer maps %s to the %s review action and keeps it on the button",
     async (shortcut, decision, buttonName) => {
@@ -2769,12 +2772,13 @@ describe("temporal frame navigation", () => {
       });
       renderApp(["/annotations/run-1"]);
 
-      await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+      await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
       await user.keyboard(shortcut);
 
       expect(decisions).toHaveLength(0);
       const button = screen.getByRole("button", { name: buttonName });
-      expect(button).not.toHaveTextContent(shortcut.toLocaleUpperCase("pl"));
+      // No shortcut hint on the button: its label is the plain action.
+      expect(button.textContent?.trim()).toBe(decision === "accept" ? "Accept" : "Reject");
 
       await user.click(button);
 
@@ -2797,8 +2801,8 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classField = screen.getByLabelText("Klasa");
+    await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
+    const classField = screen.getByLabelText("Class");
     await user.clear(classField);
     await user.type(classField, "axr");
 
@@ -2818,8 +2822,8 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("img", { name: /Klatka 17 runu run-1/ });
-    const frameSelect = screen.getByRole("combobox", { name: "Wybierz klatkę" });
+    await screen.findByRole("img", { name: /Frame 17 of run run-1/ });
+    const frameSelect = frameCounter();
     frameSelect.focus();
     await user.keyboard("a");
 
@@ -2841,11 +2845,6 @@ describe("temporal frame navigation", () => {
   }
 
   async function openCopyPicker(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(
-      await screen.findByRole("button", {
-        name: /Rozwiń listę Klasy z poprzedniej klatki/,
-      }),
-    );
   }
 
   it("ignores R and copies the preselected HUD level from the button instead", async () => {
@@ -2857,11 +2856,11 @@ describe("temporal frame navigation", () => {
     await openCopyPicker(user);
     // The default selection is the whole HUD level, and a whole level is still
     // the scope the backend has always answered.
-    expect(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
+    expect(await screen.findByRole("checkbox", { name: "Custom" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
-    const copyButton = screen.getByRole("button", { name: "Powtórz" });
+    const copyButton = screen.getByRole("button", { name: "Accept — repeat the previous frame" });
     copyButton.focus();
     // FE-015 A3 retired `R`. The press must reach nothing at all, not even the
     // focused button, so the copy below is the only request in this test.
@@ -2873,7 +2872,7 @@ describe("temporal frame navigation", () => {
     await waitFor(() => {
       expect(requests).toEqual([{ scope: "game", expected_version: 7 }]);
     });
-    expect(await screen.findByText("Skopiowano: 2. Zastąpiono: 1.")).toBeInTheDocument();
+    expect(await screen.findByText("Copied: 2. Replaced: 1.")).toBeInTheDocument();
   });
 
   it("selects every class of a subgroup with one click on its checkbox", async () => {
@@ -2883,20 +2882,20 @@ describe("temporal frame navigation", () => {
     renderApp(["/annotations/run-1"]);
 
     await openCopyPicker(user);
-    await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Custom" }));
     for (const name of ["Score", "Timer", "health"]) {
       expect(
         screen.getByRole("checkbox", { name: `${name} 1` }),
       ).toHaveAttribute("aria-checked", "false");
     }
 
-    await user.click(screen.getByRole("checkbox", { name: "Liczby" }));
+    await user.click(screen.getByRole("checkbox", { name: "Numbers" }));
     for (const name of ["7", "1"]) {
       expect(
         screen.getByRole("checkbox", { name: `${name} 1` }),
       ).toHaveAttribute("aria-checked", "true");
     }
-    await user.click(screen.getByRole("button", { name: "Powtórz" }));
+    await user.click(screen.getByRole("button", { name: "Accept — repeat the previous frame" }));
 
     await waitFor(() => {
       expect(requests).toContainEqual({ scope: "character", expected_version: 7 });
@@ -2911,12 +2910,12 @@ describe("temporal frame navigation", () => {
 
     await openCopyPicker(user);
     await user.click(await screen.findByRole("checkbox", { name: "Timer 1" }));
-    expect(screen.getByRole("checkbox", { name: "Pola HUD (gra)" })).toHaveAttribute(
+    expect(screen.getByRole("checkbox", { name: "Custom" })).toHaveAttribute(
       "aria-checked",
       "mixed",
     );
     await user.click(screen.getByRole("checkbox", { name: "7 1" }));
-    await user.click(screen.getByRole("button", { name: "Powtórz" }));
+    await user.click(screen.getByRole("button", { name: "Accept — repeat the previous frame" }));
 
     await waitFor(() => {
       expect(requests).toEqual([
@@ -2929,29 +2928,20 @@ describe("temporal frame navigation", () => {
     });
   });
 
-  it("filters the class list by typing and keeps the level rows scrollable", async () => {
-    const user = userEvent.setup();
+  it("lists every class of the previous frame inline, with counts, in a scrolling box", async () => {
     const requests: unknown[] = [];
     copyApi(requests);
     renderApp(["/annotations/run-1"]);
 
-    const filter = await screen.findByLabelText("Filtruj klasy");
-    await user.type(filter, "tim");
-
-    /*
-     * A1 keeps a second class list on screen — the annotation panel's — so the
-     * filter is only meaningful inside the picker that owns it. Scoping the
-     * query to that picker keeps the assertion about filtering rather than
-     * about how many lists the column happens to render.
-     */
-    const picker = filter.closest(".df-grouped-options");
-    expect(picker).not.toBeNull();
-    const copyClasses = within(picker as HTMLElement);
-    expect(copyClasses.getByRole("checkbox", { name: "Timer 1" })).toBeVisible();
-    expect(
-      copyClasses.queryByRole("checkbox", { name: "Score 1" }),
-    ).not.toBeInTheDocument();
-    expect(copyClasses.queryByRole("group", { name: "Liczby" })).not.toBeInTheDocument();
+    // FE-022 (Figma Repeat Previous): the rows are always on screen in a fixed
+    // list box, so there is no filter field and nothing to expand first.
+    const list = await screen.findByRole("group", {
+      name: "Classes of the previous frame and their counts",
+    });
+    expect(within(list).getByRole("checkbox", { name: "Timer 1" })).toBeVisible();
+    expect(within(list).getByRole("checkbox", { name: "Score 1" })).toBeVisible();
+    expect(screen.queryByLabelText("Filter classes")).not.toBeInTheDocument();
+    expect(list.closest(".df-review-copy__box")).not.toBeNull();
   });
 
   it("refuses to copy when the selection is empty and says why", async () => {
@@ -2961,13 +2951,13 @@ describe("temporal frame navigation", () => {
     renderApp(["/annotations/run-1"]);
 
     await openCopyPicker(user);
-    await user.click(await screen.findByRole("checkbox", { name: "Pola HUD (gra)" }));
-    expect(screen.getByRole("button", { name: "Powtórz" })).toBeDisabled();
+    await user.click(await screen.findByRole("checkbox", { name: "Custom" }));
+    expect(screen.getByRole("button", { name: "Accept — repeat the previous frame" })).toBeDisabled();
     expect(
-      screen.getByText("Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia."),
+      screen.getByText("Select at least one class or a whole group to repeat."),
     ).toBeVisible();
 
-    screen.getByRole("button", { name: "Zaakceptuj klatkę" }).focus();
+    screen.getByRole("button", { name: "Accept frame" }).focus();
     await user.keyboard("r");
     expect(requests).toEqual([]);
   });
@@ -3003,12 +2993,12 @@ describe("temporal frame navigation", () => {
     renderApp(["/annotations/run-1"]);
 
     expect(
-      await screen.findByText("To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania."),
+      await screen.findByText("This is the first frame of the run — there is no earlier frame to copy."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Powtórz" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Accept — repeat the previous frame" })).toBeDisabled();
     // No picker at all: there is nothing to type towards, so an empty list with
     // a "nothing matches" message would be a lie.
-    expect(screen.queryByLabelText("Filtruj klasy")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter classes")).not.toBeInTheDocument();
   });
 
   /*
@@ -3029,11 +3019,11 @@ describe("temporal frame navigation", () => {
 
     expect(
       await screen.findByText(
-        "Poprzednia klatka (nr 0) nie ma żadnych anotacji — nie ma czego powtórzyć.",
+        "The previous frame (0) has no annotations — nothing to repeat.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Powtórz" })).toBeDisabled();
-    expect(screen.queryByLabelText("Filtruj klasy")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Accept — repeat the previous frame" })).toBeDisabled();
+    expect(screen.queryByLabelText("Filter classes")).not.toBeInTheDocument();
   });
 
   it("offers only the classes the previous frame holds, with their counts", async () => {
@@ -3067,10 +3057,11 @@ describe("temporal frame navigation", () => {
     // The source frame is named from the backend's answer, not from the
     // filtered frame list this screen happens to hold.
     expect(
-      screen.getByText(
-        "Źródłem jest klatka 2 — poprzednia w czasie, niezależnie od aktywnego filtra statusu.",
-      ),
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: "Accept — repeat the previous frame" }),
+    ).toHaveAttribute(
+      "title",
+      "Copies from frame 2 — the previous one in time, whatever the status filter.",
+    );
   });
 
   it("explains a copy that found nothing after the source changed underneath", async () => {
@@ -3084,10 +3075,10 @@ describe("temporal frame navigation", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Powtórz" }));
+    await user.click(await screen.findByRole("button", { name: "Accept — repeat the previous frame" }));
     expect(
       await screen.findByText(
-        "Poprzednia klatka już nie ma anotacji w zaznaczonych klasach. Nic nie zmieniono.",
+        "The previous frame no longer has annotations in the selected classes. Nothing changed.",
       ),
     ).toBeInTheDocument();
   });
@@ -3150,37 +3141,35 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
-    const filters = screen.getByRole("group", { name: "Filtr statusu klatek" });
-    expect(within(filters).getByRole("button", { name: /Wszystkie\s*2/ })).toBeVisible();
-    expect(within(filters).getByRole("button", { name: /Oczekujące\s*1/ })).toHaveAttribute(
+    await screen.findByRole("img", { name: "Frame 0 of run run-1" });
+    const filters = screen.getByRole("group", { name: "Frame status filter" });
+    expect(within(filters).getByRole("button", { name: /All\s*2/ })).toBeVisible();
+    expect(within(filters).getByRole("button", { name: /Pending\s*1/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(within(filters).getByRole("button", { name: /Zaakceptowane\s*1/ })).toBeVisible();
-    expect(within(filters).getByRole("button", { name: /Odrzucone\s*0/ })).toBeVisible();
+    expect(within(filters).getByRole("button", { name: /Accepted\s*1/ })).toBeVisible();
+    expect(within(filters).getByRole("button", { name: /Rejected\s*0/ })).toBeVisible();
 
-    expect(screen.getByLabelText("Pozycja 1 z 1")).toBeVisible();
-    expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveDisplayValue(
-      "Klatka 0 · 0.000 s · oczekująca",
-    );
-    expect(screen.getByRole("button", { name: "Następna klatka" })).toBeDisabled();
+    expect(screen.getByLabelText("Frame 1 of 1 — choose a frame")).toBeVisible();
+    expect(frameCounter()).toHaveTextContent("1/1");
+    expect(screen.getByRole("button", { name: "Next frame" })).toBeDisabled();
 
-    await user.click(within(filters).getByRole("button", { name: /Wszystkie\s*2/ }));
-    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
-    expect(screen.getByLabelText("Pozycja 1 z 2")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Następna klatka" }));
+    await user.click(within(filters).getByRole("button", { name: /All\s*2/ }));
+    await screen.findByRole("img", { name: "Frame 0 of run run-1" });
+    expect(screen.getByLabelText("Frame 1 of 2 — choose a frame")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Next frame" }));
 
-    await screen.findByRole("img", { name: "Klatka 1 runu run-1" });
-    expect(screen.getByLabelText("Pozycja 2 z 2")).toBeVisible();
+    await screen.findByRole("img", { name: "Frame 1 of run run-1" });
+    expect(screen.getByLabelText("Frame 2 of 2 — choose a frame")).toBeVisible();
 
     await user.click(
-      within(screen.getByRole("group", { name: "Filtr statusu klatek" })).getByRole("button", {
-        name: /Oczekujące\s*1/,
+      within(screen.getByRole("group", { name: "Frame status filter" })).getByRole("button", {
+        name: /Pending\s*1/,
       }),
     );
-    await screen.findByRole("img", { name: "Klatka 0 runu run-1" });
-    expect(screen.getByLabelText("Pozycja 1 z 1")).toBeVisible();
+    await screen.findByRole("img", { name: "Frame 0 of run run-1" });
+    expect(screen.getByLabelText("Frame 1 of 1 — choose a frame")).toBeVisible();
   });
 
   it("uses the rejected filter as the route to reopen and sends the current frame version", async () => {
@@ -3226,12 +3215,12 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: /Odrzucone/ }));
-    expect(await screen.findByRole("button", { name: "Otwórz ponownie" })).toBeEnabled();
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: /Rejected/ }));
+    expect(await screen.findByRole("button", { name: "Reopen" })).toBeEnabled();
     expect(rejectedRequested).toBe(true);
 
-    await user.click(screen.getByRole("button", { name: "Otwórz ponownie" }));
+    await user.click(screen.getByRole("button", { name: "Reopen" }));
     await waitFor(() => {
       const reviewCall = fetchSpy.mock.calls.find(
         ([url, init]) =>
@@ -3281,17 +3270,17 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classField = screen.getByLabelText("Klasa");
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classField = screen.getByLabelText("Class");
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(screen.getByRole("button", { name: "Change class: assign another class to this box" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Dane zmieniły się w międzyczasie");
-    expect(alert).toHaveTextContent("Kod: version_conflict");
+    expect(alert).toHaveTextContent("The data changed in the meantime");
+    expect(alert).toHaveTextContent("Code: version_conflict");
     await waitFor(() => {
       expect(frameReads).toBeGreaterThanOrEqual(2);
     });
@@ -3311,9 +3300,9 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Zaakceptuj klatkę" }));
-    const firstOption = screen.getByRole("option", { name: /^7, źródło OCR:/ });
-    const secondOption = screen.getByRole("option", { name: /^health, źródło OCR:/ });
+    await user.click(await screen.findByRole("button", { name: "Accept frame" }));
+    const firstOption = screen.getByRole("option", { name: /^7, source OCR:/ });
+    const secondOption = screen.getByRole("option", { name: /^health, source OCR:/ });
     expect(firstOption).not.toHaveClass("df-region-overlay__shape--error");
     expect(secondOption).toHaveClass("df-region-overlay__shape--error");
     /*
@@ -3324,15 +3313,15 @@ describe("review filters and mutations", () => {
      * must not move onto the healthy box.
      */
     fireEvent.click(secondOption.querySelector(".df-region-overlay__shape-fill") as Element);
-    expect(await screen.findByRole("dialog", { name: "Edytuj anotację health" })).toBeVisible();
-    expect(screen.getByRole("option", { name: /^health, źródło OCR:/ })).toHaveClass(
+    expect(await screen.findByRole("dialog", { name: "Edit annotation health" })).toBeVisible();
+    expect(screen.getByRole("option", { name: /^health, source OCR:/ })).toHaveClass(
       "df-region-overlay__shape--error",
     );
-    expect(screen.getByRole("option", { name: /^7, źródło OCR:/ })).not.toHaveClass(
+    expect(screen.getByRole("option", { name: /^7, source OCR:/ })).not.toHaveClass(
       "df-region-overlay__shape--error",
     );
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("Kod: bbox_invalid");
+    expect(alert).toHaveTextContent("Code: bbox_invalid");
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   });
 
@@ -3343,35 +3332,35 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await user.click(await screen.findByRole("button", { name: "Odrzuć klatkę" }));
+    await user.click(await screen.findByRole("button", { name: "Reject frame" }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Klatka nie zakończyła jeszcze OCR");
-    expect(alert).toHaveTextContent("Kod: frame_not_reviewable");
+    expect(alert).toHaveTextContent("The frame has not finished OCR yet");
+    expect(alert).toHaveTextContent("Code: frame_not_reviewable");
   });
 
   it.each([
     {
-      button: "Zaakceptuj klatkę",
+      button: "Accept frame",
       code: "no_annotations",
-      message: "Klatka nie ma żadnej anotacji",
+      message: "The frame has no annotations",
     },
     {
-      button: "Usuń",
+      button: "Delete",
       code: "review_locked",
-      message: "Klatka ma już decyzję weryfikacji i jest zamrożona",
+      message: "The frame already has a review decision and is frozen",
     },
   ])("shows $code through the central dictionary", async ({ button, code, message }) => {
     const user = userEvent.setup();
     reviewApi({ mutation: () => ({ status: code === "no_annotations" ? 400 : 409, body: errorEnvelope(code) }) });
     renderApp(["/annotations/run-1"]);
 
-    if (button === "Usuń") {
-      await user.click(await screen.findByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    if (button === "Delete") {
+      await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     }
     await user.click(await screen.findByRole("button", { name: button }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(message);
-    expect(alert).toHaveTextContent(`Kod: ${code}`);
+    expect(alert).toHaveTextContent(`Code: ${code}`);
   });
 
   it("blocks the mutation control and shows its spinner until the backend answers", async () => {
@@ -3390,18 +3379,18 @@ describe("review filters and mutations", () => {
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classField = screen.getByLabelText("Klasa");
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classField = screen.getByLabelText("Class");
     await user.clear(classField);
     await user.type(classField, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
-    const saveButton = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
+    const saveButton = screen.getByRole("button", { name: "Change class: assign another class to this box" });
     await user.click(saveButton);
 
     expect(saveButton).toHaveAttribute("aria-busy", "true");
     expect(saveButton).toBeDisabled();
-    expect(screen.getByLabelText("Klasa")).toBeDisabled();
+    expect(screen.getByLabelText("Class")).toBeDisabled();
 
     resolveMutation?.(
       new Response(JSON.stringify(annotationFixture({ category_id: "category-2", version: 4 })), {
@@ -3424,19 +3413,19 @@ describe("keyboard-complete annotation list", () => {
       },
     });
     renderApp(["/annotations/run-1"]);
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classSelect = screen.getByLabelText("Klasa");
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classSelect = screen.getByLabelText("Class");
     await user.clear(classSelect);
     await user.type(classSelect, "health");
-    const saveClass = screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
+    const saveClass = screen.getByRole("button", { name: "Change class: assign another class to this box" });
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(saveClass).toBeEnabled());
     expect(screen.queryByRole("button", { name: "Zapisz geometrię" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     classButton.focus();
     await user.keyboard("{ArrowRight}");
     expect(within(overlay).getByRole("option")).toHaveAttribute(
@@ -3448,12 +3437,12 @@ describe("keyboard-complete annotation list", () => {
       expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(2);
     });
 
-    const deleteButton = screen.getByRole("button", { name: "Usuń" });
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
     deleteButton.focus();
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(deleteButton).toBeEnabled());
-    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje na klatce" }));
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Annotations" }));
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
       bottom: 540,
       height: 540,
@@ -3470,14 +3459,15 @@ describe("keyboard-complete annotation list", () => {
     fireEvent.pointerUp(overlay, { clientX: 400, clientY: 300, pointerId: 1 });
     /*
      * The draw sends its own create and the fixture refuses it, so the panel
-     * falls back to the draft surface — the one place "Zapisz" still means
+     * falls back to the draft surface — the one place "Save class" still means
      * "save this box". Pressing it from the keyboard is the control under test.
      */
     await waitFor(() => {
       expect(requests.filter((request) => request.method === "POST")).toHaveLength(1);
     });
+    await user.click(screen.getByRole("textbox", { name: "Class" }));
     await user.click(screen.getByRole("option", { name: "7" }));
-    const createButton = screen.getByRole("button", { name: "Zapisz klasę" });
+    const createButton = screen.getByRole("button", { name: "Save class" });
     createButton.focus();
     await user.keyboard("{Enter}");
 

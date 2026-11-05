@@ -1,17 +1,33 @@
+/*
+ * FE-022: every Figma button is outlined — radius 4, `surface/panel` fill,
+ * 12/300 label, 24 px icon. Only two things are ever filled: `emphasis`
+ * (Save profile once the draft differs, per the Figma note) and a pressed
+ * toggle (`aria-pressed="true"`), which is a state rather than a variant.
+ *
+ * `primary` and `secondary` keep their names because callers and the protected
+ * catalogue use them, but they now draw the same outlined button; `primary`
+ * only sits on the raised surface so the main action of a row still reads
+ * first. The outline is `--color-stroke-control-default`, not Figma's
+ * `border/default`, because a control outline must clear 3:1 (FE-021 log :33).
+ */
+
 .df-button {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--size-xs);
+  gap: var(--element-gap-lg);
   max-width: 100%;
-  border: var(--border-width-default) solid;
-  border-radius: var(--radius-md);
-  padding-inline: var(--size-sm);
+  min-height: var(--field-height);
+  border: var(--border-width-default) solid var(--color-stroke-control-default);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--element-padding-x-lg);
+  background: var(--color-surface-neutral-default);
+  color: var(--color-text-strong-default);
   font-family: var(--font-family-ui);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-standard);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+  line-height: var(--line-height-tight);
   letter-spacing: var(--letter-spacing-normal);
   text-align: center;
   cursor: pointer;
@@ -19,7 +35,7 @@
 }
 
 .df-button--sm {
-  min-height: var(--control-height-sm);
+  min-height: var(--field-height);
 }
 
 .df-button--md {
@@ -27,51 +43,48 @@
 }
 
 .df-button--lg {
-  min-height: var(--control-height-lg);
-  padding-inline: var(--size-md);
+  min-height: var(--control-height-md);
   font-size: var(--font-size-md);
 }
 
 .df-button--primary {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-button--muted {
+  border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+  color: var(--color-text-weak-default);
+}
+
+.df-button--emphasis {
   border-color: var(--color-fill-brand-impeccable);
   background: var(--color-fill-brand-impeccable);
   color: var(--color-text-on-brand);
 }
 
-.df-button--primary:hover {
-  border-color: var(--color-fill-brand-impeccable-hover);
-  background: var(--color-fill-brand-impeccable-hover);
-}
-
-.df-button--primary:active {
-  border-color: var(--color-fill-brand-impeccable-active);
-  background: var(--color-fill-brand-impeccable-active);
-}
-
-.df-button--secondary,
-.df-button--muted {
-  background: var(--color-surface-transparent);
+.df-button:hover:not(:disabled) {
+  background: var(--color-surface-neutral-raised);
   color: var(--color-text-strong-default);
 }
 
-.df-button--secondary {
-  border-color: var(--color-stroke-control-default);
+.df-button--primary:hover:not(:disabled) {
+  background: var(--color-surface-neutral-selected);
 }
 
-.df-button--muted {
-  border-color: var(--color-stroke-strong-default);
+.df-button--emphasis:hover:not(:disabled),
+.df-button--emphasis:active:not(:disabled) {
+  border-color: var(--color-fill-brand-impeccable-hover);
+  background: var(--color-fill-brand-impeccable-hover);
+  color: var(--color-text-on-brand);
 }
 
-.df-button--secondary:hover,
-.df-button--secondary:active,
-.df-button--muted:hover,
-.df-button--muted:active {
-  background: var(--color-surface-neutral-hover);
-}
-
-.df-button--secondary:hover,
-.df-button--secondary:active {
-  border-color: var(--color-stroke-strong-default);
+/* COLOR-09: a pressed toggle changes fill and outline, and says so with
+   `aria-pressed`, never with colour alone. */
+.df-button[aria-pressed="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-surface-neutral-selected);
+  color: var(--color-text-strong-default);
 }
 
 .df-button:focus-visible {
@@ -84,17 +97,30 @@
   cursor: not-allowed;
 }
 
+/*
+ * GRID-04/06: on a touch screen the hit area grows to 48 px without changing
+ * what is drawn — Figma's 34 px controls keep their size, and the layout does
+ * not move between mouse and finger (FE-022 §4).
+ */
 @media (pointer: coarse) {
-  .df-button { min-height: var(--control-height-lg); }
+  .df-button::after {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    width: max(100%, var(--control-height-lg));
+    height: max(100%, var(--control-height-lg));
+    content: "";
+    transform: translate(-50%, -50%);
+  }
 }
 
-/* FE-021: `Icon` is a block so it never sits on a text baseline. Inside the
-   inline content span that block broke the line and stacked the glyph above
-   its label, so a button carrying an icon lays its content out in one row. */
-.df-button__content:has(> .df-icon) {
+/* `Icon` is a block so it never sits on a text baseline; a button carrying an
+   icon lays its content out in one row. */
+.df-button__content {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-xs);
+  gap: var(--element-gap-lg);
+  min-width: 0;
 }
 
 .df-button[data-loading="true"] {
@@ -120,4 +146,3 @@
     transform: rotate(1turn);
   }
 }
-

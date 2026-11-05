@@ -8,7 +8,7 @@ import { GroupedOptionList, type GroupedOptionGroup } from "./GroupedOptionList"
 const GROUPS: readonly GroupedOptionGroup[] = [
   {
     id: "game",
-    label: "Pola HUD (gra)",
+    label: "Custom",
     options: [
       { id: "score", label: "Score" },
       { id: "timer", label: "Timer" },
@@ -45,7 +45,7 @@ function Harness({
       emptyMessage="Nic nie pasuje."
       filterLabel="Filtruj klasy"
       groups={GROUPS}
-      label="Klasy profilu"
+      label="Profile classes"
       mode={mode}
       onChange={(selection) => {
         setSelectedIds(selection);
@@ -68,19 +68,19 @@ describe("GroupedOptionList in multiple mode", () => {
 
     const filter = screen.getByLabelText("Filtruj klasy");
     const control = filter.closest(".df-grouped-options__control");
-    const toggle = screen.getByRole("button", { name: "Rozwiń listę Klasy profilu" });
+    const toggle = screen.getByRole("button", { name: "Expand list Profile classes" });
 
     expect(control).not.toBeNull();
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("group", { name: "Klasy profilu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Profile classes" })).not.toBeInTheDocument();
 
     await user.click(toggle);
 
-    expect(screen.getByRole("button", { name: "Zwiń listę Klasy profilu" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Collapse list Profile classes" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
-    expect(screen.getByRole("group", { name: "Klasy profilu" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "Profile classes" })).toBeVisible();
   });
 
   it("renders selected classes as tags, removes only one, and clears all without touching the filter", async () => {
@@ -98,23 +98,23 @@ describe("GroupedOptionList in multiple mode", () => {
     const filter = screen.getByLabelText("Filtruj klasy");
 
     await user.type(filter, "sco");
-    await user.click(screen.getByRole("button", { name: "Usuń klasę Timer z zaznaczenia" }));
+    await user.click(screen.getByRole("button", { name: "Remove Timer from the selection" }));
 
     expect(onChange).toHaveBeenLastCalledWith(["score"]);
     expect(onConfirm).not.toHaveBeenCalled();
     expect(filter).toHaveValue("sco");
-    expect(screen.getByRole("button", { name: "Zwiń listę Klasy profilu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse list Profile classes" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Usuń klasę Timer z zaznaczenia" }),
+      screen.queryByRole("button", { name: "Remove Timer from the selection" }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Wyczyść zaznaczone klasy" }));
+    await user.click(screen.getByRole("button", { name: "Clear the selection" }));
 
     expect(onChange).toHaveBeenLastCalledWith([]);
     expect(onConfirm).not.toHaveBeenCalled();
     expect(filter).toHaveValue("sco");
     expect(
-      screen.queryByRole("button", { name: "Usuń klasę Score z zaznaczenia" }),
+      screen.queryByRole("button", { name: "Remove Score from the selection" }),
     ).not.toBeInTheDocument();
   });
 
@@ -122,17 +122,17 @@ describe("GroupedOptionList in multiple mode", () => {
     const user = userEvent.setup();
     render(<Harness initial={["score", "timer", "zero"]} mode="multiple" />);
 
-    const removeScore = screen.getByRole("button", { name: "Usuń klasę Score z zaznaczenia" });
+    const removeScore = screen.getByRole("button", { name: "Remove Score from the selection" });
     removeScore.focus();
     await user.click(removeScore);
 
-    expect(screen.getByRole("button", { name: "Usuń klasę Timer z zaznaczenia" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Remove Timer from the selection" })).toHaveFocus();
 
-    await user.click(screen.getByRole("button", { name: "Usuń klasę Timer z zaznaczenia" }));
+    await user.click(screen.getByRole("button", { name: "Remove Timer from the selection" }));
 
-    expect(screen.getByRole("button", { name: "Usuń klasę 0 z zaznaczenia" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Remove 0 from the selection" })).toHaveFocus();
 
-    await user.click(screen.getByRole("button", { name: "Usuń klasę 0 z zaznaczenia" }));
+    await user.click(screen.getByRole("button", { name: "Remove 0 from the selection" }));
 
     expect(screen.getByLabelText("Filtruj klasy")).toHaveFocus();
   });
@@ -141,7 +141,7 @@ describe("GroupedOptionList in multiple mode", () => {
     const user = userEvent.setup();
     render(<Harness initial={["score", "timer"]} mode="multiple" />);
 
-    const clearAll = screen.getByRole("button", { name: "Wyczyść zaznaczone klasy" });
+    const clearAll = screen.getByRole("button", { name: "Clear the selection" });
     clearAll.focus();
     await user.click(clearAll);
 
@@ -156,7 +156,7 @@ describe("GroupedOptionList in multiple mode", () => {
     for (const name of ["0", "1", "2"]) {
       expect(checkbox(name)).toHaveAttribute("aria-checked", "true");
     }
-    expect(checkbox("Pola HUD (gra)")).toHaveAttribute("aria-checked", "false");
+    expect(checkbox("Custom")).toHaveAttribute("aria-checked", "false");
 
     await user.click(checkbox("Znaki"));
     for (const name of ["0", "1", "2"]) {
@@ -167,7 +167,7 @@ describe("GroupedOptionList in multiple mode", () => {
   it("reports a partial group as mixed, distinct from empty and from full", async () => {
     const user = userEvent.setup();
     render(<Harness mode="multiple" />);
-    const group = checkbox("Pola HUD (gra)");
+    const group = checkbox("Custom");
 
     expect(group).toHaveAttribute("aria-checked", "false");
     await user.click(checkbox("Timer"));
@@ -199,12 +199,12 @@ describe("GroupedOptionList in multiple mode", () => {
     const filter = screen.getByLabelText("Filtruj klasy");
 
     await user.type(filter, "sco");
-    await user.click(checkbox("Pola HUD (gra)"));
+    await user.click(checkbox("Custom"));
     await user.clear(filter);
 
     expect(checkbox("Score")).toHaveAttribute("aria-checked", "true");
     expect(checkbox("Timer")).toHaveAttribute("aria-checked", "false");
-    expect(checkbox("Pola HUD (gra)")).toHaveAttribute("aria-checked", "mixed");
+    expect(checkbox("Custom")).toHaveAttribute("aria-checked", "mixed");
   });
 
   it("walks the visible rows with the arrows, Home and End", async () => {
@@ -213,13 +213,13 @@ describe("GroupedOptionList in multiple mode", () => {
 
     screen.getByLabelText("Filtruj klasy").focus();
     await user.keyboard("{ArrowDown}");
-    expect(checkbox("Pola HUD (gra)")).toHaveFocus();
+    expect(checkbox("Custom")).toHaveFocus();
     await user.keyboard("{ArrowDown}{ArrowDown}");
     expect(checkbox("Timer")).toHaveFocus();
     await user.keyboard("{End}");
     expect(checkbox("2")).toHaveFocus();
     await user.keyboard("{Home}");
-    expect(checkbox("Pola HUD (gra)")).toHaveFocus();
+    expect(checkbox("Custom")).toHaveFocus();
 
     // The filter is the way back out of the list, upwards.
     await user.keyboard("{ArrowUp}");
@@ -255,13 +255,13 @@ describe("GroupedOptionList in multiple mode", () => {
     const user = userEvent.setup();
     render(<Harness mode="single" />);
 
-    await user.click(screen.getByRole("button", { name: "Zwiń grupę Znaki" }));
+    await user.click(screen.getByRole("button", { name: "Collapse group Znaki" }));
     expect(screen.getByText("2")).not.toBeVisible();
 
     const filter = screen.getByLabelText("Filtruj klasy");
     await user.type(filter, "2");
     expect(screen.getByRole("option", { name: "2" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Zwiń grupę Znaki" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Collapse group Znaki" })).toBeDisabled();
 
     await user.clear(filter);
     expect(screen.getByText("2")).not.toBeVisible();
@@ -273,10 +273,10 @@ describe("GroupedOptionList in single mode", () => {
     render(<Harness initial={["score"]} mode="single" />);
 
     expect(
-      screen.queryByRole("button", { name: "Usuń klasę Score z zaznaczenia" }),
+      screen.queryByRole("button", { name: "Remove Score from the selection" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Wyczyść zaznaczone klasy" }),
+      screen.queryByRole("button", { name: "Clear the selection" }),
     ).not.toBeInTheDocument();
   });
 
@@ -324,7 +324,7 @@ describe("GroupedOptionList in single mode", () => {
     render(<Harness initial={["zero"]} mode="single" />);
 
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
-    expect(screen.getByRole("listbox", { name: "Klasy profilu" })).toBeVisible();
+    expect(screen.getByRole("listbox", { name: "Profile classes" })).toBeVisible();
     expect(screen.getByRole("option", { name: "0" })).toHaveAttribute("aria-selected", "true");
 
     await user.click(screen.getByRole("option", { name: "Timer" }));
@@ -376,7 +376,7 @@ describe("GroupedOptionList boundaries", () => {
         emptyMessage="Nic nie pasuje."
         filterLabel="Filtruj klasy"
         groups={GROUPS}
-        label="Klasy profilu"
+        label="Profile classes"
         mode="multiple"
         onChange={onChange}
         selectedIds={[]}
@@ -400,7 +400,7 @@ describe("GroupedOptionList boundaries", () => {
         filterLabel="Filtruj klasy"
         filterMaxCodePoints={200}
         groups={GROUPS}
-        label="Klasy profilu"
+        label="Profile classes"
         mode="single"
         onChange={vi.fn()}
         onFilterChange={onFilterChange}

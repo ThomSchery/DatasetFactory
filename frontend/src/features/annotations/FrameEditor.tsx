@@ -28,7 +28,6 @@ import {
   GroupedOptionList,
   SHORTCUT_SCOPE_ATTRIBUTE,
 } from "../../components/common/GroupedOptionList";
-import { Notice } from "../../components/common/Notice";
 import { Panel } from "../../components/common/Panel";
 import {
   fitsInSource,
@@ -38,7 +37,6 @@ import {
   type NudgeDirection,
   type OverlayShape,
 } from "../../components/common/RegionOverlay";
-import { StatusBadge } from "../../components/common/StatusBadge";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import {
   ANNOTATION_POPOVER_SCOPE_ATTRIBUTE,
@@ -52,7 +50,7 @@ import {
   previousClassIds,
   previousClassOptionGroups,
 } from "./copySelection";
-import { FrameToolbar } from "./FrameToolbar";
+import { FrameNavigator, ReviewHeader } from "./FrameToolbar";
 import {
   executeReviewMutation,
   reviewMutationKey,
@@ -126,7 +124,45 @@ function busyKey(intent: EditorMutationIntent | undefined): string | null {
 }
 
 function errorMessage(error: ErrorPresentation): string {
-  return `${error.message} ${error.action} Kod: ${error.code}.`;
+  return `${error.message} ${error.action} Code: ${error.code}.`;
+}
+
+interface ReviewChromeProps {
+  counts: FrameCounts;
+  disabled: boolean;
+  filter: ReviewStatusFilter;
+  frames: readonly FrameSummary[];
+  onFilterChange: (filter: ReviewStatusFilter) => void;
+  onSelect: (frameId: string) => void;
+  selectedId: string | null;
+}
+
+/** "Review frames", the filters and ← n/N → — the same on every editor state. */
+export function ReviewChrome({
+  counts,
+  disabled,
+  filter,
+  frames,
+  onFilterChange,
+  onSelect,
+  selectedId,
+}: ReviewChromeProps) {
+  return (
+    <>
+      <ReviewHeader
+        counts={counts}
+        disabled={disabled}
+        filter={filter}
+        onFilterChange={onFilterChange}
+      />
+      <FrameNavigator
+        disabled={disabled}
+        frames={frames}
+        onSelect={onSelect}
+        selectedId={selectedId}
+      />
+    </>
+  );
 }
 
 export function FrameEditor({
@@ -150,7 +186,7 @@ export function FrameEditor({
   if (frameQuery.isPending) {
     return (
       <>
-        <FrameToolbar
+        <ReviewChrome
           counts={counts}
           disabled={disabled}
           filter={filter}
@@ -160,7 +196,7 @@ export function FrameEditor({
           selectedId={frameId}
         />
         <div className="df-review-workspace__query-state">
-          <Loading label="Ładowanie wybranej klatki…" />
+          <Loading label="Loading the selected frame…" />
         </div>
       </>
     );
@@ -169,7 +205,7 @@ export function FrameEditor({
     const error = describeApiError(frameQuery.error);
     return (
       <>
-        <FrameToolbar
+        <ReviewChrome
           counts={counts}
           disabled={disabled}
           filter={filter}
@@ -184,7 +220,7 @@ export function FrameEditor({
             onRetry={() => {
               void frameQuery.refetch();
             }}
-            title="Nie udało się pobrać klatki"
+            title="The frame could not be loaded"
           />
         </div>
       </>
@@ -666,8 +702,8 @@ function LoadedFrameEditor({
             ? // The picker offers only classes the previous frame holds, so
               // this is now a race: the source changed between the read that
               // built the list and this request.
-              "Poprzednia klatka już nie ma anotacji w zaznaczonych klasach. Nic nie zmieniono."
-            : `Skopiowano: ${copied.copied}. Zastąpiono: ${copied.replaced}.`,
+              "The previous frame no longer has annotations in the selected classes. Nothing changed."
+            : `Copied: ${copied.copied}. Replaced: ${copied.replaced}.`,
         );
       }
       await Promise.all([
@@ -782,17 +818,17 @@ function LoadedFrameEditor({
       annotation.source === "ocr" && annotation.confidence !== null
         ? ` · ${Math.round(annotation.confidence * 100)}%`
         : "";
-    const sourceLabel = annotation.source === "ocr" ? "OCR" : "ręczna";
+    const sourceLabel = annotation.source === "ocr" ? "OCR" : "manual";
     const geometry =
       geometryPreview?.annotationId === annotation.id ? geometryPreview.bbox : annotation;
     return {
       id: annotation.id,
       detailLabel:
         annotation.source === "ocr" && annotation.confidence !== null
-          ? `Confidence OCR ${Math.round(annotation.confidence * 100)}%`
+          ? `OCR confidence ${Math.round(annotation.confidence * 100)}%`
           : undefined,
       displayLabel: `${categoryName}${confidenceLabel}`,
-      label: `${categoryName}, źródło ${sourceLabel}`,
+      label: `${categoryName}, source ${sourceLabel}`,
       sourceKind: annotation.source,
       tone: invalidSet.has(annotation.id) ? "error" : "brand",
       x: geometry.x,
@@ -806,7 +842,7 @@ function LoadedFrameEditor({
       ...draftBBox,
       displayLabel: "Box",
       id: DRAFT_ANNOTATION_ID,
-      label: "Box — wybierz klasę",
+      label: "Box — choose a class",
       tone: "draft",
     });
   }
@@ -850,19 +886,19 @@ function LoadedFrameEditor({
       return errorMessage(describeApiError(previousClassesQuery.error));
     }
     if (!previousFrameKnown) {
-      return "Sprawdzanie, które klasy ma poprzednia klatka…";
+      return "Checking which classes the previous frame has…";
     }
     if (!hasPreviousFrame) {
-      return "To pierwsza klatka runu — brak wcześniejszej klatki do skopiowania.";
+      return "This is the first frame of the run — there is no earlier frame to copy.";
     }
     if (copyOfferedIds.length === 0) {
-      return `Poprzednia klatka (nr ${String(previousClasses.previous_frame_index)}) nie ma żadnych anotacji — nie ma czego powtórzyć.`;
+      return `The previous frame (${String(previousClasses.previous_frame_index)}) has no annotations — nothing to repeat.`;
     }
     if (!capabilities.canEdit) {
-      return "Kopiowanie wymaga oczekującej klatki gotowej do weryfikacji.";
+      return "Copying needs a pending frame that is ready for review.";
     }
     if (copyTarget === null) {
-      return "Zaznacz co najmniej jedną klasę albo całą grupę do powtórzenia.";
+      return "Select at least one class or a whole group to repeat.";
     }
     return copyFeedback;
   })();
@@ -1142,64 +1178,61 @@ function LoadedFrameEditor({
     }
   }
 
+  const decisionButtons = (
+    <div className="df-review-decisions">
+      {capabilities.canReject ? (
+        <Button
+          aria-label="Reject frame"
+          disabled={mutation.isPending}
+          loading={currentBusyKey === "review:reject"}
+          onClick={() => {
+            submit({ decision: "reject", expectedVersion: frame.version, kind: "review" });
+          }}
+        >
+          Reject
+        </Button>
+      ) : null}
+      {capabilities.canAccept ? (
+        <Button
+          aria-label="Accept frame"
+          data-preserve-annotation-preview={unsavedGeometry !== null || undefined}
+          disabled={
+            mutation.isPending ||
+            activeAnnotations.length === 0 ||
+            unsavedGeometry !== null
+          }
+          loading={currentBusyKey === "review:accept"}
+          onClick={() => {
+            submit({ decision: "accept", expectedVersion: frame.version, kind: "review" });
+          }}
+          title={
+            unsavedGeometry !== null
+              ? "Save or discard the unsaved box move first"
+              : activeAnnotations.length === 0
+                ? "Accepting needs an active annotation"
+                : undefined
+          }
+        >
+          Accept
+        </Button>
+      ) : null}
+      {capabilities.canReopen ? (
+        <Button
+          disabled={mutation.isPending}
+          loading={currentBusyKey === "review:reopen"}
+          onClick={() => {
+            submit({ decision: "reopen", expectedVersion: frame.version, kind: "review" });
+          }}
+        >
+          Reopen
+        </Button>
+      ) : null}
+    </div>
+  );
+
   return (
     <>
-      <FrameToolbar
-        actions={
-          <>
-            {capabilities.canAccept ? (
-              <Button
-                aria-label="Zaakceptuj klatkę"
-                data-preserve-annotation-preview={unsavedGeometry !== null || undefined}
-                disabled={
-                  mutation.isPending ||
-                  activeAnnotations.length === 0 ||
-                  unsavedGeometry !== null
-                }
-                loading={currentBusyKey === "review:accept"}
-                onClick={() => {
-                  submit({ decision: "accept", expectedVersion: frame.version, kind: "review" });
-                }}
-                size="sm"
-                title={
-                  unsavedGeometry !== null
-                    ? "Najpierw zapisz albo porzuć niezapisane przesunięcie bboxa"
-                    : activeAnnotations.length === 0
-                      ? "Akceptacja wymaga aktywnej anotacji"
-                      : undefined
-                }
-              >
-                Zaakceptuj
-              </Button>
-            ) : null}
-            {capabilities.canReject ? (
-              <Button
-                aria-label="Odrzuć klatkę"
-                disabled={mutation.isPending}
-                loading={currentBusyKey === "review:reject"}
-                onClick={() => {
-                  submit({ decision: "reject", expectedVersion: frame.version, kind: "review" });
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                Odrzuć
-              </Button>
-            ) : null}
-            {capabilities.canReopen ? (
-              <Button
-                disabled={mutation.isPending}
-                loading={currentBusyKey === "review:reopen"}
-                onClick={() => {
-                  submit({ decision: "reopen", expectedVersion: frame.version, kind: "review" });
-                }}
-                size="sm"
-              >
-                Otwórz ponownie
-              </Button>
-            ) : null}
-          </>
-        }
+      <ReviewChrome
         counts={counts}
         disabled={disabled || mutation.isPending}
         filter={filter}
@@ -1210,67 +1243,10 @@ function LoadedFrameEditor({
       />
 
       <aside
-        aria-label="Panele bieżącej klatki"
+        aria-label="Current frame panels"
         className="df-review-workspace__side-column"
       >
-        <Panel
-          aside={
-            <StatusBadge srLabel="Aktywne anotacje:" tone="neutral">
-              {activeAnnotations.length}
-            </StatusBadge>
-          }
-          className="df-review-workspace__inspector"
-          title="Anotacje na klatce"
-        >
-          <ClassList
-            annotations={activeAnnotations}
-            categories={profile.categories}
-            disabled={editorDisabled}
-            onSelect={selectAnnotation}
-            selectedId={selectedId}
-          />
-          {capabilities.terminal ? (
-            <Notice title="Klatka zaakceptowana" tone="info">
-              Zaakceptowana klatka jest terminalna i pozostaje zamrożona dla trwałości snapshotu eksportu.
-            </Notice>
-          ) : null}
-          {capabilities.canReopen ? (
-            <Notice title="Klatka odrzucona" tone="warning">
-              Edycja jest zamrożona. Użyj „Otwórz ponownie”, aby wrócić do statusu oczekującego.
-            </Notice>
-          ) : null}
-          {!capabilities.canEdit && !capabilities.frozen ? (
-            <Notice title="OCR jeszcze trwa" tone="warning">
-              Edytor odblokuje się dopiero po osiągnięciu etapu gotowego do weryfikacji.
-            </Notice>
-          ) : null}
-          {unsavedGeometry === null ? null : (
-            <Notice title="Niezapisane przesunięcie bboxa" tone="warning">
-              Zaznacz ten bbox i naciśnij <kbd>Enter</kbd>, aby zapisać przesunięcie, albo kliknij
-              poza panelem, aby je porzucić. Akceptacja klatki jest zablokowana, dopóki przesunięcie
-              nie zostanie rozstrzygnięte — zaakceptowana klatka jest terminalna.
-            </Notice>
-          )}
-          {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
-          {imageError ? (
-            <div className="df-review-image-error">
-              <InlineError
-                message={`${imageErrorCopy.message} ${imageErrorCopy.action} Kod: frame_image_not_found.`}
-              />
-              <Button
-                disabled={mutation.isPending}
-                onClick={() => {
-                  setImageAttempt((current) => current + 1);
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                Spróbuj ponownie załadować obraz
-              </Button>
-            </div>
-          ) : null}
-        </Panel>
-
+        <Panel className="df-review-workspace__inspector" title="Annotations">
         <AnnotationPopover
           annotation={popoverAnnotation}
           autoAssignedCategoryName={
@@ -1361,25 +1337,65 @@ function LoadedFrameEditor({
             removeAnnotation(popoverAnnotation.id);
           }}
         />
+          <ClassList
+            annotations={activeAnnotations}
+            categories={profile.categories}
+            disabled={editorDisabled}
+            onSelect={selectAnnotation}
+            selectedId={selectedId}
+          />
+          {capabilities.terminal ? (
+            <p aria-label="Frame accepted" className="df-review-note" role="status">
+              Accepted — the frame is final and stays frozen for the export snapshot.
+            </p>
+          ) : null}
+          {capabilities.canReopen ? (
+            <p aria-label="Frame rejected" className="df-review-note" role="status">
+              Rejected — editing is frozen. Use Reopen to return the frame to pending.
+            </p>
+          ) : null}
+          {!capabilities.canEdit && !capabilities.frozen ? (
+            <p aria-label="OCR still running" className="df-review-note" role="status">
+              OCR is still running — the editor unlocks once the frame is ready for review.
+            </p>
+          ) : null}
+          {unsavedGeometry === null ? null : (
+            <p aria-label="Unsaved box move" className="df-review-note" role="status">
+              Unsaved box move: select the box and press <kbd>Enter</kbd> to save it, or click
+              outside the panel to discard it. Accept stays blocked until then.
+            </p>
+          )}
+          {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
+          {imageError ? (
+            <div className="df-review-image-error">
+              <InlineError
+                message={`${imageErrorCopy.message} ${imageErrorCopy.action} Code: frame_image_not_found.`}
+              />
+              <Button
+                disabled={mutation.isPending}
+                onClick={() => {
+                  setImageAttempt((current) => current + 1);
+                }}
+                size="sm"
+              >
+                Load the image again
+              </Button>
+            </div>
+          ) : null}
+          {decisionButtons}
+        </Panel>
 
-        <Panel
-          className="df-review-copy"
-          description={
-            previousFrameKnown && hasPreviousFrame
-              ? `Źródłem jest klatka ${String(previousClasses.previous_frame_index)} — poprzednia w czasie, niezależnie od aktywnego filtra statusu.`
-              : "Źródłem jest poprzednia klatka w czasie, niezależnie od aktywnego filtra statusu."
-          }
-          title="Powtórz z poprzedniej klatki"
-        >
+        <Panel className="df-review-copy" title="Repeat Previous">
           {/*
             The panel keeps the explanation that distinguishes a missing source
             from an empty source, but the picker appears only when there is
             something real to choose. An empty filter would imply a typo.
           */}
           {copyOfferedIds.length === 0 ? null : (
+            <div className="df-review-copy__box">
             <GroupedOptionList
               disabled={!capabilities.canEdit || mutation.isPending}
-              emptyMessage="Żadna klasa z poprzedniej klatki nie pasuje do wpisanego tekstu."
+              emptyMessage="No class of the previous frame matches."
               // `df-review-copy` sits outside `AnnotationPopover`'s own DOM
               // (it always did — see FE-019-FIX1's correction to the FE-019
               // log), so its outside-pointerdown handler would otherwise
@@ -1388,8 +1404,9 @@ function LoadedFrameEditor({
               // button below is a real mutation and must still count as an
               // ordinary outside click.
               exemptFromOutsideClick
-              filterLabel="Filtruj klasy"
+              filterLabel="Filter classes"
               groups={copyGroups}
+              inline
               label={PREVIOUS_CLASS_LIST_LABEL}
               mode="multiple"
               onChange={(selection) => {
@@ -1398,15 +1415,21 @@ function LoadedFrameEditor({
               }}
               selectedIds={copyEffectiveSelection}
             />
+            </div>
           )}
+          {copyOfferedIds.length === 0 ? <p className="df-review-copy__empty">No classes to repeat.</p> : null}
           <Button
+            aria-label="Accept — repeat the previous frame"
             disabled={copyDisabled}
             loading={currentBusyKey === "copy-previous"}
             onClick={copyPrevious}
-            size="sm"
-            variant="secondary"
+            title={
+              previousFrameKnown && hasPreviousFrame
+                ? `Copies from frame ${String(previousClasses.previous_frame_index)} — the previous one in time, whatever the status filter.`
+                : "Copies from the previous frame in time, whatever the status filter."
+            }
           >
-            Powtórz
+            Accept
           </Button>
           <p aria-live="polite" className="df-review-copy__status">
             {copyStatus}
@@ -1415,18 +1438,17 @@ function LoadedFrameEditor({
       </aside>
 
       <section
-        aria-label={`Podgląd klatki ${frame.frame_index}`}
+        aria-label={`Frame ${frame.frame_index} preview`}
         className="df-review-workspace__preview"
       >
-
         <RegionOverlay
-          cornerLabel={`Klatka ${String(frame.frame_index)}`}
           disabled={editorDisabled}
-          imageAlt={`Klatka ${frame.frame_index} runu ${runId}`}
+          fill
+          imageAlt={`Frame ${frame.frame_index} of run ${runId}`}
           imageUrl={frameImageUrl(frame.id, imageAttempt === 0 ? undefined : imageAttempt)}
           interactionMode="draw"
           key={`frame-image-${String(imageAttempt)}`}
-          label="Bbox anotacji na klatce"
+          label="Annotation boxes on the frame"
           onDraw={capabilities.canEdit ? handleDraw : undefined}
           onImageError={() => {
             setImageError(true);

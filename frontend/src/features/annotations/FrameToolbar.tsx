@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   describeReviewStatus,
@@ -8,106 +8,175 @@ import {
   type ReviewStatusFilter,
 } from "../../api";
 import { Button } from "../../components/common/Button";
-import { SelectField } from "../../components/common/SelectField";
+import { GroupedOptionList } from "../../components/common/GroupedOptionList";
+import { Icon } from "../../components/common/Icon";
 
-interface FrameToolbarProps {
-  actions?: ReactNode;
+/*
+ * The two halves of what used to be one toolbar (FE-022, Figma Review
+ * 576/768): "Review frames" with the filter pills on one row above the
+ * workspace, and ← n/N → at the top of the left column. The counter opens the
+ * frame picker; the decisions moved into the Annotations panel.
+ */
+
+interface ReviewHeaderProps {
   counts: FrameCounts;
   disabled: boolean;
   filter: ReviewStatusFilter;
-  frames: readonly FrameSummary[];
   onFilterChange: (filter: ReviewStatusFilter) => void;
+}
+
+export function ReviewHeader({ counts, disabled, filter, onFilterChange }: ReviewHeaderProps) {
+  return (
+    <div className="df-review-header">
+      <h1 className="df-review-header__title">Review frames</h1>
+      <div aria-label="Frame status filter" className="df-review-frame-filters" role="group">
+        {REVIEW_STATUS_FILTER_OPTIONS.map((option) => {
+          const count = option.value === "all" ? counts.total : counts[option.value];
+          return (
+            <Button
+              aria-label={`${option.label} ${String(count)}`}
+              aria-pressed={filter === option.value}
+              className="df-review-frame-filters__pill"
+              disabled={disabled}
+              key={option.value}
+              onClick={() => {
+                onFilterChange(option.value);
+              }}
+            >
+              {option.label} ({count})
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface FrameNavigatorProps {
+  disabled: boolean;
+  frames: readonly FrameSummary[];
   onSelect: (frameId: string) => void;
   selectedId: string | null;
 }
 
 function frameOptionLabel(frame: FrameSummary): string {
   const review = describeReviewStatus(frame.review_status);
-  return `Klatka ${frame.frame_index} · ${(frame.timestamp_ms / 1000).toFixed(3)} s · ${review.label.toLocaleLowerCase("pl")}`;
+  return `Frame ${frame.frame_index} · ${(frame.timestamp_ms / 1000).toFixed(3)} s · ${review.label.toLocaleLowerCase("en")}`;
 }
 
-export function FrameToolbar({
-  actions,
-  counts,
-  disabled,
-  filter,
-  frames,
-  onFilterChange,
-  onSelect,
-  selectedId,
-}: FrameToolbarProps) {
+export function FrameNavigator({ disabled, frames, onSelect, selectedId }: FrameNavigatorProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const counterRef = useRef<HTMLButtonElement>(null);
   const selectedIndex = frames.findIndex((frame) => frame.id === selectedId);
   const selectedPosition = selectedIndex < 0 ? 0 : selectedIndex + 1;
-  const selectValue = selectedIndex < 0 ? "" : frames[selectedIndex]?.id ?? "";
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      return;
+    }
+    function onPointerDown(event: PointerEvent) {
+      const container = containerRef.current;
+      if (container !== null && !container.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [pickerOpen]);
 
   return (
-    <div className="df-review-toolbar">
-      <div aria-label="Filtr statusu klatek" className="df-review-frame-filters" role="group">
-        {REVIEW_STATUS_FILTER_OPTIONS.map((option) => (
-          <Button
-            aria-label={`${option.label} ${option.value === "all" ? counts.total : counts[option.value]}`}
-            aria-pressed={filter === option.value}
+    <div
+      aria-label="Frame navigation"
+      className="df-review-nav"
+      data-preserve-annotation-preview="true"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && pickerOpen) {
+          event.stopPropagation();
+          setPickerOpen(false);
+          counterRef.current?.focus();
+        }
+      }}
+      ref={containerRef}
+      role="group"
+    >
+      <Button
+        aria-label="Previous frame"
+        className="df-review-nav__step"
+        disabled={disabled || selectedIndex <= 0}
+        onClick={() => {
+          const previous = frames[selectedIndex - 1];
+          if (previous !== undefined) {
+            onSelect(previous.id);
+          }
+        }}
+        title="Previous frame"
+      >
+        <Icon name="arrow-left" />
+      </Button>
+      <Button
+        aria-expanded={pickerOpen}
+        aria-haspopup="listbox"
+        aria-label={`Frame ${String(selectedPosition)} of ${String(frames.length)} — choose a frame`}
+        className="df-review-nav__counter"
+        data-frame-id={selectedId ?? undefined}
+        disabled={disabled || frames.length === 0}
+        onClick={() => {
+          setPickerOpen((open) => !open);
+        }}
+        ref={counterRef}
+        title="Choose a frame"
+      >
+        {selectedPosition}/{frames.length}
+      </Button>
+      <Button
+        aria-label="Next frame"
+        className="df-review-nav__step"
+        disabled={disabled || selectedIndex < 0 || selectedIndex + 1 >= frames.length}
+        onClick={() => {
+          const next = frames[selectedIndex + 1];
+          if (next !== undefined) {
+            onSelect(next.id);
+          }
+        }}
+        title="Next frame"
+      >
+        <Icon name="arrow-right" />
+      </Button>
+      {pickerOpen ? (
+        <div className="df-review-nav__picker">
+          <GroupedOptionList
+            autoFocus
+            defaultOpen
             disabled={disabled}
-            key={option.value}
-            onClick={() => {
-              onFilterChange(option.value);
+            emptyMessage="No frame matches."
+            filterLabel="Choose frame"
+            groups={[
+              {
+                id: "frames",
+                label: "Frames",
+                options: frames.map((frame) => ({
+                  id: frame.id,
+                  label: frameOptionLabel(frame),
+                })),
+              },
+            ]}
+            label="Frames of this run"
+            mode="single"
+            onChange={(ids) => {
+              const [first] = ids;
+              if (first !== undefined) {
+                onSelect(first);
+                setPickerOpen(false);
+                counterRef.current?.focus();
+              }
             }}
-            size="sm"
-            variant={filter === option.value ? "primary" : "secondary"}
-          >
-            <span>{option.value === "accepted" ? "Zaakcept." : option.label}</span>
-            <strong>{option.value === "all" ? counts.total : counts[option.value]}</strong>
-          </Button>
-        ))}
-      </div>
-
-      <div aria-label="Nawigacja po klatkach" className="df-review-toolbar__navigation" role="group">
-        <Button
-          aria-label="Poprzednia klatka"
-          disabled={disabled || selectedIndex <= 0}
-          onClick={() => {
-            const previous = frames[selectedIndex - 1];
-            if (previous !== undefined) {
-              onSelect(previous.id);
-            }
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          ←
-        </Button>
-        <div className="df-review-toolbar__frame-select">
-          <SelectField
-            disabled={disabled || frames.length === 0}
-            label="Wybierz klatkę"
-            onChange={(event) => {
-              onSelect(event.target.value);
-            }}
-            options={frames.map((frame) => ({ label: frameOptionLabel(frame), value: frame.id }))}
-            placeholder={frames.length === 0 ? "Brak klatek" : undefined}
-            value={selectValue}
+            selectedIds={selectedId === null ? [] : [selectedId]}
           />
         </div>
-        <strong aria-label={`Pozycja ${selectedPosition} z ${frames.length}`}>
-          {selectedPosition} / {frames.length}
-        </strong>
-        <Button
-          aria-label="Następna klatka"
-          disabled={disabled || selectedIndex < 0 || selectedIndex + 1 >= frames.length}
-          onClick={() => {
-            const next = frames[selectedIndex + 1];
-            if (next !== undefined) {
-              onSelect(next.id);
-            }
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          →
-        </Button>
-      </div>
-
-      <div className="df-review-toolbar__decisions">{actions}</div>
+      ) : null}
     </div>
   );
 }

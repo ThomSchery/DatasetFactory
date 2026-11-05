@@ -8,9 +8,9 @@ afterEach(cleanup);
 
 describe("Button", () => {
   it("uses safe defaults and explicit design-system classes", () => {
-    render(<Button>Zapisz</Button>);
+    render(<Button>Save class</Button>);
 
-    const button = screen.getByRole("button", { name: "Zapisz" });
+    const button = screen.getByRole("button", { name: "Save class" });
     expect(button).toHaveAttribute("type", "button");
     expect(button).toHaveClass("df-button--primary", "df-button--md");
   });
@@ -18,10 +18,10 @@ describe("Button", () => {
   it("is reachable and activatable from the keyboard", async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
-    render(<Button onClick={onClick}>Uruchom</Button>);
+    render(<Button onClick={onClick}>Start</Button>);
 
     await user.tab();
-    expect(screen.getByRole("button", { name: "Uruchom" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Start" })).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(onClick).toHaveBeenCalledTimes(1);
   });
@@ -31,11 +31,11 @@ describe("Button", () => {
     const onClick = vi.fn();
     render(
       <Button disabled onClick={onClick}>
-        Usuń
+        Delete
       </Button>,
     );
 
-    const button = screen.getByRole("button", { name: "Usuń" });
+    const button = screen.getByRole("button", { name: "Delete" });
     expect(button).toBeDisabled();
     await user.click(button);
     expect(onClick).not.toHaveBeenCalled();

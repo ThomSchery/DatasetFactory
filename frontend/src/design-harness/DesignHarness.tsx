@@ -43,13 +43,13 @@ export function DesignHarness() {
         <p className="df-design-harness__kicker">FE-SETUP · Impeccable baseline</p>
         <h1>DatasetFactory design harness</h1>
         <p>
-          Referencja komponentów i tokenów do screenshot QA przy szerokości 1440 px.
+          Component and token reference for screenshot QA at 1440 px.
         </p>
       </header>
 
       <section aria-labelledby="palette-title" className="df-design-harness__section">
         <div className="df-design-harness__section-head">
-          <h2 id="palette-title">Paleta semantyczna</h2>
+          <h2 id="palette-title">Semantic palette</h2>
           <span>COLOR-01..10</span>
         </div>
         <div className="df-design-harness__palette">
@@ -69,7 +69,7 @@ export function DesignHarness() {
 
       <section aria-labelledby="foundations-title" className="df-design-harness__section">
         <div className="df-design-harness__section-head">
-          <h2 id="foundations-title">Fundamenty</h2>
+          <h2 id="foundations-title">Foundations</h2>
           <span>GRID · TYPO · RADIUS</span>
         </div>
         <div className="df-design-harness__foundations">
@@ -88,11 +88,11 @@ export function DesignHarness() {
             </div>
           </article>
           <article>
-            <h3>Typografia</h3>
-            <p className="df-design-harness__type-xl">Nagłówek 24 / tight</p>
-            <p className="df-design-harness__type-lg">Śródtytuł 20 / tight</p>
-            <p className="df-design-harness__type-md">Tekst bazowy 16 / standard</p>
-            <p className="df-design-harness__type-sm">Metadane 14 / standard</p>
+            <h3>Typography</h3>
+            <p className="df-design-harness__type-xl">Heading 24 / tight</p>
+            <p className="df-design-harness__type-lg">Subheading 20 / tight</p>
+            <p className="df-design-harness__type-md">Body 16 / standard</p>
+            <p className="df-design-harness__type-sm">Metadata 14 / standard</p>
           </article>
           <article>
             <h3>Radius</h3>
@@ -104,7 +104,7 @@ export function DesignHarness() {
             </div>
           </article>
           <article>
-            <h3>Elevation i stroke</h3>
+            <h3>Elevation and stroke</h3>
             <div className="df-design-harness__elevation-list">
               <span className="df-design-harness__elevation-low">elevation-low</span>
               <span className="df-design-harness__elevation-high">elevation-high</span>
@@ -122,27 +122,27 @@ export function DesignHarness() {
         </div>
         <div className="df-design-harness__button-grid">
           <div>
-            <h3>Warianty</h3>
+            <h3>Variants</h3>
             <div className="df-design-harness__row">
-              <Button variant="primary">Nowy profil gry</Button>
-              <Button variant="secondary">Otwórz projekt</Button>
-              <Button variant="muted">Wybierz wideo</Button>
+              <Button variant="primary">New game profile</Button>
+              <Button variant="secondary">Open project</Button>
+              <Button variant="muted">Choose video</Button>
             </div>
           </div>
           <div>
-            <h3>Rozmiary</h3>
+            <h3>Sizes</h3>
             <div className="df-design-harness__row">
-              <Button size="sm">Mały</Button>
-              <Button size="md">Średni</Button>
-              <Button size="lg">Duży</Button>
+              <Button size="sm">Small</Button>
+              <Button size="md">Medium</Button>
+              <Button size="lg">Large</Button>
             </div>
           </div>
           <div>
-            <h3>Stany trwałe</h3>
+            <h3>Persistent states</h3>
             <div className="df-design-harness__row">
-              <Button disabled>Wyłączony</Button>
-              <Button loading loadingLabel="Przetwarzanie">
-                Przetwarzanie
+              <Button disabled>Disabled</Button>
+              <Button loading loadingLabel="Processing">
+                Processing
               </Button>
             </div>
           </div>
@@ -156,17 +156,17 @@ export function DesignHarness() {
         </div>
         <div className="df-design-harness__states">
           <div className="df-design-harness__state-stack">
-            <Loading label="Wczytywanie klatek…" />
-            <InlineError message="Nie udało się odczytać pliku wideo." />
-            <Progress label="OCR klatek" value={68} />
+            <Loading label="Loading frames…" />
+            <InlineError message="The video file could not be read." />
+            <Progress label="Frame OCR" value={68} />
           </div>
           <Empty
-            action={<Button>Dodaj materiał</Button>}
-            description="Zaimportuj MP4, MKV lub MOV, aby uruchomić pipeline."
-            title="Nie ma jeszcze materiałów"
+            action={<Button>Add material</Button>}
+            description="Import an MP4, MKV or MOV to run the pipeline."
+            title="No materials yet"
           />
           <FatalError
-            description="Sprawdź dostęp do lokalnego workspace i spróbuj ponownie."
+            description="Check access to the local workspace and try again."
             onRetry={() => undefined}
           />
         </div>

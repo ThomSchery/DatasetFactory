@@ -1,12 +1,10 @@
 import { useId } from "react";
 
 import { Button } from "../../components/common/Button";
-import { GroupedOptionList } from "../../components/common/GroupedOptionList";
+import { Icon } from "../../components/common/Icon";
 import { Panel } from "../../components/common/Panel";
 import { TextField } from "../../components/common/TextField";
-import { Empty, InlineError } from "../../components/common/UiStates";
-import { groupCategories } from "../../api";
-import type { Category } from "../../api";
+import { InlineError } from "../../components/common/UiStates";
 import type { DraftCategory, DraftRegion } from "./profileDraft";
 import "./AnnotationsPanel.css";
 
@@ -37,17 +35,18 @@ export interface AnnotationsPanelProps {
 }
 
 /**
- * `Annotations` from the Figma document: everything defined on the current
- * screenshot, and the naming step a freshly drawn box goes through.
+ * `Annotations` from the Figma document (FE-022): the class field on top, the
+ * regions of the current screenshot as a compact list of name and count, and
+ * Reject / Accept under it.
  *
- * The rows are the profile's real regions, never sample values — a list that
- * showed the design's own `health & armour (1)` would be a picture of a
- * product, not the product. The count beside each row is the size of the
- * region's OCR character set, which is the only number a region actually has.
+ * The field names the box that was just drawn — focus lands there the moment a
+ * box exists, and existing class names are offered as suggestions. With a
+ * region selected instead, the same field renames that region. Accept turns
+ * the sketch into a region (a new name adds a `Custom` class), Reject drops the
+ * sketch and nothing else.
  *
- * Accept is what turns a sketch into a region, and a name the profile does not
- * know yet into a `Custom` class. Reject drops the sketch and nothing else:
- * it is a local gesture, so it never reaches the backend.
+ * The rows are the profile's real regions, never sample values. The count is
+ * the size of the region's OCR character set, the only number a region has.
  */
 export function AnnotationsPanel({
   regions,
@@ -65,140 +64,103 @@ export function AnnotationsPanel({
   nameInputRef,
   disabled = false,
 }: AnnotationsPanelProps) {
-  const listId = useId();
+  const suggestionsId = useId();
   const selected = regions.find((region) => region.key === selectedKey) ?? null;
-  const classGroups = groupCategories(
-    categories.map(
-      (category): Category => ({ id: category.key, kind: category.kind, name: category.name }),
-    ),
-    (category) => ({ id: category.id, label: category.name }),
-  );
+  const naming = sketch !== null;
+  const renameEmpty = !naming && selected !== null && selected.name.trim() === "";
 
   return (
-    <Panel
-      description="Każdy wiersz to region zdefiniowany na bieżącym zrzucie."
-      eyebrow="Profil"
-      title="Annotations"
-    >
-      {sketch === null ? null : (
-        <div className="df-annotations__sketch">
-          <TextField
-            autoComplete="off"
-            description="Nazwa trafi do listy regionów, a nowa nazwa dopisze klasę do grupy Custom."
-            disabled={disabled}
-            error={sketchError}
-            label="Nazwa narysowanego regionu"
-            onChange={(event) => {
-              onSketchNameChange(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onAccept();
-              }
-              if (event.key === "Escape") {
-                event.preventDefault();
-                onReject();
-              }
-            }}
-            ref={nameInputRef}
-            spellCheck={false}
-            value={sketchName}
-          />
-          {classGroups.length === 0 ? null : (
-            <GroupedOptionList
-              disabled={disabled}
-              emptyMessage="Żadna klasa nie pasuje do wpisanej nazwy."
-              filterLabel="Wybierz istniejącą klasę"
-              groups={classGroups.map((group) => ({
-                id: group.id,
-                label: group.label,
-                options: group.items.map((item) => ({ id: item.label, label: item.label })),
-              }))}
-              label="Istniejące klasy profilu"
-              mode="single"
-              onChange={(ids) => {
-                const [first] = ids;
-                if (first !== undefined) {
-                  onSketchNameChange(first);
-                }
-              }}
-              selectedIds={[sketchName]}
-            />
-          )}
-          <div className="df-annotations__sketch-actions">
-            <Button disabled={disabled} onClick={onReject} size="sm" variant="secondary">
-              Reject
-            </Button>
-            <Button disabled={disabled} onClick={onAccept} size="sm">
-              Accept
-            </Button>
-          </div>
-        </div>
-      )}
+    <Panel className="df-annotations" title="Annotations">
+      <datalist id={suggestionsId}>
+        {categories.map((category) => (
+          <option key={category.key} value={category.name} />
+        ))}
+      </datalist>
+      <TextField
+        autoComplete="off"
+        disabled={disabled || (!naming && selected === null)}
+        error={naming ? sketchError : undefined}
+        hideLabel
+        label={naming ? "Name of the drawn region" : "Region name"}
+        list={suggestionsId}
+        onChange={(event) => {
+          if (naming) {
+            onSketchNameChange(event.target.value);
+          } else if (selected !== null) {
+            onRename(selected.key, event.target.value);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (!naming) {
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onAccept();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onReject();
+          }
+        }}
+        placeholder={naming ? "Class name" : "Draw a region on the screenshot"}
+        ref={nameInputRef}
+        spellCheck={false}
+        value={naming ? sketchName : (selected?.name ?? "")}
+      />
 
-      {regions.length === 0 ? (
-        <Empty
-          description="Przeciągnij prostokąt na zrzucie, żeby wskazać fragment HUD, który ma trafić do datasetu."
-          title="Ten zrzut nie ma jeszcze regionów"
-        />
-      ) : (
-        <ul className="df-annotations__list" id={listId}>
-          {regions.map((region) => (
+      <ul aria-label="Regions on this screenshot" className="df-annotations__list">
+        {regions.length === 0 ? (
+          <li className="df-annotations__empty">No regions yet.</li>
+        ) : (
+          regions.map((region) => (
             <li
               className="df-annotations__row"
               data-selected={region.key === selectedKey || undefined}
               key={region.key}
             >
               <Button
-                aria-label={`Zaznacz region ${region.name}`}
+                aria-label={`Select region ${region.name}`}
                 aria-pressed={region.key === selectedKey}
                 className="df-annotations__row-select"
                 disabled={disabled}
                 onClick={() => {
                   onSelect(region.key);
                 }}
-                size="sm"
                 variant="muted"
               >
                 <span className="df-annotations__row-name">{region.name}</span>
                 <span className="df-annotations__row-detail">
-                  ({region.allowed_chars === null ? "domyślne" : region.allowed_chars.length})
+                  ({region.allowed_chars === null ? "all" : region.allowed_chars.length})
                 </span>
               </Button>
               <Button
-                aria-label={`Usuń region ${region.name}`}
+                aria-label={`Delete region ${region.name}`}
+                className="df-annotations__row-delete"
                 disabled={disabled}
                 onClick={() => {
                   onRemove(region.key);
                 }}
-                size="sm"
-                variant="secondary"
+                title={`Delete region ${region.name}`}
+                variant="muted"
               >
-                Usuń
+                <Icon name="trash" />
               </Button>
             </li>
-          ))}
-        </ul>
-      )}
+          ))
+        )}
+      </ul>
 
-      {selected === null || sketch !== null ? null : (
-        <div className="df-annotations__selected">
-          <TextField
-            autoComplete="off"
-            disabled={disabled}
-            label={`Nazwa regionu (x ${String(selected.x)}, y ${String(selected.y)}, ${String(selected.width)} × ${String(selected.height)} px)`}
-            onChange={(event) => {
-              onRename(selected.key, event.target.value);
-            }}
-            spellCheck={false}
-            value={selected.name}
-          />
-          {selected.name.trim() === "" ? (
-            <InlineError message="Region musi mieć nazwę, żeby dało się zapisać profil." />
-          ) : null}
-        </div>
-      )}
+      {renameEmpty ? <InlineError message="A region needs a name before the profile can be saved." /> : null}
+
+      <div className="df-annotations__actions">
+        <Button disabled={disabled || !naming} onClick={onReject}>
+          Reject
+        </Button>
+        <Button disabled={disabled || !naming} onClick={onAccept}>
+          Accept
+        </Button>
+      </div>
     </Panel>
   );
 }

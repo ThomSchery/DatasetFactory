@@ -7,7 +7,7 @@ export interface LoadingProps {
   label?: string;
 }
 
-export function Loading({ label = "Ładowanie…" }: LoadingProps) {
+export function Loading({ label = "Loading…" }: LoadingProps) {
   return (
     <div aria-live="polite" className="df-ui-state df-ui-state--loading" role="status">
       <span aria-hidden="true" className="df-ui-state__spinner" />
@@ -27,7 +27,6 @@ export function Empty({ action, description, title }: EmptyProps) {
 
   return (
     <section aria-labelledby={titleId} className="df-ui-state df-ui-state--panel">
-      <p className="df-ui-state__eyebrow">Brak danych</p>
       <h2 className="df-ui-state__title" id={titleId}>
         {title}
       </h2>
@@ -60,8 +59,8 @@ export interface FatalErrorProps {
 export function FatalError({
   description,
   onRetry,
-  retryLabel = "Spróbuj ponownie",
-  title = "Nie udało się wykonać operacji",
+  retryLabel = "Try again",
+  title = "The operation failed",
 }: FatalErrorProps) {
   const titleId = useId();
 
@@ -71,7 +70,6 @@ export function FatalError({
       className="df-ui-state df-ui-state--panel df-ui-state--fatal-error"
       role="alert"
     >
-      <p className="df-ui-state__eyebrow">Błąd</p>
       <h2 className="df-ui-state__title" id={titleId}>
         {title}
       </h2>
@@ -93,7 +91,7 @@ export interface ProgressProps {
   value: number;
 }
 
-export function Progress({ label = "Postęp", max = 100, value }: ProgressProps) {
+export function Progress({ label = "Progress", max = 100, value }: ProgressProps) {
   const safeMax = max > 0 ? max : 100;
   const safeValue = Math.min(Math.max(value, 0), safeMax);
   const percentage = Math.round((safeValue / safeMax) * 100);

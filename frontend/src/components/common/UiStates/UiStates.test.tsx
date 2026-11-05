@@ -40,7 +40,7 @@ describe("UiStates", () => {
     render(<FatalError description="Sprawdź workspace." onRetry={onRetry} />);
 
     await user.tab();
-    const retry = screen.getByRole("button", { name: "Spróbuj ponownie" });
+    const retry = screen.getByRole("button", { name: "Try again" });
     expect(retry).toHaveFocus();
     await user.keyboard(" ");
     expect(onRetry).toHaveBeenCalledTimes(1);

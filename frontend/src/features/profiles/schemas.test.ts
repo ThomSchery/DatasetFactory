@@ -44,12 +44,12 @@ describe("the profile a user can submit", () => {
   });
 
   it("requires a name — `profile_name_required`", () => {
-    expect(messagesFor({ ...VALID, name: "   " })).toContain("Podaj nazwę profilu.");
+    expect(messagesFor({ ...VALID, name: "   " })).toContain("Enter a profile name.");
   });
 
   it("caps the name at 200 characters — `profile_name_too_long`", () => {
     expect(messagesFor({ ...VALID, name: "x".repeat(201) })).toContain(
-      "Nazwa profilu może mieć najwyżej 200 znaków.",
+      "A profile name can have at most 200 characters.",
     );
   });
 
@@ -58,7 +58,7 @@ describe("the profile a user can submit", () => {
     ["a bare filename", "hud.png"],
   ])("rejects %s — `reference_path_not_absolute`", (_label, path) => {
     expect(messagesFor({ ...VALID, reference_image_path: path })).toContain(
-      "Ścieżka musi być bezwzględna, np. D:\\gry\\hud.png.",
+      "The path must be absolute, e.g. D:\\games\\hud.png.",
     );
   });
 
@@ -72,13 +72,13 @@ describe("the profile a user can submit", () => {
 
   it("requires at least one region — `regions_required`", () => {
     expect(messagesFor({ ...VALID, regions: [] })).toContain(
-      "Zaznacz przynajmniej jeden region HUD na obrazie.",
+      "Draw at least one HUD region on the image.",
     );
   });
 
   it("requires at least one class — `categories_required`", () => {
     expect(messagesFor({ ...VALID, categories: [] })).toContain(
-      "Dodaj przynajmniej jedną klasę.",
+      "Add at least one class.",
     );
   });
 
@@ -90,7 +90,7 @@ describe("the profile a user can submit", () => {
     ];
 
     expect(messagesFor({ ...VALID, regions })).toContain(
-      "Nazwy regionów muszą być unikalne w profilu.",
+      "Region names must be unique within the profile.",
     );
   });
 
@@ -102,7 +102,7 @@ describe("the profile a user can submit", () => {
     ];
 
     expect(messagesFor({ ...VALID, regions })).toContain(
-      "Nazwy regionów muszą być unikalne w profilu.",
+      "Region names must be unique within the profile.",
     );
   });
 
@@ -113,15 +113,15 @@ describe("the profile a user can submit", () => {
     ];
 
     expect(messagesFor({ ...VALID, categories })).toContain(
-      "Nazwy klas muszą być unikalne w profilu.",
+      "Class names must be unique within the profile.",
     );
   });
 });
 
 describe("region geometry mirrors RegionRequest", () => {
   it.each([
-    ["zero width", { width: 0 }, "Region musi mieć dodatnią szerokość."],
-    ["zero height", { height: 0 }, "Region musi mieć dodatnią wysokość."],
+    ["zero width", { width: 0 }, "A region needs a positive width."],
+    ["zero height", { height: 0 }, "A region needs a positive height."],
   ])("rejects %s — `Field(gt=0)`", (_label, override, message) => {
     const result = regionSchema.safeParse({ ...VALID.regions[0], ...override });
 
@@ -147,7 +147,7 @@ describe("per-region OCR configuration", () => {
         ...VALID,
         regions: [{ ...VALID.regions[0], allowed_chars: "7W" }],
       }),
-    ).toContain("Znaki spoza klas profilu: W. Dodaj klasy albo usuń te znaki z zakresu.");
+    ).toContain("Characters outside the profile classes: W. Add the classes or remove these characters from the range.");
   });
 
   it("offers only recognizing PSM modes and explains every option", () => {
@@ -160,7 +160,7 @@ describe("per-region OCR configuration", () => {
       "wiele wierszy",
     );
     expect(OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === "11")?.label).toContain(
-      "Oddzielne wiersze",
+      "Sparse text lines",
     );
   });
 });

@@ -1,23 +1,172 @@
+/*
+ * Figma Run frames 1378:2014 and 1362:1567–1570 (FE-022).
+ *
+ * Below 768 px: preview, then the fields panel, then Run across the full
+ * width. From 768 px: "Run Setup" over a 205 px panel whose foot holds Run,
+ * level with the bottom of the preview beside it.
+ *
+ * The same elements serve both layouts; only which box wears the panel chrome
+ * changes — the fields on a phone, the whole column on a wider screen.
+ */
 .df-run-setup {
   display: grid;
-  gap: var(--size-md); /* SPACING-01: between sections, one step up from inside. */
-}
-
-.df-run-setup__workspace {
-  display: grid;
-  gap: var(--size-md);
-}
-
-.df-run-setup__controls,
-.df-run-setup__canvas {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--site-padding);
   min-width: 0;
 }
 
-@media (min-width: 992px) {
-  .df-run-setup__workspace {
-    /* The Figma layout: a column of controls that stays narrow, and an image
-       that takes every pixel left over. */
-    grid-template-columns: var(--workspace-panel-width) minmax(0, 1fr);
+.df-run-setup__heading {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip: rect(0 0 0 0);
+  color: var(--color-text-placeholder-default);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+}
+
+.df-run-setup__preview {
+  min-width: 0;
+  aspect-ratio: 328 / 173;
+}
+
+.df-run-setup__preview .df-reference-image,
+.df-run-setup__placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.df-run-setup__placeholder {
+  display: grid;
+  place-items: center;
+  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.df-run-setup__placeholder p {
+  margin: var(--size-none);
+}
+
+/* Phone: the column is bare and the fields carry the panel. */
+.df-run-setup__column.df-panel {
+  gap: var(--site-padding);
+  padding: var(--size-none);
+  border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+}
+
+.df-run-setup__fields {
+  display: grid;
+  gap: var(--element-gap-lg);
+  min-width: 0;
+  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-neutral-default);
+}
+
+.df-run-setup__form {
+  display: grid;
+  gap: var(--site-padding);
+  min-width: 0;
+}
+
+.df-run-setup__picker {
+  display: grid;
+  gap: var(--element-gap-lg);
+  min-width: 0;
+}
+
+.df-run-setup__label {
+  display: flex;
+  align-items: center;
+  gap: var(--element-padding-x-md);
+  margin: var(--size-none);
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+}
+
+.df-run-setup__picker .df-grouped-options__control {
+  min-height: var(--field-height-lg);
+}
+
+.df-run-setup__error {
+  margin: var(--size-none);
+  color: var(--color-status-error-default);
+  font-size: var(--font-size-xs);
+}
+
+.df-run-setup__run.df-button {
+  width: 100%;
+  min-height: var(--field-height);
+  color: var(--color-text-weak-default);
+}
+
+@media (min-width: 576px) {
+  .df-run-setup__preview {
+    aspect-ratio: 544 / 297;
+  }
+}
+
+@media (min-width: 768px) {
+  .df-run-setup {
+    grid-template-columns: var(--workspace-run-column) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
     align-items: start;
+  }
+
+  .df-run-setup__heading {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: var(--size-none);
+    clip: auto;
+    white-space: normal;
+  }
+
+  .df-run-setup__preview {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    aspect-ratio: 947 / 521;
+  }
+
+  /* Wider screens: the whole column is the panel, and Run sits at its foot. */
+  .df-run-setup__column.df-panel {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: var(--element-gap-lg);
+    padding: var(--element-padding-y-lg) var(--element-padding-x-md);
+    border-color: var(--color-stroke-panel-default);
+    background: var(--color-surface-neutral-default);
+  }
+
+  .df-run-setup__column > .df-panel__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .df-run-setup__fields {
+    padding: var(--size-none);
+    border-color: var(--color-surface-transparent);
+    background: var(--color-surface-transparent);
+  }
+
+  .df-run-setup__form {
+    gap: var(--element-gap-lg);
+  }
+
+  .df-run-setup__run-slot {
+    margin-block-start: auto;
   }
 }

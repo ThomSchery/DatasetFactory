@@ -82,19 +82,19 @@ describe("AnnotationPopover", () => {
   it("opens the class field expanded with the cursor already in its filter", () => {
     renderPopover();
 
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
     expect(field).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Zwiń listę Klasy profilu" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Collapse list Profile classes" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
-    expect(screen.getByRole("listbox", { name: "Klasy profilu" })).toBeVisible();
+    expect(screen.getByRole("listbox", { name: "Profile classes" })).toBeVisible();
   });
 
   it("filters profile classes and saves the active result with Enter", async () => {
     const user = userEvent.setup();
     const { onCategoryChange } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
 
     await user.clear(field);
     await user.type(field, "hea{Enter}");
@@ -114,7 +114,7 @@ describe("AnnotationPopover", () => {
   it("abandons an unsaved geometry preview on the same outside pointerdown", () => {
     const { onClose } = renderPopover({ hasUnsavedGeometry: true });
 
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     fireEvent.pointerDown(screen.getByTestId("outside"));
 
     expect(onClose).toHaveBeenCalledOnce();
@@ -123,7 +123,7 @@ describe("AnnotationPopover", () => {
   it("stays open while the pointer works inside it", async () => {
     const { onClose } = renderPopover();
 
-    fireEvent.pointerDown(screen.getByRole("textbox", { name: "Klasa" }));
+    fireEvent.pointerDown(screen.getByRole("textbox", { name: "Class" }));
     fireEvent.pointerDown(screen.getByRole("option", { name: "Health" }));
 
     expect(onClose).not.toHaveBeenCalled();
@@ -143,7 +143,7 @@ describe("AnnotationPopover", () => {
     const user = userEvent.setup();
     const { onClose } = renderPopover();
 
-    await user.type(screen.getByRole("textbox", { name: "Klasa" }), "{Escape}");
+    await user.type(screen.getByRole("textbox", { name: "Class" }), "{Escape}");
     await user.keyboard("{Escape}");
 
     expect(onClose).not.toHaveBeenCalled();
@@ -156,19 +156,19 @@ describe("AnnotationPopover", () => {
       annotation: { ...annotation, category_id: "" },
       draft: true,
     });
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
 
     await user.type(field, "health and armour{Enter}");
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Brak takiej klasy w profilu. Utwórz ją i przypisz albo porzuć box.",
+      "The profile has no such class. Create and assign it, or discard the box.",
     );
-    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save class" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
     expect(onCreateCategory).not.toHaveBeenCalled();
 
     await user.click(
-      screen.getByRole("button", { name: "Utwórz i przypisz klasę „health and armour”" }),
+      screen.getByRole("button", { name: "Create and assign class “health and armour”" }),
     );
     expect(onCreateCategory).toHaveBeenCalledWith({
       kind: "game",
@@ -179,17 +179,17 @@ describe("AnnotationPopover", () => {
   it("canonicalises a lowercase character and hides the action for an existing name", async () => {
     const user = userEvent.setup();
     renderPopover();
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
 
     await user.type(field, "a");
     expect(
-      screen.getByRole("button", { name: "Utwórz i przypisz klasę „A”" }),
+      screen.getByRole("button", { name: "Create and assign class “A”" }),
     ).toBeVisible();
 
     await user.clear(field);
     await user.type(field, "  hEaLtH  ");
     expect(
-      screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+      screen.queryByRole("button", { name: /Create and assign class/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -199,19 +199,19 @@ describe("AnnotationPopover", () => {
       annotation: { ...annotation, category_id: "" },
       draft: true,
     });
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
     await user.type(field, "8");
 
-    update({ categoryError: "Nie udało się zapisać nowej klasy." });
+    update({ categoryError: "The new class could not be saved." });
 
     expect(field).toHaveValue("8");
-    expect(screen.getByRole("alert")).toHaveTextContent("Nie udało się zapisać nowej klasy.");
+    expect(screen.getByRole("alert")).toHaveTextContent("The new class could not be saved.");
   });
 
   it("reveals and selects the backend-authoritative class after a name conflict", async () => {
     const user = userEvent.setup();
     const { onCategoryChange, update } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
     await user.type(field, "s");
 
     update({
@@ -224,19 +224,19 @@ describe("AnnotationPopover", () => {
       "aria-selected",
       "true",
     );
-    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(screen.getByRole("button", { name: "Change class: assign another class to this box" }));
     expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 
   it("claims no selection when the conflict winner stays unknown", async () => {
     const user = userEvent.setup();
     const { onCategoryChange, update } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
     await user.type(field, "s");
 
     update({
       categoryConflict: { kind: "unidentified", rejectedName: "S" },
-      categoryError: "Klasa o tej nazwie już istnieje w profilu.",
+      categoryError: "A class with this name already exists in the profile.",
     });
 
     // Filter relaxed, so the class blocking the name is reachable at all.
@@ -246,20 +246,20 @@ describe("AnnotationPopover", () => {
     }
     expect(screen.getByRole("option", { name: "Health" })).toBeVisible();
     expect(screen.getByRole("option", { name: "7" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Change class: assign another class to this box" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("option", { name: "Health" }));
-    await user.click(screen.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(screen.getByRole("button", { name: "Change class: assign another class to this box" }));
     expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 
   it("keeps the create action away while the conflict winner is unknown", async () => {
     const user = userEvent.setup();
     const { update } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Klasa" });
+    const field = screen.getByRole("textbox", { name: "Class" });
     await user.type(field, "s");
-    expect(screen.getByRole("button", { name: "Utwórz i przypisz klasę „S”" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create and assign class “S”" })).toBeVisible();
 
     update({ categoryConflict: { kind: "unidentified", rejectedName: "S" } });
     await user.type(field, "s");
@@ -268,19 +268,19 @@ describe("AnnotationPopover", () => {
     // suite owns the parent wiring that keeps the rejection memory alive.
     expect(field).toHaveValue("s");
     expect(
-      screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+      screen.queryByRole("button", { name: /Create and assign class/ }),
     ).not.toBeInTheDocument();
 
     await user.clear(field);
     await user.type(field, "Mana");
     expect(
-      screen.getByRole("button", { name: "Utwórz i przypisz klasę „Mana”" }),
+      screen.getByRole("button", { name: "Create and assign class “Mana”" }),
     ).toBeVisible();
 
     await user.clear(field);
     await user.type(field, "s");
     expect(
-      screen.queryByRole("button", { name: /Utwórz i przypisz klasę/ }),
+      screen.queryByRole("button", { name: /Create and assign class/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -313,16 +313,16 @@ describe("AnnotationPopover", () => {
     it("marks the geometry as unsaved and names the key that saves it", () => {
       const { update } = renderPopover({ hasUnsavedGeometry: true });
 
-      const marker = screen.getByText(/Przesunięcie bboxa nie jest jeszcze zapisane/);
+      const marker = screen.getByText(/The box move is not saved yet/);
       expect(marker).toBeVisible();
       expect(marker).toHaveTextContent("Enter");
-      expect(screen.getByText("Niezapisane")).toBeVisible();
+      expect(screen.getByText("Unsaved")).toBeVisible();
       expectGeometryFormAbsent();
 
       update({ hasUnsavedGeometry: false });
 
       expect(
-        screen.queryByText(/Przesunięcie bboxa nie jest jeszcze zapisane/),
+        screen.queryByText(/The box move is not saved yet/),
       ).not.toBeInTheDocument();
     });
 
@@ -332,7 +332,7 @@ describe("AnnotationPopover", () => {
       update({ hasUnsavedGeometry: true });
 
       expectGeometryFormAbsent();
-      expect(screen.getByText("Niezapisane")).toBeVisible();
+      expect(screen.getByText("Unsaved")).toBeVisible();
     });
   });
 
@@ -343,19 +343,19 @@ describe("AnnotationPopover", () => {
       draft: true,
     });
 
-    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save class" })).toBeDisabled();
     for (const option of screen.getAllByRole("option")) {
       expect(option).toHaveAttribute("aria-selected", "false");
     }
 
     // Walking the list is not choosing from it.
     await user.keyboard("{ArrowDown}{ArrowDown}");
-    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save class" })).toBeDisabled();
     expect(onCategoryChange).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("option", { name: "Health" }));
-    expect(screen.getByRole("button", { name: "Zapisz klasę" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Zapisz klasę" }));
+    expect(screen.getByRole("button", { name: "Save class" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Save class" }));
     expect(onCategoryChange).toHaveBeenCalledWith("health");
   });
 });

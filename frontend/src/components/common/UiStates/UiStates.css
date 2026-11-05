@@ -9,8 +9,8 @@
   display: flex;
   align-items: center;
   gap: var(--size-xs);
-  min-height: var(--control-height-md);
-  font-size: var(--font-size-sm);
+  min-height: var(--field-height);
+  font-size: var(--font-size-xs);
 }
 
 .df-ui-state--loading {
@@ -28,9 +28,10 @@
 }
 
 .df-ui-state--panel {
-  padding: var(--size-lg);
-  border: var(--border-width-default) solid var(--color-stroke-weak-default);
-  border-radius: var(--radius-lg);
+  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
   background: var(--color-surface-neutral-default);
 }
 
@@ -50,27 +51,25 @@
 }
 
 .df-ui-state__title {
-  margin-top: var(--size-sm);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-tight);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-tight);
 }
 
 .df-ui-state__description {
   max-width: var(--measure-copy);
-  margin-top: var(--size-xs);
+  margin-top: var(--element-padding-y-md);
   color: var(--color-text-weak-default);
 }
 
 .df-ui-state__action {
-  margin-top: var(--size-md);
+  margin-top: var(--element-gap-lg);
 }
 
 .df-ui-state--inline-error {
-  padding: var(--size-xs) var(--size-sm);
+  padding: var(--element-padding-y-md) var(--element-padding-x-md);
   border: var(--border-width-default) solid var(--color-status-error-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--color-status-error-soft);
   color: var(--color-text-strong-default);
 }

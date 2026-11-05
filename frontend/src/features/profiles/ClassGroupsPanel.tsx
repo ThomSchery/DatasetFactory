@@ -3,11 +3,10 @@ import { useState } from "react";
 import { Button } from "../../components/common/Button";
 import { CollapsibleGroup } from "../../components/common/CollapsibleGroup";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
+import { Icon } from "../../components/common/Icon";
 import { Panel } from "../../components/common/Panel";
-import { Notice } from "../../components/common/Notice";
-import { SelectField } from "../../components/common/SelectField";
 import { TextField } from "../../components/common/TextField";
-import { Empty, InlineError } from "../../components/common/UiStates";
+import { InlineError } from "../../components/common/UiStates";
 import type { DraftCategory, DraftRegion } from "./profileDraft";
 import { CHARACTER_CLASS_ALPHABET, categoryGroupIdOf, categoryGroupLabelOf } from "../../api";
 import { OCR_PAGE_SEGMENTATION_OPTIONS } from "./schemas";
@@ -34,20 +33,16 @@ const GROUPS: readonly { id: string; label: string; test: (name: string) => bool
 ];
 
 /**
- * The four class groups the Figma document stacks under the Annotations panel.
- *
- * `Custom` and the three character groups mean different things, and the panel
- * says so rather than drawing one list of identical checkboxes:
+ * The four class groups the Figma document stacks under Annotations (FE-022:
+ * always on screen, inactive until a region is selected).
  *
  *  - `Custom` holds the classes the operator named on a box. They are verified
- *    by hand, never read by OCR, so a checkbox next to them would claim a
- *    recognition setting that does not exist.
+ *    by hand, never read by OCR, so they carry rename and delete, not a
+ *    checkbox.
  *  - `Numbers`, `Letters` and `Symbols` are the OCR alphabet, and their
- *    checkboxes are the selected region's `allowed_chars` — exactly the
- *    "wybór rozpoznawanych znaków" the design means.
- *
- * With no region selected the character groups have nothing to act on, and the
- * panel says that instead of showing boxes whose state means nothing.
+ *    checkboxes are the selected region's `allowed_chars`.
+ *  - The rest of a region's OCR settings — the text layout (PSM) and the names
+ *    of the character classes — fold away under "OCR settings".
  */
 export function ClassGroupsPanel({
   categories,
@@ -62,16 +57,21 @@ export function ClassGroupsPanel({
 }: ClassGroupsPanelProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
-  const [characterNamesOpen, setCharacterNamesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const custom = categories.filter((category) => category.kind === "game");
   const characters = categories.filter((category) => category.kind === "character");
-  const selected = region === null ? "" : (region.allowed_chars ?? characters.map((category) => category.name).join(""));
+  const selected =
+    region === null
+      ? ""
+      : (region.allowed_chars ?? characters.map((category) => category.name).join(""));
   const unsupported =
     region === null
       ? []
       : [...new Set([...selected])].filter(
           (char) => !characters.some((category) => category.name === char),
         );
+  const characterDisabled = disabled || region === null;
+  const psm = region?.page_segmentation_mode ?? DEFAULT_REGION_PAGE_SEGMENTATION_MODE;
 
   function renameRow(category: DraftCategory) {
     const editing = editingKey === category.key;
@@ -81,42 +81,76 @@ export function ClassGroupsPanel({
       onRenameCategory(category.key, editingName.trim());
       setEditingKey(null);
     };
+    const movesGroup =
+      editingName.trim() !== "" &&
+      categoryGroupIdOf({ name: editingName.trim(), kind: nextKind }) !== categoryGroupIdOf(category);
     return (
-      <li className="df-class-groups__custom-row" key={category.key}>
+      <li className="df-class-groups__row" key={category.key}>
         {editing ? (
-          <div>
+          <div className="df-class-groups__rename">
             <TextField
-              autoComplete="off" autoFocus disabled={disabled}
-              label={`Nowa nazwa klasy ${category.name}`}
+              autoComplete="off"
+              autoFocus
+              disabled={disabled}
+              hideLabel
+              label={`New name of class ${category.name}`}
               onChange={(event) => setEditingName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") { event.preventDefault(); finish(); }
-                if (event.key === "Escape") { event.preventDefault(); setEditingKey(null); }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  finish();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setEditingKey(null);
+                }
               }}
               value={editingName}
             />
-            {editingName.trim() !== "" && categoryGroupIdOf({ name: editingName.trim(), kind: nextKind }) !== categoryGroupIdOf(category) ? (
-              <Notice title="Klasa zmieni grupę" tone="warning">
-                {categoryGroupLabelOf(category)} → {categoryGroupLabelOf({ name: editingName.trim(), kind: nextKind })}.
-              </Notice>
+            {movesGroup ? (
+              <p className="df-class-groups__note" role="status">
+                Moves the class: {categoryGroupLabelOf(category)} →{" "}
+                {categoryGroupLabelOf({ name: editingName.trim(), kind: nextKind })}.
+              </p>
             ) : null}
           </div>
-        ) : <span className="df-class-groups__custom-name">{category.name}</span>}
-        <div className="df-class-groups__custom-actions">
+        ) : (
+          <span className="df-class-groups__name">{category.name}</span>
+        )}
+        <div className="df-class-groups__actions">
           {editing ? (
             <>
-              <Button disabled={disabled || editingName.trim() === ""} onClick={finish} size="sm">Gotowe</Button>
-              <Button disabled={disabled} onClick={() => setEditingKey(null)} size="sm" variant="secondary">Anuluj</Button>
+              <Button disabled={disabled || editingName.trim() === ""} onClick={finish} size="sm">
+                Done
+              </Button>
+              <Button disabled={disabled} onClick={() => setEditingKey(null)} size="sm">
+                Cancel
+              </Button>
             </>
           ) : (
-            <Button aria-label={`Zmień nazwę klasy ${category.name}`} disabled={disabled}
-              onClick={() => { setEditingName(category.name); setEditingKey(category.key); }} size="sm" variant="muted">
-              Zmień nazwę
+            <Button
+              aria-label={`Rename class ${category.name}`}
+              disabled={disabled}
+              onClick={() => {
+                setEditingName(category.name);
+                setEditingKey(category.key);
+              }}
+              title={`Rename class ${category.name}`}
+              variant="muted"
+            >
+              <Icon name="edit" />
             </Button>
           )}
-          {category.kind === "game" ? (
-            <Button aria-label={`Usuń klasę ${category.name} z profilu`} disabled={disabled}
-              onClick={() => onRemoveCategory(category.key)} size="sm" variant="secondary">Usuń</Button>
+          {category.kind === "game" && !editing ? (
+            <Button
+              aria-label={`Remove class ${category.name} from the profile`}
+              disabled={disabled}
+              onClick={() => onRemoveCategory(category.key)}
+              title={`Remove class ${category.name}`}
+              variant="muted"
+            >
+              <Icon name="trash" />
+            </Button>
           ) : null}
         </div>
       </li>
@@ -124,83 +158,108 @@ export function ClassGroupsPanel({
   }
 
   return (
-    <Panel
-      description="Custom to klasy nazwane na zrzucie. Pozostałe grupy wybierają znaki, które OCR ma rozpoznawać w zaznaczonym regionie."
-      eyebrow="Profil"
-      title="Klasy"
-    >
-      <CollapsibleGroup label="Custom" onToggle={onToggleCustom} open={customOpen}>
-        {custom.length === 0 ? (
-          <Empty
-            description="Narysuj box na zrzucie i nazwij go — nazwa pojawi się tutaj jako klasa."
-            title="Custom jest puste"
-          />
-        ) : (
-          <ul className="df-class-groups__custom">
-            {custom.map(renameRow)}
-          </ul>
-        )}
-      </CollapsibleGroup>
-
-      <CollapsibleGroup label="Nazwy klas OCR" open={characterNamesOpen} onToggle={() => setCharacterNamesOpen((open) => !open)}>
-        <ul className="df-class-groups__custom">{characters.map(renameRow)}</ul>
-      </CollapsibleGroup>
-
-      {region === null ? (
-        <Empty
-          description="Zaznacz region na zrzucie albo na liście Annotations, żeby wybrać znaki, które OCR ma w nim czytać."
-          title="Brak zaznaczonego regionu"
-        />
-      ) : (
-        <>
-          {region.allowed_chars === null ? (
-            <p>Region dziedziczy konfigurację OCR. Zmiana znaku lub układu zapisze własne ustawienia.</p>
-          ) : null}
-          <GroupedOptionList
-            disabled={disabled}
-            emptyMessage="Żaden znak nie pasuje do filtra."
-            filterLabel="Filtruj znaki"
-            groups={GROUPS.map((group) => ({
-              id: group.id,
-              label: group.label,
-              options: characters
-                .filter((category) => group.test(category.name))
-                .map((category) => ({ id: category.name, label: category.name })),
-            })).filter((group) => group.options.length > 0)}
-            label={`Znaki rozpoznawane w regionie ${region.name}`}
-            mode="multiple"
-            onChange={(ids) => {
-              // Profile order, not click order: the backend normalises the
-              // whitelist the same way, so the two never disagree.
-              onAllowedCharsChange(
-                characters
-                  .filter((category) => ids.includes(category.name))
-                  .map((category) => category.name)
-                  .join(""),
-              );
-            }}
-            selectedIds={[...selected]}
-          />
-          {unsupported.length === 0 ? null : (
-            <InlineError
-              message={`Region czyta znaki spoza klas profilu: ${unsupported.join(" ")}. Dodaj te klasy albo usuń je z zakresu.`}
-            />
+    <Panel className="df-class-groups" hideTitle radius="sm" title="Classes">
+      <div className="df-class-groups__group">
+        <CollapsibleGroup label="Custom" onToggle={onToggleCustom} open={customOpen}>
+          {custom.length === 0 ? (
+            <p className="df-class-groups__note">Name a drawn box to add a class here.</p>
+          ) : (
+            <ul className="df-class-groups__list">{custom.map(renameRow)}</ul>
           )}
-          {selected.length === 0 ? (
-            <InlineError message="Region musi mieć co najmniej jeden znak, żeby dało się zapisać profil." />
-          ) : null}
-          <SelectField
-            description="Jak Tesseract ma czytać układ tego regionu. Tryb 0 nie rozpoznaje znaków i dlatego go tu nie ma."
-            disabled={disabled}
-            label="Układ tekstu OCR"
-            onChange={(event) => {
-              onPageSegmentationModeChange(Number(event.target.value));
-            }}
-            options={OCR_PAGE_SEGMENTATION_OPTIONS}
-            value={String(region.page_segmentation_mode ?? DEFAULT_REGION_PAGE_SEGMENTATION_MODE)}
-          />
-        </>
-      )}
+        </CollapsibleGroup>
+      </div>
+
+      <GroupedOptionList
+        disabled={characterDisabled}
+        emptyMessage="No character class in the profile."
+        filterLabel="Filter characters"
+        groups={GROUPS.map((group) => ({
+          id: group.id,
+          label: group.label,
+          options: characters
+            .filter((category) => group.test(category.name))
+            .map((category) => ({ id: category.name, label: category.name })),
+        }))}
+        initiallyCollapsedGroupIds={GROUPS.map((group) => group.id)}
+        inline
+        label={
+          region === null
+            ? "Characters OCR reads — select a region first"
+            : `Characters OCR reads in region ${region.name}`
+        }
+        mode="multiple"
+        onChange={(ids) => {
+          // Profile order, not click order: the backend normalises the
+          // whitelist the same way, so the two never disagree.
+          onAllowedCharsChange(
+            characters
+              .filter((category) => ids.includes(category.name))
+              .map((category) => category.name)
+              .join(""),
+          );
+        }}
+        selectedIds={[...selected]}
+      />
+
+      {region !== null && unsupported.length > 0 ? (
+        <InlineError
+          message={`The region reads characters outside the profile classes: ${unsupported.join(" ")}. Add these classes or remove them from the range.`}
+        />
+      ) : null}
+      {region !== null && selected.length === 0 ? (
+        <InlineError message="A region needs at least one character before the profile can be saved." />
+      ) : null}
+
+      <div className="df-class-groups__group">
+        <CollapsibleGroup
+          label="OCR settings"
+          onToggle={() => setSettingsOpen((open) => !open)}
+          open={settingsOpen}
+        >
+          {region === null ? (
+            <p className="df-class-groups__note">Select a region to change how OCR reads it.</p>
+          ) : (
+            <>
+              {region.allowed_chars === null ? (
+                <p className="df-class-groups__note">
+                  The region inherits the OCR settings. Changing a character or the layout saves
+                  its own settings.
+                </p>
+              ) : null}
+              <GroupedOptionList
+                disabled={disabled}
+                emptyMessage="No layout matches."
+                filterLabel="Text layout (PSM)"
+                groups={[
+                  {
+                    id: "psm",
+                    label: "Tesseract page segmentation",
+                    options: OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => ({
+                      id: option.value,
+                      label: option.label,
+                    })),
+                  },
+                ]}
+                label="OCR text layout"
+                mode="single"
+                onChange={(ids) => {
+                  const [first] = ids;
+                  if (first !== undefined) {
+                    onPageSegmentationModeChange(Number(first));
+                  }
+                }}
+                placeholder={
+                  OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(psm))
+                    ?.label ?? "Text layout (PSM)"
+                }
+                selectedIds={[String(psm)]}
+              />
+            </>
+          )}
+          <p className="df-class-groups__subtitle">Character class names</p>
+          <ul className="df-class-groups__list">{characters.map(renameRow)}</ul>
+        </CollapsibleGroup>
+      </div>
     </Panel>
   );
 }

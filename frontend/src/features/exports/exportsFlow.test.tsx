@@ -57,16 +57,16 @@ describe("export query states", () => {
       // transition to the first screen-owned state a local budget, then verify
       // the dependent export -> run loading sequence with the normal timeout.
       expect(
-        await screen.findByText("Ładowanie statusu eksportu…", {}, { timeout: 2_000 }),
+        await screen.findByText("Loading the export status…", {}, { timeout: 2_000 }),
       ).toBeInTheDocument();
-      expect(await screen.findByText("Ładowanie runu eksportu…")).toBeInTheDocument();
-      expect(await screen.findByRole("region", { name: "Bieżący eksport" })).toHaveTextContent(
+      expect(await screen.findByText("Loading the export run…")).toBeInTheDocument();
+      expect(await screen.findByRole("region", { name: "Current export" })).toHaveTextContent(
         "foreign-export",
       );
       if (status === "completed") {
-        expect(screen.getByRole("region", { name: "Wynik eksportu COCO" })).toBeInTheDocument();
+        expect(screen.getByRole("region", { name: "COCO export result" })).toBeInTheDocument();
       } else {
-        expect(screen.getByText("Eksport jest przygotowywany…")).toBeInTheDocument();
+        expect(screen.getByText("Preparing the export…")).toBeInTheDocument();
       }
       expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/dashboard"))).toBe(false);
       expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
@@ -93,7 +93,7 @@ describe("export query states", () => {
 
     renderApp(["/exports"]);
 
-    expect(await screen.findByRole("region", { name: "Wynik eksportu COCO" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "COCO export result" })).toBeInTheDocument();
     expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/exports/export-1"))).toBe(
       true,
     );
@@ -105,7 +105,7 @@ describe("export query states", () => {
     renderApp(["/exports?export_id="]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Nieprawidłowy identyfikator eksportu",
+      "Invalid export id",
     );
     expect(spy).not.toHaveBeenCalled();
   });
@@ -119,7 +119,7 @@ describe("export query states", () => {
     renderApp(["/exports?export_id=missing"]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Nie udało się wczytać statusu eksportu",
+      "The export status could not be loaded",
     );
     expect(spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/dashboard"))).toBe(false);
     expect(spy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
@@ -141,15 +141,15 @@ describe("export query states", () => {
       }),
     );
     renderApp(["/exports"]);
-    expect(await screen.findByText("Ładowanie runu do eksportu…")).toBeInTheDocument();
+    expect(await screen.findByText("Loading the run to export…")).toBeInTheDocument();
     release();
-    expect(await screen.findByText("Brak runu do eksportu")).toBeInTheDocument();
+    expect(await screen.findByText("No run to export")).toBeInTheDocument();
 
     vi.unstubAllGlobals();
     stubFetch(() => ({ status: 500, body: errorEnvelope("internal_error") }));
     renderApp(["/exports"]);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Nie udało się wczytać źródła eksportu",
+      "The export source could not be loaded",
     );
   });
 
@@ -168,11 +168,11 @@ describe("export query states", () => {
       });
       renderApp(["/exports"]);
 
-      await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
+      await user.click(await screen.findByRole("button", { name: "Start export" }));
       const alert = await screen.findByRole("alert");
-      expect(alert).toHaveTextContent(`Kod: ${code}.`);
-      expect(screen.getByRole("button", { name: "Uruchom eksport" })).toBeInTheDocument();
-      expect(screen.queryByRole("region", { name: "Bieżący eksport" })).toBeNull();
+      expect(alert).toHaveTextContent(`Code: ${code}.`);
+      expect(screen.getByRole("button", { name: "Start export" })).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Current export" })).toBeNull();
     },
   );
 
@@ -204,14 +204,14 @@ describe("export query states", () => {
     }));
     renderApp(["/exports"]);
 
-    const start = await screen.findByRole("button", { name: "Uruchom eksport" });
+    const start = await screen.findByRole("button", { name: "Start export" });
     await user.click(start);
     expect(start).toBeDisabled();
     expect(start).toHaveAttribute("aria-busy", "true");
-    expect(screen.queryByRole("region", { name: "Bieżący eksport" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Current export" })).toBeNull();
 
     release();
-    expect(await screen.findByRole("region", { name: "Bieżący eksport" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Current export" })).toBeInTheDocument();
   });
 
   it("offers retry when GET export status fails independently from POST", async () => {
@@ -235,11 +235,11 @@ describe("export query states", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
+    await user.click(await screen.findByRole("button", { name: "Start export" }));
 
     const failure = await screen.findByRole("alert");
-    expect(failure).toHaveTextContent("Nie udało się wczytać statusu eksportu");
-    expect(within(failure).getByRole("button", { name: "Spróbuj ponownie" })).toBeEnabled();
+    expect(failure).toHaveTextContent("The export status could not be loaded");
+    expect(within(failure).getByRole("button", { name: "Try again" })).toBeEnabled();
   });
 
   it("sends Roboflow split settings and renders the split manifest", async () => {
@@ -297,19 +297,19 @@ describe("export query states", () => {
 
     renderApp(["/exports"]);
     await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Wariant eksportu" }),
+      await screen.findByRole("combobox", { name: "Export variant" }),
       "roboflow_coco",
     );
     const train = screen.getByRole("spinbutton", { name: "Train (%)" });
     const valid = screen.getByRole("spinbutton", { name: "Valid (%)" });
-    const seed = screen.getByRole("spinbutton", { name: "Ziarno podziału" });
+    const seed = screen.getByRole("spinbutton", { name: "Split seed" });
     await user.clear(train);
     await user.type(train, "70");
     await user.clear(valid);
     await user.type(valid, "20");
     await user.clear(seed);
     await user.type(seed, "42");
-    await user.click(screen.getByRole("button", { name: "Uruchom eksport" }));
+    await user.click(screen.getByRole("button", { name: "Start export" }));
 
     await waitFor(() => {
       expect(requestBody).toEqual({
@@ -320,9 +320,9 @@ describe("export query states", () => {
       });
     });
     const result = await screen.findByRole("region", {
-      name: "Wynik eksportu Roboflow COCO",
+      name: "Roboflow COCO export result",
     });
-    expect(within(result).getByText("Podział datasetu")).toBeInTheDocument();
+    expect(within(result).getByText("Dataset split")).toBeInTheDocument();
     expect(result).toHaveTextContent("train/_annotations.coco.json");
     expect(result).toHaveTextContent("42");
   });
@@ -338,15 +338,15 @@ describe("export query states", () => {
     renderApp(["/exports"]);
 
     await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Wariant eksportu" }),
+      await screen.findByRole("combobox", { name: "Export variant" }),
       "roboflow_coco",
     );
     const train = screen.getByRole("spinbutton", { name: "Train (%)" });
     await user.clear(train);
     await user.type(train, "79");
-    await user.click(screen.getByRole("button", { name: "Uruchom eksport" }));
+    await user.click(screen.getByRole("button", { name: "Start export" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("razem dawać 100%");
+    expect(await screen.findByRole("alert")).toHaveTextContent("add up to 100%");
     expect(
       spy.mock.calls.some(
         ([url, init]) => String(url).endsWith("/api/v1/exports") && init?.method === "POST",
@@ -397,11 +397,11 @@ describe("export lifecycle", () => {
 
     renderApp(["/exports"]);
     await tick();
-    fireEvent.click(screen.getByRole("button", { name: "Uruchom eksport" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start export" }));
     await tick();
     expect(exportGets).toBe(1);
     await tick();
-    expect(screen.getByText("Eksport jest przygotowywany…")).toBeInTheDocument();
+    expect(screen.getByText("Preparing the export…")).toBeInTheDocument();
 
     await tick(RUN_POLL_INTERVAL_MS);
     expect(exportGets).toBe(2);
@@ -409,8 +409,8 @@ describe("export lifecycle", () => {
     current = exportFixture();
     await tick(RUN_POLL_INTERVAL_MS);
     expect(exportGets).toBe(3);
-    expect(screen.getByRole("region", { name: "Wynik eksportu COCO" })).toHaveTextContent(
-      "To licznik pochodzenia boksów, nie ocena trafności OCR.",
+    expect(screen.getByRole("region", { name: "COCO export result" })).toHaveTextContent(
+      "A count of where boxes came from, not a measure of OCR accuracy.",
     );
 
     await tick(RUN_POLL_INTERVAL_MS * 10);
@@ -450,10 +450,10 @@ describe("completed and failed exports", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
+    await user.click(await screen.findByRole("button", { name: "Start export" }));
 
-    expect(await screen.findByRole("button", { name: "Skonfiguruj nowy eksport" })).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent(`Kod: ${code}.`);
+    expect(await screen.findByRole("button", { name: "Configure a new export" })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent(`Code: ${code}.`);
   });
 
   it("shows source counts as provenance and never exposes an absolute output path", async () => {
@@ -475,10 +475,10 @@ describe("completed and failed exports", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
+    await user.click(await screen.findByRole("button", { name: "Start export" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("bezpiecznej relatywnej ścieżki");
+    expect(alert).toHaveTextContent("no safe relative path");
     expect(document.body).not.toHaveTextContent("D:\\secret");
     expect(screen.queryByRole("textbox")).toBeNull();
   });
@@ -524,28 +524,28 @@ describe("explicit run completion", () => {
     vi.stubGlobal("fetch", spy);
 
     renderApp(["/exports"]);
-    await user.click(await screen.findByRole("button", { name: "Uruchom eksport" }));
-    const complete = await screen.findByRole("button", { name: "Zamknij run" });
+    await user.click(await screen.findByRole("button", { name: "Start export" }));
+    const complete = await screen.findByRole("button", { name: "Close run" });
     await user.click(complete);
 
     expect(complete).toBeDisabled();
     expect(complete).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByRole("region", { name: "Źródło eksportu" })).toHaveTextContent(
-      "Gotowy do weryfikacji",
+    expect(screen.getByRole("region", { name: "Export source" })).toHaveTextContent(
+      "Ready for review",
     );
-    expect(screen.queryByText("Run został zamknięty")).toBeNull();
+    expect(screen.queryByText("The run is closed")).toBeNull();
 
     const completeCall = spy.mock.calls.find(([url]) => String(url).endsWith("/complete"));
     expect(JSON.parse(String(completeCall?.[1]?.body))).toEqual({ expected_version: 4 });
 
     release();
-    expect(await screen.findByText("Run został zamknięty")).toBeInTheDocument();
+    expect(await screen.findByText("The run is closed")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole("region", { name: "Źródło eksportu" })).toHaveTextContent(
-        "Ukończony",
+      expect(screen.getByRole("region", { name: "Export source" })).toHaveTextContent(
+        "Completed",
       );
     });
-    expect(screen.queryByRole("button", { name: "Zamknij run" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close run" })).toBeNull();
     expect(
       spy.mock.calls.some(([url]) => String(url).endsWith("/api/v1/dashboard")),
     ).toBe(true);
@@ -569,15 +569,15 @@ describe("explicit run completion", () => {
       return { status: 200, body: dashboardFixture({ run: reviewRun() }) };
     });
     renderApp(["/exports"]);
-    const start = await screen.findByRole("button", { name: "Uruchom eksport" });
+    const start = await screen.findByRole("button", { name: "Start export" });
     start.focus();
     await user.keyboard("{Enter}");
 
-    const complete = await screen.findByRole("button", { name: "Zamknij run" });
+    const complete = await screen.findByRole("button", { name: "Close run" });
     expect(complete).toBeVisible();
-    expect(screen.getByRole("region", { name: "Bieżący eksport" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Wynik eksportu COCO" })).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Pochodzenie anotacji" })).getByText("OCR"))
+    expect(screen.getByRole("region", { name: "Current export" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "COCO export result" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Annotation sources" })).getByText("OCR"))
       .toBeInTheDocument();
   });
 });

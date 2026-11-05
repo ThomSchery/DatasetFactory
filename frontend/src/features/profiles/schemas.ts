@@ -32,15 +32,15 @@ export const CHARACTER_CLASS_ALPHABET: readonly string[] = [
 const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 
 export const OCR_PAGE_SEGMENTATION_OPTIONS = [
-  { value: "3", label: "3 — Automatyczny układ strony" },
-  { value: "4", label: "4 — Kolumna tekstu o zmiennym rozmiarze" },
-  { value: "6", label: "6 — Jeden zwarty blok tekstu" },
-  { value: "7", label: "7 — Jeden wiersz tekstu" },
-  { value: "8", label: "8 — Jedno słowo" },
-  { value: "10", label: "10 — Jeden znak" },
-  { value: "11", label: "11 — Oddzielne wiersze lub fragmenty tekstu (sprawdzone dla HUD)" },
-  { value: "12", label: "12 — Rzadki tekst z wykrywaniem orientacji" },
-  { value: "13", label: "13 — Surowy pojedynczy wiersz" },
+  { value: "3", label: "3 — Automatic page layout" },
+  { value: "4", label: "4 — A column of text of variable sizes" },
+  { value: "6", label: "6 — One uniform block of text" },
+  { value: "7", label: "7 — One text line" },
+  { value: "8", label: "8 — One word" },
+  { value: "10", label: "10 — One character" },
+  { value: "11", label: "11 — Sparse text lines or fragments (verified for HUD)" },
+  { value: "12", label: "12 — Sparse text with orientation detection" },
+  { value: "13", label: "13 — Raw single line" },
 ] as const;
 
 export const DEFAULT_REGION_PAGE_SEGMENTATION_MODE = 7;
@@ -64,16 +64,16 @@ export function regionOcrValidation(
 ): { allowedChars?: string; pageSegmentationMode?: string } {
   const errors: { allowedChars?: string; pageSegmentationMode?: string } = {};
   if (allowedChars.length === 0) {
-    errors.allowedChars = "Podaj co najmniej jeden dozwolony znak.";
+    errors.allowedChars = "Enter at least one allowed character.";
   } else {
     const available = new Set(characterClasses);
     const unsupported = [...new Set([...allowedChars].filter((char) => !available.has(char)))];
     if (unsupported.length > 0) {
-      errors.allowedChars = `Znaki spoza klas profilu: ${unsupported.join(" ")}. Dodaj klasy albo usuń te znaki z zakresu.`;
+      errors.allowedChars = `Characters outside the profile classes: ${unsupported.join(" ")}. Add the classes or remove these characters from the range.`;
     }
   }
   if (!OCR_PAGE_SEGMENTATION_MODES.has(pageSegmentationMode)) {
-    errors.pageSegmentationMode = "Wybierz obsługiwany układ tekstu.";
+    errors.pageSegmentationMode = "Choose a supported text layout.";
   }
   return errors;
 }
@@ -114,18 +114,18 @@ const boundedName = (missing: string, tooLong: string) =>
  */
 export const regionSchema = z.object({
   id: z.string().min(1),
-  name: boundedName("Nazwij region.", "Nazwa regionu może mieć najwyżej 200 znaków."),
+  name: boundedName("Name the region.", "A region name can have at most 200 characters."),
   // `RegionRequest`: x/y are `ge=0`, width/height are `gt=0`.
   x: z.number().int().min(0),
   y: z.number().int().min(0),
-  width: z.number().int().positive("Region musi mieć dodatnią szerokość."),
-  height: z.number().int().positive("Region musi mieć dodatnią wysokość."),
-  allowed_chars: z.string().min(1, "Podaj co najmniej jeden dozwolony znak."),
+  width: z.number().int().positive("A region needs a positive width."),
+  height: z.number().int().positive("A region needs a positive height."),
+  allowed_chars: z.string().min(1, "Enter at least one allowed character."),
   page_segmentation_mode: z
     .number()
     .int()
     .refine((value) => OCR_PAGE_SEGMENTATION_MODES.has(value), {
-      message: "Wybierz obsługiwany układ tekstu.",
+      message: "Choose a supported text layout.",
     }),
 });
 
@@ -133,11 +133,11 @@ export type RegionValue = z.infer<typeof regionSchema>;
 
 export const categorySchema = z
   .object({
-    name: boundedName("Nazwij klasę.", "Nazwa klasy może mieć najwyżej 200 znaków."),
+    name: boundedName("Name the class.", "A class name can have at most 200 characters."),
     kind: z.enum(["character", "game"]),
   })
   .refine((category) => category.kind !== "character" || CHARACTER_CLASSES.has(category.name), {
-    message: "Klasa bazowa musi być jednym znakiem z alfabetu OCR.",
+    message: "A base class must be one character of the OCR alphabet.",
     path: ["name"],
   });
 
@@ -145,25 +145,25 @@ export type CategoryValue = z.infer<typeof categorySchema>;
 
 export const profileCreateSchema = z
   .object({
-    name: boundedName("Podaj nazwę profilu.", "Nazwa profilu może mieć najwyżej 200 znaków."),
+    name: boundedName("Enter a profile name.", "A profile name can have at most 200 characters."),
     reference_image_path: z
       .string()
       .trim()
       .refine(
         (value) => value === "" || ABSOLUTE_PATH.test(value),
-        "Ścieżka musi być bezwzględna, np. D:\\gry\\hud.png.",
+        "The path must be absolute, e.g. D:\\games\\hud.png.",
       ),
     // `Field(min_length=1)` on both collections, and `regions_required` /
     // `categories_required` in the definition engine behind it.
-    regions: z.array(regionSchema).min(1, "Zaznacz przynajmniej jeden region HUD na obrazie."),
-    categories: z.array(categorySchema).min(1, "Dodaj przynajmniej jedną klasę."),
+    regions: z.array(regionSchema).min(1, "Draw at least one HUD region on the image."),
+    categories: z.array(categorySchema).min(1, "Add at least one class."),
   })
   .superRefine((profile, ctx) => {
     const duplicateRegion = hasDuplicateNames(profile.regions.map((region) => region.name));
     if (duplicateRegion !== null) {
       ctx.addIssue({
         code: "custom",
-        message: "Nazwy regionów muszą być unikalne w profilu.",
+        message: "Region names must be unique within the profile.",
         path: ["regions"],
       });
     }
@@ -171,7 +171,7 @@ export const profileCreateSchema = z
     if (duplicateCategory !== null) {
       ctx.addIssue({
         code: "custom",
-        message: "Nazwy klas muszą być unikalne w profilu.",
+        message: "Class names must be unique within the profile.",
         path: ["categories"],
       });
     }

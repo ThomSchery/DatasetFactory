@@ -1,0 +1,73 @@
+/*
+ * Figma `sidebar` 1248:991: `surface/panel` with a `border/default` edge and a
+ * column of 24 px icons 24 px apart. The strip is 56 px (24 + 2 × 16).
+ */
+.df-side-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--element-gap-lg);
+  padding: var(--element-padding-y-lg) var(--element-padding-y-lg);
+  background: var(--color-surface-neutral-default);
+}
+
+.df-side-nav[hidden],
+.df-side-nav-drawer[hidden] {
+  display: none;
+}
+
+.df-side-nav--strip {
+  position: sticky;
+  inset-block-start: 0;
+  width: var(--sidenav-width);
+  height: calc(100vh - var(--topbar-height));
+  border-inline-end: var(--border-width-default) solid var(--color-stroke-panel-default);
+}
+
+.df-side-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--element-gap-lg);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+.df-side-nav__collapse.df-button {
+  width: var(--control-height-md);
+  min-height: var(--control-height-md);
+  padding: var(--size-none);
+}
+
+/* OVERLAY-01/04: the drawer is a layer above the page, with a scrim behind it
+   and an outline and elevation of its own. */
+.df-side-nav-drawer {
+  position: fixed;
+  z-index: 4;
+  inset: 0;
+}
+
+.df-side-nav-drawer__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--color-overlay-scrim);
+}
+
+.df-side-nav--drawer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  align-items: stretch;
+  width: min(calc(var(--size-3xl) * 3), calc(100vw - var(--size-xxl)));
+  padding: var(--element-padding-y-lg) var(--element-padding-x-md);
+  border-inline-end: var(--border-width-default) solid var(--color-stroke-panel-default);
+  box-shadow: var(--shadow-elevation-high);
+}
+
+.df-side-nav--drawer .df-side-nav__collapse {
+  align-self: flex-start;
+}
+
+.df-side-nav--drawer .df-side-nav__list {
+  align-items: stretch;
+}

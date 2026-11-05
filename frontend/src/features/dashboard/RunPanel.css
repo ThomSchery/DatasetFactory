@@ -1,31 +1,37 @@
-.df-run-panel__progress,
-.df-run-panel__failure,
-.df-run-panel__error,
-.df-run-panel__no-actions {
-  margin-top: var(--size-md);
-}
-
-.df-run-panel__code {
-  margin: var(--size-xs) var(--size-none) var(--size-none);
-  color: var(--color-text-weak-default);
+.df-run-panel {
+  display: grid;
+  gap: var(--element-gap-md);
+  min-width: 0;
+  padding-block-start: var(--element-gap-lg);
+  border-block-start: var(--border-width-default) solid var(--color-stroke-panel-default);
   font-size: var(--font-size-xs);
 }
 
-.df-run-panel__code code {
-  font-family: var(--font-family-mono);
+.df-run-panel__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--element-gap-md);
 }
 
-.df-run-panel__no-actions {
-  margin-bottom: var(--size-none);
+.df-run-panel__title {
   color: var(--color-text-weak-default);
-  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
 }
 
-/* SPACING-01: the control group is separated from the data above it by more
-   space than the controls have between them. */
+.df-run-panel__meta {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  overflow-wrap: anywhere;
+}
+
 .df-run-panel__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--size-xs);
-  margin-top: var(--size-lg);
+  gap: var(--element-gap-md);
+}
+
+.df-run-panel__actions .df-button {
+  flex: 1 1 auto;
 }

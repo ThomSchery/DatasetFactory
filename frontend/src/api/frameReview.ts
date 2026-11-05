@@ -13,10 +13,10 @@ export const REVIEW_STATUS_FILTER_OPTIONS: readonly {
   label: string;
   value: ReviewStatusFilter;
 }[] = [
-  { label: "Wszystkie", value: "all" },
-  { label: "Oczekujące", value: "pending" },
-  { label: "Zaakceptowane", value: "accepted" },
-  { label: "Odrzucone", value: "rejected" },
+  { label: "All", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "Accepted", value: "accepted" },
+  { label: "Rejected", value: "rejected" },
 ];
 
 const REVIEW_STATUSES = new Set<ReviewStatus>(["pending", "accepted", "rejected"]);
@@ -38,17 +38,17 @@ export interface StatusPresentation {
 }
 
 const REVIEW_STATUS_COPY: Readonly<Record<ReviewStatus, StatusPresentation>> = {
-  pending: { label: "Oczekująca", tone: "brand" },
-  accepted: { label: "Zaakceptowana", tone: "success" },
-  rejected: { label: "Odrzucona", tone: "error" },
+  pending: { label: "Pending", tone: "brand" },
+  accepted: { label: "Accepted", tone: "success" },
+  rejected: { label: "Rejected", tone: "error" },
 };
 
 const FRAME_STAGE_COPY: Readonly<Record<FrameStage, StatusPresentation>> = {
-  pending: { label: "Oczekuje", tone: "neutral" },
-  sampled: { label: "Spróbkowana", tone: "neutral" },
-  cropped: { label: "Regiony HUD", tone: "neutral" },
-  ocr_complete: { label: "OCR ukończony", tone: "brand" },
-  review_pending: { label: "Gotowa do weryfikacji", tone: "brand" },
+  pending: { label: "Waiting", tone: "neutral" },
+  sampled: { label: "Sampled", tone: "neutral" },
+  cropped: { label: "HUD regions", tone: "neutral" },
+  ocr_complete: { label: "OCR complete", tone: "brand" },
+  review_pending: { label: "Ready for review", tone: "brand" },
 };
 
 export function describeReviewStatus(status: ReviewStatus): StatusPresentation {
@@ -92,10 +92,10 @@ export function isActiveAnnotation(annotation: Annotation): boolean {
 export function decisionLabel(decision: ReviewDecision): string {
   switch (decision) {
     case "accept":
-      return "Zaakceptuj klatkę";
+      return "Accept frame";
     case "reject":
-      return "Odrzuć klatkę";
+      return "Reject frame";
     case "reopen":
-      return "Otwórz ponownie";
+      return "Reopen";
   }
 }

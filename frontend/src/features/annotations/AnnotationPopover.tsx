@@ -282,16 +282,17 @@ export function AnnotationPopover({
     <div
       aria-label={
         annotation === undefined
-          ? "Anotacja bez zaznaczenia"
+          ? "Annotation — nothing selected"
           : draft
-            ? "Wybierz klasę dla nowego bbox"
-            : `Edytuj anotację ${categoryName}`
+            ? "Choose a class for the new box"
+            : `Edit annotation ${categoryName}`
       }
       className="df-annotation-popover"
       data-annotation-popover="panel"
       ref={popoverRef}
       role={annotation === undefined ? "region" : "dialog"}
     >
+      {annotation === undefined ? null : (
       <header className="df-annotation-popover__header">
         {/*
           A box saved a moment ago by the draw gesture is still "the new box" to
@@ -299,7 +300,7 @@ export function AnnotationPopover({
           heading follows the moment rather than the persistence state.
         */}
         <strong>
-          {draft || justDrawn ? "Nowa anotacja · box" : "Anotacja"}
+          {draft || justDrawn ? "New box" : categoryName}
         </strong>
         {/*
           FE-017 B struck the `OCR`/`Ręczna` badge in both places the operator
@@ -315,61 +316,69 @@ export function AnnotationPopover({
         */}
         {autoAssignedCategoryName === undefined &&
         (annotation === undefined ||
-          annotation.source !== "ocr" ||
-          annotation.confidence === null) ? null : (
+          annotation.source !== "ocr") ? null : (
           <span className="df-annotation-popover__badges">
             {autoAssignedCategoryName === undefined ? null : (
-              <StatusBadge srLabel="Klasa wybrana automatycznie:" tone="brand">
-                przypisano: {autoAssignedCategoryName}
+              <StatusBadge srLabel="Class chosen automatically:" tone="brand">
+                assigned: {autoAssignedCategoryName}
               </StatusBadge>
             )}
+            {/* FE-022: an OCR proposal is a proposal until a person accepts it
+                — the disclosure CONTEXT.md requires, here on the box itself. */}
+            {annotation !== undefined &&
+            annotation.source === "ocr" &&
+            annotation.status === "proposed" ? (
+              <StatusBadge srLabel="OCR proposal:" tone="warning">
+                Pending
+              </StatusBadge>
+            ) : null}
             {annotation !== undefined &&
             annotation.source === "ocr" &&
             annotation.confidence !== null ? (
-              <StatusBadge srLabel="Confidence OCR:" tone="neutral">
+              <StatusBadge srLabel="OCR confidence:" tone="neutral">
                 {Math.round(annotation.confidence * 100)}%
               </StatusBadge>
             ) : null}
           </span>
         )}
       </header>
+      )}
 
       <GroupedOptionList
         autoFocus={annotation !== undefined}
-        defaultOpen
-        disabled={disabled}
+        disabled={disabled || annotation === undefined}
         emptyMessage={
           draft
-            ? "Brak takiej klasy w profilu. Utwórz ją i przypisz albo porzuć box."
-            : "Brak takiej klasy w profilu. Utwórz ją i przypisz poniżej."
+            ? "The profile has no such class. Create and assign it, or discard the box."
+            : "The profile has no such class. Create and assign it below."
         }
-        filterLabel="Klasa"
+        filterLabel="Class"
         filterMaxCodePoints={200}
         filterValue={categoryQuery}
         filterAction={
           annotation !== undefined && canCreateCategory ? (
             <Button
-              aria-label={`Utwórz i przypisz klasę „${proposedCategory.name}”`}
+              aria-label={`Create and assign class “${proposedCategory.name}”`}
               className="df-annotation-popover__create-class"
               disabled={disabled}
               loading={busyKey === "create-category"}
-              loadingLabel="Tworzenie i przypisywanie klasy…"
+              loadingLabel="Creating and assigning the class…"
               onClick={() => {
                 onCreateCategory(proposedCategory);
               }}
               size="sm"
               variant="secondary"
             >
-              <span>Utwórz i przypisz klasę</span>
+              <span>Create and assign class</span>
               <span aria-hidden="true" className="df-annotation-popover__create-class-name">
-                „{proposedCategory.name}”
+                “{proposedCategory.name}”
               </span>
             </Button>
           ) : null
         }
         groups={classGroups}
         key={annotation?.id ?? "empty"}
-        label="Klasy profilu"
+        label="Profile classes"
         mode="single"
         onChange={(selection) => {
           const next = selection[0] ?? "";
@@ -399,6 +408,7 @@ export function AnnotationPopover({
 
       {categoryError === null ? null : <InlineError message={categoryError} />}
 
+      {annotation === undefined ? null : (
       <div className="df-annotation-popover__actions">
         <Button
           disabled={disabled || annotation === undefined}
@@ -413,7 +423,7 @@ export function AnnotationPopover({
             is drawn (FE-017 D), and `FrameEditor.removeAnnotation` sends the
             versioned `DELETE` for it.
           */}
-          {draft || justDrawn ? "Porzuć box" : "Usuń"}
+          {draft || justDrawn ? "Discard box" : "Delete"}
         </Button>
         <Button
           /*
@@ -423,7 +433,7 @@ export function AnnotationPopover({
            * name contains the visible label, as WCAG 2.5.3 requires, and then
            * says which of the two this is.
            */
-          aria-label={draft ? "Zapisz klasę" : "Zmień nazwę: przypisz inną klasę do tego boxa"}
+          aria-label={draft ? "Save class" : "Change class: assign another class to this box"}
           disabled={disabled || annotation === undefined || form.categoryId === ""}
           loading={
             annotation !== undefined &&
@@ -434,17 +444,18 @@ export function AnnotationPopover({
           }}
           size="sm"
         >
-          {draft ? "Zapisz" : "Zmień nazwę"}
+          {draft ? "Save class" : "Change class"}
         </Button>
       </div>
+      )}
 
       {!hasUnsavedGeometry ? null : (
         <p className="df-annotation-popover__unsaved">
-          <StatusBadge srLabel="Stan geometrii:" tone="warning">
-            Niezapisane
+          <StatusBadge srLabel="Geometry:" tone="warning">
+            Unsaved
           </StatusBadge>
           <span>
-            Przesunięcie bboxa nie jest jeszcze zapisane. Naciśnij <kbd>Enter</kbd>, aby je zapisać.
+            The box move is not saved yet. Press <kbd>Enter</kbd> to save it.
           </span>
         </p>
       )}

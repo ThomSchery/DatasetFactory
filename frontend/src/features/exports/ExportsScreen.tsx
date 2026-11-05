@@ -29,25 +29,23 @@ import "./ExportsScreen.css";
 
 function actionError(error: unknown) {
   const failure = describeApiError(error);
-  return <InlineError message={`${failure.message} ${failure.action} Kod: ${failure.code}.`} />;
+  return <InlineError message={`${failure.message} ${failure.action} Code: ${failure.code}.`} />;
 }
 
 function RunSummary({ run }: { run: PipelineRun }) {
   const status = describeRunStatus(run.status);
   return (
     <Panel
-      aside={<StatusBadge srLabel="Status runu:" tone={status.tone}>{status.label}</StatusBadge>}
-      description="Eksport obejmie wyłącznie klatki zaakceptowane w tym runie."
-      eyebrow="Run"
-      title="Źródło eksportu"
+      aside={<StatusBadge srLabel="Run status:" tone={status.tone}>{status.label}</StatusBadge>}
+      title="Export source"
     >
       <DataList
         items={[
-          { label: "ID runu", value: <code className="df-exports__path">{run.id}</code> },
-          { label: "Wersja CAS", value: run.version },
-          { label: "Rewizja weryfikacji", value: run.review_revision },
+          { label: "Run id", value: <code className="df-exports__path">{run.id}</code> },
+          { label: "CAS version", value: run.version },
+          { label: "Review revision", value: run.review_revision },
           {
-            label: "Klatki ukończone / zaplanowane",
+            label: "Frames finished / planned",
             value: `${String(run.completed_frames)} / ${String(run.total_frames)}`,
           },
         ]}
@@ -85,30 +83,28 @@ function ExportStatusPanel({
 
   return (
     <Panel
-      aside={<StatusBadge srLabel="Status eksportu:" tone={presentation.tone}>{presentation.label}</StatusBadge>}
-      description="Status jest odpytywany wyłącznie do zakończenia lub niepowodzenia eksportu."
-      eyebrow="Eksport"
-      title="Bieżący eksport"
+      aside={<StatusBadge srLabel="Export status:" tone={presentation.tone}>{presentation.label}</StatusBadge>}
+      title="Current export"
     >
       <div className="df-exports__status">
         <DataList
           items={[
-            { label: "ID eksportu", value: <code className="df-exports__path">{activeExport.id}</code> },
-            { label: "Rewizja wejścia", value: activeExport.input_revision },
+            { label: "Export id", value: <code className="df-exports__path">{activeExport.id}</code> },
+            { label: "Input revision", value: activeExport.input_revision },
           ]}
           layout="columns"
         />
 
         {terminalFailure === null ? null : (
           <Notice title={terminalFailure.message} tone="error">
-            {terminalFailure.action} Kod: {activeExport.error_code ?? "unknown_error"}.
+            {terminalFailure.action} Code: {activeExport.error_code ?? "unknown_error"}.
           </Notice>
         )}
 
         {runClosed ? (
-          <Notice title="Run został zamknięty">
-            Backend potwierdził terminalny status runu. Eksport i jego manifest pozostają
-            niezmienione.
+          <Notice title="The run is closed">
+            The backend confirmed the final run status. The export and its manifest stay
+            unchanged.
           </Notice>
         ) : null}
 
@@ -121,17 +117,17 @@ function ExportStatusPanel({
               onClick={onNewExport}
               variant="secondary"
             >
-              Skonfiguruj nowy eksport
+              Configure a new export
             </Button>
           ) : null}
           {canComplete ? (
             <Button
               disabled={busy}
               loading={completing}
-              loadingLabel="Zamykanie runu…"
+              loadingLabel="Closing the run…"
               onClick={onComplete}
             >
-              Zamknij run
+              Close run
             </Button>
           ) : null}
         </div>
@@ -176,8 +172,8 @@ export function ExportsScreen() {
   if (invalidExportLocator) {
     return (
       <FatalError
-        description="Parametr export_id musi zawierać niepusty identyfikator eksportu. Otwórz ekran bez parametru, aby odtworzyć najnowszy eksport aktywnego runu."
-        title="Nieprawidłowy identyfikator eksportu"
+        description="The export_id parameter must hold a non-empty export id. Open the screen without it to restore the latest export of the active run."
+        title="Invalid export id"
       />
     );
   }
@@ -189,12 +185,12 @@ export function ExportsScreen() {
         <FatalError
           description={`${failure.message} ${failure.action}`}
           onRetry={() => void exportQuery.refetch()}
-          title="Nie udało się wczytać statusu eksportu"
+          title="The export status could not be loaded"
         />
       );
     }
     if (exportQuery.isPending || exportQuery.data === undefined) {
-      return <Loading label="Ładowanie statusu eksportu…" />;
+      return <Loading label="Loading the export status…" />;
     }
     if (runQuery.isError) {
       const failure = describeApiError(runQuery.error);
@@ -202,17 +198,17 @@ export function ExportsScreen() {
         <FatalError
           description={`${failure.message} ${failure.action}`}
           onRetry={() => void runQuery.refetch()}
-          title="Nie udało się odświeżyć runu"
+          title="The run could not be refreshed"
         />
       );
     }
     if (runQuery.isPending || runQuery.data === undefined) {
-      return <Loading label="Ładowanie runu eksportu…" />;
+      return <Loading label="Loading the export run…" />;
     }
   }
 
   if (!hasExportLocator && dashboard.isPending) {
-    return <Loading label="Ładowanie runu do eksportu…" />;
+    return <Loading label="Loading the run to export…" />;
   }
   if (!hasExportLocator && dashboard.isError) {
     const failure = describeApiError(dashboard.error);
@@ -220,7 +216,7 @@ export function ExportsScreen() {
       <FatalError
         description={`${failure.message} ${failure.action}`}
         onRetry={() => void dashboard.refetch()}
-        title="Nie udało się wczytać źródła eksportu"
+        title="The export source could not be loaded"
       />
     );
   }
@@ -231,8 +227,8 @@ export function ExportsScreen() {
   if (run === null) {
     return (
       <Empty
-        description="Nie ma aktywnego runu do eksportu. Uruchom przetwarzanie materiału i zaakceptuj przynajmniej jedną klatkę."
-        title="Brak runu do eksportu"
+        description="There is no active run to export. Run a material and accept at least one frame."
+        title="No run to export"
       />
     );
   }
@@ -243,17 +239,17 @@ export function ExportsScreen() {
       <FatalError
         description={`${failure.message} ${failure.action}`}
         onRetry={() => void latestExportQuery.refetch()}
-        title="Nie udało się odtworzyć ostatniego eksportu"
+        title="The latest export could not be restored"
       />
     );
   }
 
   if (!hasExportLocator && !startingFresh && latestExportQuery.isPending) {
-    return <Loading label="Sprawdzanie ostatniego eksportu…" />;
+    return <Loading label="Checking the latest export…" />;
   }
 
   if (!hasExportLocator && !startingFresh && latestExportQuery.data !== null) {
-    return <Loading label="Przywracanie ostatniego eksportu…" />;
+    return <Loading label="Restoring the latest export…" />;
   }
 
   const startExport = () => {
@@ -265,11 +261,11 @@ export function ExportsScreen() {
         values.some((value) => !Number.isFinite(value) || value < 0 || value > 100) ||
         Math.abs(values.reduce((sum, value) => sum + value, 0) - 100) > Number.EPSILON
       ) {
-        setFormError("Proporcje train, valid i test muszą być liczbami od 0 do 100 i razem dawać 100%.");
+        setFormError("Train, valid and test must be numbers from 0 to 100 that add up to 100%.");
         return;
       }
       if (!Number.isSafeInteger(seedValue)) {
-        setFormError("Ziarno podziału musi być liczbą całkowitą.");
+        setFormError("The split seed must be a whole number.");
         return;
       }
       request = {
@@ -296,15 +292,13 @@ export function ExportsScreen() {
 
       {!hasExportLocator ? (
         <Panel
-          description="Backend utworzy niezmienną migawkę bieżącej rewizji w wybranym wariancie COCO."
-          eyebrow="Eksport"
-          title="Nowy eksport"
+          title="New export"
         >
           <div className="df-exports__start">
             <SelectField
-              description="Wariant DatasetFactory zachowuje dotychczasowy układ. Roboflow tworzy katalogi train, valid i test."
+              description="The DatasetFactory variant keeps the existing layout. Roboflow creates train, valid and test folders."
               disabled={busy}
-              label="Wariant eksportu"
+              label="Export variant"
               onChange={(event) => {
                 setFormat(event.target.value as ExportFormat);
                 setFormError(null);
@@ -363,9 +357,9 @@ export function ExportsScreen() {
                   />
                 </div>
                 <TextField
-                  description="Ten sam run, podział i ziarno dają ten sam przydział klatek."
+                  description="The same run, split and seed give the same frame assignment."
                   disabled={busy}
-                  label="Ziarno podziału"
+                  label="Split seed"
                   onChange={(event) => {
                     setSeed(event.target.value);
                     setFormError(null);
@@ -378,15 +372,15 @@ export function ExportsScreen() {
                 {formError === null ? null : <InlineError message={formError} />}
               </div>
             ) : null}
-            <p>Ścieżkę wyniku wybiera backend w obrębie workspace. Nie podajesz jej ręcznie.</p>
+            <p>The backend chooses the output path inside the workspace.</p>
             {createMutation.error === null ? null : actionError(createMutation.error)}
             <Button
               disabled={busy}
               loading={createMutation.isPending}
-              loadingLabel="Uruchamianie eksportu…"
+              loadingLabel="Starting the export…"
               onClick={startExport}
             >
-              Uruchom eksport
+              Start export
             </Button>
           </div>
         </Panel>
@@ -406,7 +400,7 @@ export function ExportsScreen() {
           {isCompletedExportStatus(activeExport.status) ? (
             <ExportManifestPanel completedExport={activeExport} />
           ) : isRunningExportStatus(activeExport.status) ? (
-            <Loading label="Eksport jest przygotowywany…" />
+            <Loading label="Preparing the export…" />
           ) : null}
         </>
       )}

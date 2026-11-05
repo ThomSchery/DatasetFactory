@@ -47,14 +47,14 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
   const groups = classGroups(annotations, categories);
   if (groups.length === 0) {
     return (
-      <p className="df-review-annotations__empty">
-        Ta klatka nie ma aktywnych anotacji. Narysuj bbox albo odrzuć klatkę.
+      <p className="df-review-annotations__empty df-review-classes">
+        No active annotations on this frame. Draw a box or reject the frame.
       </p>
     );
   }
 
   return (
-    <ol aria-label="Klasy na bieżącej klatce" className="df-review-classes">
+    <ol aria-label="Classes on this frame" className="df-review-classes">
       {groups.map((group) => {
         const selectedIndex = group.annotations.findIndex((item) => item.id === selectedId);
         const selected = selectedIndex >= 0;
@@ -64,7 +64,7 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
         return (
           <li className="df-review-classes__item" data-selected={selected || undefined} key={group.categoryId}>
             <Button
-              aria-label={`Klasa ${label}, ${group.annotations.length} anotacji`}
+              aria-label={`Class ${label}, ${group.annotations.length} annotations`}
               aria-pressed={selected}
               data-annotation-selection-target={nextAnnotation?.id}
               disabled={disabled}
@@ -74,11 +74,11 @@ export function ClassList({ annotations, categories, disabled, onSelect, selecte
                 }
               }}
               size="sm"
-              variant={selected ? "primary" : "secondary"}
+              variant="muted"
             >
               <span className="df-review-classes__name">{label}</span>
-              <span aria-label="Liczba anotacji" className="df-review-classes__count">
-                {group.annotations.length}
+              <span aria-label="Annotation count" className="df-review-classes__count">
+                ({group.annotations.length})
               </span>
             </Button>
           </li>

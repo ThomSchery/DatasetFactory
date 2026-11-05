@@ -18,7 +18,7 @@ describe("copyOptionGroups", () => {
     expect(copyOptionGroups(CATEGORIES)).toEqual([
       {
         id: "game",
-        label: "Pola HUD (gra)",
+        label: "Custom",
         options: [
           { id: "score", label: "Score" },
           { id: "timer", label: "Timer" },
@@ -26,15 +26,15 @@ describe("copyOptionGroups", () => {
       },
       {
         id: "digits",
-        label: "Liczby",
+        label: "Numbers",
         options: [
           { id: "zero", label: "0" },
           { id: "one", label: "1" },
           { id: "two", label: "2" },
         ],
       },
-      { id: "letters", label: "Litery", options: [{ id: "letter-a", label: "A" }] },
-      { id: "symbols", label: "Symbole", options: [{ id: "dash", label: "-" }] },
+      { id: "letters", label: "Letters", options: [{ id: "letter-a", label: "A" }] },
+      { id: "symbols", label: "Symbols", options: [{ id: "dash", label: "-" }] },
     ]);
   });
 

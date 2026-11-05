@@ -14,32 +14,32 @@ describe("TextField", () => {
     render(
       <TextField
         description="Podaj pełną ścieżkę lokalną."
-        error="Ścieżka musi być bezwzględna."
-        label="Ścieżka pliku wideo"
+        error="The path must be absolute."
+        label="Video file path"
       />,
     );
 
-    const input = screen.getByLabelText("Ścieżka pliku wideo");
+    const input = screen.getByLabelText("Video file path");
     expect(input).toHaveAccessibleDescription(
-      "Podaj pełną ścieżkę lokalną. Ścieżka musi być bezwzględna.",
+      "Podaj pełną ścieżkę lokalną. The path must be absolute.",
     );
     expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("alert")).toHaveTextContent("Ścieżka musi być bezwzględna.");
+    expect(screen.getByRole("alert")).toHaveTextContent("The path must be absolute.");
   });
 
   it("is valid and describes only the help text when there is no error", () => {
-    render(<TextField description="Domyślnie 1000 ms." label="Interwał" />);
+    render(<TextField description="Domyślnie 1000 ms." label="Sample rate" />);
 
-    const input = screen.getByLabelText("Interwał");
+    const input = screen.getByLabelText("Sample rate");
     expect(input).not.toHaveAttribute("aria-invalid");
     expect(input).toHaveAccessibleDescription("Domyślnie 1000 ms.");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("forwards native input attributes", () => {
-    render(<TextField disabled inputMode="numeric" label="Interwał" value="1000" readOnly />);
+    render(<TextField disabled inputMode="numeric" label="Sample rate" value="1000" readOnly />);
 
-    const input = screen.getByLabelText("Interwał");
+    const input = screen.getByLabelText("Sample rate");
     expect(input).toBeDisabled();
     expect(input).toHaveAttribute("inputmode", "numeric");
     expect(input).toHaveValue("1000");
@@ -57,7 +57,7 @@ describe("SelectField", () => {
       <SelectField
         label="Materiał"
         options={options}
-        placeholder="Wybierz materiał"
+        placeholder="Choose a source file"
         value=""
         onChange={() => undefined}
       />,
@@ -65,14 +65,14 @@ describe("SelectField", () => {
 
     const select = screen.getByLabelText("Materiał");
     expect(select).toHaveValue("");
-    expect(screen.getByRole("option", { name: "Wybierz materiał" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Choose a source file" })).toBeDisabled();
     expect(screen.getAllByRole("option")).toHaveLength(3);
   });
 
   it("marks itself invalid and announces the message", () => {
     render(
       <SelectField
-        error="Wybierz materiał."
+        error="Choose a source file."
         label="Materiał"
         options={options}
         value=""
@@ -81,6 +81,6 @@ describe("SelectField", () => {
     );
 
     expect(screen.getByLabelText("Materiał")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("alert")).toHaveTextContent("Wybierz materiał.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a source file.");
   });
 });

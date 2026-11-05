@@ -28,6 +28,38 @@
   --control-height-md: 40px;
   --control-height-lg: 48px;
   --measure-copy: 65ch;
+  /* FE-022 — Figma 05.11 element tokens. `element/padding/L-R/L|M|S` = 16/8/6,
+     `element/padding/U-D/L|M` = 8/4, `element/gap/L|M` = 8/6, and the page
+     margin `site/padding/XS` = 16 at every width. Decision D07 (2026-11-05)
+     takes these over the 8-point rounding FE-021 applied (GRID-01 deviation,
+     recorded in docs/tickets/FE-022/log.md). */
+  --site-padding: 16px;
+  --element-padding-x-lg: 16px;
+  --element-padding-x-md: 8px;
+  --element-padding-x-sm: 6px;
+  --element-padding-y-lg: 8px;
+  --element-padding-y-md: 4px;
+  --element-gap-lg: 8px;
+  --element-gap-md: 6px;
+  /* Figma geometry: 44 px top bar, 24 px icons, 34–42 px fields, the 56 px
+     icon strip (FE-022), and the fixed left columns of the three workspaces. */
+  --topbar-height: 44px;
+  --icon-size: 24px;
+  --sidenav-width: 56px;
+  --field-height: 34px;
+  --field-height-lg: 42px;
+  --list-row-height: 35px;
+  --class-row-height: 40px;
+  --workspace-profile-column: 247px;
+  --workspace-run-column: 205px;
+  --workspace-review-column: 261px;
+  --workspace-switch-width: 361px;
+  /* Figma picture fields: Profile 328 × 279 (phone) and 479 px tall in the
+     768–1200 panel; Review 511 (phone) and 543 px tall. */
+  --profile-image-height-sm: 279px;
+  --profile-image-height-md: 479px;
+  --review-image-height-sm: 511px;
+  --review-image-height-md: 543px;
   /* The width the design harness renders a component gallery at. The product
      itself has no minimum width any more: FE-021 replaced `WidthGuard` with a
      layout that works from 360 px up. */
@@ -41,6 +73,7 @@
   --font-family-sans: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-family-ui: var(--font-family-sans);
   --font-family-mono: "JetBrains Mono", "Cascadia Mono", "Segoe UI Mono", ui-monospace, monospace;
+  --font-weight-light: 300; /* Figma: navigation, buttons and field labels. */
   --font-weight-regular: 400;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
@@ -94,6 +127,8 @@
   --color-surface-neutral-hover: hsl(216 18% 92% / 0.06);
   --color-surface-transparent: hsl(220 11% 15% / 0);
   --color-stroke-weak-default: hsl(219 15% 26%); /* border/subtle #383F4C */
+  /* FE-022: the outline every Figma panel, list and tile carries. */
+  --color-stroke-panel-default: hsl(219 15% 35%); /* border/default #4B5465 */
   /*
    * BORDER-03/COLOR-08 — the outline of an interactive control, which has to
    * clear 3:1 against every surface a control can sit on. Figma's

@@ -53,7 +53,7 @@ export function CollapsibleGroup({
         <Button
           aria-controls={contentId}
           aria-expanded={open}
-          aria-label={`${open ? "Zwiń" : "Rozwiń"} grupę ${label}`}
+          aria-label={`${open ? "Collapse" : "Expand"} group ${label}`}
           className="df-collapsible-group__toggle"
           disabled={toggleDisabled}
           onClick={onToggle}

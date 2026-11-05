@@ -8,8 +8,8 @@ import { Panel } from "./Panel";
 describe("Panel", () => {
   it("is a region labelled by its own heading", () => {
     render(
-      <Panel description="Stan zależności lokalnych." eyebrow="System" title="Stan systemu">
-        <p>Treść</p>
+      <Panel title="Stan systemu">
+        <p>Stan zależności lokalnych.</p>
       </Panel>,
     );
 

@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBlocker } from "react-router";
+import { useBlocker, useNavigate } from "react-router";
 
 import {
-  activateProfile,
   CHARACTER_CLASS_ALPHABET,
   categoriesInUseFromError,
   createProfile,
@@ -19,15 +18,15 @@ import {
   saveProfileDefinition,
 } from "../../api";
 import type { GameProfile } from "../../api";
+import { runSetupPath } from "../../app/navigation";
 import { Button } from "../../components/common/Button";
 import { Dialog } from "../../components/common/Dialog";
+import { FilePickerTile } from "../../components/common/FilePickerTile";
 import { Icon } from "../../components/common/Icon";
-import { Notice } from "../../components/common/Notice";
-import { Panel } from "../../components/common/Panel";
 import { RegionOverlay, type OverlayShape, type SourceRect, type SourceSize } from "../../components/common/RegionOverlay";
-import { StatusBadge } from "../../components/common/StatusBadge";
 import { TextField } from "../../components/common/TextField";
-import { Empty, FatalError, InlineError, Loading } from "../../components/common/UiStates";
+import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
+import { useLocalFilePicker } from "../files";
 import { AnnotationsPanel } from "./AnnotationsPanel";
 import { ClassGroupsPanel } from "./ClassGroupsPanel";
 import { ProfileSearchField } from "./ProfileSearchField";
@@ -62,7 +61,10 @@ import "./ProfileWorkspaceScreen.css";
  *     replacing the screenshot while dirty asks first.
  */
 
-type PendingSwitch = { kind: "profile"; profileId: string } | { kind: "new" } | { kind: "image" };
+type PendingSwitch =
+  | { kind: "profile"; profileId: string }
+  | { kind: "new" }
+  | { kind: "image"; path: string };
 
 export interface ProfileWorkspaceScreenProps {
   /** Opens on an empty draft instead of the active profile. */
@@ -71,6 +73,7 @@ export interface ProfileWorkspaceScreenProps {
 
 export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspaceScreenProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [draft, setDraft] = useState<ProfileDraft>(emptyDraft);
   const [baseline, setBaseline] = useState<ProfileDraft>(draft);
@@ -84,7 +87,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   const [sketchName, setSketchName] = useState("");
   const [sketchError, setSketchError] = useState<string | undefined>(undefined);
   const [source, setSource] = useState<SourceSize | null>(null);
-  const [imagePath, setImagePath] = useState("");
+  const [changeImageOpen, setChangeImageOpen] = useState(false);
   const [pending, setPending] = useState<PendingSwitch | null>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState("");
@@ -162,13 +165,6 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     },
   });
 
-  const activate = useMutation({
-    mutationFn: activateProfile,
-    onSuccess: async () => {
-      await invalidateFor(queryClient, { type: "profile-selected" });
-    },
-  });
-
   const preview = useMutation({
     mutationFn: (path: string) => createReferencePreview({ reference_image_path: path }),
     onSuccess: (result) => {
@@ -191,10 +187,11 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
       setSelectedRegionKey(null);
       setSketch(null);
       setSource({ width: result.width, height: result.height });
+      setChangeImageOpen(false);
     },
   });
 
-  const busy = save.isPending || saveAs.isPending || preview.isPending || activate.isPending;
+  const busy = save.isPending || saveAs.isPending || preview.isPending;
   // A detail request can finish after the operator starts interacting. Until
   // its target is loaded, the previous draft must not be editable.
   const editingDisabled = busy || (!startedBlank && profiles.isPending) ||
@@ -233,7 +230,6 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     setPending(null);
     save.reset();
     saveAs.reset();
-    activate.reset();
     preview.reset();
     if (next.kind === "profile") {
       if (next.profileId === openProfileId) {
@@ -257,15 +253,15 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
       setSelectedRegionKey(null);
       setSketch(null);
       setSource(null);
-      setImagePath("");
       preview.reset();
       return;
     }
-    const path = imagePath.trim();
-    if (path !== "") {
-      preview.mutate(path);
-    }
+    preview.mutate(next.path);
   }
+
+  const imagePicker = useLocalFilePicker("image", (path) => {
+    requestSwitch({ kind: "image", path });
+  });
 
   function acceptSketch() {
     if (sketch === null) {
@@ -273,11 +269,11 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     }
     const name = sketchName.trim();
     if (name === "") {
-      setSketchError("Nazwij region, zanim go zatwierdzisz.");
+      setSketchError("Name the region before accepting it.");
       return;
     }
     if (hasRegionNamed(draft, name)) {
-      setSketchError("Region o tej nazwie już istnieje w tym profilu.");
+      setSketchError("A region with this name already exists in this profile.");
       return;
     }
     const next = withAcceptedSketch(draft, sketch, name);
@@ -310,7 +306,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           {
             ...(geometryPreview?.id === SKETCH_ID ? geometryPreview.rect : sketch),
             id: SKETCH_ID,
-            label: "Nowy region, czeka na nazwę",
+            label: "New region, waiting for a name",
             tone: "draft" as const,
           },
         ]),
@@ -334,112 +330,204 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
     if (busy) return;
     const name = saveAsName.trim();
     if (name === "") {
-      setSaveAsError("Podaj nazwę nowego profilu.");
+      setSaveAsError("Enter a name for the new profile.");
       return;
     }
     const taken = profiles.data?.some(
       (profile) => profile.name.trim().toLowerCase() === name.toLowerCase(),
     );
     if (taken === true) {
-      setSaveAsError("Profil o tej nazwie już istnieje. Wybierz inną nazwę.");
+      setSaveAsError("A profile with this name already exists. Choose another name.");
       return;
     }
     if (draft.regions.length === 0) {
-      setSaveAsError("Narysuj przynajmniej jeden region, zanim zapiszesz profil.");
+      setSaveAsError("Draw at least one region before saving the profile.");
       return;
     }
     saveAs.mutate({ current: draft, name });
   }
 
+  const pickerError =
+    imagePicker.error === null ? undefined : `${imagePicker.error.message} ${imagePicker.error.action}`;
+  const imageError =
+    previewFailure === null
+      ? pickerError
+      : `${previewFailure.message} ${previewFailure.action} Code: ${previewFailure.code}.`;
+  const saveTitle =
+    draft.profileId === null
+      ? "A new profile is saved with Save as first"
+      : sketch !== null
+        ? "Accept or reject the drawn box first"
+        : !dirty
+          ? "No changes to save"
+          : undefined;
+
+  const imagePanel =
+    draft.referenceAssetUrl === null ? (
+      <div className="df-profile-workspace__empty-image">
+        <FilePickerTile
+          busy={imagePicker.picking || preview.isPending}
+          busyLabel={preview.isPending ? "Loading the screenshot…" : "Waiting for the file dialog…"}
+          disabled={editingDisabled}
+          error={imageError}
+          icon="image"
+          label="Add screenshot (JPG/PNG)"
+          onPath={(path) => {
+            requestSwitch({ kind: "image", path });
+          }}
+          onPick={imagePicker.pick}
+          pathLabel="Screenshot path"
+          pathPlaceholder="D:\games\hud.png"
+        />
+      </div>
+    ) : (
+      <RegionOverlay
+        disabled={editingDisabled}
+        fill
+        imageAlt={
+          draft.profileId === null
+            ? "Screenshot of the new profile with its regions"
+            : `Reference screenshot of profile ${draft.name} with its regions`
+        }
+        imageUrl={draft.referenceAssetUrl}
+        interactionMode={drawMode ? "draw" : "select"}
+        label="HUD regions on the reference screenshot"
+        onDraw={(rect) => {
+          setSketch(rect);
+          setSketchName(nextRegionName(draft));
+          setSketchError(undefined);
+          setSelectedRegionKey(null);
+          // The design puts the cursor in the class field the moment a box
+          // exists, so naming is one gesture rather than a hunt.
+          window.requestAnimationFrame(() => {
+            sketchInputRef.current?.focus();
+            sketchInputRef.current?.select();
+          });
+        }}
+        onRemove={(id) => {
+          if (id === SKETCH_ID) {
+            rejectSketch();
+            return;
+          }
+          setDraft((current) => ({
+            ...current,
+            regions: current.regions.filter((region) => region.key !== id),
+          }));
+          setSelectedRegionKey((current) => (current === id ? null : current));
+        }}
+        onSelect={(id) => {
+          if (id !== SKETCH_ID) {
+            setSelectedRegionKey(id);
+          }
+        }}
+        onShapeChange={drawMode ? undefined : (id, rect) => setGeometryPreview({ id, rect })}
+        onShapeChangeCancel={() => setGeometryPreview(null)}
+        onShapeChangeEnd={(id, rect) => {
+          setGeometryPreview(null);
+          if (id === SKETCH_ID) {
+            setSketch(rect);
+            return;
+          }
+          setDraft((current) => ({
+            ...current,
+            regions: current.regions.map((region) =>
+              region.key === id ? { ...region, ...rect } : region,
+            ),
+          }));
+        }}
+        onSourceResolved={setSource}
+        selectedId={sketch === null ? selectedRegionKey : SKETCH_ID}
+        shapes={shapes}
+        source={source}
+        tools={
+          <>
+            <Button
+              aria-label="Draw region"
+              aria-pressed={drawMode}
+              className="df-profile-workspace__tool"
+              disabled={editingDisabled}
+              onClick={() => setDrawMode((active) => !active)}
+              size="sm"
+              title="Draw region (Escape ends drawing)"
+            >
+              <Icon name="draw" />
+            </Button>
+            <Button
+              aria-label="Change screenshot"
+              className="df-profile-workspace__tool"
+              disabled={editingDisabled}
+              onClick={() => {
+                imagePicker.reset();
+                preview.reset();
+                setChangeImageOpen(true);
+              }}
+              size="sm"
+              title="Change screenshot"
+            >
+              <Icon name="image" />
+            </Button>
+          </>
+        }
+        trailing={
+          <Button
+            className="df-profile-workspace__run"
+            disabled={draft.profileId === null}
+            onClick={() => {
+              void navigate(runSetupPath(draft.profileId));
+            }}
+            size="md"
+            title={draft.profileId === null ? "Save the profile first" : "Run with this profile"}
+          >
+            <Icon name="run" />
+            Run
+          </Button>
+        }
+      />
+    );
+
   return (
     <div className="df-profile-workspace">
+      <div className="df-profile-workspace__canvas">{imagePanel}</div>
+
       <div className="df-profile-workspace__controls">
-        <Panel
-          aside={
-            dirty ? (
-              <StatusBadge srLabel="Stan draftu:" tone="warning">
-                Niezapisane zmiany
-              </StatusBadge>
-            ) : null
-          }
-          description="Wybierz profil, żeby wczytać jego zrzut, regiony i klasy, albo zacznij nowy."
-          eyebrow="Profil"
-          title={draft.profileId === null ? "Nowy profil" : draft.name}
-        >
-          {profiles.isPending ? <Loading label="Ładowanie profili…" /> : null}
-          {profiles.isError ? (
-            <FatalError
-              description={(() => {
-                const failure = describeApiError(profiles.error);
-                return `${failure.message} ${failure.action}`;
-              })()}
-              onRetry={() => void profiles.refetch()}
-              title="Nie udało się wczytać profili"
-            />
-          ) : null}
-          {profiles.isSuccess ? (
-            <>
-              <ProfileSearchField
-                disabled={busy}
-                onSelect={(profileId) => {
-                  requestSwitch({ kind: "profile", profileId });
-                }}
-                profiles={profiles.data}
-                selectedId={draft.profileId}
-              />
-              <div className="df-profile-workspace__profile-actions">
-                <Button
-                  disabled={busy}
-                  onClick={() => {
-                    requestSwitch({ kind: "new" });
-                  }}
-                  size="sm"
-                  variant="secondary"
-                >
-                  <Icon name="plus" />
-                  Nowy profil
-                </Button>
-                {draft.profileId === null ||
-                profiles.data.find((profile) => profile.id === draft.profileId)?.active ===
-                  true ? null : (
-                  <Button
-                    disabled={busy}
-                    loading={activate.isPending}
-                    loadingLabel="Ustawianie profilu…"
-                    onClick={() => {
-                      activate.mutate(draft.profileId as string);
-                    }}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    Ustaw jako aktywny
-                  </Button>
-                )}
-              </div>
-              {activate.isError ? (
-                <InlineError
-                  message={(() => {
-                    const failure = describeApiError(activate.error);
-                    return `${failure.message} ${failure.action}`;
-                  })()}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {detail.isPending && targetId !== null ? (
-            <Loading label="Ładowanie definicji profilu…" />
-          ) : null}
-          {detail.isError ? (
-            <FatalError
-              description={(() => {
-                const failure = describeApiError(detail.error);
-                return `${failure.message} ${failure.action}`;
-              })()}
-              onRetry={() => void detail.refetch()}
-              title="Nie udało się wczytać definicji profilu"
-            />
-          ) : null}
-        </Panel>
+        {profiles.isPending ? <Loading label="Loading profiles…" /> : null}
+        {profiles.isError ? (
+          <FatalError
+            description={(() => {
+              const failure = describeApiError(profiles.error);
+              return `${failure.message} ${failure.action}`;
+            })()}
+            onRetry={() => void profiles.refetch()}
+            title="Profiles could not be loaded"
+          />
+        ) : null}
+        {profiles.isSuccess ? (
+          <ProfileSearchField
+            disabled={busy}
+            onNew={() => {
+              requestSwitch({ kind: "new" });
+            }}
+            onSelect={(profileId) => {
+              requestSwitch({ kind: "profile", profileId });
+            }}
+            profiles={profiles.data}
+            selectedId={draft.profileId}
+            selectedName={draft.profileId === null ? null : draft.name}
+          />
+        ) : null}
+        {detail.isPending && targetId !== null ? (
+          <Loading label="Loading the profile definition…" />
+        ) : null}
+        {detail.isError ? (
+          <FatalError
+            description={(() => {
+              const failure = describeApiError(detail.error);
+              return `${failure.message} ${failure.action}`;
+            })()}
+            onRetry={() => void detail.refetch()}
+            title="The profile definition could not be loaded"
+          />
+        ) : null}
 
         <AnnotationsPanel
           categories={draft.categories}
@@ -476,20 +564,17 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           sketchName={sketchName}
         />
 
-        {draft.profileId !== null ? (
-          <Notice title="Ustawienia regionu obowiązują od kolejnego runu">
-            Zapis nie przelicza istniejących klatek, próbek ani obserwacji. Ukończone runy zachowują swoją geometrię.
-          </Notice>
-        ) : null}
-
         <div className="df-profile-workspace__save">
           <Button
             disabled={!canSave || editingDisabled || sketch !== null}
             loading={save.isPending}
-            loadingLabel="Zapisywanie profilu…"
+            loadingLabel="Saving the profile…"
             onClick={() => {
               save.mutate(draft);
             }}
+            title={saveTitle}
+            // Figma note: Save profile changes colour once the draft differs.
+            variant={canSave && sketch === null ? "emphasis" : "secondary"}
           >
             <Icon name="save" />
             Save profile
@@ -497,66 +582,45 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           <Button
             disabled={editingDisabled || draft.referenceAssetId === null || sketch !== null}
             onClick={() => {
-              setSaveAsName(draft.profileId === null ? draft.name : `${draft.name} (kopia)`);
+              setSaveAsName(draft.profileId === null ? draft.name : `${draft.name} (copy)`);
               setSaveAsError(undefined);
               saveAs.reset();
               setSaveAsOpen(true);
             }}
-            variant="secondary"
           >
             <Icon name="plus" />
             Save as
           </Button>
         </div>
-
-        {sketch !== null ? (
-          <Notice title="Niezatwierdzony szkic">{"Zatwierd\u017a lub odrzu\u0107 szkic, aby zapisa\u0107 profil."}</Notice>
-        ) : null}
-
-        {draft.profileId === null && draft.referenceAssetId !== null ? (
-          <Notice title="Ten profil jeszcze nie istnieje">
-            Zapisz definicję przez „Save as”, żeby nadać jej nazwę. „Save profile” nadpisuje
-            wybrany profil i dlatego jest dostępne dopiero po zapisaniu.
-          </Notice>
-        ) : null}
-
+        {/* COLOR-09: the filled Save profile is not the only sign of a dirty draft. */}
         {dirty ? (
-          <p className="df-profile-workspace__dirty" role="status">
-            Draft różni się od zapisanego profilu. Zapisz go albo odrzuć zmiany, zanim przejdziesz
-            dalej.
+          <p className="df-visually-hidden" role="status">
+            Unsaved changes
           </p>
         ) : null}
 
         {renamedOcrBlockers.length > 0 ? (
-          <InlineError message={`Najpierw zmień zakres znaków OCR w regionach: ${renamedOcrBlockers.map((region) => `„${region.name}”`).join(", ")}.`} />
+          <InlineError message={`First change the OCR character range of these regions: ${renamedOcrBlockers.map((region) => `“${region.name}”`).join(", ")}.`} />
         ) : null}
-
         {regionConflict === null ? null : (
           <InlineError
-            message={`Region „${regionConflict.name}” już istnieje w tym profilu. Zmień nazwę i zapisz ponownie.`}
+            message={`Region “${regionConflict.name}” already exists in this profile. Rename it and save again.`}
           />
         )}
         {inUse.length === 0 ? null : (
-          <Notice title="Klasy są używane przez anotacje" tone="warning">
-            Nie można usunąć: {inUse.map((category) => category.name).join(", ")}. Przywróć je w
-            profilu albo zapisz tę definicję jako nowy profil przez „Save as”.
-          </Notice>
+          <InlineError
+            message={`Saved annotations use these classes, so they cannot be removed: ${inUse.map((category) => category.name).join(", ")}. Restore them or save the definition as a new profile with Save as.`}
+          />
         )}
         {saveFailure === null || inUse.length > 0 || regionConflict !== null ? null : (
           <InlineError
             message={
               isVersionConflict(save.error)
-                ? "Profil zmienił się w innej karcie. Wczytaj go ponownie i powtórz zmiany — draft zostaje tutaj."
+                ? "The profile changed in another tab. Load it again and repeat your changes — the draft stays here."
                 : `${saveFailure.message} ${saveFailure.action}`
             }
           />
         )}
-
-        <Notice title="Ukończone eksporty pozostają niezmienne">
-          Zmiana nazwy klasy pojawi się w przyszłych eksportach. Nie modyfikuje paczek już
-          zapisanych w workspace, a identyfikator klasy przeżywa zmianę nazwy, więc istniejące
-          anotacje dalej na nią wskazują.
-        </Notice>
 
         <ClassGroupsPanel
           categories={draft.categories}
@@ -603,142 +667,40 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
         />
       </div>
 
-      <div className="df-profile-workspace__canvas">
-        {draft.referenceAssetUrl === null ? (
-          <Panel
-            description="Materiałem referencyjnym profilu jest zrzut ekranu z HUD-em. Podaj bezwzględną ścieżkę do pliku JPG lub PNG."
-            eyebrow="Profil"
-            title="Dodaj zrzut ekranu"
+      <Dialog
+        actions={
+          <Button
+            onClick={() => {
+              setChangeImageOpen(false);
+            }}
           >
-            <Empty
-              description="Bez zrzutu nie ma układu współrzędnych, w którym dałoby się zapisać regiony."
-              title="Brak zrzutu do rysowania"
-            />
-            <TextField
-              autoComplete="off"
-              disabled={editingDisabled}
-              label="Ścieżka zrzutu ekranu"
-              onChange={(event) => {
-                setImagePath(event.target.value);
-              }}
-              placeholder="D:\gry\hud.png"
-              spellCheck={false}
-              value={imagePath}
-            />
-            <Button
-              disabled={editingDisabled || imagePath.trim() === ""}
-              loading={preview.isPending}
-              loadingLabel="Wczytywanie zrzutu…"
-              onClick={() => {
-                requestSwitch({ kind: "image" });
-              }}
-            >
-              <Icon name="image" />
-              Wczytaj zrzut
-            </Button>
-            {previewFailure === null ? null : (
-              <InlineError message={`${previewFailure.message} ${previewFailure.action}`} />
-            )}
-          </Panel>
-        ) : (
-          <Panel
-            description="Przeciągnij prostokąt, żeby narysować region. Strzałki chodzą po regionach, Enter zaznacza, Delete usuwa zaznaczony."
-            eyebrow="Profil"
-            title="Zrzut referencyjny"
-          >
-            <Button className="df-profile-workspace__draw-toggle" aria-pressed={drawMode} disabled={editingDisabled} onClick={() => setDrawMode((active) => !active)} size="sm" variant="secondary">
-              {drawMode ? <span aria-hidden="true">{"\u2713"}</span> : null}
-              Draw region
-            </Button>
-            <RegionOverlay
-              interactionMode={drawMode ? "draw" : "select"}
-              disabled={editingDisabled}
-              imageAlt={
-                draft.profileId === null
-                  ? "Zrzut ekranu nowego profilu z zaznaczonymi regionami"
-                  : `Zrzut referencyjny profilu ${draft.name} z zaznaczonymi regionami`
-              }
-              imageUrl={draft.referenceAssetUrl}
-              label="Regiony HUD na zrzucie referencyjnym"
-              onDraw={(rect) => {
-                setSketch(rect);
-                setSketchName(nextRegionName(draft));
-                setSketchError(undefined);
-                setSelectedRegionKey(null);
-                // The design puts the cursor in the name field the moment a
-                // box exists, so naming is one gesture rather than a hunt.
-                window.requestAnimationFrame(() => {
-                  sketchInputRef.current?.focus();
-                  sketchInputRef.current?.select();
-                });
-              }}
-              onRemove={(id) => {
-                if (id === SKETCH_ID) {
-                  rejectSketch();
-                  return;
-                }
-                setDraft((current) => ({
-                  ...current,
-                  regions: current.regions.filter((region) => region.key !== id),
-                }));
-                setSelectedRegionKey((current) => (current === id ? null : current));
-              }}
-              onSelect={(id) => {
-                if (id !== SKETCH_ID) {
-                  setSelectedRegionKey(id);
-                }
-              }}
-              onShapeChange={drawMode ? undefined : (id, rect) => setGeometryPreview({ id, rect })}
-              onShapeChangeCancel={() => setGeometryPreview(null)}
-              onShapeChangeEnd={(id, rect) => {
-                setGeometryPreview(null);
-                if (id === SKETCH_ID) {
-                  setSketch(rect);
-                  return;
-                }
-                setDraft((current) => ({
-                  ...current,
-                  regions: current.regions.map((region) =>
-                    region.key === id ? { ...region, ...rect } : region,
-                  ),
-                }));
-              }}
-              onSourceResolved={setSource}
-              selectedId={sketch === null ? selectedRegionKey : SKETCH_ID}
-              shapes={shapes}
-              source={source}
-            />
-            <div className="df-profile-workspace__image-swap">
-              <TextField
-                autoComplete="off"
-                description="Nowy zrzut zastąpi obecny i usunie narysowane regiony — ich współrzędne należą do poprzedniego obrazu."
-                disabled={editingDisabled}
-                label="Zmień zrzut ekranu"
-                onChange={(event) => {
-                  setImagePath(event.target.value);
-                }}
-                placeholder="D:\gry\hud.png"
-                spellCheck={false}
-                value={imagePath}
-              />
-              <Button
-                disabled={editingDisabled || imagePath.trim() === ""}
-                loading={preview.isPending}
-                loadingLabel="Wczytywanie zrzutu…"
-                onClick={() => {
-                  requestSwitch({ kind: "image" });
-                }}
-                variant="secondary"
-              >
-                Wczytaj inny zrzut
-              </Button>
-              {previewFailure === null ? null : (
-                <InlineError message={`${previewFailure.message} ${previewFailure.action}`} />
-              )}
-            </div>
-          </Panel>
-        )}
-      </div>
+            Cancel
+          </Button>
+        }
+        description="A new screenshot replaces this one and removes the drawn regions — their coordinates belong to the old picture."
+        onClose={() => {
+          setChangeImageOpen(false);
+        }}
+        open={changeImageOpen}
+        title="Change screenshot"
+      >
+        {changeImageOpen ? (
+        <FilePickerTile
+          busy={imagePicker.picking || preview.isPending}
+          busyLabel={preview.isPending ? "Loading the screenshot…" : "Waiting for the file dialog…"}
+          disabled={editingDisabled}
+          error={imageError}
+          icon="image"
+          label="Choose screenshot (JPG/PNG)"
+          onPath={(path) => {
+            requestSwitch({ kind: "image", path });
+          }}
+          onPick={imagePicker.pick}
+          pathLabel="Screenshot path"
+          pathPlaceholder="D:\games\hud.png"
+        />
+        ) : null}
+      </Dialog>
 
       <Dialog
         actions={
@@ -750,21 +712,21 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
               }}
               variant="secondary"
             >
-              Anuluj
+              Cancel
             </Button>
             <Button
               disabled={saveAs.isPending}
               loading={saveAs.isPending}
-              loadingLabel="Tworzenie profilu…"
+              loadingLabel="Creating the profile…"
               onClick={() => {
                 submitSaveAs();
               }}
             >
-              Zapisz jako nowy profil
+              Save as new profile
             </Button>
           </>
         }
-        description="Nowy profil dostanie własną kopię zrzutu i własne identyfikatory. Profil, z którego wyszedł, zostaje bez zmian."
+        description="The new profile gets its own copy of the screenshot and its own ids; the profile it came from stays unchanged. Region settings apply from the next run."
         onClose={() => {
           if (!saveAs.isPending) setSaveAsOpen(false);
         }}
@@ -776,7 +738,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           autoFocus
           disabled={saveAs.isPending}
           error={saveAsError}
-          label="Nazwa nowego profilu"
+          label="New profile name"
           onChange={(event) => {
             setSaveAsName(event.target.value);
             setSaveAsError(undefined);
@@ -803,9 +765,8 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
                 if (blocker.state === "blocked") blocker.reset();
                 setPending(null);
               }}
-              variant="secondary"
             >
-              Wróć do draftu
+              Back to the draft
             </Button>
             <Button
               disabled={busy}
@@ -817,20 +778,20 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
                 }
               }}
             >
-              Odrzuć zmiany
+              Discard changes
             </Button>
           </>
         }
-        description="Draft bieżącego profilu nie został zapisany. Odrzucenie usunie go bezpowrotnie."
+        description="The draft of this profile is not saved. Discarding it removes it for good."
         onClose={() => {
           if (blocker.state === "blocked") blocker.reset();
           setPending(null);
         }}
         open={pending !== null || blocker.state === "blocked"}
-        title="Niezapisane zmiany"
+        title="Unsaved changes"
       >
         <p className="df-profile-workspace__confirm">
-          Zapisz draft przez „Save profile” albo „Save as”, jeżeli chcesz go zachować.
+          Save the draft with Save profile or Save as if you want to keep it.
         </p>
       </Dialog>
     </div>

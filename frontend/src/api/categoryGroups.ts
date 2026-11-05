@@ -26,10 +26,10 @@ export interface CategoryGroupDescriptor {
 
 /** The four groups, in the order every list shows them. */
 export const CATEGORY_GROUPS: readonly CategoryGroupDescriptor[] = [
-  { id: "game", label: "Pola HUD (gra)" },
-  { id: "digits", label: "Liczby" },
-  { id: "letters", label: "Litery" },
-  { id: "symbols", label: "Symbole" },
+  { id: "game", label: "Custom" },
+  { id: "digits", label: "Numbers" },
+  { id: "letters", label: "Letters" },
+  { id: "symbols", label: "Symbols" },
 ];
 
 const DIGIT = /^[0-9]$/;

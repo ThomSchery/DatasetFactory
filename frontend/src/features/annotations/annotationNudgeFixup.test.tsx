@@ -86,20 +86,20 @@ function geometryPatches(fetchSpy: FetchSpy): RecordedRequest[] {
 }
 
 function overlayShape(): HTMLElement {
-  return within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
+  return within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getByRole(
     "option",
   );
 }
 
 function overlayShapeNamed(name: RegExp): HTMLElement {
-  return within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
+  return within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getByRole(
     "option",
     { name },
   );
 }
 
 function overlaySurface(): HTMLElement {
-  const overlay = screen.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const overlay = screen.getByRole("listbox", { name: "Annotation boxes on the frame" });
   vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue({
     bottom: 1080,
     height: 1080,
@@ -143,7 +143,7 @@ function ownShapeFill(shape = overlayShape()): Element {
 
 /** Selects the only annotation and leaves focus outside the docked panel. */
 async function selectAndNudge(user: ReturnType<typeof userEvent.setup>, presses = 3): Promise<void> {
-  const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+  const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
   await user.click(classButton);
   classButton.focus();
   await user.keyboard("{ArrowRight}".repeat(presses));
@@ -155,13 +155,13 @@ afterEach(() => {
 
 describe("FE-010-FIX1 — pan is a non-destructive canvas gesture", () => {
   function expectUnsavedNudge(fetchSpy: FetchSpy): void {
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 102, y 120"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
-    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
+    expect(screen.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
   }
 
@@ -170,7 +170,7 @@ describe("FE-010-FIX1 — pan is a non-destructive canvas gesture", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 2);
     const overlay = overlaySurface();
     const viewport = layOutOverlayViewport(overlay);
@@ -212,9 +212,9 @@ describe("FE-010-FIX1 — pan is a non-destructive canvas gesture", () => {
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 2);
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     expect(classButton).toHaveFocus();
     const overlay = overlaySurface();
     const viewport = layOutOverlayViewport(overlay);
@@ -269,7 +269,7 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 1);
     const overlay = overlaySurface();
     const viewport = layOutOverlayViewport(overlay);
@@ -281,14 +281,14 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
         deltaY: -100,
       });
     }
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Pan" }));
+    expect(screen.getByText("Unsaved")).toBeVisible();
 
-    const second = overlayShapeNamed(/^health, źródło OCR:/);
+    const second = overlayShapeNamed(/^health, source OCR:/);
     second.focus();
     fireEvent.keyDown(second, { key: "Enter" });
     expect(second).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -318,7 +318,7 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 1);
     const overlay = overlaySurface();
     const viewport = layOutOverlayViewport(overlay);
@@ -330,7 +330,7 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
         deltaY: -100,
       });
     }
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
     fireEvent.pointerDown(overlay, {
       button: 0,
       clientX: 960,
@@ -339,7 +339,7 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
     });
     expect(viewport).toHaveAttribute("data-panning", "true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
     fireEvent.pointerMove(overlay, {
       button: 0,
       clientX: 1040,
@@ -348,12 +348,12 @@ describe("FE-011-FIX1 — pan state ends with its selection and view context", (
     });
     fireEvent.pointerUp(overlay, { button: 0, pointerId: 42 });
 
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
     expect(viewport).not.toHaveAttribute("data-panning");
     expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 101, y 120"));
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
-    expect(screen.getByText("Niezapisane")).toBeVisible();
-    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
+    expect(screen.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
   });
 });
@@ -364,10 +364,10 @@ describe("FE-010-FIX2 — Space-pan cannot activate the focused panel button", (
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const deleteButton = within(dialog).getByRole("button", { name: "Usuń" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    const deleteButton = within(dialog).getByRole("button", { name: "Delete" });
     deleteButton.focus();
     expect(deleteButton).toHaveFocus();
 
@@ -415,12 +415,12 @@ describe("FE-009-FIX1 — one geometry on the overlay and in the request", () =>
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 103, y 120, width 40, height 32"),
     );
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
 
@@ -440,13 +440,13 @@ describe("FE-009-FIX1 — one geometry on the overlay and in the request", () =>
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
     await user.keyboard("{Shift>}{ArrowRight}{/Shift}{ArrowLeft}");
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 112, y 120, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 112, y 120, width 40, height 32"),
     );
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
 
@@ -467,16 +467,16 @@ describe("FE-009-FIX1 — one geometry on the overlay and in the request", () =>
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
-    within(dialog).getByRole("textbox", { name: "Klasa" }).focus();
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
+    within(dialog).getByRole("textbox", { name: "Class" }).focus();
     await user.keyboard("{ArrowRight}");
 
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 103, y 120, width 40, height 32"),
     );
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
   });
@@ -488,10 +488,10 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 1);
 
-    screen.getByRole("button", { name: "Usuń" }).focus();
+    screen.getByRole("button", { name: "Delete" }).focus();
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
@@ -500,17 +500,17 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
   });
 
-  it("saves the class when Enter is pressed on Zapisz klasę", async () => {
+  it("saves the class when Enter is pressed on Save class", async () => {
     const user = userEvent.setup();
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 1);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
     await user.click(within(dialog).getByRole("option", { name: "health" }));
-    within(dialog).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }).focus();
+    within(dialog).getByRole("button", { name: "Change class: assign another class to this box" }).focus();
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
@@ -524,10 +524,10 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user, 1);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
     expect(within(dialog).queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Zapisz geometrię" })).not.toBeInTheDocument();
     expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 101, y 120"));
@@ -539,7 +539,7 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
 
@@ -559,7 +559,7 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
     /*
@@ -568,11 +568,11 @@ describe("FE-009-FIX1 — Enter belongs to the focused control inside the panel"
      * `AnnotationPopover`, so the FE-014 boundary is asserted with the same
      * force — a click there must both close the panel and drop the preview.
      */
-    await user.click(screen.getByRole("heading", { name: "Anotacje na klatce" }));
+    await user.click(screen.getByRole("heading", { name: "Annotations" }));
 
-    expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Edit annotation 7" })).not.toBeInTheDocument();
     expect(overlayShape()).toHaveAttribute("aria-label", expect.stringContaining("x 100, y 120"));
-    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
     expect(geometryPatches(fetchSpy)).toHaveLength(0);
   });
 });
@@ -583,18 +583,18 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
 
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 103, y 120"),
     );
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
     expect(
-      within(dialog).getByText(/Przesunięcie bboxa nie jest jeszcze zapisane/),
+      within(dialog).getByText(/The box move is not saved yet/),
     ).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
   });
@@ -604,12 +604,12 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
-    const dialog = screen.getByRole("dialog", { name: "Edytuj anotację 7" });
+    const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
     await user.click(within(dialog).getByRole("option", { name: "health" }));
-    await user.click(within(dialog).getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }));
+    await user.click(within(dialog).getByRole("button", { name: "Change class: assign another class to this box" }));
 
     await waitFor(() => {
       expect(mutations(fetchSpy).filter((request) => "category_id" in request.body)).toHaveLength(1);
@@ -620,8 +620,8 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
       expect.stringContaining("x 103, y 120"),
     );
     expect(
-      within(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).getByText(
-        /Przesunięcie bboxa nie jest jeszcze zapisane/,
+      within(screen.getByRole("dialog", { name: "Edit annotation 7" })).getByText(
+        /The box move is not saved yet/,
       ),
     ).toBeVisible();
   });
@@ -633,20 +633,20 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
+    expect(await screen.findByText(/Code: internal_error/)).toBeVisible();
     expect(geometryPatches(fetchSpy)).toHaveLength(1);
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 103, y 120"),
     );
     expect(
-      within(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).getByText(
-        /Przesunięcie bboxa nie jest jeszcze zapisane/,
+      within(screen.getByRole("dialog", { name: "Edit annotation 7" })).getByText(
+        /The box move is not saved yet/,
       ),
     ).toBeVisible();
   });
@@ -656,7 +656,7 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     const fetchSpy = reviewApi();
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const frameReadsBefore = fetchSpy.mock.calls.filter(
       ([url, init]) => url === "/api/v1/frames/frame-1" && (init?.method ?? "GET") === "GET",
@@ -677,7 +677,7 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
       expect.stringContaining("x 103, y 120"),
     );
     expect(
-      screen.getByText(/Przesunięcie bboxa nie jest jeszcze zapisane/),
+      screen.getByText(/The box move is not saved yet/),
     ).toBeVisible();
   });
 
@@ -686,15 +686,15 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
 
     await user.keyboard("a");
 
-    const acceptButton = screen.getByRole("button", { name: "Zaakceptuj klatkę" });
+    const acceptButton = screen.getByRole("button", { name: "Accept frame" });
     expect(acceptButton).toBeDisabled();
     await user.click(acceptButton);
-    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(screen.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
     expect(
       mutations(fetchSpy).filter((request) => request.url.endsWith("/review")),
     ).toHaveLength(0);
@@ -705,7 +705,7 @@ describe("FE-009-FIX1 — an unsaved nudge is visible and blocks acceptance", ()
       expect(geometryPatches(fetchSpy)).toHaveLength(1);
     });
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Zaakceptuj klatkę" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Accept frame" })).toBeEnabled();
     });
   });
 });
@@ -716,8 +716,8 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
       "aria-label",
       expect.stringContaining("x 103, y 120"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
-    expect(screen.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
+    expect(screen.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
   }
 
@@ -726,7 +726,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
 
@@ -734,7 +734,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     fireEvent.pointerUp(overlay, { clientX: 110, clientY: 130, pointerId: 1 });
 
     expectNudgeStillVisible(fetchSpy);
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
   });
 
   it("keeps a nudge after pointercancel without movement", async () => {
@@ -742,7 +742,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
 
@@ -757,7 +757,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
 
@@ -777,7 +777,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     const fetchSpy = reviewApi();
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
     const frameReadsBefore = fetchSpy.mock.calls.filter(
@@ -806,7 +806,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
 
@@ -814,7 +814,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
     fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
     fireEvent.pointerUp(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
 
-    expect(await screen.findByText(/Kod: internal_error/)).toBeVisible();
+    expect(await screen.findByText(/Code: internal_error/)).toBeVisible();
     expect(geometryPatches(fetchSpy)).toHaveLength(1);
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
@@ -827,7 +827,7 @@ describe("FE-009-FIX2 — cancelling a pointer gesture restores its baseline", (
       "aria-label",
       expect.stringContaining("x 113, y 120"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(geometryPatches(fetchSpy)).toHaveLength(1);
   });
 });
@@ -840,9 +840,9 @@ describe("FE-009-FIX3 — a gesture baseline belongs to one selection context", 
   });
 
   function expectNoUnsavedGeometry(fetchSpy: FetchSpy): void {
-    expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("status", { name: "Niezapisane przesunięcie bboxa" }),
+      screen.queryByRole("status", { name: "Unsaved box move" }),
     ).not.toBeInTheDocument();
     expect(mutations(fetchSpy)).toHaveLength(0);
   }
@@ -854,63 +854,63 @@ describe("FE-009-FIX3 — a gesture baseline belongs to one selection context", 
     });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
 
-    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute("aria-selected", "true");
-    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+    expect(overlayShapeNamed(/^7, source OCR:/)).toHaveAttribute("aria-selected", "true");
+    expect(overlayShapeNamed(/^7, source OCR:/)).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 103, y 120"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
 
-    fireEvent.pointerDown(ownShapeFill(overlayShapeNamed(/^7, źródło OCR:/)), {
+    fireEvent.pointerDown(ownShapeFill(overlayShapeNamed(/^7, source OCR:/)), {
       clientX: 110,
       clientY: 130,
       pointerId: 1,
     });
     fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
-    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+    expect(overlayShapeNamed(/^7, source OCR:/)).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 113, y 120"),
     );
     expect(mutations(fetchSpy)).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Klasa health, 1 anotacji" }));
-    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Class health, 1 annotations" }));
+    expect(overlayShapeNamed(/^health, source OCR:/)).toHaveAttribute("aria-selected", "true");
     // RegionOverlay still paints its in-flight local manipulation until the
     // old pointer is cancelled; FrameEditor has already discarded A's preview.
-    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+    expect(overlayShapeNamed(/^7, source OCR:/)).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 113, y 120"),
     );
     expectNoUnsavedGeometry(fetchSpy);
 
     fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
-    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute("aria-selected", "true");
-    expect(overlayShapeNamed(/^7, źródło OCR:/)).toHaveAttribute(
+    expect(overlayShapeNamed(/^health, source OCR:/)).toHaveAttribute("aria-selected", "true");
+    expect(overlayShapeNamed(/^7, source OCR:/)).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 100, y 120"),
     );
     expectNoUnsavedGeometry(fetchSpy);
 
-    fireEvent.pointerDown(ownShapeFill(overlayShapeNamed(/^health, źródło OCR:/)), {
+    fireEvent.pointerDown(ownShapeFill(overlayShapeNamed(/^health, source OCR:/)), {
       clientX: 410,
       clientY: 130,
       pointerId: 2,
     });
     fireEvent.pointerMove(overlay, { clientX: 420, clientY: 130, pointerId: 2 });
-    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute(
+    expect(overlayShapeNamed(/^health, source OCR:/)).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 410, y 120"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
 
     fireEvent.pointerCancel(overlay, { clientX: 420, clientY: 130, pointerId: 2 });
-    expect(overlayShapeNamed(/^health, źródło OCR:/)).toHaveAttribute(
+    expect(overlayShapeNamed(/^health, source OCR:/)).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 400, y 120"),
     );
@@ -922,24 +922,24 @@ describe("FE-009-FIX3 — a gesture baseline belongs to one selection context", 
     const fetchSpy = reviewApi();
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await selectAndNudge(user);
     const overlay = overlaySurface();
     fireEvent.pointerDown(ownShapeFill(), { clientX: 110, clientY: 130, pointerId: 1 });
     fireEvent.pointerMove(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
 
-    fireEvent.pointerDown(screen.getByRole("heading", { name: "Anotacje" }));
-    expect(screen.queryByRole("dialog", { name: "Edytuj anotację 7" })).not.toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole("heading", { name: "Annotations" }));
+    expect(screen.queryByRole("dialog", { name: "Edit annotation 7" })).not.toBeInTheDocument();
     expectNoUnsavedGeometry(fetchSpy);
 
     fireEvent.pointerCancel(overlay, { clientX: 120, clientY: 130, pointerId: 1 });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
 
     expect(overlayShape()).toHaveAttribute(
       "aria-label",
       expect.stringContaining("x 100, y 120"),
     );
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
     expectNoUnsavedGeometry(fetchSpy);
   });
 });
@@ -952,8 +952,8 @@ describe("FE-009-FIX1 — a box outside the frame moves by one pixel", () => {
     const fetchSpy = reviewApi({ frame: frameDetailFixture({ annotations: [outside] }) });
     renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowLeft}");
@@ -965,7 +965,7 @@ describe("FE-009-FIX1 — a box outside the frame moves by one pixel", () => {
 
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByText(/Kod: bbox_invalid/)).toBeVisible();
+    expect(await screen.findByText(/Code: bbox_invalid/)).toBeVisible();
     expect(mutations(fetchSpy)).toHaveLength(0);
     // The rejected commit must not roll the walk back to where it started.
     expect(overlayShape()).toHaveAttribute(

@@ -1,28 +1,40 @@
 /*
- * The Figma shell: a thin bar, a centred three-way switch, then the screen.
- * Everything is a single column, so the same rules serve 360 px and 1920 px
- * and nothing has a fixed width (FE-021 §11).
+ * The Figma shell (FE-022): a 44 px `surface/panel` bar with ☰ and ⋮, the
+ * 56 px icon strip from 768 px, and the screen with a 16 px margin at every
+ * width (`site/padding/XS`). Below 768 px the strip is a drawer, so the screen
+ * takes the full width.
  */
 
 .df-shell {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    "bar"
+    "main";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--topbar-height) 1fr;
   min-height: 100vh;
   background: var(--color-background-primary-default); /* COLOR-02: the 60%. */
+}
+
+.df-shell[data-strip="open"] {
+  grid-template-areas:
+    "bar bar"
+    "nav main";
+  grid-template-columns: var(--sidenav-width) minmax(0, 1fr);
 }
 
 .df-shell__skip {
   position: absolute;
   inset-block-start: var(--size-xs);
   inset-inline-start: var(--size-xs);
-  z-index: 3;
-  padding: var(--size-xs) var(--size-sm);
+  z-index: 5;
+  padding: var(--element-padding-y-md) var(--element-padding-x-md);
   transform: translateY(-200%);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--color-surface-neutral-raised);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-ui);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   text-decoration: none;
 }
 
@@ -32,84 +44,67 @@
 
 .df-shell__bar {
   display: flex;
-  gap: var(--size-sm);
+  grid-area: bar;
   align-items: center;
-  min-height: var(--control-height-lg);
-  padding: var(--size-xs) var(--size-sm);
-  /* BORDER-03: a structural divider, so stroke-weak rather than stroke-strong. */
-  border-block-end: var(--border-width-default) solid var(--color-stroke-weak-default);
+  justify-content: space-between;
+  height: var(--topbar-height);
+  padding-inline: var(--site-padding);
   background: var(--color-surface-neutral-default); /* COLOR-02: the 30%. */
 }
 
-.df-shell__brand {
-  margin: var(--size-none);
+.df-shell__toggle.df-button,
+.df-shell__more .df-button {
+  width: var(--icon-size);
+  min-width: var(--icon-size);
+  min-height: var(--icon-size);
+  padding: var(--size-none);
   color: var(--color-text-strong-default);
-  font-family: var(--font-family-ui);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-tight);
-  line-height: var(--line-height-tight);
-  white-space: nowrap;
 }
 
-.df-shell__heading {
-  /* TYPO-07: the screen's name sits beside the product's, one step down in
-     weight and colour rather than in a heading band of its own. The Figma
-     workspace has no page title, and a 1.5rem heading over every screen was
-     the first thing pushing the image below the fold. */
-  overflow: hidden;
-  flex: 1 1 auto;
+.df-shell__more {
+  display: flex;
+}
+
+.df-shell > .df-side-nav--strip {
+  grid-area: nav;
+}
+
+.df-shell__main {
+  grid-area: main;
   min-width: 0;
-  margin: var(--size-none);
-  color: var(--color-text-weak-default);
-  font-family: var(--font-family-ui);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-tight);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: var(--site-padding);
 }
 
 .df-shell__switch {
   display: flex;
   justify-content: center;
-  padding: var(--size-sm) var(--size-sm) var(--size-none);
+  margin-block-end: var(--site-padding);
 }
 
 .df-shell__segments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-xxs);
-  justify-content: center;
-  max-width: 100%;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--element-gap-md);
+  width: min(100%, var(--workspace-switch-width));
   margin: var(--size-none);
-  padding: var(--size-xxs);
-  /* The switch reads as one track, the way the document draws it; the pill
-     inside it carries the selection. */
-  border: var(--border-width-default) solid var(--color-stroke-weak-default);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-neutral-default);
+  padding: var(--element-padding-y-md) var(--element-padding-x-md);
+  /* Figma `Frame 52`: one track, the pill inside it carries the selection. */
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-neutral-selected);
   list-style: none;
 }
 
-.df-shell__main {
-  min-width: 0;
-  padding: var(--size-sm);
+.df-shell__menu-action.df-button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: var(--control-height-md);
 }
 
-@media (min-width: 768px) {
-  .df-shell__bar {
-    gap: var(--size-md);
-    padding-inline: var(--size-md);
-  }
-
-  .df-shell__main {
-    padding: var(--size-md);
-  }
-}
-
-@media (min-width: 1200px) {
-  .df-shell__main {
-    padding: var(--size-md) var(--size-lg) var(--size-lg);
-  }
+.df-ocr-engine__note {
+  max-width: var(--measure-copy);
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
 }

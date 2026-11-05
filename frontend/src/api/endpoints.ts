@@ -20,8 +20,10 @@ import type {
   ListFramesQuery,
   ListMaterialsQuery,
   ListRunsQuery,
+  LocalFileKind,
   Material,
   Page,
+  PickedLocalFile,
   PipelineRun,
   PreviousFrameClasses,
   ProfileSummary,
@@ -193,6 +195,18 @@ export function listMaterials(
   signal?: AbortSignal,
 ): Promise<Page<Material>> {
   return apiRequest<Page<Material>>("/materials", { query: { ...query }, signal });
+}
+
+// --- local files ----------------------------------------------------------
+
+/**
+ * `POST /local-files/pick` (FE-022) — the backend opens the native "open file"
+ * dialog and answers with the chosen absolute path, or `null` when the user
+ * cancelled. The browser cannot reveal a full path, and files are read in
+ * place, so this is the only way a click can name a file on disk.
+ */
+export function pickLocalFile(kind: LocalFileKind): Promise<PickedLocalFile> {
+  return apiRequest<PickedLocalFile>("/local-files/pick", { method: "POST", body: { kind } });
 }
 
 // --- runs -----------------------------------------------------------------

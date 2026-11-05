@@ -16,9 +16,9 @@ export interface ReferenceImageProps {
  *
  * `RegionOverlay` owns every image that carries geometry; this is for the
  * screens that only need to show which picture is in play — the run setup, and
- * a profile being previewed rather than edited. The image keeps its aspect
- * ratio and never exceeds its column, so a 1920-wide frame does not push the
- * layout sideways on a phone.
+ * a profile being previewed rather than edited. Since FE-022 it fills the box
+ * its consumer sizes and is cropped to it, like Figma's `IMAGE FILL`: the
+ * preview shows which picture is in play, not every pixel of it.
  */
 export function ReferenceImage({ url, alt, caption }: ReferenceImageProps) {
   const [failed, setFailed] = useState(false);
@@ -27,12 +27,12 @@ export function ReferenceImage({ url, alt, caption }: ReferenceImageProps) {
   if (failed) {
     return (
       <FatalError
-        description="Nie udało się pobrać obrazu z API. Plik mógł zostać przeniesiony poza workspace."
+        description="The image could not be loaded from the API. The file may have moved out of the workspace."
         onRetry={() => {
           setFailed(false);
           setReloadKey((key) => key + 1);
         }}
-        title="Obraz się nie wczytał"
+        title="The image did not load"
       />
     );
   }

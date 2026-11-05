@@ -1,0 +1,87 @@
+/*
+ * Figma `Frame 126` on Upload 360: a 328 × 173 outlined field (radius 4,
+ * `border/default`) holding one picture. Here it holds the icon and label of
+ * the action, and keeps the same proportion at every width.
+ */
+.df-file-tile {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+
+.df-file-tile__pick.df-button {
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 328 / 173;
+  max-height: calc(var(--size-3xl) * 4);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-primary-default);
+  color: var(--color-text-strong-default);
+}
+
+.df-file-tile__pick.df-button:hover:not(:disabled) {
+  background: var(--color-surface-neutral-default);
+}
+
+.df-file-tile__body {
+  display: grid;
+  justify-items: center;
+  gap: var(--element-gap-lg);
+  min-width: 0;
+}
+
+.df-file-tile__label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+}
+
+.df-file-tile__detail {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fallback sits inside the tile's lower edge, so it costs no height. */
+.df-file-tile__fallback {
+  position: absolute;
+  inset-block-end: var(--element-padding-y-md);
+  inset-inline-end: var(--element-padding-x-md);
+  display: flex;
+  align-items: center;
+  gap: var(--element-gap-md);
+}
+
+.df-file-tile__path-toggle.df-button {
+  min-height: 0;
+  padding: var(--element-padding-y-md) var(--element-padding-x-md);
+  text-decoration: underline;
+}
+
+.df-file-tile__hint {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+}
+
+.df-file-tile__path {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--element-gap-lg);
+  margin-block-start: var(--element-gap-lg);
+}
+
+.df-file-tile__path[hidden] {
+  display: none;
+}
+
+.df-file-tile__error {
+  margin: var(--element-gap-lg) var(--size-none) var(--size-none);
+  color: var(--color-status-error-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}

@@ -41,7 +41,7 @@ async function readBody(response: Response): Promise<unknown> {
   try {
     return JSON.parse(text) as unknown;
   } catch (cause) {
-    throw new ApiTransportError("Odpowiedź serwera nie jest poprawnym JSON-em.", {
+    throw new ApiTransportError("The server response is not valid JSON.", {
       status: response.status,
       cause,
     });
@@ -74,7 +74,7 @@ export async function apiRequest<TResponse>(
     if (cause instanceof DOMException && cause.name === "AbortError") {
       throw cause;
     }
-    throw new ApiTransportError("Nie udało się połączyć z lokalnym API.", { cause });
+    throw new ApiTransportError("The local API could not be reached.", { cause });
   }
 
   const payload = await readBody(response);
@@ -85,7 +85,7 @@ export async function apiRequest<TResponse>(
       throw apiError;
     }
     throw new ApiTransportError(
-      `Serwer odpowiedział kodem ${String(response.status)} bez koperty błędu.`,
+      `The server answered ${String(response.status)} without an error envelope.`,
       { status: response.status },
     );
   }

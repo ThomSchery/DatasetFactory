@@ -20,8 +20,8 @@ export const materialImportSchema = z.object({
   local_path: z
     .string()
     .trim()
-    .min(1, "Podaj ścieżkę do pliku wideo.")
-    .regex(ABSOLUTE_PATH, "Ścieżka musi być bezwzględna, np. D:\\wideo\\mecz.mp4."),
+    .min(1, "Enter the path to the file.")
+    .regex(ABSOLUTE_PATH, "The path must be absolute, e.g. D:\\videos\\match.mp4."),
 });
 
 export type MaterialImportValues = z.infer<typeof materialImportSchema>;
@@ -30,12 +30,12 @@ export type MaterialImportValues = z.infer<typeof materialImportSchema>;
 export const DEFAULT_INTERVAL_MS = 1000;
 
 export const runLaunchSchema = z.object({
-  profile_id: z.string().min(1, "Wybierz profil gry."),
-  video_id: z.string().min(1, "Wybierz materiał."),
+  profile_id: z.string().min(1, "Choose a profile."),
+  video_id: z.string().min(1, "Choose a source file."),
   interval_ms: z.coerce
     .number<number>()
-    .int("Interwał musi być liczbą całkowitą milisekund.")
-    .positive("Interwał musi być większy od zera."),
+    .int("The sample rate must be a whole number of milliseconds.")
+    .positive("The sample rate must be greater than zero."),
 });
 
 export type RunLaunchValues = z.infer<typeof runLaunchSchema>;

@@ -8,7 +8,9 @@ import "./NavItem.css";
  * Figma document draws for the Upload / Profil / Run switch: same link, same
  * active semantics, different shape (FE-021).
  */
-export type NavItemVariant = "rail" | "segment";
+/** `strip` is the icon-only item of the FE-022 side bar; its label stays as
+ * accessible text and as the tooltip. */
+export type NavItemVariant = "rail" | "segment" | "strip";
 
 export interface NavItemProps {
   /** Route path this item navigates to. */
@@ -21,6 +23,8 @@ export interface NavItemProps {
   variant?: NavItemVariant;
   /** Decorative mark before the label; must carry no meaning of its own. */
   icon?: ReactNode;
+  /** Native tooltip; the strip variant shows only an icon. */
+  title?: string;
 }
 
 /**
@@ -36,12 +40,14 @@ export function NavItem({
   end = false,
   variant = "rail",
   icon,
+  title,
 }: NavItemProps) {
   const base = `df-nav-item df-nav-item--${variant}`;
   return (
     <NavLink
       className={({ isActive }) => (isActive ? `${base} df-nav-item--active` : base)}
       end={end}
+      title={title}
       to={to}
     >
       {icon === undefined ? null : (
@@ -49,7 +55,13 @@ export function NavItem({
           {icon}
         </span>
       )}
-      <span className="df-nav-item__label">{children}</span>
+      <span
+        className={
+          variant === "strip" ? "df-nav-item__label df-visually-hidden" : "df-nav-item__label"
+        }
+      >
+        {children}
+      </span>
       {description === undefined ? null : (
         <span className="df-nav-item__description">{description}</span>
       )}

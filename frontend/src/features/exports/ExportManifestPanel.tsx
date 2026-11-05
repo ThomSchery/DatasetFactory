@@ -24,8 +24,8 @@ export function ExportManifestPanel({ completedExport }: { completedExport: Expo
 
   if (manifest === null || outputPath === null) {
     return (
-      <Panel eyebrow="Manifest" title="Wynik eksportu">
-        <InlineError message="Ukończony eksport nie zawiera bezpiecznej relatywnej ścieżki lub kompletnego manifestu. Odśwież status; jeżeli problem wraca, sprawdź logi backendu." />
+      <Panel title="Export result">
+        <InlineError message="The finished export has no safe relative path or no complete manifest. Refresh the status; if the problem returns, check the backend logs." />
       </Panel>
     );
   }
@@ -46,34 +46,32 @@ export function ExportManifestPanel({ completedExport }: { completedExport: Expo
       )
     ) {
       return (
-        <Panel eyebrow="Manifest" title="Wynik eksportu Roboflow COCO">
-          <InlineError message="Manifest zawiera niebezpieczną albo niepełną ścieżkę części datasetu. Odśwież status; jeżeli problem wraca, sprawdź logi backendu." />
+        <Panel title="Roboflow COCO export result">
+          <InlineError message="The manifest holds an unsafe or incomplete dataset part path. Refresh the status; if the problem returns, check the backend logs." />
         </Panel>
       );
     }
 
     return (
       <Panel
-        description="Manifest opisuje niezmienną migawkę oraz deterministyczny podział po klatkach."
-        eyebrow="Manifest"
-        title="Wynik eksportu Roboflow COCO"
+        title="Roboflow COCO export result"
       >
         <div className="df-exports__manifest">
           <DataList
             items={[
-              { label: "Schemat", value: manifest.schema },
+              { label: "Schema", value: manifest.schema },
               { label: "Run", value: manifest.run_id },
-              { label: "Profil", value: manifest.profile_id },
-              { label: "Rewizja wejścia", value: manifest.input_revision },
-              { label: "Czas eksportu", value: formatExportedAt(manifest.exported_at) },
-              { label: "Ziarno podziału", value: manifest.seed },
+              { label: "Profile", value: manifest.profile_id },
+              { label: "Input revision", value: manifest.input_revision },
+              { label: "Exported at", value: formatExportedAt(manifest.exported_at) },
+              { label: "Split seed", value: manifest.seed },
               {
-                label: "Proporcje train / valid / test",
+                label: "Train / valid / test ratios",
                 value: `${String(manifest.split_ratios.train * 100)}% / ${String(manifest.split_ratios.valid * 100)}% / ${String(manifest.split_ratios.test * 100)}%`,
               },
               {
-                hint: "Wartość pochodzi z API i jest względna wobec skonfigurowanego workspace.",
-                label: "Ścieżka względem workspace",
+                hint: "From the API, relative to the configured workspace.",
+                label: "Path relative to the workspace",
                 value: <code className="df-exports__path">{outputPath}</code>,
               },
             ]}
@@ -81,21 +79,21 @@ export function ExportManifestPanel({ completedExport }: { completedExport: Expo
           />
 
           <section aria-labelledby="dataset-splits-title" className="df-exports__sources">
-            <h3 id="dataset-splits-title">Podział datasetu</h3>
+            <h3 id="dataset-splits-title">Dataset split</h3>
             <DataList
               items={(["train", "valid", "test"] as const).map((name) => ({
-                hint: `${splitPaths[name].annotations} · obrazy: ${splitPaths[name].images}`,
+                hint: `${splitPaths[name].annotations} · images: ${splitPaths[name].images}`,
                 label: name,
-                value: `${String(manifest.splits[name].frame_count)} klatek · ${String(manifest.splits[name].annotation_count)} anotacji`,
+                value: `${String(manifest.splits[name].frame_count)} frames · ${String(manifest.splits[name].annotation_count)} annotations`,
               }))}
               layout="columns"
             />
-            <p>Każda klatka i wszystkie jej boksy występują dokładnie w jednej części.</p>
+            <p>Every frame and all its boxes are in exactly one part.</p>
           </section>
 
-          <Notice title="Niezmienna migawka">
-            Ten eksport pozostaje migawką rewizji {manifest.input_revision}. Późniejsza zmiana
-            klasy lub klatki nie aktualizuje paczki.
+          <Notice title="Immutable snapshot">
+            This export stays a snapshot of revision {manifest.input_revision}. A later change
+            to a class or a frame does not update the package.
           </Notice>
         </div>
       </Panel>
@@ -106,31 +104,29 @@ export function ExportManifestPanel({ completedExport }: { completedExport: Expo
   const imagesPath = safeWorkspaceRelativePath(manifest.images ?? null);
   if (annotationsPath === null || imagesPath === null) {
     return (
-      <Panel eyebrow="Manifest" title="Wynik eksportu COCO">
-        <InlineError message="Ukończony eksport nie zawiera bezpiecznej relatywnej ścieżki lub kompletnego manifestu. Odśwież status; jeżeli problem wraca, sprawdź logi backendu." />
+      <Panel title="COCO export result">
+        <InlineError message="The finished export has no safe relative path or no complete manifest. Refresh the status; if the problem returns, check the backend logs." />
       </Panel>
     );
   }
 
   return (
     <Panel
-      description="Manifest opisuje niezmienną migawkę zaakceptowanych klatek i anotacji."
-      eyebrow="Manifest"
-      title="Wynik eksportu COCO"
+      title="COCO export result"
     >
       <div className="df-exports__manifest">
         <DataList
           items={[
-            { label: "Schemat", value: manifest.schema },
+            { label: "Schema", value: manifest.schema },
             { label: "Run", value: manifest.run_id },
-            { label: "Profil", value: manifest.profile_id },
-            { label: "Rewizja wejścia", value: manifest.input_revision },
-            { label: "Czas eksportu", value: formatExportedAt(manifest.exported_at) },
-            { label: "Plik anotacji", value: annotationsPath },
-            { label: "Katalog obrazów", value: imagesPath },
+            { label: "Profile", value: manifest.profile_id },
+            { label: "Input revision", value: manifest.input_revision },
+            { label: "Exported at", value: formatExportedAt(manifest.exported_at) },
+            { label: "Annotations file", value: annotationsPath },
+            { label: "Images folder", value: imagesPath },
             {
-              hint: "Wartość pochodzi z API i jest względna wobec skonfigurowanego workspace.",
-              label: "Ścieżka względem workspace",
+              hint: "From the API, relative to the configured workspace.",
+              label: "Path relative to the workspace",
               value: <code className="df-exports__path">{outputPath}</code>,
             },
           ]}
@@ -138,7 +134,7 @@ export function ExportManifestPanel({ completedExport }: { completedExport: Expo
         />
 
         <section aria-labelledby="annotation-sources-title" className="df-exports__sources">
-          <h3 id="annotation-sources-title">Pochodzenie anotacji</h3>
+          <h3 id="annotation-sources-title">Annotation sources</h3>
           <DataList
             items={[
               { label: "OCR", value: manifest.annotation_sources.ocr },
@@ -146,12 +142,12 @@ export function ExportManifestPanel({ completedExport }: { completedExport: Expo
             ]}
             layout="columns"
           />
-          <p>To licznik pochodzenia boksów, nie ocena trafności OCR.</p>
+          <p>A count of where boxes came from, not a measure of OCR accuracy.</p>
         </section>
 
-        <Notice title="Niezmienna migawka">
-          Ten eksport pozostaje migawką rewizji {manifest.input_revision}. Późniejsza zmiana
-          klatki nie aktualizuje tego wyniku — aktualny stan wymaga uruchomienia nowego eksportu.
+        <Notice title="Immutable snapshot">
+          This export stays a snapshot of revision {manifest.input_revision}. A later frame
+          change does not update it — the current state needs a new export.
         </Notice>
       </div>
     </Panel>

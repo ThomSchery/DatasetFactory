@@ -1,7 +1,8 @@
 .df-icon {
   display: block;
-  width: 1em;
-  height: 1em;
+  /* GRID-14: drawn at the document's 24 px, never stretched. */
+  width: var(--icon-size);
+  height: var(--icon-size);
   flex: none;
   fill: none;
   stroke: currentcolor;

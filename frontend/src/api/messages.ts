@@ -3,10 +3,10 @@ import type { ErrorDetails } from "./errors";
 import type { ExportStatus, RunStatus } from "./types";
 
 /*
- * Central translation of backend error codes into Polish copy plus a suggested
- * action (FE-001-F1 §Logika.6). No feature invents its own wording, and no
- * feature reinterprets a code into its own domain meaning
- * (`react-coding-standards.md` §3).
+ * Central translation of backend error codes into English copy plus a
+ * suggested action (FE-001-F1 §Logika.6; English since FE-022). No feature
+ * invents its own wording, and no feature reinterprets a code into its own
+ * domain meaning (`react-coding-standards.md` §3).
  *
  * Two sources feed this one dictionary:
  *   1. `error.code` from the TECH_PLAN §5 envelope,
@@ -24,342 +24,354 @@ export interface ErrorCopy {
 const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
   // --- optimistic concurrency and review gates (TK-005, TK-007) ---
   version_conflict: {
-    message: "Dane zmieniły się w międzyczasie i Twoja wersja jest nieaktualna.",
-    action: "Odśwież widok i wykonaj operację ponownie na aktualnym stanie.",
+    message: "The data changed in the meantime and your version is out of date.",
+    action: "Refresh the view and repeat the operation on the current state.",
   },
   review_locked: {
-    message: "Klatka ma już decyzję weryfikacji i jest zamrożona.",
-    action:
-      "Zaakceptowanej klatki nie da się zmienić. Odrzuconą odblokujesz decyzją „otwórz ponownie”.",
+    message: "The frame already has a review decision and is frozen.",
+    action: "An accepted frame cannot change. Unlock a rejected frame with Reopen.",
   },
   frame_not_reviewable: {
-    message: "Klatka nie zakończyła jeszcze OCR, więc nie można jej weryfikować.",
-    action: "Poczekaj, aż klatka osiągnie etap review_pending, i spróbuj ponownie.",
+    message: "The frame has not finished OCR yet, so it cannot be reviewed.",
+    action: "Wait until the frame reaches review_pending and try again.",
   },
   invalid_review_transition: {
-    message: "Ta decyzja weryfikacji jest niedozwolona w bieżącym stanie klatki.",
-    action: "Ponownie otworzyć można wyłącznie klatkę odrzuconą.",
+    message: "This review decision is not allowed in the frame's current state.",
+    action: "Only a rejected frame can be reopened.",
   },
   bbox_invalid: {
-    message: "Część boksów wykracza poza granice klatki.",
-    action: "Popraw geometrię wskazanych boksów i powtórz operację.",
+    message: "Some boxes extend beyond the frame.",
+    action: "Fix the geometry of the marked boxes and repeat the operation.",
   },
   no_annotations: {
-    message: "Klatka nie ma żadnej anotacji, więc nie da się jej zaakceptować.",
-    action: "Dodaj przynajmniej jeden boks albo odrzuć klatkę.",
+    message: "The frame has no annotations, so it cannot be accepted.",
+    action: "Add at least one box or reject the frame.",
   },
   empty_patch: {
-    message: "Żądanie zmiany anotacji nie zawiera żadnego pola do zmiany.",
-    action: "Zmień klasę albo geometrię boksu przed zapisem.",
+    message: "The annotation change request has no field to change.",
+    action: "Change the class or the box geometry before saving.",
   },
   category_not_allowed: {
-    message: "Wybrana klasa nie należy do profilu tego runu.",
-    action: "Wybierz klasę zdefiniowaną w profilu gry.",
+    message: "The chosen class does not belong to this run's profile.",
+    action: "Choose a class defined in the game profile.",
   },
   previous_frame_not_found: {
-    message: "Ta klatka nie ma wcześniejszej klatki w kolejności runu.",
-    action: "Wybierz późniejszą klatkę albo edytuj tę grupę ręcznie.",
+    message: "This frame has no earlier frame in the run.",
+    action: "Choose a later frame or edit this group by hand.",
   },
 
   // --- run lifecycle ---
   active_run: {
-    message: "Inny run jest już aktywny.",
-    action: "Zatrzymaj lub dokończ bieżący run, zanim uruchomisz kolejny.",
+    message: "Another run is already active.",
+    action: "Pause or finish the current run before starting another one.",
   },
   invalid_transition: {
-    message: "Ta operacja jest niedozwolona w bieżącym statusie runu.",
-    action: "Odśwież status runu i wybierz operację dostępną dla tego stanu.",
+    message: "This operation is not allowed in the run's current status.",
+    action: "Refresh the run status and choose an operation available in that state.",
   },
   source_missing: {
-    message: "Plik źródłowy nie istnieje pod zapisaną ścieżką.",
-    action: "Przywróć plik w tym samym miejscu albo zaimportuj materiał ponownie.",
+    message: "The source file no longer exists at its saved path.",
+    action: "Put the file back in the same place or import the material again.",
   },
   source_changed: {
-    message: "Plik źródłowy zmienił się od czasu importu.",
-    action: "Zaimportuj materiał ponownie, żeby run pracował na spójnym pliku.",
+    message: "The source file changed since it was imported.",
+    action: "Import the material again so the run works on a consistent file.",
   },
   invalid_interval: {
-    message: "Interwał próbkowania jest poza dozwolonym zakresem.",
-    action: "Podaj interwał większy od zera.",
+    message: "The sample rate is outside the allowed range.",
+    action: "Enter an interval greater than zero.",
   },
   profile_changed_during_run_creation: {
-    message: "Profil zmieni\u0142 si\u0119 podczas tworzenia runu.",
-    action: "Spr\u00f3buj ponownie.",
+    message: "The profile changed while the run was being created.",
+    action: "Try again.",
   },
   profile_resolution_mismatch: {
-    message: "Rozdzielczość materiału nie zgadza się z rozdzielczością profilu.",
-    action: "Wybierz materiał o rozdzielczości profilu albo utwórz profil dla tej rozdzielczości.",
+    message: "The material resolution does not match the profile resolution.",
+    action:
+      "Choose a material with the profile's resolution or create a profile for this resolution.",
   },
   worker_unavailable: {
-    message: "Worker przetwarzający run jest niedostępny.",
-    action: "Sprawdź, czy backend działa, i spróbuj ponownie.",
+    message: "The worker that processes runs is unavailable.",
+    action: "Check that the backend is running and try again.",
   },
   ocr_provenance_unknown: {
-    message:
-      "Nie można uruchomić runu, ponieważ brakuje zweryfikowanego runtime’u lub modelu Tesseracta.",
+    message: "The run cannot start because the verified Tesseract runtime or model is missing.",
     action:
-      "Zainstaluj Tesseracta zgodnie z TD-015 i ustaw jego ścieżki oraz sumy SHA-256 w konfiguracji.",
+      "Install Tesseract as described in TD-015 and set its paths and SHA-256 sums in the configuration.",
   },
   ocr_provenance_mismatch: {
     message:
-      "Nie można uruchomić runu, ponieważ runtime lub model Tesseracta nie zgadza się z przypiętą sumą SHA-256.",
+      "The run cannot start because the Tesseract runtime or model does not match the pinned SHA-256 sum.",
     action:
-      "Zainstaluj zweryfikowaną wersję Tesseracta zgodną z TD-015 albo popraw przypięte sumy w konfiguracji.",
+      "Install the verified Tesseract version from TD-015 or correct the pinned sums in the configuration.",
   },
   ocr_configuration_invalid: {
-    message: "Nie można uruchomić runu, ponieważ konfiguracja Tesseracta jest niepełna albo niepoprawna.",
+    message: "The run cannot start because the Tesseract configuration is incomplete or invalid.",
     action:
-      "Zainstaluj Tesseracta zgodnie z TD-015 i uzupełnij ścieżki, wersję oraz sumy SHA-256 w konfiguracji.",
+      "Install Tesseract as described in TD-015 and complete the paths, version and SHA-256 sums in the configuration.",
   },
 
   // --- profiles ---
   profile_name_exists: {
-    message: "Profil o tej nazwie już istnieje.",
-    action: "Podaj inną nazwę profilu.",
+    message: "A profile with this name already exists.",
+    action: "Enter a different profile name.",
   },
   // One wording for both recoveries. The panel selects the existing class only
   // when the backend names it; claiming a selection here would be a lie on the
   // path where the winner stays unknown (FE-013-FIX2).
   category_name_exists: {
-    message: "Klasa o tej nazwie już istnieje w profilu.",
-    action: "Lista została odświeżona. Wskaż istniejącą klasę na liście i zapisz przypisanie albo podaj inną nazwę.",
+    message: "A class with this name already exists in the profile.",
+    action:
+      "The list was refreshed. Pick the existing class from the list and save the assignment, or enter a different name.",
   },
   category_used_by_regions: {
-    message: "Nie można zmienić tej klasy, bo używają jej jawne zakresy OCR regionów.",
-    action: "Najpierw zmień zakres znaków w regionach wskazanych przy polu nazwy.",
+    message: "This class cannot change because region OCR ranges use it.",
+    action: "First change the character range of the regions named by the name field.",
   },
   // A whole-profile save that asked to drop a class `annotations` still point
   // at. `Annotation.category_id` is RESTRICT, so there is no version of this
   // that keeps both the deletion and the review work; the copy says so rather
   // than suggesting a retry.
   category_in_use: {
-    message: "Nie można usunąć tej klasy, bo używają jej zapisane anotacje.",
-    action: "Zostaw klasę w profilu albo zapisz definicję jako nowy profil przez Save as.",
+    message: "This class cannot be removed because saved annotations use it.",
+    action: "Keep the class in the profile or save the definition as a new profile with Save as.",
   },
   // The add-a-region twin of `category_name_exists`. `hud_regions` carries
   // `UniqueConstraint(profile_id, name)` and the backend names the region that
   // already holds the name, so the screen can point at it.
   region_name_exists: {
-    message: "Region o tej nazwie już istnieje w tym profilu.",
-    action: "Podaj inną nazwę regionu.",
+    message: "A region with this name already exists in this profile.",
+    action: "Enter a different region name.",
   },
   region_persistence_failed: {
-    message: "Nie udało się zapisać regionu.",
-    action: "Spróbuj ponownie; jeśli błąd wraca, sprawdź dostępność bazy w workspace.",
+    message: "The region could not be saved.",
+    action: "Try again; if the error returns, check that the workspace database is available.",
   },
   regions_required: {
-    message: "Profil musi mieć przynajmniej jeden region HUD.",
-    action: "Zaznacz region na obrazie referencyjnym.",
+    message: "A profile needs at least one HUD region.",
+    action: "Draw a region on the reference image.",
   },
   categories_required: {
-    message: "Profil musi mieć przynajmniej jedną klasę.",
-    action: "Dodaj klasę bazową albo klasę specyficzną dla gry.",
+    message: "A profile needs at least one class.",
+    action: "Add a base class or a game-specific class.",
   },
   region_out_of_bounds: {
-    message: "Region wykracza poza obraz referencyjny.",
-    action: "Zmieść region w granicach obrazu.",
+    message: "The region extends beyond the reference image.",
+    action: "Fit the region inside the image.",
   },
   unsupported_reference_image: {
-    message: "Format obrazu referencyjnego nie jest wspierany.",
-    action: "Wskaż obraz w obsługiwanym formacie.",
+    message: "The reference image format is not supported.",
+    action: "Choose an image in a supported format.",
   },
   // Added in FE-001-F3. `POST /profiles` answers with every code
   // `DatasetDefinitionEngine.validate_profile`, `ReferenceImageProbe` and
   // `ProfileUseCases.create_profile` can raise, and each one names a different
   // repair — folding them into the generic fallback would hide which.
   reference_path_not_absolute: {
-    message: "Ścieżka do obrazu referencyjnego musi być bezwzględna.",
-    action: "Podaj pełną ścieżkę lokalną do pliku obrazu.",
+    message: "The reference image path must be absolute.",
+    action: "Enter the full local path to the image file.",
   },
   invalid_reference_image: {
-    message: "Wskazany plik nie jest poprawnym obrazem.",
-    action: "Wskaż nieuszkodzony plik obrazu klatki referencyjnej.",
+    message: "The chosen file is not a valid image.",
+    action: "Choose an undamaged screenshot file.",
   },
   reference_image_unreadable: {
-    message: "Nie udało się odczytać obrazu referencyjnego z dysku.",
-    action: "Sprawdź uprawnienia do pliku i spróbuj ponownie.",
+    message: "The reference image could not be read from disk.",
+    action: "Check the file permissions and try again.",
   },
   invalid_source_dimensions: {
-    message: "Obraz referencyjny ma niepoprawne wymiary.",
-    action: "Wskaż obraz o dodatniej szerokości i wysokości.",
+    message: "The reference image has invalid dimensions.",
+    action: "Choose an image with a positive width and height.",
   },
   profile_name_required: {
-    message: "Profil musi mieć nazwę.",
-    action: "Podaj nazwę profilu.",
+    message: "A profile needs a name.",
+    action: "Enter a profile name.",
   },
   profile_name_too_long: {
-    message: "Nazwa profilu jest za długa.",
-    action: "Skróć nazwę do 200 znaków.",
+    message: "The profile name is too long.",
+    action: "Shorten the name to 200 characters.",
   },
   invalid_region_name: {
-    message: "Nazwa regionu jest pusta albo za długa.",
-    action: "Nazwij region tekstem o długości od 1 do 200 znaków.",
+    message: "The region name is empty or too long.",
+    action: "Name the region with 1 to 200 characters.",
   },
   invalid_region_bbox: {
-    message: "Region ma niepoprawną geometrię.",
-    action: "Region musi mieć dodatnią szerokość i wysokość oraz nieujemny początek.",
+    message: "The region has invalid geometry.",
+    action: "A region needs a positive width and height and a non-negative origin.",
   },
   duplicate_region_name: {
-    message: "Dwa regiony mają tę samą nazwę.",
-    action: "Nazwy regionów muszą być unikalne w profilu.",
+    message: "Two regions have the same name.",
+    action: "Region names must be unique within the profile.",
   },
   invalid_category_name: {
-    message: "Nazwa klasy jest pusta albo za długa.",
-    action: "Nazwij klasę tekstem o długości od 1 do 200 znaków.",
+    message: "The class name is empty or too long.",
+    action: "Name the class with 1 to 200 characters.",
   },
   invalid_category_kind: {
-    message: "Rodzaj klasy nie jest rozpoznawany.",
-    action: "Wybierz klasę bazową albo klasę specyficzną dla gry.",
+    message: "The class kind is not recognised.",
+    action: "Choose a base class or a game-specific class.",
   },
   invalid_character_category: {
-    message: "Klasa bazowa nie należy do alfabetu OCR.",
-    action: "Klasa bazowa to jeden znak ze zbioru A–Z, 0–9, „-” i „/”.",
+    message: "The base class is not part of the OCR alphabet.",
+    action: "A base class is one character from A–Z, 0–9, “-” and “/”.",
   },
   duplicate_category_name: {
-    message: "Dwie klasy mają tę samą nazwę.",
-    action: "Nazwy klas muszą być unikalne w profilu.",
+    message: "Two classes have the same name.",
+    action: "Class names must be unique within the profile.",
   },
   reference_asset_copy_failed: {
-    message: "Nie udało się skopiować obrazu referencyjnego do katalogu roboczego.",
-    action: "Sprawdź miejsce na dysku i uprawnienia katalogu roboczego, po czym powtórz zapis.",
+    message: "The reference image could not be copied into the workspace.",
+    action: "Check disk space and workspace permissions, then save again.",
   },
   reference_source_required: {
-    message: "Nie wskazano źródła obrazu referencyjnego.",
-    action: "Wybierz materiał i moment albo użyj bezwzględnej ścieżki do obrazu.",
+    message: "No reference image source was given.",
+    action: "Choose a material and a moment, or use an absolute image path.",
   },
   invalid_frame_timestamp: {
-    message: "Wybrany moment nie mieści się w czasie trwania materiału.",
-    action: "Podaj moment od początku materiału do jego czasu końcowego.",
+    message: "The chosen moment is outside the material's duration.",
+    action: "Choose a moment between the start and the end of the material.",
   },
   ffmpeg_unavailable: {
-    message: "FFmpeg jest niedostępny, więc nie da się wyciąć klatki referencyjnej.",
-    action: "Zainstaluj FFmpeg albo popraw jego ścieżkę w konfiguracji i spróbuj ponownie.",
+    message: "FFmpeg is unavailable, so the reference frame cannot be extracted.",
+    action: "Install FFmpeg or correct its path in the configuration and try again.",
   },
   frame_extraction_timeout: {
-    message: "Wycinanie klatki referencyjnej przekroczyło limit czasu.",
-    action: "Sprawdź materiał i spróbuj ponownie z innym momentem.",
+    message: "Extracting the reference frame took too long.",
+    action: "Check the material and try again with a different moment.",
   },
   reference_frame_extraction_failed: {
-    message: "Nie udało się wyciąć poprawnej klatki referencyjnej z materiału.",
-    action: "Wybierz inny moment albo użyj alternatywnej ścieżki do obrazu.",
+    message: "A valid reference frame could not be extracted from the material.",
+    action: "Choose a different moment or use an image path instead.",
   },
   reference_frame_resolution_mismatch: {
-    message: "Wycięta klatka ma inne wymiary niż zaimportowany materiał.",
-    action: "Zaimportuj materiał ponownie, a następnie ponów wybór klatki.",
+    message: "The extracted frame has different dimensions than the imported material.",
+    action: "Import the material again, then choose the frame again.",
   },
   profile_persistence_failed: {
-    message: "Zapis profilu nie powiódł się i nic nie zostało utrwalone.",
-    action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
+    message: "Saving the profile failed and nothing was stored.",
+    action: "Try again; if the error returns, check the backend logs.",
   },
   category_persistence_failed: {
-    message: "Nie udało się zapisać nowej klasy.",
-    action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
+    message: "The new class could not be saved.",
+    action: "Try again; if the error returns, check the backend logs.",
   },
 
   // --- materials ---
   unsupported_media: {
-    message: "Format pliku wideo nie jest wspierany.",
-    action: "Użyj pliku z rodziny mp4/mov albo matroska/webm.",
+    message: "The video file format is not supported.",
+    action: "Use a file from the mp4/mov or matroska/webm family.",
   },
   media_too_large: {
-    message: "Plik wideo przekracza dopuszczalny rozmiar.",
-    action: "Wskaż mniejszy plik albo przytnij materiał przed importem.",
+    message: "The video file is larger than allowed.",
+    action: "Choose a smaller file or trim the material before importing.",
   },
   media_too_long: {
-    message: "Materiał jest dłuższy niż dopuszczalny czas.",
-    action: "Skróć nagranie i zaimportuj je ponownie.",
+    message: "The material is longer than allowed.",
+    action: "Shorten the recording and import it again.",
   },
   disk_space: {
-    message: "Na dysku brakuje miejsca na przetworzenie tego materiału.",
-    action: "Zwolnij miejsce w katalogu roboczym i powtórz import.",
+    message: "There is not enough disk space to process this material.",
+    action: "Free up space in the workspace and repeat the import.",
   },
   media_path_not_absolute: {
-    message: "Ścieżka do pliku musi być bezwzględna.",
-    action: "Podaj pełną ścieżkę lokalną do pliku wideo.",
+    message: "The file path must be absolute.",
+    action: "Enter the full local path to the video file.",
   },
   // TECH_PLAN §5 lists only 400/404 for `POST /materials`; the backend also
   // answers 503 and 504 here (`backend/app/api/materials.py`).
   ffprobe_unavailable: {
-    message: "FFmpeg/ffprobe jest niedostępny, więc nie da się sprawdzić materiału.",
-    action: "Zainstaluj FFmpeg albo popraw jego ścieżkę w konfiguracji i spróbuj ponownie.",
+    message: "FFmpeg/ffprobe is unavailable, so the material cannot be checked.",
+    action: "Install FFmpeg or correct its path in the configuration and try again.",
   },
   ffprobe_timeout: {
-    message: "Analiza materiału przez ffprobe przekroczyła limit czasu.",
-    action: "Sprawdź, czy plik nie jest uszkodzony, i powtórz import.",
+    message: "Analysing the material with ffprobe took too long.",
+    action: "Check that the file is not damaged and repeat the import.",
+  },
+  // FE-022: the native "open file" dialog behind `POST /local-files/pick`.
+  file_picker_unavailable: {
+    message: "The system file dialog could not be opened.",
+    action: "Use Enter path to type the full path to the file.",
+  },
+  file_picker_busy: {
+    message: "A file dialog is already open.",
+    action: "Finish or close the open dialog first.",
   },
 
   // --- exports ---
   export_running: {
-    message: "Eksport tego runu już trwa.",
-    action: "Poczekaj na jego zakończenie, zanim uruchomisz kolejny.",
+    message: "An export of this run is already running.",
+    action: "Wait for it to finish before starting another one.",
   },
   no_accepted_frames: {
-    message: "Run nie ma żadnej zaakceptowanej klatki do wyeksportowania.",
-    action: "Zaakceptuj przynajmniej jedną klatkę w weryfikacji.",
+    message: "The run has no accepted frame to export.",
+    action: "Accept at least one frame in review.",
   },
   export_revision_conflict: {
-    message: "Stan weryfikacji zmienił się w trakcie eksportu, więc nic nie zostało zapisane.",
-    action: "Uruchom eksport ponownie, żeby objął aktualną rewizję.",
+    message: "The review state changed during the export, so nothing was written.",
+    action: "Run the export again so it covers the current revision.",
   },
   export_source_missing: {
-    message: "Podczas eksportu zabrakło pliku źródłowego klatki.",
-    action: "Przywróć brakujące artefakty runu i powtórz eksport.",
+    message: "A frame source file went missing during the export.",
+    action: "Restore the missing run artifacts and repeat the export.",
   },
   export_process_interrupted: {
-    message: "Proces eksportu został przerwany przed zakończeniem.",
-    action: "Uruchom eksport ponownie; niedokończony wynik nie został opublikowany.",
+    message: "The export process was interrupted before it finished.",
+    action: "Run the export again; the unfinished result was not published.",
   },
   export_unavailable: {
-    message: "Usługa eksportu jest niedostępna.",
-    action: "Sprawdź, czy backend działa, i spróbuj ponownie.",
+    message: "The export service is unavailable.",
+    action: "Check that the backend is running and try again.",
   },
 
   // --- not found ---
-  run_not_found: { message: "Nie znaleziono runu.", action: "Wróć do listy i wybierz istniejący run." },
-  frame_not_found: { message: "Nie znaleziono klatki.", action: "Odśwież listę klatek." },
+  run_not_found: {
+    message: "Run not found.",
+    action: "Go back to the list and choose an existing run.",
+  },
+  frame_not_found: { message: "Frame not found.", action: "Refresh the frame list." },
   frame_image_not_found: {
-    message: "Nie znaleziono obrazu klatki.",
-    action: "Sprawdź katalog roboczy albo uruchom run ponownie.",
+    message: "Frame image not found.",
+    action: "Check the workspace or run the material again.",
   },
   annotation_not_found: {
-    message: "Nie znaleziono anotacji.",
-    action: "Odśwież klatkę — anotacja mogła zostać usunięta.",
+    message: "Annotation not found.",
+    action: "Refresh the frame — the annotation may have been deleted.",
   },
-  profile_not_found: { message: "Nie znaleziono profilu.", action: "Wybierz istniejący profil gry." },
-  video_not_found: { message: "Nie znaleziono materiału.", action: "Wybierz istniejący materiał." },
-  export_not_found: { message: "Nie znaleziono eksportu.", action: "Wróć do listy eksportów." },
+  profile_not_found: { message: "Profile not found.", action: "Choose an existing game profile." },
+  video_not_found: { message: "Material not found.", action: "Choose an existing material." },
+  export_not_found: { message: "Export not found.", action: "Go back to the export list." },
   asset_not_found: {
-    message: "Nie znaleziono obrazu referencyjnego.",
-    action: "Utwórz profil ponownie z dostępnym obrazem.",
+    message: "Reference image not found.",
+    action: "Create the profile again with an available image.",
   },
   route_not_found: {
-    message: "Ten adres API nie istnieje.",
-    action: "Zgłoś problem — frontend odpytał nieistniejący endpoint.",
+    message: "This API address does not exist.",
+    action: "Report the problem — the frontend called an endpoint that does not exist.",
   },
 
   // --- generic ---
   validation_error: {
-    message: "Żądanie nie przeszło walidacji po stronie API.",
-    action: "Popraw zaznaczone pola i wyślij formularz ponownie.",
+    message: "The request did not pass API validation.",
+    action: "Correct the marked fields and submit again.",
   },
   dependency_unavailable: {
-    message: "Krytyczna zależność lokalna jest niedostępna.",
-    action: "Sprawdź stan bazy i katalogu roboczego na ekranie startowym.",
+    message: "A critical local dependency is unavailable.",
+    action: "Check the database and the workspace directory.",
   },
   internal_error: {
-    message: "Wystąpił nieoczekiwany błąd aplikacji.",
-    action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
+    message: "An unexpected application error occurred.",
+    action: "Try again; if the error returns, check the backend logs.",
   },
 };
 
 const FALLBACK_COPY: ErrorCopy = {
-  message: "Operacja nie powiodła się.",
-  action: "Spróbuj ponownie; jeśli błąd wraca, zajrzyj do logów backendu.",
+  message: "The operation failed.",
+  action: "Try again; if the error returns, check the backend logs.",
 };
 
 const TRANSPORT_COPY: ErrorCopy = {
-  message: "Nie udało się porozumieć z lokalnym API.",
-  action: "Sprawdź, czy backend DatasetFactory działa, i spróbuj ponownie.",
+  message: "The local API could not be reached.",
+  action: "Check that the DatasetFactory backend is running and try again.",
 };
 
 /** Copy for a bare code, e.g. the `error_code` field of a failed export. */
@@ -387,13 +399,13 @@ export interface RunStatusCopy {
 }
 
 const RUN_STATUS_COPY: Readonly<Record<RunStatus, RunStatusCopy>> = {
-  queued: { label: "W kolejce", tone: "neutral" },
-  running: { label: "W toku", tone: "brand" },
-  paused: { label: "Wstrzymany", tone: "warning" },
-  review_ready: { label: "Gotowy do weryfikacji", tone: "brand" },
-  completed: { label: "Ukończony", tone: "success" },
-  failed: { label: "Nieudany", tone: "error" },
-  cancelled: { label: "Anulowany", tone: "neutral" },
+  queued: { label: "Queued", tone: "neutral" },
+  running: { label: "Running", tone: "brand" },
+  paused: { label: "Paused", tone: "warning" },
+  review_ready: { label: "Ready for review", tone: "brand" },
+  completed: { label: "Completed", tone: "success" },
+  failed: { label: "Failed", tone: "error" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
 export function describeRunStatus(status: RunStatus): RunStatusCopy {
@@ -401,9 +413,9 @@ export function describeRunStatus(status: RunStatus): RunStatusCopy {
 }
 
 const EXPORT_STATUS_COPY: Readonly<Record<ExportStatus, RunStatusCopy>> = {
-  running: { label: "W toku", tone: "brand" },
-  completed: { label: "Ukończony", tone: "success" },
-  failed: { label: "Nieudany", tone: "error" },
+  running: { label: "Running", tone: "brand" },
+  completed: { label: "Completed", tone: "success" },
+  failed: { label: "Failed", tone: "error" },
 };
 
 export function describeExportStatus(status: ExportStatus): RunStatusCopy {
@@ -413,15 +425,15 @@ export function describeExportStatus(status: ExportStatus): RunStatusCopy {
 /**
  * `PipelineRun.current_stage` is a free-form string the worker writes
  * (`backend/app/access/store/repositories/{runs,checkpoints}.py`), not a closed
- * enum in the contract. Known values get Polish copy; anything else is shown
+ * enum in the contract. Known values get English copy; anything else is shown
  * verbatim rather than hidden, so a new worker stage stays visible.
  */
 const RUN_STAGE_COPY: Readonly<Record<string, string>> = {
-  sampling: "Próbkowanie",
-  sample: "Próbkowanie",
-  crop: "Regiony HUD",
+  sampling: "Sampling",
+  sample: "Sampling",
+  crop: "HUD regions",
   ocr: "OCR",
-  review: "Weryfikacja",
+  review: "Review",
 };
 
 export function describeRunStage(stage: string | null): string | null {

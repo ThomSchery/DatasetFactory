@@ -4,16 +4,58 @@
  * where the two coordinate systems meet and it is a CSS `inset: 0`.
  */
 
+/* The picture, then one row of tools under it (FE-022: tools sit beside the
+   picture, never over it). */
+.df-region-canvas {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--element-gap-lg);
+  min-width: 0;
+  min-height: 0;
+}
+
 .df-region-overlay {
   position: relative;
   display: block;
   width: fit-content;
   max-width: 100%;
-  margin: var(--size-md) auto;
+  margin: var(--size-none) auto;
   overflow: hidden;
-  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
   background-color: var(--color-background-primary-default);
   line-height: var(--line-height-tight);
+}
+
+/* `IMAGE FILL`: the consumer sizes the canvas; the picture is cropped to it. */
+.df-region-canvas--fill {
+  height: 100%;
+}
+
+.df-region-canvas--fill .df-region-overlay {
+  width: 100%;
+  height: 100%;
+}
+
+.df-region-canvas--fill .df-region-overlay__zoom-stage {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.df-region-canvas--fill .df-region-overlay__image {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  border-radius: var(--radius-none);
+}
+
+.df-region-canvas--fill .df-region-overlay__zoom-stage[data-placed] .df-region-overlay__image {
+  object-fit: fill;
 }
 
 .df-region-overlay[data-disabled] {
@@ -218,58 +260,40 @@
   pointer-events: none;
 }
 
-.df-region-overlay__zoom-controls {
-  position: absolute;
-  top: var(--size-xs);
-  right: var(--size-xs);
-  z-index: 2;
+.df-region-overlay__toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--size-xs);
-  padding: calc(var(--size-xs) / 2);
-  border-radius: var(--radius-md);
-  background: var(--color-overlay-scrim);
-  color: var(--color-text-strong-default);
+  gap: var(--element-padding-y-md);
+  min-width: 0;
+}
+
+.df-region-overlay__zoom-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--element-padding-y-md);
+}
+
+.df-region-overlay__zoom-controls .df-button {
+  width: var(--field-height);
+  min-width: var(--field-height);
+  padding: var(--size-none);
 }
 
 .df-region-overlay__zoom-value {
   min-width: var(--size-xl);
+  color: var(--color-text-weak-default);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   text-align: center;
 }
 
-/* Below the Figma `lg` frame the floating controls covered most of the top
-   row of the HUD — at 768 px about three quarters of it, which is exactly where
-   the regions under review sit. There they go under the image instead. */
-@media (max-width: 991px) {
-  .df-region-overlay__zoom-controls {
-    position: static;
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 100%;
-  }
-}
-
-.df-region-overlay__zoom-controls .df-button {
-  min-width: var(--control-height-sm);
-  min-height: var(--control-height-sm);
-  padding-inline: var(--size-xs);
-  background: var(--color-background-primary-default);
-}
-
-.df-region-overlay__zoom-controls .df-button[aria-pressed="true"] {
-  border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-fill-brand-impeccable);
-  color: var(--color-text-on-brand);
-}
-
-.df-region-overlay__zoom-controls .df-button[aria-pressed="true"]:hover,
-.df-region-overlay__zoom-controls .df-button[aria-pressed="true"]:active {
-  border-color: var(--color-fill-brand-impeccable-hover);
-  background: var(--color-fill-brand-impeccable-hover);
+.df-region-overlay__trailing {
+  display: flex;
+  gap: var(--element-gap-md);
+  margin-inline-start: auto;
 }
 
 .df-region-overlay__context-menu {
@@ -285,6 +309,7 @@
 }
 
 .df-region-overlay__context-menu .df-button {
+  gap: var(--element-gap-md);
   justify-content: flex-start;
   width: 100%;
   min-height: var(--control-height-sm);

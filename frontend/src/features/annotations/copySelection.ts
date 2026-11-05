@@ -34,7 +34,7 @@ export function copyOptionGroups(
  * rows carry the digit.
  */
 export const PREVIOUS_CLASS_LIST_LABEL =
-  "Klasy z poprzedniej klatki i liczba ich wystąpień";
+  "Classes of the previous frame and their counts";
 
 /**
  * The picker restricted to what the previous frame actually holds, with the

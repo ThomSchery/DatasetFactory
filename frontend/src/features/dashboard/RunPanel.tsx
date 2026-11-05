@@ -7,18 +7,16 @@ import {
 } from "../../api";
 import type { PipelineRun, RunAction } from "../../api";
 import { Button } from "../../components/common/Button";
-import { DataList } from "../../components/common/DataList";
-import { Panel } from "../../components/common/Panel";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { InlineError, Progress } from "../../components/common/UiStates";
 import { useRunActions } from "./useRunActions";
 import "./RunPanel.css";
 
 const ACTION_LABELS: Readonly<Record<RunAction, string>> = {
-  start: "Uruchom",
-  pause: "Wstrzymaj",
-  resume: "Wznów",
-  cancel: "Anuluj",
+  start: "Start",
+  pause: "Pause",
+  resume: "Resume",
+  cancel: "Cancel",
 };
 
 export interface RunPanelProps {
@@ -28,12 +26,12 @@ export interface RunPanelProps {
 }
 
 /**
- * The active run: what it is doing, how far it got, and the four controls.
+ * The active run, compact (FE-022): it sits under the Run button inside the
+ * Run Setup panel rather than as a full-width panel, and keeps everything the
+ * operator needs to steer the run — status, stage, progress and the controls.
  *
  * Progress counts frames the run has finished against the frames it planned
- * (`total_frames`). That is a different number from the dashboard's
- * `frame_counts.total`, which counts frame rows that exist, and the two are
- * never presented as the same thing.
+ * (`total_frames`), never the frame rows that already exist.
  */
 export function RunPanel({ onTransitioned, run }: RunPanelProps) {
   const status = describeRunStatus(run.status);
@@ -45,61 +43,35 @@ export function RunPanel({ onTransitioned, run }: RunPanelProps) {
   const mutationError = mutation.isError ? describeApiError(mutation.error) : null;
 
   return (
-    <Panel
-      aside={
-        <StatusBadge srLabel="Status runu:" tone={status.tone}>
+    <section aria-label="Active run" className="df-run-panel">
+      <div className="df-run-panel__heading">
+        <span className="df-run-panel__title">Active run</span>
+        <StatusBadge srLabel="Run status:" tone={status.tone}>
           {status.label}
         </StatusBadge>
-      }
-      eyebrow="Run"
-      title="Aktywny run"
-    >
-      <DataList
-        items={[
-          { label: "Identyfikator", value: run.id },
-          { label: "Etap", value: stage ?? "Brak etapu" },
-          {
-            hint: "Klatki ukończone wobec zaplanowanych dla tego runu.",
-            label: "Klatki",
-            value: `${String(run.completed_frames)} / ${String(run.total_frames)}`,
-          },
-          { label: "Interwał próbkowania", value: `${String(run.interval_ms)} ms` },
-          { label: "Próba", value: run.attempt },
-        ]}
-        layout="columns"
+      </div>
+      <p className="df-run-panel__meta">
+        {stage ?? "No stage"} · {String(run.interval_ms)} ms · attempt {String(run.attempt)}
+      </p>
+      <Progress
+        label={`Frames ${String(run.completed_frames)} / ${String(run.total_frames)}`}
+        max={run.total_frames}
+        value={run.completed_frames}
       />
 
-      <div className="df-run-panel__progress">
-        <Progress
-          label="Postęp klatek"
-          max={run.total_frames}
-          value={run.completed_frames}
-        />
-      </div>
-
       {failure === null ? null : (
-        <div className="df-run-panel__failure">
-          {/* The stable `error_code` is shown alongside the copy: it is what the
-              user quotes in a bug report, and translating it away would lose it. */}
-          <InlineError message={`${failure.message} ${failure.action}`} />
-          <p className="df-run-panel__code">
-            Kod błędu: <code>{run.error_code}</code>
-          </p>
-        </div>
+        // The stable `error_code` is shown alongside the copy: it is what the
+        // user quotes in a bug report.
+        <InlineError message={`${failure.message} ${failure.action} Code: ${String(run.error_code)}.`} />
       )}
 
-      {actions.length === 0 ? (
-        <p className="df-run-panel__no-actions">
-          Ten status runu nie ma dostępnych operacji sterujących.
-        </p>
-      ) : (
+      {actions.length === 0 ? null : (
         <div className="df-run-panel__actions">
           {actions.map((action) => (
             <Button
               key={action}
               // Every control sends the same `expected_version`, so a second one
-              // in flight would only earn a `409 version_conflict`. All four are
-              // disabled while any of them is pending (FE-06).
+              // in flight would only earn a `409 version_conflict`.
               disabled={mutation.isPending}
               loading={mutation.isPending && mutation.variables?.action === action}
               onClick={() => {
@@ -109,7 +81,8 @@ export function RunPanel({ onTransitioned, run }: RunPanelProps) {
                   runId: run.id,
                 });
               }}
-              variant={action === "cancel" ? "muted" : "primary"}
+              size="sm"
+              variant="secondary"
             >
               {ACTION_LABELS[action]}
             </Button>
@@ -118,10 +91,8 @@ export function RunPanel({ onTransitioned, run }: RunPanelProps) {
       )}
 
       {mutationError === null ? null : (
-        <div className="df-run-panel__error">
-          <InlineError message={`${mutationError.message} ${mutationError.action}`} />
-        </div>
+        <InlineError message={`${mutationError.message} ${mutationError.action}`} />
       )}
-    </Panel>
+    </section>
   );
 }

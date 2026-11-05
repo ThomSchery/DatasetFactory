@@ -3,64 +3,89 @@
   gap: 0;
   align-content: center;
   min-height: var(--control-height-md); /* GRID-05: desktop hit area >= 32px. */
-  padding: var(--size-xs) var(--size-sm);
+  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
   color: var(--color-text-weak-default);
   font-family: var(--font-family-ui);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-standard);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+  line-height: var(--line-height-tight);
   text-decoration: none; /* TYPO-19: structurally interactive, no underline. */
 }
 
+/* The stacked item of the menu and the drawer: icon, label, optional note. */
 .df-nav-item--rail {
-  /* BWIDTH-13: the inactive item reserves the same 2px accent in a transparent
-     colour, so activation never shifts the 8-point grid. */
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--element-gap-lg);
+  align-items: center;
   border-inline-start: var(--border-width-emphasis) solid var(--color-surface-transparent);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
+}
+
+.df-nav-item--rail .df-nav-item__label,
+.df-nav-item--rail .df-nav-item__description {
+  grid-column: 2;
 }
 
 .df-nav-item:hover {
   /* OPACITY-02 Method B: a 0.06 alpha layer instead of a new absolute colour. */
-  background: var(--color-surface-neutral-hover);
+  background: var(--color-surface-neutral-raised);
   color: var(--color-text-strong-default);
 }
 
-.df-nav-item:hover .df-nav-item__label {
+.df-nav-item--rail:hover .df-nav-item__label {
   text-decoration: underline; /* TYPO-20 Logic B. */
 }
 
 .df-nav-item--rail.df-nav-item--active {
   border-inline-start-color: var(--color-fill-brand-impeccable); /* BORDER-08. */
-  background: var(--color-fill-brand-impeccable-soft);
-  color: var(--color-text-strong-default);
-}
-
-/*
- * The Figma switch: a pill inside a grouped track. The active pill is a
- * lighter surface with a visible outline, and it keeps `aria-current`, so the
- * state is never carried by the surface alone (COLOR-09).
- */
-.df-nav-item--segment {
-  display: inline-flex;
-  gap: var(--size-xs);
-  align-items: center;
-  justify-content: center;
-  min-height: var(--control-height-md);
-  padding: var(--size-xs) var(--size-md);
-  border: var(--border-width-default) solid var(--color-surface-transparent);
-  border-radius: var(--radius-lg);
-  white-space: nowrap;
-}
-
-.df-nav-item--segment.df-nav-item--active {
-  border-color: var(--color-stroke-control-default);
   background: var(--color-surface-neutral-selected);
   color: var(--color-text-strong-default);
 }
 
-@media (max-width: 576px) {
-  .df-nav-item--segment {
-    padding-inline: var(--size-xs);
-  }
+/*
+ * The Figma switch (`Flow`): a 40 px pill with a 24 px icon and a 12/300 label
+ * inside the `Frame 52` track. The active pill is the selected surface with a
+ * visible outline and keeps `aria-current`, so the state is never carried by
+ * the surface alone (COLOR-09).
+ */
+.df-nav-item--segment {
+  display: inline-flex;
+  gap: var(--element-gap-lg);
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--control-height-md);
+  padding: var(--size-none) var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-neutral-default);
+  color: var(--color-text-strong-default);
+  white-space: nowrap;
+}
+
+.df-nav-item--segment.df-nav-item--active {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-surface-neutral-raised);
+}
+
+/* The FE-022 side bar: a 24 px glyph on a 40 px square, label for assistive
+   technology and the tooltip only. */
+.df-nav-item--strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  padding: var(--size-none);
+  border: var(--border-width-default) solid var(--color-surface-transparent);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-weak-default);
+}
+
+.df-nav-item--strip.df-nav-item--active {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-surface-neutral-selected);
+  color: var(--color-text-strong-default);
 }
 
 .df-nav-item__icon {
@@ -68,12 +93,16 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: var(--size-sm);
-  height: var(--size-sm);
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.df-nav-item--rail .df-nav-item__icon {
+  grid-row: 1 / span 2;
 }
 
 .df-nav-item__label {
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-light);
 }
 
 .df-nav-item--active .df-nav-item__label {

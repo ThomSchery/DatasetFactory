@@ -15,8 +15,8 @@ describe("StatusBadge", () => {
   });
 
   it("defaults to the neutral tone", () => {
-    render(<StatusBadge>Gotowe</StatusBadge>);
-    expect(screen.getByText("Gotowe")).toHaveClass("df-status-badge--neutral");
+    render(<StatusBadge>Done</StatusBadge>);
+    expect(screen.getByText("Done")).toHaveClass("df-status-badge--neutral");
   });
 
   it("carries a screen reader prefix so meaning is not colour-only", () => {

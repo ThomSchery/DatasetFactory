@@ -3,9 +3,11 @@ export { AppShell } from "./AppShell";
 export { createQueryClient } from "./queryClient";
 export { appRoutes, createAppRouter } from "./routes";
 export {
-  NAV_DESTINATIONS,
+  MENU_DESTINATIONS,
   PIPELINE_STAGES,
+  SECTION_DESTINATIONS,
   WORKSPACE_DESTINATIONS,
   annotationsPath,
+  runSetupPath,
 } from "./navigation";
-export type { NavDestination, NavDestinationIcon, PipelineStage } from "./navigation";
+export type { NavDestination, PipelineStage } from "./navigation";

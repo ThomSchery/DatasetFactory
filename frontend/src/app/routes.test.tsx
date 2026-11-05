@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,27 +10,24 @@ import {
   runFixture,
   runSummaryFixture,
 } from "../test/fixtures";
-import { renderApp, stubFetch } from "../test/harness";
-import { NAV_DESTINATIONS, WORKSPACE_DESTINATIONS } from "./navigation";
+import { renderApp, restoreViewportWidth, setViewportWidth, stubFetch } from "../test/harness";
+import { MENU_DESTINATIONS, SECTION_DESTINATIONS, WORKSPACE_DESTINATIONS } from "./navigation";
 
 /*
- * FE-04 fixed the route set at five; FE-021 added `/run` when it split Upload
- * from Run, and kept every earlier address resolving.
- *
- * The navigation itself changed shape: three steps in a switch, everything
- * else behind a named menu. These tests follow that shape but assert the same
- * properties as before — every destination reachable, the active one carrying
+ * FE-022 routes and shell: no Dashboard (`/` opens Upload), a side bar with the
+ * four sections, the Upload / Profile / Run switch on those three screens and
+ * the ⋮ menu for everything else. These tests assert the same properties as
+ * before — every destination reachable, the active one carrying
  * `aria-current`, and the whole thing operable from the keyboard.
  */
 
-const BUILT_ROUTES: readonly [string, string][] = [
-  ["/", "Dashboard"],
-  ["/run", "Run Setup"],
-];
-
-/** Opens the menu that holds the complete destination map. */
+/** Opens the ⋮ menu that holds what the side bar does not show. */
 async function openMenu(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "Wszystkie sekcje" }));
+  await user.click(screen.getByRole("button", { name: "More" }));
+}
+
+function sections() {
+  return screen.getByRole("navigation", { name: "Sections" });
 }
 
 beforeEach(() => {
@@ -68,119 +65,214 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  restoreViewportWidth();
 });
 
-describe("the five FE-04 routes", () => {
-  it.each(BUILT_ROUTES)("renders the %s screen with its run panel", async (path, heading) => {
-    renderApp([path]);
+describe("the routes", () => {
+  it("opens Upload at / now that the Dashboard is gone", async () => {
+    const app = renderApp(["/"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(heading);
-    expect(
-      await screen.findByRole("region", { name: "Aktywny run" }, { timeout: 3000 }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+    await waitFor(() => {
+      expect(app.router.state.location.pathname).toBe("/materials");
+    });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Upload");
+    expect(screen.getByRole("button", { name: "Upload Video" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Dashboard/ })).toBeNull();
   });
 
-  it("renders Upload as import and material list, without the run controls", async () => {
+  it("renders Run Setup with its visible heading and run settings", async () => {
+    renderApp(["/run"]);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Run Setup");
+    expect(await screen.findByRole("region", { name: "Run settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run" })).toBeInTheDocument();
+  });
+
+  it("renders Upload as the upload tile alone, without the run controls", () => {
     renderApp(["/materials"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Materiały");
-    expect(await screen.findByRole("region", { name: "Import materiału" })).toBeInTheDocument();
-    // FE-021 moved starting a run to `/run`; Upload stops at the list.
-    expect(screen.queryByRole("region", { name: "Aktywny run" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Uruchomienie runu" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Upload Video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enter path" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Active run" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Run settings" })).toBeNull();
   });
 
   it("opens the profile workspace on a blank draft at /profiles/new", () => {
     renderApp(["/profiles/new"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nowy profil gry");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("New profile");
     // The same panels as a loaded profile; only the screenshot is missing.
-    expect(screen.getByRole("region", { name: "Dodaj zrzut ekranu" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add screenshot (JPG/PNG)" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Annotations" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Klasy" })).toBeInTheDocument();
-    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+    expect(screen.getByRole("region", { name: "Classes" })).toBeInTheDocument();
   });
 
   it("opens the active profile in the same workspace at /profiles", async () => {
     renderApp(["/profiles"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Profile gier");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Setup for scan");
     expect(
-      await screen.findByRole("region", { name: "Zrzut referencyjny" }),
+      await screen.findByRole("img", { name: /Reference screenshot of profile/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Annotations" })).toBeInTheDocument();
   });
 
-  it("renders the annotation review screen built in FE-001-F4", async () => {
+  it("renders the annotation review screen", async () => {
     renderApp(["/annotations/run-42"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
     expect(
-      await screen.findByRole("group", { name: "Filtr statusu klatek" }),
+      await screen.findByRole("group", { name: "Frame status filter" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Brak klatek dla wybranego filtra")).toBeInTheDocument();
-    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Review frames");
+    expect(screen.getByText("No frames for this filter")).toBeInTheDocument();
   });
 
   it("renders the global run list as the annotation entry point", async () => {
     renderApp(["/annotations"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Anotacje");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Annotations");
     expect(await screen.findByText("Quake Champions")).toBeInTheDocument();
   });
 
-  it("renders the export screen built in FE-001-F5", async () => {
+  it("renders the export screen", async () => {
     renderApp(["/exports"]);
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Eksporty");
-    expect(await screen.findByText("Brak runu do eksportu")).toBeInTheDocument();
-    expect(screen.queryByText(/nie (jest|są) jeszcze zbudowan/i)).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Exports");
+    expect(await screen.findByText("No run to export")).toBeInTheDocument();
   });
 
   it("keeps runId in the URL rather than in component state", async () => {
     const app = renderApp(["/annotations/run-42"]);
-    await screen.findByText("Brak klatek dla wybranego filtra");
+    await screen.findByText("No frames for this filter");
     expect(app.router.state.location.pathname).toBe("/annotations/run-42");
   });
 
   it("shows an explicit empty state for an unknown path", () => {
     renderApp(["/nope"]);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nieznana trasa");
-    expect(screen.getByRole("region", { name: "Nie ma takiej trasy" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Unknown page");
+    expect(screen.getByRole("region", { name: "No such page" })).toBeInTheDocument();
   });
 });
 
 describe("navigation shell", () => {
-  it("offers the three workspace steps as a switch", () => {
-    renderApp(["/"]);
-    const steps = screen.getByRole("navigation", { name: "Kroki workspace'u" });
+  it("draws a bar with no text, only the sections toggle and the menu", () => {
+    renderApp(["/materials"]);
+    const bar = screen.getByRole("banner");
+    // The ⋮ list lives in the bar but is hidden; nothing visible is text.
+    expect(bar).not.toHaveTextContent("DatasetFactory");
+    expect(bar.querySelectorAll("h1, h2, p")).toHaveLength(0);
+    expect(within(bar).getByRole("button", { name: "Sections" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "More" })).toBeInTheDocument();
+  });
+
+  it("offers the three workspace steps as a switch on Upload, Profile and Run only", async () => {
+    renderApp(["/materials"]);
+    const steps = screen.getByRole("navigation", { name: "Workspace steps" });
     for (const destination of WORKSPACE_DESTINATIONS) {
       expect(within(steps).getByRole("link", { name: destination.label })).toBeInTheDocument();
     }
   });
 
-  it("keeps every destination reachable through the menu", async () => {
+  it("drops the switch on Review", async () => {
+    renderApp(["/annotations/run-42"]);
+    await screen.findByText("No frames for this filter");
+    expect(screen.queryByRole("navigation", { name: "Workspace steps" })).toBeNull();
+  });
+
+  it("shows the four sections as an icon strip from 768 px, with names", () => {
+    renderApp(["/materials"]);
+    for (const destination of SECTION_DESTINATIONS) {
+      const link = within(sections()).getByRole("link", { name: destination.label });
+      expect(link).toHaveAttribute("href", destination.path);
+      expect(link).toHaveAttribute("title", expect.stringContaining(destination.label));
+    }
+  });
+
+  it("collapses the strip with |← and brings it back with ☰", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
-    const nav = screen.getByRole("navigation", { name: "Nawigacja główna" });
+    renderApp(["/materials"]);
+    const toggle = screen.getByRole("button", { name: "Sections" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getByRole("button", { name: "Collapse sections" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("navigation", { name: "Sections" })).toBeNull();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(sections()).toBeInTheDocument();
+  });
+
+  it("hides the sections below 768 px and opens them as a drawer from ☰", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    const toggle = screen.getByRole("button", { name: "Sections" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+
+    await user.click(toggle);
+    const drawer = screen.getByRole("dialog", { name: "Sections" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(drawer).getByRole("button", { name: "Close sections" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+    expect(toggle).toHaveFocus();
+  });
+
+  it("traps focus inside the drawer and closes it after a choice", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    const app = renderApp(["/materials"]);
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    const drawer = screen.getByRole("dialog", { name: "Sections" });
+
+    await user.tab({ shift: true });
+    expect(within(drawer).getByRole("link", { name: "Annotations" })).toHaveFocus();
+    await user.tab();
+    expect(within(drawer).getByRole("button", { name: "Close sections" })).toHaveFocus();
+
+    await user.click(within(drawer).getByRole("link", { name: "Setup for scan" }));
+    await waitFor(() => {
+      expect(app.router.state.location.pathname).toBe("/profiles");
+    });
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+  });
+
+  it("closes the drawer on a click outside it", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    await user.pointer({ keys: "[MouseLeft]", target: screen.getByTestId("side-nav-scrim") });
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+  });
+
+  it("keeps the remaining destinations and the OCR engine report in the menu", async () => {
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    const nav = screen.getByRole("navigation", { name: "More destinations" });
 
     // Collapsed, the links are present but out of the tab order.
-    expect(within(nav).queryByRole("link", { name: /Eksporty/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /Exports/ })).toBeNull();
 
     await openMenu(user);
 
-    for (const destination of NAV_DESTINATIONS) {
+    for (const destination of MENU_DESTINATIONS) {
       expect(
         within(nav).getByRole("link", { name: new RegExp(destination.label) }),
       ).toBeInTheDocument();
     }
+    expect(within(nav).getByRole("button", { name: "OCR engine" })).toBeInTheDocument();
   });
 
   it("closes the menu on Escape and gives focus back to its toggle", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
-    const toggle = screen.getByRole("button", { name: "Wszystkie sekcje" });
+    renderApp(["/materials"]);
+    const toggle = screen.getByRole("button", { name: "More" });
 
     await openMenu(user);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -193,28 +285,27 @@ describe("navigation shell", () => {
 
   it("does not fake SAM 3 as a working destination", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
+    renderApp(["/materials"]);
     await openMenu(user);
     expect(screen.queryByRole("link", { name: /SAM 3/ })).toBeNull();
   });
 
-  it("marks the active step with aria-current", () => {
+  it("marks the active section and step with aria-current", () => {
     renderApp(["/materials"]);
-    expect(screen.getByRole("link", { name: "Upload" })).toHaveAttribute("aria-current", "page");
+    expect(within(sections()).getByRole("link", { name: "Upload" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    const steps = screen.getByRole("navigation", { name: "Workspace steps" });
+    expect(within(steps).getByRole("link", { name: "Upload" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
-  it("does not mark the dashboard active on a nested route", async () => {
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    await openMenu(user);
-    expect(screen.getByRole("link", { name: /Dashboard/ })).not.toHaveAttribute("aria-current");
-  });
-
-  it("links Anotacje to the global run list from every route", async () => {
-    const user = userEvent.setup();
+  it("links Annotations to the global run list from every route", () => {
     renderApp(["/annotations/run-7"]);
-    await openMenu(user);
-    expect(screen.getByRole("link", { name: /Anotacje/ })).toHaveAttribute(
+    expect(within(sections()).getByRole("link", { name: "Annotations" })).toHaveAttribute(
       "href",
       "/annotations",
     );
@@ -222,34 +313,38 @@ describe("navigation shell", () => {
 
   it("is operable from the keyboard", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
+    renderApp(["/materials"]);
 
     await user.tab();
-    expect(screen.getByRole("link", { name: "Przejdź do treści" })).toHaveFocus();
+    expect(screen.getByRole("link", { name: "Skip to content" })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("button", { name: "Wszystkie sekcje" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Sections" })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("link", { name: "Upload" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "More" })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("link", { name: "Profil" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Collapse sections" })).toHaveFocus();
+
+    await user.tab();
+    await user.tab();
+    expect(within(sections()).getByRole("link", { name: "Setup for scan" })).toHaveFocus();
 
     await user.keyboard("{Enter}");
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Profile gier");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Setup for scan");
   });
 
   it("navigates between routes by activating a destination in the menu", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
+    renderApp(["/materials"]);
 
     await openMenu(user);
-    await user.click(screen.getByRole("link", { name: /Eksporty/ }));
+    await user.click(screen.getByRole("link", { name: /Exports/ }));
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Eksporty");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Exports");
     // Navigating is the menu's whole job, so it closes behind the choice.
-    expect(screen.getByRole("button", { name: "Wszystkie sekcje" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "More" })).toHaveAttribute(
       "aria-expanded",
       "false",
     );

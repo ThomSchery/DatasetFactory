@@ -11,10 +11,10 @@ function category(name: string, kind: Category["kind"] = "character"): Category 
 describe("category groups", () => {
   it("offers exactly the four groups the two screens share", () => {
     expect(CATEGORY_GROUPS.map((group) => group.label)).toEqual([
-      "Pola HUD (gra)",
-      "Liczby",
-      "Litery",
-      "Symbole",
+      "Custom",
+      "Numbers",
+      "Letters",
+      "Symbols",
     ]);
   });
 
@@ -30,15 +30,15 @@ describe("category groups", () => {
 
   it("keeps game classes in their own group regardless of their name", () => {
     expect(categoryGroupIdOf(category("7", "game"))).toBe("game");
-    expect(categoryGroupLabelOf(category("health & armour", "game"))).toBe("Pola HUD (gra)");
+    expect(categoryGroupLabelOf(category("health & armour", "game"))).toBe("Custom");
   });
 
   it("names the group a rename would move a class into", () => {
     // The FE-016 warning compares groups, not `kind`: both of these are
     // `character`, and the class still changes group.
-    expect(categoryGroupLabelOf({ kind: "character", name: "7" })).toBe("Liczby");
-    expect(categoryGroupLabelOf({ kind: "character", name: "A" })).toBe("Litery");
-    expect(categoryGroupLabelOf({ kind: "character", name: "-" })).toBe("Symbole");
+    expect(categoryGroupLabelOf({ kind: "character", name: "7" })).toBe("Numbers");
+    expect(categoryGroupLabelOf({ kind: "character", name: "A" })).toBe("Letters");
+    expect(categoryGroupLabelOf({ kind: "character", name: "-" })).toBe("Symbols");
   });
 
   it("drops empty groups and keeps profile order inside the ones that remain", () => {
@@ -47,15 +47,15 @@ describe("category groups", () => {
       (item) => item.name,
     );
     expect(grouped.map((group) => [group.label, group.items])).toEqual([
-      ["Pola HUD (gra)", ["score"]],
-      ["Liczby", ["9", "0"]],
-      ["Litery", ["A"]],
-      ["Symbole", ["-"]],
+      ["Custom", ["score"]],
+      ["Numbers", ["9", "0"]],
+      ["Letters", ["A"]],
+      ["Symbols", ["-"]],
     ]);
   });
 
   it("renders no heading for a group the profile has nothing in", () => {
     const grouped = groupCategories([category("7"), category("8")], (item) => item.name);
-    expect(grouped.map((group) => group.label)).toEqual(["Liczby"]);
+    expect(grouped.map((group) => group.label)).toEqual(["Numbers"]);
   });
 });

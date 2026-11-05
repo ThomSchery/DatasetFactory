@@ -187,12 +187,12 @@ describe("the drawing surface", () => {
     const focusSurface = vi.spyOn(surface, "focus");
 
     expect(fireEvent.contextMenu(surface)).toBe(true);
-    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Box actions" })).not.toBeInTheDocument();
     expect(fireEvent.contextMenu(fill as Element, { clientX: 120, clientY: 140 })).toBe(false);
-    const menu = screen.getByRole("menu", { name: "Akcje bboxa" });
-    expect(within(menu).getByRole("menuitem", { name: "Usuń" })).toHaveFocus();
+    const menu = screen.getByRole("menu", { name: "Box actions" });
+    expect(within(menu).getByRole("menuitem", { name: "Delete" })).toHaveFocus();
 
-    await user.click(within(menu).getByRole("menuitem", { name: "Usuń" }));
+    await user.click(within(menu).getByRole("menuitem", { name: "Delete" }));
     expect(onRemove).toHaveBeenCalledOnce();
     expect(onRemove).toHaveBeenCalledWith("region-1");
     expect(focusSurface).toHaveBeenCalledOnce();
@@ -215,7 +215,7 @@ describe("the drawing surface", () => {
       clientY: 140,
     });
 
-    await user.click(screen.getByRole("menuitem", { name: "Usuń" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     expect(removed).not.toBeInTheDocument();
     expect(focusSurvivor).toHaveBeenCalledOnce();
@@ -230,11 +230,11 @@ describe("the drawing surface", () => {
     option.focus();
 
     expect(fireEvent.keyDown(option, { key: "F10", shiftKey: true })).toBe(false);
-    const menu = screen.getByRole("menu", { name: "Akcje bboxa" });
-    expect(within(menu).getByRole("menuitem", { name: "Usuń" })).toHaveFocus();
+    const menu = screen.getByRole("menu", { name: "Box actions" });
+    expect(within(menu).getByRole("menuitem", { name: "Delete" })).toHaveFocus();
 
     expect(fireEvent.keyDown(document, { key: "Escape" })).toBe(false);
-    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Box actions" })).not.toBeInTheDocument();
     // Without this the keyboard operator lands on `body` and tabs in from the
     // start of the document to reach the bbox they were already on.
     expect(option).toHaveFocus();
@@ -250,7 +250,7 @@ describe("the drawing surface", () => {
 
     fireEvent.pointerDown(document.body);
 
-    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Box actions" })).not.toBeInTheDocument();
     /*
      * The handoff, not the final resting place: a browser follows this
      * `pointerdown` with a `mousedown` whose default action focuses whatever
@@ -277,12 +277,12 @@ describe("the drawing surface", () => {
      * menu does not reach for a bbox the operator has already left.
      */
     const handBack = vi.spyOn(option, "focus");
-    const zoomIn = screen.getByRole("button", { name: "Powiększ kanwę" });
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
     act(() => {
       zoomIn.focus();
     });
 
-    expect(screen.queryByRole("menu", { name: "Akcje bboxa" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Box actions" })).not.toBeInTheDocument();
     expect(handBack).not.toHaveBeenCalled();
     expect(zoomIn).toHaveFocus();
   });
@@ -293,23 +293,23 @@ describe("the drawing surface", () => {
     const surface = surfaceElement();
     const viewport = layOutViewport(surface, 960);
     const stage = viewport.querySelector("[data-overlay-zoom-stage]");
-    const zoomOut = screen.getByRole("button", { name: "Pomniejsz kanwę" });
-    const zoomIn = screen.getByRole("button", { name: "Powiększ kanwę" });
+    const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
 
     expect(zoomOut).toBeDisabled();
     await user.click(zoomIn);
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("125%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("125%");
     expect(stage).toHaveStyle({ transform: "translate(-120px, -67.5px) scale(1.25)" });
     expect(zoomOut).toBeEnabled();
 
     for (let step = 0; step < 12; step += 1) {
       await user.click(zoomIn);
     }
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("800%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("800%");
     expect(zoomIn).toBeDisabled();
 
-    await user.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    await user.click(screen.getByRole("button", { name: "Reset view" }));
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
     expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1)" });
   });
 
@@ -408,7 +408,7 @@ describe("the drawing surface", () => {
     });
 
     expect(handled).toBe(false);
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("125%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("125%");
     expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
       transform: "translate(-60px, -33.75px) scale(1.25)",
     });
@@ -421,10 +421,10 @@ describe("the drawing surface", () => {
         deltaY: -100,
       });
     }
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("800%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("800%");
 
-    await user.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    await user.click(screen.getByRole("button", { name: "Reset view" }));
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
     expect(viewport.querySelector("[data-overlay-zoom-stage]")).toHaveStyle({
       transform: "translate(0px, 0px) scale(1)",
     });
@@ -444,7 +444,7 @@ describe("the drawing surface", () => {
     const surface = surfaceElement();
     layOutSurface(surface, 960);
     const viewport = layOutViewport(surface, 960);
-    const handButton = screen.getByRole("button", { name: "Przesuwaj kadr" });
+    const handButton = screen.getByRole("button", { name: "Pan" });
 
     expect(handButton).toBeVisible();
     expect(handButton).toBeDisabled();
@@ -459,7 +459,7 @@ describe("the drawing surface", () => {
     expect(handButton).toBeEnabled();
 
     await user.click(handButton);
-    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -495,8 +495,8 @@ describe("the drawing surface", () => {
       pointerId: 12,
     });
 
-    await user.click(screen.getByRole("button", { name: "Zakończ przesuwanie" }));
-    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "Pan" }));
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -520,8 +520,8 @@ describe("the drawing surface", () => {
         deltaY: -100,
       });
     }
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("156%");
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("156%");
+    await user.click(screen.getByRole("button", { name: "Pan" }));
 
     const panTo = (pointerId: number, dx: number, dy: number) => {
       fireEvent.pointerDown(surface, {
@@ -577,12 +577,12 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
 
     const first = screen.getByRole("option", { name: /Region 1:/ });
     first.focus();
     fireEvent.keyDown(first, { key: "Enter" });
-    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -590,7 +590,7 @@ describe("the drawing surface", () => {
     const second = screen.getByRole("option", { name: /Region 2:/ });
     second.focus();
     fireEvent.keyDown(second, { key: "Enter" });
-    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -625,14 +625,14 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
 
     const second = screen.getByRole("option", { name: /Region 2:/ });
     const fill = second.querySelector(".df-region-overlay__shape-fill");
     expect(fill).not.toBeNull();
     fireEvent.click(fill as Element, { clientX: 230, clientY: 65 });
 
-    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -662,7 +662,7 @@ describe("the drawing surface", () => {
           deltaY: -100,
         });
       }
-      await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+      await user.click(screen.getByRole("button", { name: "Pan" }));
       fireEvent.pointerDown(surface, {
         button: 0,
         clientX: 480,
@@ -671,8 +671,8 @@ describe("the drawing surface", () => {
       });
       expect(viewport).toHaveAttribute("data-panning", "true");
 
-      fireEvent.click(screen.getByRole("button", { name: "Dopasuj kanwę do widoku" }));
-      expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+      fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
+      expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
       expect(viewport).not.toHaveAttribute("data-panning");
       expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1)" });
 
@@ -689,7 +689,7 @@ describe("the drawing surface", () => {
         fireEvent.pointerCancel(surface, { button: 0, pointerId: 31 });
       }
 
-      expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+      expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
       expect(stage).toHaveStyle({ transform: "translate(0px, 0px) scale(1)" });
       expect(onDraw).not.toHaveBeenCalled();
     },
@@ -709,7 +709,7 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
     fireEvent.pointerDown(surface, {
       button: 0,
       buttons: 1,
@@ -730,7 +730,7 @@ describe("the drawing surface", () => {
     fireEvent.lostPointerCapture(surface, { pointerId: 41 });
 
     expect(viewport).not.toHaveAttribute("data-panning");
-    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -759,7 +759,7 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
     fireEvent.pointerDown(surface, {
       button: 0,
       buttons: 1,
@@ -780,7 +780,7 @@ describe("the drawing surface", () => {
     fireEvent(window, new Event("blur"));
 
     expect(viewport).not.toHaveAttribute("data-panning");
-    expect(screen.getByRole("button", { name: "Przesuwaj kadr" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -812,7 +812,7 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
     fireEvent.pointerDown(surface, {
       button: 0,
       buttons: 1,
@@ -848,7 +848,7 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    await user.click(screen.getByRole("button", { name: "Przesuwaj kadr" }));
+    await user.click(screen.getByRole("button", { name: "Pan" }));
     fireEvent.pointerDown(surface, {
       button: 0,
       buttons: 1,
@@ -869,7 +869,7 @@ describe("the drawing surface", () => {
 
     expect(viewport).not.toHaveAttribute("data-panning");
     expect(stage?.getAttribute("style")).toBe(transformBeforeMove);
-    expect(screen.getByRole("button", { name: "Zakończ przesuwanie" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pan" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -885,7 +885,7 @@ describe("the drawing surface", () => {
     const unhandled = fireEvent.wheel(surface, { clientX: 480, clientY: 270, deltaY: 100 });
 
     expect(unhandled).toBe(true);
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("100%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
   });
 
   it("leaves Ctrl-wheel to the browser when the requested zoom is already at a limit", () => {
@@ -918,7 +918,7 @@ describe("the drawing surface", () => {
         deltaY: -100,
       });
     }
-    expect(screen.getByLabelText("Powiększenie kanwy")).toHaveTextContent("800%");
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("800%");
 
     const atMaximum = fireEvent.wheel(surface, {
       clientX: 480,
@@ -984,7 +984,7 @@ describe("the drawing surface", () => {
       deltaY: -100,
     });
 
-    const resetButton = screen.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+    const resetButton = screen.getByRole("button", { name: "Reset view" });
     resetButton.focus();
     const keyDownAllowed = fireEvent.keyDown(resetButton, { code: "Space", key: " " });
     expect(keyDownAllowed).toBe(true);
@@ -1034,7 +1034,7 @@ describe("the drawing surface", () => {
       deltaY: -100,
     });
 
-    const resetButton = screen.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+    const resetButton = screen.getByRole("button", { name: "Reset view" });
     resetButton.focus();
     fireEvent.pointerEnter(surface, { clientX: 480, clientY: 270, pointerId: 9 });
 
@@ -1385,7 +1385,7 @@ describe("keyboard reach", () => {
 
     expect(
       screen.getByRole("option", {
-        name: "Pasek zdrowia: x 10, y 20, szerokość 100, wysokość 40",
+        name: "Pasek zdrowia: x 10, y 20, width 100, height 40",
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("option")).toHaveLength(3);
@@ -1746,5 +1746,74 @@ describe("the picture itself", () => {
 
     expect(onDraw).not.toHaveBeenCalled();
     expect(within(surface).getByRole("option")).toHaveAttribute("tabindex", "-1");
+  });
+});
+
+describe("fill: the Figma IMAGE FILL crop (FE-022)", () => {
+  function squareViewport(this: Element): DOMRect {
+    const size = this.classList.contains("df-region-overlay") ? 400 : 0;
+    return {
+      left: 0,
+      top: 0,
+      width: size,
+      height: size,
+      right: size,
+      bottom: size,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+  }
+
+  it("starts cropped to cover the box and Reset shows the whole frame", async () => {
+    const user = userEvent.setup();
+    const spy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(squareViewport);
+    try {
+      render(
+        <RegionOverlay
+          fill
+          imageAlt="Frame"
+          imageUrl="/frame.png"
+          label="Boxes"
+          shapes={[]}
+          source={SOURCE}
+        />,
+      );
+
+      // 1920 × 1080 in a 400 × 400 box: the whole frame is 400 × 225, so the
+      // cover crop is 400 / 225 ≈ 178 %.
+      const zoom = screen.getByRole("status", { name: "Canvas zoom" });
+      expect(zoom).toHaveTextContent("178%");
+      const stage = document.querySelector<HTMLElement>(".df-region-overlay__zoom-stage");
+      expect(stage?.style.width).toBe("400px");
+      expect(stage?.style.height).toBe("225px");
+
+      await user.click(screen.getByRole("button", { name: "Reset view" }));
+      expect(zoom).toHaveTextContent("100%");
+      expect(stage?.style.transform).toBe("translate(0px, 0px) scale(1)");
+      expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps the tools in a row under the picture, never over it", () => {
+    render(
+      <RegionOverlay
+        fill
+        imageAlt="Frame"
+        imageUrl="/frame.png"
+        label="Boxes"
+        shapes={[]}
+        source={SOURCE}
+        trailing={<span>Run slot</span>}
+      />,
+    );
+    const viewport = document.querySelector(".df-region-overlay");
+    const toolbar = document.querySelector(".df-region-overlay__toolbar");
+    expect(viewport).not.toContainElement(toolbar as HTMLElement);
+    expect(toolbar).toHaveTextContent("Run slot");
   });
 });

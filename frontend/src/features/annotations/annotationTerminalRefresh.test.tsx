@@ -13,6 +13,20 @@ import {
 } from "../../test/fixtures";
 import { renderApp, stubFetch } from "../../test/harness";
 
+/** FE-022: ← n/N → — the counter opens the frame picker. */
+function frameCounter(): HTMLElement {
+  return screen.getByRole("button", { name: /choose a frame/ });
+}
+
+async function chooseFrame(user: ReturnType<typeof userEvent.setup>, frameId: string) {
+  await user.click(frameCounter());
+  const option = document.querySelector(`[data-option-id="${frameId}"]`);
+  if (!(option instanceof HTMLElement)) {
+    throw new Error(`Frame option ${frameId} is missing`);
+  }
+  await user.click(option);
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -74,13 +88,13 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
@@ -90,19 +104,19 @@ describe("terminal annotation refresh", () => {
       expect(listReads).toBe(2);
       expect(frameReads).toBe(2);
       expect(
-        within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getAllByRole("option"),
+        within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getAllByRole("option"),
       ).toHaveLength(2);
     });
-    expect(screen.getByRole("dialog", { name: "Edytuj anotację 7" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Edit annotation 7" })).toBeVisible();
     expect(
-      within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getAllByRole(
+      within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getAllByRole(
         "option",
       )[0],
     ).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("x 103, y 120, szerokość 40, wysokość 32"),
+      expect.stringContaining("x 103, y 120, width 40, height 32"),
     );
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Przerysuj bbox" })).not.toBeInTheDocument();
 
     await act(async () => {
@@ -174,8 +188,8 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}");
@@ -185,22 +199,22 @@ describe("terminal annotation refresh", () => {
     });
 
     await waitFor(() => {
-      const editor = screen.getByRole("dialog", { name: "Edytuj anotację health" });
+      const editor = screen.getByRole("dialog", { name: "Edit annotation health" });
       expect(within(editor).getByRole("option", { name: "health" })).toHaveAttribute(
         "aria-selected",
         "true",
       );
       expect(
-        within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
+        within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getByRole(
           "option",
         ),
       ).toHaveAttribute(
         "aria-label",
-        expect.stringContaining("x 101, y 120, szerokość 40, wysokość 32"),
+        expect.stringContaining("x 101, y 120, width 40, height 32"),
       );
     });
 
-    screen.getByRole("button", { name: "Klasa health, 1 anotacji" }).focus();
+    screen.getByRole("button", { name: "Class health, 1 annotations" }).focus();
     await user.keyboard("{Enter}");
     await waitFor(() => {
       expect(patchBody).toEqual({
@@ -255,12 +269,12 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowLeft}{Enter}");
-    expect(await screen.findByText(/Kod: bbox_invalid/)).toBeVisible();
+    expect(await screen.findByText(/Code: bbox_invalid/)).toBeVisible();
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
@@ -268,19 +282,19 @@ describe("terminal annotation refresh", () => {
 
     await waitFor(() => {
       expect(
-        within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
+        within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getByRole(
           "option",
         ),
       ).toHaveAttribute(
         "aria-label",
-        expect.stringContaining("x 1899, y 120, szerokość 40, wysokość 32"),
+        expect.stringContaining("x 1899, y 120, width 40, height 32"),
       );
       expect(frameReads).toBe(2);
     });
-    expect(screen.getByText("Niezapisane")).toBeVisible();
-    expect(screen.getByText(/Kod: bbox_invalid/)).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
+    expect(screen.getByText(/Code: bbox_invalid/)).toBeVisible();
 
-    screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }).focus();
+    screen.getByRole("button", { name: "Class 7, 1 annotations" }).focus();
     await user.keyboard("{Enter}");
     expect(geometryWrites).toBe(0);
   });
@@ -336,26 +350,26 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    await user.click(screen.getByRole("button", { name: "Klasa 7, 1 anotacji" }));
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.run("run-1") });
     });
 
     await waitFor(() => {
-      const editor = screen.getByRole("dialog", { name: "Edytuj anotację health" });
+      const editor = screen.getByRole("dialog", { name: "Edit annotation health" });
       expect(within(editor).getByRole("option", { name: "health" })).toHaveAttribute(
         "aria-selected",
         "true",
       );
       expect(
-        within(screen.getByRole("listbox", { name: "Bbox anotacji na klatce" })).getByRole(
+        within(screen.getByRole("listbox", { name: "Annotation boxes on the frame" })).getByRole(
           "option",
         ),
       ).toHaveAttribute(
         "aria-label",
-        expect.stringContaining("x 144, y 222, szerokość 50, wysokość 36"),
+        expect.stringContaining("x 144, y 222, width 50, height 36"),
       );
     });
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
@@ -391,18 +405,18 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient } = renderApp(["/annotations/run-1"]);
 
-    const overlay = await screen.findByRole("listbox", { name: "Bbox anotacji na klatce" });
-    const classButton = screen.getByRole("button", { name: "Klasa 7, 1 anotacji" });
+    const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const classButton = screen.getByRole("button", { name: "Class 7, 1 annotations" });
     await user.click(classButton);
     classButton.focus();
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByText("Niezapisane")).toBeVisible();
+    expect(screen.getByText("Unsaved")).toBeVisible();
 
     await act(async () => {
       await queryClient.refetchQueries({ exact: true, queryKey: queryKeys.frame("frame-1") });
     });
     await waitFor(() => {
-      expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+      expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
       expect(within(overlay).getByRole("option")).toHaveAttribute(
         "aria-label",
         expect.stringContaining("x 101, y 120"),
@@ -417,7 +431,7 @@ describe("terminal annotation refresh", () => {
         "aria-label",
         expect.stringContaining("x 188, y 120"),
       );
-      expect(screen.queryByText("Niezapisane")).not.toBeInTheDocument();
+      expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
     });
   });
 
@@ -476,14 +490,14 @@ describe("terminal annotation refresh", () => {
     });
     const { queryClient, router } = renderApp(["/annotations/run-b"]);
 
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveValue("frame-b"));
+    await waitFor(() => expect(frameCounter()).toHaveAttribute("data-frame-id", "frame-b"));
     queryClient.setQueryDefaults(queryKeys.run("run-b"), { staleTime: Infinity });
     queryClient.setQueryDefaults(queryKeys.frame("frame-b"), { staleTime: Infinity });
 
     await act(async () => {
       await router.navigate("/annotations/run-a");
     });
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveValue("frame-a"));
+    await waitFor(() => expect(frameCounter()).toHaveAttribute("data-frame-id", "frame-a"));
     await waitFor(() => {
       expect(reads.frameA).toBe(1);
       expect(reads.listA).toBe(1);
@@ -492,7 +506,7 @@ describe("terminal annotation refresh", () => {
     await act(async () => {
       await router.navigate("/annotations/run-b");
     });
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Wybierz klatkę" })).toHaveValue("frame-b"));
+    await waitFor(() => expect(frameCounter()).toHaveAttribute("data-frame-id", "frame-b"));
     await waitFor(() => {
       expect(reads.runB).toBe(1);
       expect(reads.listB).toBe(1);

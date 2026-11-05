@@ -1,15 +1,15 @@
 /*
- * The product's destinations and the five pipeline stages, in one place, so
- * the shell and the router cannot drift apart.
+ * The product's destinations in one place, so the shell and the router cannot
+ * drift apart.
  *
- * FE-021 splits the list in two. The Figma document puts three destinations in
- * a switch at the top of the workspace — Upload, Profil, Run — and everything
- * else behind a menu. Both lists are navigation, both are rendered by the
- * shell, and `NAV_DESTINATIONS` stays the complete map: a destination that
- * exists must be reachable, whether or not the design drew a tab for it.
+ * FE-022 follows the Figma document of 2026-11-05: the four sections of the
+ * workflow live in the side bar (`SECTION_DESTINATIONS`), the three workspace
+ * steps keep the Upload / Profile / Run switch, and what neither shows is in
+ * the ⋮ menu. The Dashboard is gone: `/` opens Upload, the active run lives on
+ * Run and the frame counts live in the Review filters.
  */
 
-export type NavDestinationIcon = "upload" | "profile" | "run";
+import type { IconName } from "../components/common/Icon";
 
 export interface NavDestination {
   path: string;
@@ -17,53 +17,67 @@ export interface NavDestination {
   description: string;
   /** Match the path exactly rather than by prefix. */
   end?: boolean;
-  icon?: NavDestinationIcon;
+  icon: IconName;
 }
 
-/** The three workspace steps the Figma switch shows, in its order. */
-export const WORKSPACE_DESTINATIONS: readonly NavDestination[] = [
+/** The four sections of the Figma side bar, in its order. */
+export const SECTION_DESTINATIONS: readonly NavDestination[] = [
   {
     path: "/materials",
     label: "Upload",
-    description: "Import wideo i lista materiałów",
+    description: "Choose a video to import",
     icon: "upload",
   },
   {
     path: "/profiles",
-    label: "Profil",
-    description: "Zrzut referencyjny, regiony HUD i klasy",
+    label: "Setup for scan",
+    description: "Reference screenshot, HUD regions and classes",
     icon: "profile",
   },
   {
     path: "/run",
-    label: "Run",
-    description: "Wybór materiału, profilu i interwału",
-    icon: "run",
+    label: "Review for scan",
+    description: "Source file, profile and sample rate",
+    icon: "scan",
+  },
+  {
+    path: "/annotations",
+    label: "Annotations",
+    description: "Runs and frame review",
+    icon: "edit",
   },
 ];
 
+/** The three workspace steps the Figma switch shows, in its order. */
+export const WORKSPACE_DESTINATIONS: readonly NavDestination[] = [
+  { path: "/materials", label: "Upload", description: "Choose a video to import", icon: "upload" },
+  {
+    path: "/profiles",
+    label: "Profile",
+    description: "Reference screenshot, HUD regions and classes",
+    icon: "profile",
+  },
+  { path: "/run", label: "Run", description: "Source file, profile and sample rate", icon: "run" },
+];
+
+/** Routes on which the switch is drawn (Figma: Upload, Profile and Run frames). */
+export const WORKSPACE_SWITCH_PATHS: readonly string[] = [
+  "/materials",
+  "/profiles",
+  "/profiles/new",
+  "/run",
+];
+
 /**
- * Every destination the application serves. The three above are repeated here
- * on purpose: this is the list the menu renders, and leaving them out would
- * make the menu an incomplete answer to "where can I go".
+ * Everything the side bar does not show, behind ⋮. With the sections above,
+ * every route the application serves is reachable.
  */
-export const NAV_DESTINATIONS: readonly NavDestination[] = [
-  {
-    path: "/",
-    label: "Dashboard",
-    description: "Aktywny run i stan systemu",
-    end: true,
-  },
-  ...WORKSPACE_DESTINATIONS,
-  {
-    path: "/annotations",
-    label: "Anotacje",
-    description: "Weryfikacja klatek wybranego runu",
-  },
+export const MENU_DESTINATIONS: readonly NavDestination[] = [
   {
     path: "/exports",
-    label: "Eksporty",
-    description: "Generowanie datasetu COCO",
+    label: "Exports",
+    description: "Generate the COCO dataset",
+    icon: "folder",
   },
 ];
 
@@ -80,13 +94,20 @@ export interface PipelineStage {
  * the backend never produces (FE-11).
  */
 export const PIPELINE_STAGES: readonly PipelineStage[] = [
-  { label: "Próbkowanie", description: "Klatki co zadany interwał", inV1: true },
-  { label: "Regiony HUD", description: "Crop regionów z profilu", inV1: true },
-  { label: "OCR", description: "Propozycje znaków z Tesseractu", inV1: true },
-  { label: "SAM 3", description: "Segmentacja — planowana po v1", inV1: false },
-  { label: "Weryfikacja", description: "Decyzja człowieka na klatce", inV1: true },
+  { label: "Sampling", description: "Frames at the chosen interval", inV1: true },
+  { label: "HUD regions", description: "Crops of the profile regions", inV1: true },
+  { label: "OCR", description: "Character proposals from Tesseract", inV1: true },
+  { label: "SAM 3", description: "Segmentation — planned after v1", inV1: false },
+  { label: "Review", description: "A human decision per frame", inV1: true },
 ];
 
 export function annotationsPath(runId: string): string {
   return `/annotations/${encodeURIComponent(runId)}`;
+}
+
+/** Run Setup with a profile already chosen (Profile → Run, FE-022). */
+export function runSetupPath(profileId?: string | null): string {
+  return profileId === undefined || profileId === null
+    ? "/run"
+    : `/run?profile=${encodeURIComponent(profileId)}`;
 }

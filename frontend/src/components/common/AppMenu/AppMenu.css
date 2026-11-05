@@ -5,7 +5,7 @@
 .df-app-menu__list {
   position: absolute;
   z-index: 2;
-  inset-block-start: calc(100% + var(--size-xs));
+  inset-block-start: calc(100% + var(--element-padding-y-md));
   inset-inline-end: 0;
   display: grid;
   gap: var(--size-xxs);
@@ -13,11 +13,11 @@
   min-width: calc(var(--size-xxl) * 3);
   max-width: calc(100vw - var(--size-lg));
   margin: var(--size-none);
-  padding: var(--size-xs);
+  padding: var(--element-padding-y-md);
   /* OVERLAY-04: a layer that covers the page states itself with an outline and
      an elevation, never by colour alone. */
-  border: var(--border-width-default) solid var(--color-stroke-weak-default);
-  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-sm);
   background: var(--color-surface-neutral-raised);
   box-shadow: var(--shadow-elevation-high);
   list-style: none;

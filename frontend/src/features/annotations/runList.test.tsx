@@ -44,16 +44,16 @@ it("shows persisted review progress and distinguishes a completed export", async
 
   const quake = (await screen.findByText("Quake Champions")).closest("li");
   expect(quake).not.toBeNull();
-  expect(within(quake as HTMLElement).getByText("Odrzucone: 3")).toBeInTheDocument();
-  expect(within(quake as HTMLElement).getByText("Oczekujące anotacje")).toBeInTheDocument();
+  expect(within(quake as HTMLElement).getByText("Rejected: 3")).toBeInTheDocument();
+  expect(within(quake as HTMLElement).getByText("Pending annotations")).toBeInTheDocument();
   expect(within(quake as HTMLElement).getByText("120")).toBeInTheDocument();
   expect(within(quake as HTMLElement).getByRole("progressbar")).toHaveAttribute("value", "3");
-  expect(within(quake as HTMLElement).queryByText("Wyeksportowany")).toBeNull();
+  expect(within(quake as HTMLElement).queryByText("Exported")).toBeNull();
 
   const exported = screen.getByText("Arena").closest("li");
   expect(exported).not.toBeNull();
-  expect(within(exported as HTMLElement).getByText("Ukończony")).toBeInTheDocument();
-  expect(within(exported as HTMLElement).getByText("Wyeksportowany")).toBeInTheDocument();
+  expect(within(exported as HTMLElement).getByText("Completed")).toBeInTheDocument();
+  expect(within(exported as HTMLElement).getByText("Exported")).toBeInTheDocument();
 });
 
 it("opens the existing annotation deep-link for the selected run", async () => {
@@ -78,10 +78,10 @@ it("opens the existing annotation deep-link for the selected run", async () => {
   });
 
   const app = renderApp(["/annotations"]);
-  await user.click(await screen.findByRole("button", { name: "Otwórz weryfikację" }));
+  await user.click(await screen.findByRole("button", { name: "Open review" }));
 
   expect(app.router.state.location.pathname).toBe("/annotations/run-1");
   expect(
-    await screen.findByRole("group", { name: "Filtr statusu klatek" }),
+    await screen.findByRole("group", { name: "Frame status filter" }),
   ).toBeInTheDocument();
 });

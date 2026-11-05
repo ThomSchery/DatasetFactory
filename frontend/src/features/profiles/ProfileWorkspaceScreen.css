@@ -1,75 +1,120 @@
 /*
- * The Figma profile workspace: controls in a column, the screenshot beside
- * them. Below 992 px the two stack and the image comes first, exactly as the
- * mobile frame draws it — on a phone the picture is the thing being worked on
- * and the controls follow it.
+ * Figma Profile frames 1355:1291 / 1395:1656 (360, 576) and 1355:1306–1308
+ * (768–1200), FE-022.
+ *
+ * Below 768 px: the picture (328 × 279 at 360), then Search, Annotations, Save
+ * and the class groups. From 768 px: a 247 px column on `surface/page` with
+ * 8 px inside, and the picture panel (545 px, picture 479 px) beside it.
  */
-
 .df-profile-workspace {
   display: grid;
-  gap: var(--size-md);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--site-padding);
+  align-items: start;
+  min-width: 0;
 }
 
-.df-profile-workspace__controls,
-.df-profile-workspace__canvas {
+.df-profile-workspace__controls {
   display: grid;
-  gap: var(--size-md);
   align-content: start;
+  gap: var(--element-gap-lg);
   min-width: 0;
 }
 
 .df-profile-workspace__canvas {
-  order: -1;
-}
-
-.df-profile-workspace__profile-actions,
-.df-profile-workspace__save {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-xs);
-}
-
-.df-profile-workspace__image-swap {
   display: grid;
-  gap: var(--size-xs);
+  min-width: 0;
 }
 
-.df-profile-workspace__dirty {
-  margin: var(--size-none);
-  color: var(--color-text-weak-default);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-standard);
+/* Phone: the picture box itself is the 279 px field; the tools sit under it. */
+.df-profile-workspace__canvas .df-region-canvas {
+  height: calc(var(--profile-image-height-sm) + var(--element-gap-lg) + var(--field-height));
+}
+
+.df-profile-workspace__empty-image .df-file-tile__pick.df-button {
+  aspect-ratio: auto;
+  height: var(--profile-image-height-sm);
+  max-height: none;
+}
+
+.df-profile-workspace__save {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--element-gap-lg);
+}
+
+.df-profile-workspace__save .df-button {
+  padding-inline: var(--element-padding-x-md);
+  white-space: nowrap;
+}
+
+.df-profile-workspace__tool.df-button {
+  width: var(--field-height);
+  min-width: var(--field-height);
+  padding: var(--size-none);
+}
+
+.df-profile-workspace__run.df-button {
+  min-height: var(--field-height);
 }
 
 .df-profile-workspace__confirm {
   max-width: var(--measure-copy);
   margin: var(--size-none);
   color: var(--color-text-weak-default);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
 }
 
-@media (min-width: 992px) {
+/* Up to 991 px the zoom value stays readable to a screen reader but gives its
+   room to the tools, so the tool row stays one line beside the picture. */
+@media (max-width: 991px) {
+  .df-profile-workspace .df-region-overlay__zoom-value {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip: rect(0 0 0 0);
+  }
+}
+
+@media (min-width: 768px) {
   .df-profile-workspace {
-    grid-template-columns: var(--workspace-panel-width) minmax(0, 1fr);
-    align-items: start;
+    grid-template-columns: var(--workspace-profile-column) minmax(0, 1fr);
   }
 
+  .df-profile-workspace__controls {
+    grid-column: 1;
+    grid-row: 1;
+    padding-inline: var(--element-padding-x-md);
+    border-radius: var(--radius-sm);
+    background: var(--color-background-primary-default);
+  }
+
+  .df-profile-workspace__controls .df-annotations {
+    border-radius: var(--radius-sm);
+  }
+
+  /* Figma `Frame 52`: the picture panel, 545 px, picture 479 px, Run below. */
   .df-profile-workspace__canvas {
-    /* On a wide screen the controls are on the left, as the desktop frame
-       has them, and the image takes everything that is left. */
-    order: 0;
+    grid-column: 2;
+    grid-row: 1;
+    padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+    border: var(--border-width-default) solid var(--color-stroke-panel-default);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-neutral-default);
   }
-}
 
-.df-profile-workspace__draw-toggle[aria-pressed="true"] {
-  border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-fill-brand-impeccable);
-  color: var(--color-text-on-brand);
-}
+  .df-profile-workspace__canvas .df-region-canvas {
+    height: calc(var(--profile-image-height-md) + var(--element-gap-lg) + var(--control-height-md));
+  }
 
-.df-profile-workspace__draw-toggle[aria-pressed="true"]:hover,
-.df-profile-workspace__draw-toggle[aria-pressed="true"]:active {
-  border-color: var(--color-fill-brand-impeccable-hover);
-  background: var(--color-fill-brand-impeccable-hover);
+  .df-profile-workspace__empty-image .df-file-tile__pick.df-button {
+    height: calc(var(--profile-image-height-md) + var(--element-gap-lg) + var(--control-height-md));
+  }
+
+  .df-profile-workspace__run.df-button {
+    min-width: calc(var(--size-3xl) + var(--size-md) + var(--size-sm));
+    min-height: var(--control-height-md);
+  }
 }

@@ -105,12 +105,12 @@ describe("central error code dictionary", () => {
 
   it("falls back rather than throwing on an unknown code", () => {
     const copy = describeErrorCode("something_new_from_the_backend");
-    expect(copy.message).toBe("Operacja nie powiodła się.");
+    expect(copy.message).toBe("The operation failed.");
     expect(copy.action.length).toBeGreaterThan(0);
   });
 
   it("falls back on a null export error_code", () => {
-    expect(describeErrorCode(null).message).toBe("Operacja nie powiodła się.");
+    expect(describeErrorCode(null).message).toBe("The operation failed.");
   });
 
   it.each([
@@ -121,6 +121,6 @@ describe("central error code dictionary", () => {
     const copy = describeErrorCode(code);
     expect(`${copy.message} ${copy.action}`).toContain("Tesseract");
     expect(copy.action).toContain("TD-015");
-    expect(copy.action).not.toMatch(/spróbuj|ponow/i);
+    expect(copy.action).not.toMatch(/try again|retry/i);
   });
 });

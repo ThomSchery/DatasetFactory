@@ -4,8 +4,8 @@
   padding: var(--size-none);
   /* OVERLAY-04/SHADOW-05: a layer above the page states itself with an
      outline and an elevation, not with colour alone. */
-  border: var(--border-width-default) solid var(--color-stroke-weak-default);
-  border-radius: var(--radius-lg);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-md);
   background: var(--color-surface-neutral-default);
   box-shadow: var(--shadow-elevation-high);
   color: var(--color-text-strong-default);
@@ -19,15 +19,15 @@
 
 .df-dialog__body {
   display: grid;
-  gap: var(--size-sm);
-  padding: var(--size-md);
+  gap: var(--element-gap-lg);
+  padding: var(--element-padding-x-lg);
 }
 
 .df-dialog__title {
   margin: var(--size-none);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-ui);
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
 }
@@ -36,7 +36,7 @@
   max-width: var(--measure-copy);
   margin: var(--size-none);
   color: var(--color-text-weak-default);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
 }
 

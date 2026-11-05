@@ -5,6 +5,19 @@ import { RUN_POLL_INTERVAL_MS, TERMINAL_RUN_STATUSES } from "../../api";
 import type { RunStatus } from "../../api";
 import { dashboardFixture, emptyDashboard, runFixture } from "../../test/fixtures";
 import { renderApp, stubFetch } from "../../test/harness";
+
+/** Run Setup also lists source files and profiles; answer those as empty. */
+function stubRunScreen(respond: Parameters<typeof stubFetch>[0]) {
+  return stubFetch((url, init) => {
+    if (url.includes("/materials")) {
+      return { status: 200, body: { items: [], page: 1, page_size: 100, total: 0 } };
+    }
+    if (url.endsWith("/profiles")) {
+      return { status: 200, body: [] };
+    }
+    return respond(url, init);
+  });
+}
 import { dashboardPollInterval } from "./dashboardQuery";
 
 /*
@@ -78,12 +91,12 @@ describe("the dashboard's polling in the running application", () => {
 
   it("polls a nonterminal run, then stops when it turns terminal", async () => {
     let current = dashboardFixture({ run: runFixture({ status: "running" }) });
-    const spy = stubFetch(() => ({ status: 200, body: current }));
+    const spy = stubRunScreen(() => ({ status: 200, body: current }));
 
-    renderApp(["/"]);
+    renderApp(["/run"]);
     await tick();
     expect(dashboardCalls(spy)).toBe(1);
-    expect(screen.getByText("W toku")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
 
     await tick(RUN_POLL_INTERVAL_MS);
     expect(dashboardCalls(spy)).toBe(2);
@@ -95,7 +108,7 @@ describe("the dashboard's polling in the running application", () => {
     current = dashboardFixture({ run: runFixture({ status: "review_ready" }) });
     await tick(RUN_POLL_INTERVAL_MS);
     expect(dashboardCalls(spy)).toBe(4);
-    expect(screen.getByText("Gotowy do weryfikacji")).toBeInTheDocument();
+    expect(screen.getByText("Ready for review")).toBeInTheDocument();
 
     // And then it goes quiet: ten more intervals produce no further request.
     await tick(RUN_POLL_INTERVAL_MS * 10);
@@ -103,12 +116,12 @@ describe("the dashboard's polling in the running application", () => {
   });
 
   it("does not poll at all when there is no run", async () => {
-    const spy = stubFetch(() => ({ status: 200, body: emptyDashboard() }));
+    const spy = stubRunScreen(() => ({ status: 200, body: emptyDashboard() }));
 
-    renderApp(["/"]);
+    renderApp(["/run"]);
     await tick();
     expect(dashboardCalls(spy)).toBe(1);
-    expect(screen.getByText("Brak aktywnego runu")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Active run" })).toBeNull();
 
     await tick(RUN_POLL_INTERVAL_MS * 10);
     expect(dashboardCalls(spy)).toBe(1);

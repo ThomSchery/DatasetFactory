@@ -551,3 +551,11 @@ export interface Export {
   /** Relative to the workspace; the backend never returns an absolute path. */
   output_relpath: string | null;
 }
+
+/** `POST /local-files/pick` (FE-022). */
+export type LocalFileKind = "video" | "image";
+
+export interface PickedLocalFile {
+  /** Absolute path the user chose, or `null` when the dialog was cancelled. */
+  path: string | null;
+}

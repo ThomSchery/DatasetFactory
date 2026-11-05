@@ -17,8 +17,7 @@ import {
   type RunStatus,
 } from "../../api";
 import { Empty, FatalError, Loading } from "../../components/common/UiStates";
-import { FrameEditor } from "./FrameEditor";
-import { FrameToolbar } from "./FrameToolbar";
+import { FrameEditor, ReviewChrome } from "./FrameEditor";
 import { reviewMutationKey } from "./reviewMutations";
 import "./AnnotationReviewScreen.css";
 
@@ -53,7 +52,12 @@ async function listFilteredRunFrames(
 
 function queryErrorMessage(error: unknown): string {
   const presentation = describeApiError(error);
-  return `${presentation.message} ${presentation.action} Kod: ${presentation.code}.`;
+  return `${presentation.message} ${presentation.action} Code: ${presentation.code}.`;
+}
+
+/** The page heading while the header with the visible title is not on screen. */
+function HiddenHeading() {
+  return <h1 className="df-visually-hidden">Review frames</h1>;
 }
 
 /** Route screen: the run id is read from `/annotations/:runId` and nowhere else. */
@@ -61,10 +65,13 @@ export function AnnotationReviewScreen() {
   const { runId } = useParams<{ runId: string }>();
   if (runId === undefined || runId === "") {
     return (
+      <>
+      <HiddenHeading />
       <FatalError
-        description="Adres weryfikacji nie zawiera identyfikatora runu. Kod: run_not_found."
-        title="Brak runu w adresie"
+        description="The review address has no run id. Code: run_not_found."
+        title="No run in the address"
       />
+      </>
     );
   }
   return <ReviewForRun runId={runId} />;
@@ -160,56 +167,74 @@ function ReviewForRun({ runId }: { runId: string }) {
   }, [activeFrameId, framesQuery.refetch, queryClient, runId, runQuery.data?.status]);
 
   if (runQuery.isPending) {
-    return <Loading label="Ładowanie runu i profilu anotacji…" />;
+    return (
+      <>
+        <HiddenHeading />
+        <Loading label="Loading the run and its annotation profile…" />
+      </>
+    );
   }
   if (runQuery.isError) {
     return (
+      <>
+      <HiddenHeading />
       <FatalError
         description={queryErrorMessage(runQuery.error)}
         onRetry={() => {
           void runQuery.refetch();
         }}
-        title="Nie udało się pobrać runu"
+        title="The run could not be loaded"
       />
+      </>
     );
   }
   if (profileQuery.isPending) {
-    return <Loading label="Ładowanie profilu przypisanego do runu…" />;
+    return (
+      <>
+        <HiddenHeading />
+        <Loading label="Loading the profile of this run…" />
+      </>
+    );
   }
   if (profileQuery.isError) {
     return (
+      <>
+      <HiddenHeading />
       <FatalError
         description={queryErrorMessage(profileQuery.error)}
         onRetry={() => {
           void profileQuery.refetch();
         }}
-        title="Nie udało się pobrać klas profilu"
+        title="The profile classes could not be loaded"
       />
+      </>
     );
   }
   let framesContent;
   if (framesQuery.isPending) {
     framesContent = (
       <div className="df-review-workspace__all-state">
-        <Loading label="Ładowanie listy klatek…" />
+        <HiddenHeading />
+        <Loading label="Loading the frame list…" />
       </div>
     );
   } else if (framesQuery.isError) {
     framesContent = (
       <div className="df-review-workspace__all-state">
+        <HiddenHeading />
         <FatalError
           description={queryErrorMessage(framesQuery.error)}
           onRetry={() => {
             void framesQuery.refetch();
           }}
-          title="Nie udało się pobrać klatek"
+          title="The frames could not be loaded"
         />
       </div>
     );
   } else if (framesQuery.data.items.length === 0) {
     framesContent = (
       <>
-        <FrameToolbar
+        <ReviewChrome
           counts={counts}
           disabled={isWriting}
           filter={filter}
@@ -223,8 +248,8 @@ function ReviewForRun({ runId }: { runId: string }) {
         />
         <div className="df-review-workspace__all-state">
           <Empty
-            description="Zmień jawny filtr statusu albo poczekaj, aż run utworzy klatki. Odrzucone są dostępne w opcji „Odrzucone”."
-            title="Brak klatek dla wybranego filtra"
+            description="Change the status filter or wait until the run produces frames. Rejected frames are under Rejected."
+            title="No frames for this filter"
           />
         </div>
       </>
