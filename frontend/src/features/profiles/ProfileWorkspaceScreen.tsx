@@ -487,7 +487,9 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
 
   return (
     <div className="df-profile-workspace">
-      <div className="df-profile-workspace__canvas">{imagePanel}</div>
+      <section aria-label="Reference screenshot" className="df-profile-workspace__canvas">
+        {imagePanel}
+      </section>
 
       <div className="df-profile-workspace__controls">
         {profiles.isPending ? <Loading label="Loading profiles…" /> : null}

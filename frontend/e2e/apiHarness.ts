@@ -18,6 +18,7 @@ import {
   healthFixture,
   materialFixture,
   profileFixture,
+  profileSummaryFixture,
   runFixture,
 } from "../src/test/fixtures";
 
@@ -264,6 +265,23 @@ export class ApiHarness {
       await json(route, profile, 201);
       return;
     }
+    // FE-022: Profile and Run Setup list the saved profiles in comboboxes.
+    if (pathname === "/profiles" && method === "GET") {
+      await json(
+        route,
+        this.phase === "empty"
+          ? []
+          : [
+              profileSummaryFixture({
+                category_count: profile.categories.length,
+                region_count: profile.regions.length,
+                source_height: profile.source_height,
+                source_width: profile.source_width,
+              }),
+            ],
+      );
+      return;
+    }
     if (pathname === "/profiles/current" && method === "GET") {
       await json(route, this.phase === "empty" ? null : this.profileBody());
       return;
@@ -301,6 +319,15 @@ export class ApiHarness {
       return;
     }
     if (pathname === "/materials" && method === "GET") {
+      // FE-022: the Dashboard is gone, so the shared loading and error states
+      // are shown by Run Setup, which lists the materials.
+      if (this.dashboardMode === "loading") {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
+      if (this.dashboardMode === "error") {
+        await apiError(route, "database_unavailable", 503);
+        return;
+      }
       const items = ["material", "queued", "review", "accepted", "exporting", "exported", "completed"].includes(this.phase)
         ? [material]
         : [];

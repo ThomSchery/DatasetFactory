@@ -6,6 +6,7 @@ import path from "node:path";
 import { profileFixture, profileSummaryFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -102,28 +103,28 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
     await page.goto("/profiles");
     await freezeMotion(page);
 
-    const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
+    const surface = page.getByRole("listbox", { name: "HUD regions on the reference screenshot" });
     await expect(surface).toBeVisible();
+    await showWholeFrame(page);
     const bounds = await surface.boundingBox();
     if (bounds === null) throw new Error("Brak powierzchni regionów");
     await surface.dispatchEvent("pointerdown", { clientX: bounds.x + bounds.width * 0.2, clientY: bounds.y + bounds.height * 0.2, pointerId: 1 });
     await surface.dispatchEvent("pointermove", { clientX: bounds.x + bounds.width * 0.4, clientY: bounds.y + bounds.height * 0.4, pointerId: 1 });
     await surface.dispatchEvent("pointerup", { clientX: bounds.x + bounds.width * 0.4, clientY: bounds.y + bounds.height * 0.4, pointerId: 1 });
-    const nextRunNotice = page.getByRole("status", {
-      name: "Ustawienia regionu obowiązują od kolejnego runu",
-    });
-    await expect(nextRunNotice).toBeVisible({ timeout: 30_000 });
-    await expect(nextRunNotice).toContainText(
-      "nie przelicza istniejących klatek, próbek ani obserwacji",
-    );
-    await expect(page.getByRole("textbox", { name: "Nazwa narysowanego regionu" })).toBeVisible();
+    // FE-022: the box's name field takes focus at once (Figma), and the
+    // next-run sentence lives in the Save as dialog rather than on screen.
+    await expect(page.getByLabel("Name of the drawn region")).toBeFocused();
     await page.getByRole("button", { name: "Accept", exact: true }).click();
-    await page.getByLabel("Filtruj znaki").focus();
+    // The new region inherits every character: each group row is checked.
+    for (const label of ["Numbers", "Letters", "Symbols"]) {
+      await expect(page.getByRole("checkbox", { name: label, exact: true })).toHaveAttribute("aria-checked", "true");
+      await page.getByRole("button", { name: `Expand group ${label}` }).click();
+    }
     for (const character of ["7", "8", "A", "-"]) {
       await expect(page.getByRole("checkbox", { name: character, exact: true })).toHaveAttribute("aria-checked", "true");
     }
-    await expect(page.getByLabel("Układ tekstu OCR")).toHaveValue("7");
-    await nextRunNotice.scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: "Expand group OCR settings" }).click();
+    await expect(page.getByLabel("Text layout (PSM)")).toHaveAttribute("placeholder", /^7 —/);
     await shoot(page, `profile-add-region-${suffix}`);
 
     const profileClasses = page.getByRole("group", { name: "Numbers" });
@@ -134,29 +135,31 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
     await shoot(page, `profile-groups-expanded-${suffix}`);
 
     for (const label of ["Numbers", "Letters", "Symbols"]) {
-      await page.getByRole("button", { name: `Zwiń grupę ${label}` }).click();
-      await expect(page.getByRole("button", { name: `Rozwiń grupę ${label}` })).toBeVisible();
+      await page.getByRole("button", { name: `Collapse group ${label}` }).click();
+      await expect(page.getByRole("button", { name: `Expand group ${label}` })).toBeVisible();
     }
     await shoot(page, `profile-groups-collapsed-${suffix}`);
 
     await page.goto("/annotations/run-1");
+
+    await showWholeFrame(page);
     await freezeMotion(page);
-    await page.getByRole("button", { name: "Klasa 7, 1 anotacji" }).click();
-    const popover = page.getByRole("dialog", { name: "Edytuj anotację 7" });
+    await page.getByRole("button", { name: "Class 7, 1 annotations" }).click();
+    const popover = page.getByRole("dialog", { name: "Edit annotation 7" });
     await expect(popover).toBeVisible({ timeout: 30_000 });
-    for (const label of ["Pola HUD (gra)", "Liczby", "Litery", "Symbole"]) {
+    for (const label of ["Custom", "Numbers", "Letters", "Symbols"]) {
       await expect(popover.getByRole("group", { name: label })).toBeVisible();
     }
     await shoot(page, `annotation-groups-expanded-${suffix}`);
 
-    for (const label of ["Liczby", "Litery", "Symbole"]) {
-      await popover.getByRole("button", { name: `Zwiń grupę ${label}` }).click();
+    for (const label of ["Numbers", "Letters", "Symbols"]) {
+      await popover.getByRole("button", { name: `Collapse group ${label}` }).click();
     }
     await shoot(page, `annotation-groups-collapsed-${suffix}`);
 
     // Falsyfikowalność wymagania filtra: `8` is hidden above, then a query
-    // must reveal it without forgetting that Liczby was collapsed.
-    const filter = popover.getByRole("textbox", { name: "Klasa" });
+    // must reveal it without forgetting that Numbers was collapsed.
+    const filter = popover.getByRole("textbox", { name: "Class" });
     await filter.fill("8");
     await expect(popover.getByRole("option", { name: "8" })).toBeVisible();
     await filter.fill("");

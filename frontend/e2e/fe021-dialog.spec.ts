@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { profileFixture, profileSummaryFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
+import { showWholeFrame } from "./profileFlow";
 
 test("FE-021: Save as dialog traps focus and restores its opener on Escape", async ({ page }) => {
   const api = new ApiHarness({ phase: "profile" });
@@ -15,7 +16,7 @@ test("FE-021: Save as dialog traps focus and restores its opener on Escape", asy
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Save as" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Nazwa nowego profilu")).toBeFocused();
+  await expect(dialog.getByLabel("New profile name")).toBeFocused();
   for (let i = 0; i < 4; i += 1) {
     await page.keyboard.press("Tab");
     expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
@@ -31,37 +32,37 @@ test("FE-021: review remains usable across mobile, tablet and desktop widths", a
   for (const width of [360, 576, 768, 992, 1200, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
     const preview = page.locator(".df-review-workspace__preview");
     await expect(preview).toBeVisible();
-    await expect(page.getByRole("img", { name: /Klatka .* runu/ })).toBeVisible();
+    await expect(page.locator(".df-review-workspace__preview .df-region-overlay")).toBeVisible();
     const geometry = await page.evaluate(() => {
       const rect = (selector: string) => {
         const element = document.querySelector(selector);
         if (element === null) throw new Error(`Brak ${selector}`);
         return element.getBoundingClientRect();
       };
-      const image = rect(".df-region-overlay__image");
+      const image = rect(".df-review-workspace__preview .df-region-overlay");
       const zoom = rect(".df-region-overlay__zoom-controls");
       return {
         width: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,
         preview: rect(".df-review-workspace__preview").width,
         headerHeight: rect(".df-shell__bar").height,
-        picker: rect(".df-review-toolbar__frame-select select").width,
+        picker: rect(".df-review-nav__counter").width,
         zoomOverlapsImage: zoom.top < image.bottom && zoom.bottom > image.top,
       };
     });
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
     expect(geometry.preview).toBeGreaterThan(200);
     expect(geometry.headerHeight).toBeLessThan(80);
-    // The picker has to show at least "Klatka NN" next to its arrow; it once
-    // collapsed to the arrow alone at 360 px.
-    expect(geometry.picker, `frame picker too narrow at ${String(width)} px`).toBeGreaterThanOrEqual(128);
-    // Below the `lg` frame the image is too small for floating zoom controls
-    // to sit on it without covering the HUD under review (FE-015 keeps them on
-    // the image from 992 px up).
-    if (width < 992) {
-      expect(geometry.zoomOverlapsImage, `zoom controls cover the frame at ${String(width)} px`).toBe(false);
+    // FE-022: the counter between the arrows opens the frame picker; Figma
+    // draws it 113–180 px wide.
+    expect(geometry.picker, `frame counter too narrow at ${String(width)} px`).toBeGreaterThanOrEqual(100);
+    // From 576 px the tools sit in a row under the picture field; below it
+    // Figma leaves no row, so they float in the field's corner (FE-022 log).
+    if (width >= 576) {
+      expect(geometry.zoomOverlapsImage, `zoom controls cover the field at ${String(width)} px`).toBe(false);
     }
     await page.screenshot({ path: `../docs/tickets/FE-021/review-${width}.png`, fullPage: false });
   }
@@ -75,10 +76,11 @@ test("FE-021: profile overlay draws at mobile, tablet and desktop sizes", async 
   for (const width of [360, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/profiles");
-    const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
+    const surface = page.getByRole("listbox", { name: "HUD regions on the reference screenshot" });
     await expect(surface).toBeVisible();
+    await showWholeFrame(page);
     // An icon is a block; it once stacked above its label inside the button.
-    for (const name of ["Nowy profil", "Save profile", "Save as"]) {
+    for (const name of ["Save profile", "Save as"]) {
       const offset = await page.getByRole("button", { exact: true, name }).evaluate((button) => {
         const icon = button.querySelector(".df-icon")?.getBoundingClientRect();
         const content = button.querySelector(".df-button__content")?.getBoundingClientRect();
@@ -94,7 +96,7 @@ test("FE-021: profile overlay draws at mobile, tablet and desktop sizes", async 
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.7, { steps: 4 });
     await page.mouse.up();
-    await expect(page.getByLabel("Nazwa narysowanego regionu")).toBeFocused();
+    await expect(page.getByLabel("Name of the drawn region")).toBeFocused();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `../docs/tickets/FE-021/profile-${width}.png`, fullPage: false });
     await page.getByRole("button", { name: "Reject" }).click();
@@ -113,7 +115,8 @@ test("FE-021 FIX1: draw inside a full-frame existing region with real hit testin
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
+  const surface = page.getByRole("listbox", { name: "HUD regions on the reference screenshot" });
+  await showWholeFrame(page);
   await surface.scrollIntoViewIfNeeded();
   const box = await surface.boundingBox();
   if (box === null) throw new Error("No surface");
@@ -121,7 +124,7 @@ test("FE-021 FIX1: draw inside a full-frame existing region with real hit testin
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, { steps: 5 });
   await page.mouse.up();
-  await expect(page.getByLabel("Nazwa narysowanego regionu")).toBeVisible();
+  await expect(page.getByLabel("Name of the drawn region")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   await toggle.click();

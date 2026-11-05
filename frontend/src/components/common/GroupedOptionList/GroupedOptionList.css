@@ -76,6 +76,12 @@
   border-color: var(--color-surface-transparent);
 }
 
+.df-grouped-options__control .df-button,
+.df-grouped-options__filter .df-field__control {
+  /* The control is one 34 px field; nothing inside may push it taller. */
+  min-height: calc(var(--field-height) - var(--border-width-default) * 2);
+}
+
 .df-grouped-options__icon {
   display: inline-flex;
   flex: none;

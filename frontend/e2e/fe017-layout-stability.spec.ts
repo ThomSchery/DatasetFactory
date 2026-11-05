@@ -2,11 +2,12 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { profileFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
+import { showWholeFrame } from "./profileFlow";
 
 /*
  * FE-017 A. The operator's recording showed every bbox moving 15 px sideways
  * the moment a geometry save finished. The box never moved: a document
- * scrollbar appeared with the "Niezapisane" notice and vanished with it, and
+ * scrollbar appeared with the "Unsaved" notice and vanished with it, and
  * the canvas lives in the `minmax(0, 1fr)` column that absorbs the difference.
  *
  * This file asserts a number, not a screenshot: the canvas's right edge before,
@@ -130,21 +131,22 @@ test("FE-017 A: prawa krawędź kanwy nie drgnie przy plakietce „Niezapisane�
     // taller viewport would make the document "fit" without measuring it.
     await page.setViewportSize({ height: 600, width });
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
 
-    const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
     await expect(overlay).toBeVisible();
     const unsavedNotice = page.getByRole("status", {
-      name: "Niezapisane przesunięcie bboxa",
+      name: "Unsaved box move",
     });
 
-    const classButton = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
+    const classButton = page.getByRole("button", { name: /Class .* 1 annotations/ });
     await classButton.click();
     await classButton.evaluate((element) => {
       if (element instanceof HTMLElement) {
         element.focus({ preventScroll: true });
       }
     });
-    await expect(page.getByRole("dialog", { name: /Edytuj anotację/ })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: /Edit annotation/ })).toBeVisible();
     await fitViewportToDocument(page, width);
     await expect(classButton).toBeFocused();
 

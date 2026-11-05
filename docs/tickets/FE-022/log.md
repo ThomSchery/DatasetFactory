@@ -46,3 +46,30 @@ Ramki 768–1200 nie mają panelu w środku; komponent `sidebar` (69 px w wersji
 ### Zachowane mechanizmy
 
 Izolacja kontekstu mutacji (`selectionContext`, `reviewMutationKey`), blokada nawigacji z niezapisanym draftem (`useBlocker` + `beforeunload`), sprzątanie `pointercancel` / `blur` w `RegionOverlay`, granice skrótów (`data-shortcut-scope`, `data-annotation-popover`), `scrollbar-gutter: stable`.
+
+## Wykonanie — backend (2026-11-05)
+
+- `POST /api/v1/local-files/pick` (`backend/app/api/local_files.py`): body `{kind: "video" | "image"}`, odpowiedź `{path: string | null}`. Okno systemowe (`tkinter.filedialog`) w procesie potomnym `python -I -c`, wywoływane z endpointu synchronicznego (pula wątków), więc pętla serwera nie jest blokowana. Jedno okno naraz (`file_picker_busy` 409), brak okna/środowiska → `file_picker_unavailable` 503, anulowanie → `path: null`. Implementacja wstrzykiwana przez `CompositionRoot.file_picker`; serwer E2E podmienia ją na `ControlledE2eFilePicker` (plik kontrolny `control/pick-video|image`). Testy: `backend/tests/test_local_file_picker_api.py` (7), granice API rozszerzone o `local_files`. Commit `8121fd0`.
+
+## Katalog komponentów (new-component.md jest chroniony — zapis tutaj, jak w FE-021)
+
+| Komponent | Ścieżka | Kiedy używać |
+|---|---|---|
+| `SideNav` | `components/common/SideNav` | Panel boczny sekcji: `mode="strip"` (pasek ikon 56 px z `|←`) albo `mode="drawer"` (modalna szuflada: fokus w środku, pułapka Tab, Escape, klik w scrim, powrót fokusu na ☰). Pozycje to `NavItem` (`strip`/`rail`). |
+| `FilePickerTile` | `components/common/FilePickerTile` | Kafel wyboru pliku z dysku: główny przycisk (klik/Enter/Spacja → `onPick`), zapas „Enter path” (pole + Open), podpowiedź po upuszczeniu, komunikat błędu `role=alert`, stan busy. Logikę okna dostarcza konsument (`useLocalFilePicker`). |
+| `Panel` (zmiana) | `components/common/Panel` | Bez `eyebrow`/`description`; etykieta 12/400, `radius` `sm`/`md`, `hideTitle` dla paneli bez etykiety w Figmie (nazwa zostaje w drzewie dostępności). |
+| `Button` (zmiana) | `components/common/Button` | Wszystkie warianty obrysowane (radius 4, 12/300); nowy `emphasis` (wypełniony) tylko dla Save profile w stanie dirty; `aria-pressed=true` = stan aktywny. Dotyk: obszar 48 px przez `::after`, bez zmiany wyglądu. |
+| `NavItem` (zmiana) | `components/common/NavItem` | Nowy wariant `strip` (ikona, etykieta ukryta wizualnie + `title`). |
+| `TextField`/`Field` (zmiana) | `components/common/Field` | `labelIcon`, `suffix` (np. „ms”), `hideLabel`; opis tylko dla czytnika (Figma bez akapitów pomocy); slot błędu pojawia się tylko z błędem. |
+| `GroupedOptionList` (zmiana) | `components/common/GroupedOptionList` | `placeholder` (zamknięty combobox pokazuje wybór), `icon`, `inline` (wiersze zawsze widoczne, bez pola filtra — grupy klas profilu, Repeat Previous), `initiallyCollapsedGroupIds`; klik w pole otwiera listę. Zastępuje natywny `<select>` na Run (Source file, Profile), w Review (wybór klatki) i dla PSM. |
+| `RegionOverlay` (zmiana) | `components/common/RegionOverlay` | `fill` — obraz kadrowany jak `IMAGE FILL` (start: cover), Reset = cała klatka (skala 1, contain); `tools`/`trailing` — rząd narzędzi pod obrazem (zoom −/+, pan, reset, narzędzia ekranu, Run). |
+| `AppMenu` (zmiana) | `components/common/AppMenu` | `actions` — pozycje niebędące trasą (OCR engine). |
+
+## Decyzje wykonawcze
+
+- Dashboard: usunięty ekran i trasa (`/` → `/materials`). Katalog `features/dashboard` zostaje z `RunPanel` (zwarty aktywny run na Run Setup), `useDashboard` i `useRunActions` — zmiana nazwy katalogu tylko dla porządku zwiększyłaby diff.
+- Run: przycisk Run tworzy run i od razu go startuje, potem przechodzi do Review. Gdy start odpowie np. `409 active_run`, run zostaje w kolejce, a zwarty panel pod przyciskiem pokazuje Start/Cancel i komunikat.
+- Profile: przycisk „Ustaw jako aktywny” zniknął (brak w Figmie); Run dostaje profil jawnie (`/run?profile=<id>` z przycisku Run na Profile, combobox Profile). Aktywny profil służy już tylko jako domyślny podgląd na Run.
+- Review: decyzje Reject/Accept/Reopen w panelu Annotations; Repeat Previous jako lista inline z licznikami + Accept (kopiowanie). Filtrowanie listy Repeat Previous tekstem zniknęło (Figma: lista bez pola) — test FE-019 przepisany na „wszystkie klasy inline z licznikami”. Pole klasy domyślnie zamknięte i nieaktywne bez zaznaczonego boxa.
+- Telefon (< 576 px) w Review: rząd narzędzi zoomu pływa w prawym dolnym rogu obrazu (Figma nie ma na niego miejsca pod obrazem 511 px). Na Profile narzędzia są zawsze pod obrazem („nie nad nim”); wartość zoomu < 992 px tylko dla czytnika.
+- OCR (CONTEXT.md:235–236): „OCR engine” w ⋮ pokazuje `engine_id`, wersję, oba SHA-256, `quality_gate`, `experimental` i zdanie o pełnej ręcznej weryfikacji; propozycja OCR w Review ma plakietkę „Pending”. Test: `src/app/ocrEngine.test.tsx`.

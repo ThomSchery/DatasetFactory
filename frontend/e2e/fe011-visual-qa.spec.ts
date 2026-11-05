@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -23,12 +24,13 @@ async function openEditedFrame(
 ): Promise<ViewportMetrics> {
   await page.setViewportSize(viewport);
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+  await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
 
-  const image = page.getByRole("img", { name: /Klatka .* runu/ });
-  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const image = page.locator(".df-review-workspace__preview .df-region-overlay");
+  const panel = page.getByRole("dialog", { name: /Edit annotation/ });
   await expect(image).toBeVisible();
   await expect(panel).toBeVisible();
   const imageBounds = await image.boundingBox();
@@ -89,9 +91,9 @@ test("FE-011 daje obrazowi szerokość viewportu i pokazuje pan bez skrótów", 
 
   await openEditedFrame(page, { width: 1440, height: 1000 });
   const canvas = page.locator(".df-region-overlay");
-  const preview = page.getByRole("region", { name: /Podgląd klatki/ });
-  const toolbar = page.locator(".df-review-toolbar");
-  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const preview = page.getByRole("region", { name: /Frame .* preview/ });
+  const toolbar = page.locator(".df-review-header");
+  const panel = page.getByRole("dialog", { name: /Edit annotation/ });
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
   await canvas.scrollIntoViewIfNeeded();
   const canvasBefore = await canvas.boundingBox();
@@ -110,15 +112,15 @@ test("FE-011 daje obrazowi szerokość viewportu i pokazuje pan bez skrótów", 
   await page.mouse.wheel(0, -100);
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("156%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("156%");
 
   await page.mouse.move(10, 10);
-  const handButton = page.getByRole("button", { name: "Przesuwaj kadr" });
+  const handButton = page.getByRole("button", { name: "Pan", exact: true });
   await expect(handButton).toBeVisible();
   await expect(handButton).toBeInViewport();
   await expect(handButton).toBeEnabled();
   await handButton.click();
-  const activeHandButton = page.getByRole("button", { name: "Zakończ przesuwanie" });
+  const activeHandButton = page.getByRole("button", { name: "Pan", exact: true });
   await expect(activeHandButton).toHaveAttribute("aria-pressed", "true");
   const beforePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
   await page.mouse.move(center.x, center.y);
@@ -128,7 +130,7 @@ test("FE-011 daje obrazowi szerokość viewportu i pokazuje pan bez skrótów", 
   const afterPan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
   expect(afterPan).not.toBe(beforePan);
   await expect(panel).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Choose a class for the new box" })).toHaveCount(0);
   expect(mutations).toEqual([]);
 
   const canvasAfter = await canvas.boundingBox();
@@ -156,6 +158,7 @@ test("FE-011-FIX1 reset 1x unieważnia nadal trzymany pan", async ({ page }) => 
   await api.install(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
 
   const canvas = page.locator(".df-region-overlay");
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
@@ -173,29 +176,29 @@ test("FE-011-FIX1 reset 1x unieważnia nadal trzymany pan", async ({ page }) => 
   await page.mouse.wheel(0, -100);
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("156%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("156%");
 
-  await page.getByRole("button", { name: "Przesuwaj kadr" }).click();
+  await page.getByRole("button", { name: "Pan", exact: true }).click();
   await page.mouse.move(center.x, center.y);
   await page.mouse.down();
   await expect(canvas).toHaveAttribute("data-panning", "true");
   await page.keyboard.press("Tab");
-  const resetButton = page.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+  const resetButton = page.getByRole("button", { name: "Reset view" });
   await expect(resetButton).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
   await expect(canvas).not.toHaveAttribute("data-panning");
   const resetTransform = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
 
   await page.mouse.move(center.x + 96, center.y + 64, { steps: 4 });
   await page.mouse.up();
 
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
   expect(await zoomStage.evaluate((element) => getComputedStyle(element).transform)).toBe(
     resetTransform,
   );
-  await expect(page.getByRole("button", { name: "Przesuwaj kadr" })).toBeDisabled();
-  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Pan", exact: true })).toBeDisabled();
+  await expect(page.getByRole("dialog", { name: "Choose a class for the new box" })).toHaveCount(0);
   expect(
     api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
   ).toEqual([]);
@@ -206,6 +209,7 @@ test("FE-011-FIX2 utrata capture i blur kończą aktywną epokę panu", async ({
   await api.install(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
 
   const canvas = page.locator(".df-region-overlay");
   const surface = page.locator(".df-region-overlay__surface");
@@ -226,7 +230,7 @@ test("FE-011-FIX2 utrata capture i blur kończą aktywną epokę panu", async ({
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("125%");
   await handButton.click();
   await expect(handButton).toHaveAttribute("aria-pressed", "true");
 
@@ -287,7 +291,7 @@ test("FE-011-FIX2 utrata capture i blur kończą aktywną epokę panu", async ({
     transformAtBlur,
   );
   await page.mouse.up();
-  await expect(page.getByRole("dialog", { name: "Wybierz klasę dla nowego bbox" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Choose a class for the new box" })).toHaveCount(0);
   expect(
     api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
   ).toEqual([]);
@@ -298,8 +302,9 @@ test("FE-011-FIX1 wysoki panel nadal mieści się w viewportcie", async ({ page 
   await api.install(page);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/annotations/run-1");
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
-  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  await showWholeFrame(page);
+  await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
+  const panel = page.getByRole("dialog", { name: /Edit annotation/ });
   await expect(panel).toBeVisible();
 
   const metrics = await panel.evaluate((element) => {

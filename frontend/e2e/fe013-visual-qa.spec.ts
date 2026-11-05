@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -16,10 +17,11 @@ test("FE-013 pokazuje jawną akcję utworzenia klasy bez efektu pustego Enter", 
   await api.install(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
 
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
-  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
-  const filter = panel.getByRole("textbox", { name: "Klasa" });
+  await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
+  const panel = page.getByRole("dialog", { name: /Edit annotation/ });
+  const filter = panel.getByRole("textbox", { name: "Class" });
   await expect(panel).toBeVisible();
   await expect(filter).toBeFocused();
 
@@ -30,7 +32,7 @@ test("FE-013 pokazuje jawną akcję utworzenia klasy bez efektu pustego Enter", 
 
   await filter.fill("Health");
   const createAction = panel.getByRole("button", {
-    name: "Utwórz i przypisz klasę „Health”",
+    name: "Create and assign class “Health”",
   });
   await expect(createAction).toBeVisible();
   await expect(createAction).toBeInViewport();

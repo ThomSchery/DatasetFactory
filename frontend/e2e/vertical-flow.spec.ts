@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
-import { createProfileInWorkspace } from "./profileFlow";
+import { createProfileInWorkspace, showWholeFrame } from "./profileFlow";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const referenceImage = path.join(
@@ -190,42 +190,44 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
 
   await createProfileInWorkspace(page, referenceImage, "Gra testowa E2E restart");
   const initialDashboardResponse = page.waitForResponse(isDashboardGet);
-  await page.goto("/materials");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
-  expect((await initialDashboardResponse).ok()).toBe(true);
-
-  await page.getByLabel("Ścieżka pliku wideo").fill(fixtureVideo);
-  await page.getByRole("button", { name: "Zaimportuj materiał" }).click();
-  await expect(page.getByText("synthetic-hud.mkv").first()).toBeVisible();
   await page.goto("/run");
-  const materialSelect = page.getByRole("combobox", { name: "Materiał", exact: true });
-  await expect(materialSelect).toContainText("synthetic-hud.mkv");
-  await materialSelect.selectOption({ index: 1 });
-  await page.getByRole("combobox", { name: "Profil gry", exact: true }).selectOption({ index: 1 });
-  await page.getByLabel("Interwał próbkowania (ms)").fill("500");
+  expect((await initialDashboardResponse).ok()).toBe(true);
+  await page.goto("/materials");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Upload");
+
+  // FE-022: the Upload tile opens the native dialog through the backend; the
+  // E2E server answers it from a control file instead of a real window.
+  fs.writeFileSync(path.join(controlRoot, "pick-video"), fixtureVideo, "utf8");
+  try {
+    await page.getByRole("button", { name: "Upload Video" }).click();
+    await expect(page.getByText(/synthetic-hud\.mkv/).first()).toBeVisible();
+  } finally {
+    fs.rmSync(path.join(controlRoot, "pick-video"), { force: true });
+  }
+  await page.goto("/run");
+  await page.getByLabel("Source file", { exact: true }).click();
+  await page.getByRole("option", { name: /synthetic-hud\.mkv/ }).click();
+  await page.getByLabel("Profile", { exact: true }).click();
+  await page.getByRole("option", { name: "Gra testowa E2E restart" }).click();
+  await page.getByLabel("Sample rate").fill("500");
   const createRunResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === "/api/v1/runs",
   );
-  await page.getByRole("button", { name: "Utwórz run" }).click();
-  const createdRunResponse = await createRunResponse;
-  expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
-  const createdRun = (await createdRunResponse.json()) as RunSnapshot;
-  await expect(page.getByRole("button", { name: "Utwórz run" })).toBeEnabled({ timeout: 15000 });
-  await expect.poll(async () => (await apiJson<{ run: RunSnapshot | null }>(request, "/dashboard")).run)
-    .toMatchObject({ id: createdRun.id, status: "queued" });
-  await expect(page.getByRole("region", { name: "Aktywny run" })).toContainText(createdRun.id, { timeout: 15000 });
-  const startRun = page.getByRole("button", { name: "Uruchom" });
-  await expect(startRun).toBeVisible();
-
-  const runId = createdRun.id;
+  // FE-022: Run creates the run and starts it in one gesture. OCR is held
+  // before the click so the restart below still lands mid-run.
   fs.writeFileSync(holdOcr, "1", "utf8");
   let restart: { previous_pid: number; restarted_pid: number } | null = null;
   let durableBeforeRestart: DurableFrameSnapshot | null = null;
   let firstFrameBeforeRestart: FrameSnapshot | null = null;
+  let runId = "";
   try {
-    await startRun.click();
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    const createdRunResponse = await createRunResponse;
+    expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
+    const createdRun = (await createdRunResponse.json()) as RunSnapshot;
+    runId = createdRun.id;
     await page.waitForURL(/\/annotations\/[^/?]+$/);
     expect(new URL(page.url()).pathname).toBe(`/annotations/${runId}`);
     await expect
@@ -296,8 +298,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   expect(firstFrameBeforeRestart).not.toBeNull();
   const paused = await waitForRunStatus(request, runId, "paused");
 
-  await page.goto("/");
-  const resumeRun = page.getByRole("button", { name: "Wznów" });
+  await page.goto("/run");
+  const resumeRun = page.getByRole("button", { name: "Resume" });
   await expect(resumeRun).toBeVisible();
   await resumeRun.click();
   const resumed = await waitForRunStatus(request, runId, "review_ready");
@@ -362,18 +364,20 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   expect(fs.readdirSync(path.join(runtimeRoot, "workspace", "exports"))).toHaveLength(0);
 
   await page.goto(`/annotations/${runId}`);
+  await page.getByRole("listbox", { name: "Annotation boxes on the frame" }).waitFor();
+  await showWholeFrame(page);
   const initialAnnotation = frameAfterResume.annotations[0];
   if (initialAnnotation === undefined) {
     throw new Error("OCR annotation missing after resume");
   }
 
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
-  const annotationEditor = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
+  const annotationEditor = page.getByRole("dialog", { name: /Edit annotation/ });
   await expect(annotationEditor).toBeVisible();
   await expect(annotationEditor.getByRole("spinbutton")).toHaveCount(0);
   await expect(annotationEditor.getByRole("button", { name: "Zapisz geometrię" })).toHaveCount(0);
   await expect(annotationEditor.getByRole("button", { name: "Przerysuj bbox" })).toHaveCount(0);
-  const frameSurface = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const frameSurface = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   const selectedOption = frameSurface.getByRole("option").first();
   await expect(selectedOption).toHaveAttribute("aria-selected", "true");
   await selectedOption.scrollIntoViewIfNeeded();
@@ -430,10 +434,10 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect(selectedOption).toHaveAttribute(
     "aria-label",
     new RegExp(
-      `x ${String(movedBbox.x)}, y ${String(movedBbox.y)}, szerokość ${String(movedBbox.width)}, wysokość ${String(movedBbox.height)}`,
+      `x ${String(movedBbox.x)}, y ${String(movedBbox.y)}, width ${String(movedBbox.width)}, height ${String(movedBbox.height)}`,
     ),
   );
-  await expect(annotationEditor.getByText("Niezapisane")).toBeVisible();
+  await expect(annotationEditor.getByText("Unsaved")).toBeVisible();
   await page.mouse.up();
 
   await expect.poll(() => geometryBodies.length).toBe(1);
@@ -511,7 +515,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect(selectedOption).toHaveAttribute(
     "aria-label",
     new RegExp(
-      `x ${String(resizedBbox.x)}, y ${String(resizedBbox.y)}, szerokość ${String(resizedBbox.width)}, wysokość ${String(resizedBbox.height)}`,
+      `x ${String(resizedBbox.x)}, y ${String(resizedBbox.y)}, width ${String(resizedBbox.width)}, height ${String(resizedBbox.height)}`,
     ),
   );
   await page.mouse.up();
@@ -537,7 +541,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     throw new Error("Resized annotation missing before keyboard nudge");
   }
   const nudgedBbox = { ...resizedBbox, x: resizedBbox.x + 3 };
-  const classChip = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
+  const classChip = page.getByRole("button", { name: /Class .* 1 annotations/ });
   await classChip.focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
@@ -545,14 +549,14 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await expect(selectedOption).toHaveAttribute(
     "aria-label",
     new RegExp(
-      `x ${String(nudgedBbox.x)}, y ${String(nudgedBbox.y)}, szerokość ${String(nudgedBbox.width)}, wysokość ${String(nudgedBbox.height)}`,
+      `x ${String(nudgedBbox.x)}, y ${String(nudgedBbox.y)}, width ${String(nudgedBbox.width)}, height ${String(nudgedBbox.height)}`,
     ),
   );
   expect(geometryBodies).toHaveLength(2);
-  await expect(annotationEditor.getByText("Niezapisane")).toBeVisible();
+  await expect(annotationEditor.getByText("Unsaved")).toBeVisible();
 
   const frameImageBounds = await page
-    .getByRole("img", { name: `Klatka 0 runu ${runId}` })
+    .getByRole("img", { name: `Frame 0 of run ${runId}` })
     .boundingBox();
   const dockedPopoverBounds = await annotationEditor.boundingBox();
   expect(frameImageBounds).not.toBeNull();
@@ -593,8 +597,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     })
     .toEqual(nudgedBbox);
 
-  await annotationEditor.getByRole("button", { name: "Usuń" }).click();
-  await expect(page.getByText("Ta klatka nie ma aktywnych anotacji.")).toBeVisible();
+  await annotationEditor.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("No active annotations on this frame.")).toBeVisible();
   const afterDelete = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
   expect(afterDelete.annotations).toHaveLength(1);
   expect(afterDelete.annotations[0]?.status).toBe("deleted");
@@ -631,9 +635,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.down();
   await page.mouse.move(abandonTo.x, abandonTo.y, { steps: 4 });
   await page.mouse.up();
-  const savedPopover = page.getByRole("dialog", { name: "Edytuj anotację -" });
+  const savedPopover = page.getByRole("dialog", { name: "Edit annotation -" });
   await expect(savedPopover).toBeVisible();
-  await expect(savedPopover.getByText("przypisano: -")).toBeVisible();
+  await expect(savedPopover.getByText("assigned: -")).toBeVisible();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
@@ -650,7 +654,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   await page.mouse.move(manualTo.clientX, manualTo.clientY, { steps: 4 });
   await page.mouse.up();
   await expect(savedPopover).toBeVisible();
-  await expect(savedPopover.getByText("przypisano: -")).toBeVisible();
+  await expect(savedPopover.getByText("assigned: -")).toBeVisible();
 
   // FE-017 D persists both gestures immediately with the profile's first class.
   // Abandoning the second box therefore has to issue a real DELETE and leave
@@ -663,7 +667,7 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
       ).length;
     })
     .toBe(2);
-  await savedPopover.getByRole("button", { name: "Porzuć box" }).click();
+  await savedPopover.getByRole("button", { name: "Discard box" }).click();
   await expect
     .poll(async () => {
       const frame = await apiJson<FrameSnapshot>(request, `/frames/${frameId}`);
@@ -673,46 +677,46 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
     })
     .toBe(1);
 
-  await page.getByRole("button", { name: "Odrzuć klatkę" }).click();
+  await page.getByRole("button", { name: "Reject frame" }).click();
   await expect
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("rejected");
-  await page.getByRole("button", { name: /Odrzucone/ }).click();
-  const reopenFrame = page.getByRole("button", { name: "Otwórz ponownie" });
+  await page.getByRole("button", { name: /Rejected/ }).click();
+  const reopenFrame = page.getByRole("button", { name: "Reopen" });
   await expect(reopenFrame).toBeVisible();
   await reopenFrame.click();
   await expect
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("pending");
-  await page.getByRole("button", { name: /Oczekujące/ }).click();
-  const acceptFrame = page.getByRole("button", { name: "Zaakceptuj klatkę" });
+  await page.getByRole("button", { name: /Pending/ }).click();
+  const acceptFrame = page.getByRole("button", { name: "Accept frame" });
   await expect(acceptFrame).toBeVisible();
   await acceptFrame.click();
   await expect
     .poll(async () => (await apiJson<FrameSnapshot>(request, `/frames/${frameId}`)).review_status)
     .toBe("accepted");
 
-  const frameSelect = page.getByLabel("Wybierz klatkę");
-  await expect(frameSelect).toBeVisible();
-  await frameSelect.selectOption(secondFrameId);
-  await expect(page.getByRole("img", { name: `Klatka 1 runu ${runId}` })).toBeVisible();
-  await page.getByRole("button", { name: "Zaakceptuj klatkę" }).click();
+  // FE-022: the n/N counter opens the frame picker.
+  await page.getByRole("button", { name: /choose a frame/ }).click();
+  await page.locator(`[data-option-id="${secondFrameId}"]`).click();
+  await expect(page.getByRole("img", { name: `Frame 1 of run ${runId}` })).toBeVisible();
+  await page.getByRole("button", { name: "Accept frame" }).click();
   await expect
     .poll(
       async () => (await apiJson<FrameSnapshot>(request, `/frames/${secondFrameId}`)).review_status,
     )
     .toBe("accepted");
 
-  await page.getByRole("button", { name: "Wszystkie sekcje" }).click();
-  await page.getByRole("link", { name: /Eksporty/ }).click();
-  await expect(page.getByRole("button", { name: "Uruchom eksport" })).toBeVisible();
-  await page.getByRole("button", { name: "Uruchom eksport" }).click();
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("link", { name: /Exports/ }).click();
+  await expect(page.getByRole("button", { name: "Start export" })).toBeVisible();
+  await page.getByRole("button", { name: "Start export" }).click();
   await expect(page).toHaveURL(/\/exports\?export_id=[^&]+$/);
-  await expect(page.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "COCO export result" })).toBeVisible({
     timeout: 15_000,
   });
   await expect(
-    page.getByText("To licznik pochodzenia boksów, nie ocena trafności OCR."),
+    page.getByText("A count of where boxes came from, not a measure of OCR accuracy."),
   ).toBeVisible();
 
   const exportId = new URL(page.url()).searchParams.get("export_id");
@@ -756,8 +760,8 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   ).toBe(true);
 
   const beforeComplete = await apiJson<{ version: number }>(request, `/runs/${runId}`);
-  await page.getByRole("button", { name: "Zamknij run" }).click();
-  await expect(page.getByText("Run został zamknięty")).toBeVisible();
+  await page.getByRole("button", { name: "Close run" }).click();
+  await expect(page.getByText("The run is closed")).toBeVisible();
   expect(completeBody).toEqual({ expected_version: beforeComplete.version });
   const completedRun = await apiJson<{ status: string }>(request, `/runs/${runId}`);
   expect(completedRun.status).toBe("completed");

@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,10 +25,11 @@ test("FE-012 panel bez sekcji geometrii nadal pokazuje niezapisane przesunięcie
   await api.install(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
 
-  const classChip = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
+  const classChip = page.getByRole("button", { name: /Class .* 1 annotations/ });
   await classChip.click();
-  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const panel = page.getByRole("dialog", { name: /Edit annotation/ });
   await expect(panel).toBeVisible();
 
   await expect(panel.getByRole("spinbutton")).toHaveCount(0);
@@ -35,7 +37,7 @@ test("FE-012 panel bez sekcji geometrii nadal pokazuje niezapisane przesunięcie
   await expect(panel.getByRole("button", { name: "Przerysuj bbox" })).toHaveCount(0);
   await expect(panel.locator("summary")).toHaveCount(0);
 
-  const canvas = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const canvas = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   const shape = canvas.getByRole("option").first();
   await classChip.focus();
   for (let step = 0; step < 3; step += 1) {
@@ -43,14 +45,14 @@ test("FE-012 panel bez sekcji geometrii nadal pokazuje niezapisane przesunięcie
   }
   await expect(shape).toHaveAttribute(
     "aria-label",
-    /x 103, y 120, szerokość 40, wysokość 32/,
+    /x 103, y 120, width 40, height 32/,
   );
-  await expect(panel.getByText("Niezapisane")).toBeVisible();
+  await expect(panel.getByText("Unsaved")).toBeVisible();
   expect(
     api.requests.filter((request) => !["GET", "HEAD", "OPTIONS"].includes(request.method)),
   ).toEqual([]);
 
-  const image = page.getByRole("img", { name: /Klatka .* runu/ });
+  const image = page.locator(".df-review-workspace__preview .df-region-overlay");
   const imageBounds = await image.boundingBox();
   const panelBounds = await panel.boundingBox();
   if (imageBounds === null || panelBounds === null) {

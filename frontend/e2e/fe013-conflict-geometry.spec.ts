@@ -1,10 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { ApiHarness } from "./apiHarness";
+import { showWholeFrame } from "./profileFlow";
 
 /*
  * FE-013-FIX2 FIX-A. The conflict alert used to take the docked panel's `auto`
- * column, starve the action column and push "Zapisz" past the panel's left
+ * column, starve the action column and push "Save class" past the panel's left
  * edge: the button was still visible and still worked from the keyboard, so
  * `toBeVisible` passed while a plain mouse click landed on the dialog instead.
  * These assertions are therefore geometric — containment plus a hit test —
@@ -46,7 +47,7 @@ async function measure(page: Page, panel: Locator, save: Locator): Promise<Panel
         top: saveRect.top,
       },
     };
-  }, '[aria-label="Zmień nazwę: przypisz inną klasę do tego boxa"]');
+  }, '[aria-label="Change class: assign another class to this box"]');
 }
 
 function expectContained(geometry: PanelGeometry): void {
@@ -76,17 +77,18 @@ for (const conflict of conflicts) {
     await api.install(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
 
-    await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
-    const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
-    const filter = panel.getByRole("textbox", { name: "Klasa" });
+    await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
+    const panel = page.getByRole("dialog", { name: /Edit annotation/ });
+    const filter = panel.getByRole("textbox", { name: "Class" });
     await filter.fill(conflict.typed);
     await panel
-      .getByRole("button", { name: `Utwórz i przypisz klasę „${conflict.proposed}”` })
+      .getByRole("button", { name: `Create and assign class “${conflict.proposed}”` })
       .click();
 
-    await expect(panel.getByRole("alert")).toContainText("już istnieje w profilu");
-    const save = panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
+    await expect(panel.getByRole("alert")).toContainText("already exists in the profile");
+    const save = panel.getByRole("button", { name: "Change class: assign another class to this box" });
     const afterConflict = await measure(page, panel, save);
     expectContained(afterConflict);
 
@@ -142,25 +144,26 @@ test("FE-013 offers manual recovery when the backend names no winner", async ({ 
   await api.install(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
 
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
-  const panel = page.getByRole("dialog", { name: /Edytuj anotację/ });
-  const filter = panel.getByRole("textbox", { name: "Klasa" });
+  await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
+  const panel = page.getByRole("dialog", { name: /Edit annotation/ });
+  const filter = panel.getByRole("textbox", { name: "Class" });
   await filter.fill("s");
-  await panel.getByRole("button", { name: "Utwórz i przypisz klasę „S”" }).click();
+  await panel.getByRole("button", { name: "Create and assign class “S”" }).click();
 
   const alert = panel.getByRole("alert");
-  await expect(alert).toContainText("Klasa o tej nazwie już istnieje w profilu.");
-  await expect(alert).toContainText("Wskaż istniejącą klasę na liście");
+  await expect(alert).toContainText("A class with this name already exists in the profile.");
+  await expect(alert).toContainText("Pick the existing class from the list");
   await expect(alert).not.toContainText("wybrana");
   await expect(filter).toHaveValue("");
   await expect(panel.getByRole("option", { name: "ſ" })).toBeVisible();
   await expect(panel.getByRole("option", { name: "ſ" })).toHaveAttribute("aria-selected", "false");
-  await expect(panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
-  await expect(panel.getByRole("button", { name: /Utwórz i przypisz klasę/ })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Change class: assign another class to this box" })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: /Create and assign class/ })).toHaveCount(0);
 
   await panel.getByRole("option", { name: "ſ" }).click();
-  const save = panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" });
+  const save = panel.getByRole("button", { name: "Change class: assign another class to this box" });
   expectContained(await measure(page, panel, save));
   await save.click();
 

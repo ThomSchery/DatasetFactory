@@ -108,3 +108,31 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
 }
+
+.df-ocr-engine__subtitle {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.df-ocr-engine__dependencies {
+  display: grid;
+  gap: var(--element-gap-md);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+  font-size: var(--font-size-xs);
+}
+
+.df-ocr-engine__dependencies li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--element-gap-md);
+}
+
+.df-ocr-engine__detail {
+  color: var(--color-text-weak-default);
+  overflow-wrap: anywhere;
+}

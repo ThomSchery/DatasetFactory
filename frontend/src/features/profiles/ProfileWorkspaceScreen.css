@@ -9,7 +9,8 @@
 .df-profile-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--site-padding);
+  /* Phone: the tool row already separates picture and Search (Figma: 16). */
+  gap: var(--element-gap-lg);
   align-items: start;
   min-width: 0;
 }
@@ -80,6 +81,7 @@
 
 @media (min-width: 768px) {
   .df-profile-workspace {
+    gap: var(--site-padding);
     grid-template-columns: var(--workspace-profile-column) minmax(0, 1fr);
   }
 
@@ -117,4 +119,16 @@
     min-width: calc(var(--size-3xl) + var(--size-md) + var(--size-sm));
     min-height: var(--control-height-md);
   }
+}
+
+/* FE-021 FIX2: drawing is a mode, so its pressed state reads at a glance —
+   filled, ≥ 3:1 against the panel, and announced by `aria-pressed`. */
+.df-profile-workspace__tool.df-button[aria-pressed="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable);
+  color: var(--color-text-on-brand);
+}
+
+.df-profile-workspace__tool.df-button[aria-pressed="true"]:hover {
+  background: var(--color-fill-brand-impeccable-hover);
 }

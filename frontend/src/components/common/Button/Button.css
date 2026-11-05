@@ -39,11 +39,11 @@
 }
 
 .df-button--md {
-  min-height: var(--control-height-md);
+  min-height: var(--field-height); /* Figma buttons: 33–34 px. */
 }
 
 .df-button--lg {
-  min-height: var(--control-height-md);
+  min-height: var(--control-height-md); /* Figma `Flow` / Run: 40 px. */
   font-size: var(--font-size-md);
 }
 

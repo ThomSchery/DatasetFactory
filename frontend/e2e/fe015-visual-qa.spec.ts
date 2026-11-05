@@ -6,6 +6,7 @@ import path from "node:path";
 import { profileFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -52,26 +53,24 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
     const suffix = `${String(viewport.width)}x${String(viewport.height)}`;
     await page.setViewportSize(viewport);
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
 
-    const panel = page.getByRole("region", { name: "Anotacja bez zaznaczenia" });
-    const image = page.getByRole("img", { name: /Klatka .* runu/ });
-    const frameSelect = page.getByRole("combobox", { name: "Wybierz klatkę" });
-    const frameSelectField = frameSelect.locator("xpath=..");
-    const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+    const panel = page.getByRole("region", { name: "Annotation — nothing selected" });
+    const image = page.locator(".df-review-workspace__preview .df-region-overlay");
+    const frameCounter = page.getByRole("button", { name: /choose a frame/ });
+    const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
 
     await expect(panel).toBeVisible();
     await expect(page.getByRole("region", { name: "Dane klatki" })).toHaveCount(0);
-    await expect(
-      page.getByText("Wybierz bbox z listy lub bezpośrednio na obrazie."),
-    ).toHaveCount(0);
-    await expect(panel.getByRole("option")).toHaveCount(18);
-    await expect(panel.getByRole("textbox", { name: "Klasa" })).toHaveValue("");
-    await expect(panel.getByRole("button", { name: "Usuń" })).toBeDisabled();
-    await expect(panel.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" })).toBeDisabled();
-    await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
-    await expect(page.getByRole("button", { name: "Pomniejsz kanwę" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Powiększ kanwę" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Dopasuj kanwę do widoku" })).toBeVisible();
+    // FE-022: with nothing selected the class field rests closed and inert.
+    await expect(panel.getByRole("option")).toHaveCount(0);
+    await expect(panel.getByRole("textbox", { name: "Class" })).toHaveValue("");
+    await expect(panel.getByRole("textbox", { name: "Class" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
+    await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset view" })).toBeVisible();
 
     const panelBounds = await panel.boundingBox();
     const imageBounds = await image.boundingBox();
@@ -83,48 +82,18 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
       `annotation panel must remain left of the image at ${suffix}`,
     ).toBeLessThanOrEqual(imageBounds.x);
 
-    const selectMetrics = await frameSelect.evaluate((element) => {
-      const field = element.parentElement;
-      if (field === null) {
-        throw new Error("Frame select has no field wrapper");
-      }
-      const chevron = getComputedStyle(field, "::after");
-      return {
-        appearance: getComputedStyle(element).appearance,
-        chevronBorderRight: chevron.borderRightWidth,
-        chevronContent: chevron.content,
-        chevronPointerEvents: chevron.pointerEvents,
-        tagName: element.tagName,
-      };
-    });
-    expect(selectMetrics).toMatchObject({
-      appearance: "none",
-      chevronPointerEvents: "none",
-      tagName: "SELECT",
-    });
-    expect(selectMetrics.chevronBorderRight).not.toBe("0px");
-    expect(selectMetrics.chevronContent).not.toBe("none");
-    await expect(frameSelectField).toBeVisible();
+    // The frame picker is the n/N counter now — a button, not a native select.
+    await expect(frameCounter).toBeVisible();
+    expect(await frameCounter.evaluate((element) => element.tagName)).toBe("BUTTON");
 
-    const categoryList = panel.locator(".df-grouped-options__list");
-    const scrollbarMetrics = await categoryList.evaluate((element) => {
-      const root = getComputedStyle(document.documentElement);
-      return {
-        clientHeight: element.clientHeight,
-        scrollHeight: element.scrollHeight,
-        thumbRadius: getComputedStyle(element, "::-webkit-scrollbar-thumb").borderRadius,
-        tokenRadius: root.getPropertyValue("--radius-pill").trim(),
-      };
-    });
-    expect(scrollbarMetrics.scrollHeight).toBeGreaterThan(scrollbarMetrics.clientHeight);
-    expect(scrollbarMetrics.thumbRadius).toBe(scrollbarMetrics.tokenRadius);
-    await categoryList.evaluate((element) => {
-      element.scrollTop = element.scrollHeight / 3;
-    });
-    await expect
-      .poll(() => categoryList.evaluate((element) => element.scrollTop))
-      .toBeGreaterThan(0);
-    await categoryList.hover();
+    // The class list is a fixed box that scrolls rather than growing.
+    const classList = page.locator(".df-review-classes");
+    const listMetrics = await classList.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
+      overflowY: getComputedStyle(element).overflowY,
+    }));
+    expect(listMetrics.overflowY).toBe("auto");
+    expect(Math.round(listMetrics.height)).toBe(140);
 
     await writeFile(
       path.join(screenshotDirectory, `editor-no-selection-${suffix}.png`),
@@ -133,9 +102,9 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
 
     const shape = overlay.getByRole("option").first();
     await shape.click({ button: "right" });
-    const menu = page.getByRole("menu", { name: "Akcje bboxa" });
+    const menu = page.getByRole("menu", { name: "Box actions" });
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Usuń" })).toBeFocused();
+    await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
     await expect(panel).toBeVisible();
     await writeFile(
       path.join(screenshotDirectory, `editor-context-menu-${suffix}.png`),

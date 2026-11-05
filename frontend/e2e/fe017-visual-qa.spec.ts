@@ -6,6 +6,7 @@ import path from "node:path";
 import { annotationFixture, frameDetailFixture, profileFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -88,9 +89,10 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
     const suffix = `${String(viewport.width)}x${String(viewport.height)}`;
     await page.setViewportSize(viewport);
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
     await freezeMotion(page);
 
-    const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+    const inspector = page.getByRole("region", { name: "Annotations" });
     // The first navigation pays for the dev server's cold module graph, which
     // is slower than the default expectation timeout on this machine.
     await expect(inspector).toBeVisible({ timeout: 30_000 });
@@ -103,10 +105,13 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
     // The count badge is what is left beside the title. Its value is read
     // rather than pinned, because the box drawn below adds to it and the
     // second viewport starts from that state.
-    const countBadge = inspector.locator(".df-panel__aside .df-status-badge");
-    await expect(countBadge).toHaveText(/\d+$/);
-    const countBefore = Number.parseInt((await countBadge.innerText()).match(/\d+$/)?.[0] ?? "", 10);
-    expect(Number.isNaN(countBefore), `count badge is not a number at ${suffix}`).toBe(false);
+    // FE-022: the count lives on each class row, "(n)", as Figma draws it.
+    const annotationTotal = () =>
+      inspector.locator(".df-review-classes__count").evaluateAll((items) =>
+        items.reduce((sum, item) => sum + Number((item.textContent ?? "").replace(/\D/g, "")), 0),
+      );
+    const countBefore = await annotationTotal();
+    expect(countBefore, `class rows carry no counts at ${suffix}`).toBeGreaterThan(0);
 
     // B: the row is the full width of the list, and a long name wraps rather
     // than being cut off.
@@ -114,30 +119,32 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
     const row = inspector.locator(".df-review-classes__item .df-button").first();
     const listBox = await bounds(list, `class list at ${suffix}`);
     const rowBox = await bounds(row, `class row at ${suffix}`);
+    // FE-022: the list is a bordered box, so a full-width row is 2 px (the
+    // two 1 px borders) narrower than the box itself.
     expect(Math.abs(rowBox.width - listBox.width), `row is not full width at ${suffix}`)
-      .toBeLessThanOrEqual(1);
+      .toBeLessThanOrEqual(2.5);
 
     // C: only the classes the previous frame holds, each with its count.
     // The unit the row digits are in is said once, in the list's own name.
     const copyPanel = page.getByRole("region", {
-      name: "Powtórz z poprzedniej klatki",
+      name: "Repeat Previous",
     });
-    await copyPanel
-      .getByRole("button", { name: /Rozwiń listę Klasy z poprzedniej klatki/ })
-      .click();
+    // FE-022: the Repeat Previous list is always open.
     const picker = copyPanel.getByRole("group", {
-      name: "Klasy z poprzedniej klatki i liczba ich wystąpień",
+      name: "Classes of the previous frame and their counts",
     });
     await expect(picker.getByRole("checkbox", { name: "7 3" })).toBeVisible();
     await expect(
       picker.getByRole("checkbox", { name: "health & armour 1" }),
     ).toBeVisible();
     await expect(picker.getByRole("checkbox", { name: /^Score/ })).toHaveCount(0);
+    // FE-022: the source frame is named in the Accept button's tooltip.
     await expect(
-      page.getByText(
-        "Źródłem jest klatka 16 — poprzednia w czasie, niezależnie od aktywnego filtra statusu.",
-      ),
-    ).toBeVisible();
+      copyPanel.getByRole("button", { name: "Accept — repeat the previous frame" }),
+    ).toHaveAttribute(
+      "title",
+      "Copies from frame 16 — the previous one in time, whatever the status filter.",
+    );
 
     // The previous-classes request resolves independently from the frame. Wait
     // for it before the first screenshot too, otherwise this shot races between
@@ -154,18 +161,21 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
      * assigned and offers "Zmień nazwę" — the two things that make an
      * unasked-for class a visible mistake rather than an exported one.
      */
-    const canvas = page.locator(".df-region-overlay");
+    // FE-022: the whole frame is letterboxed inside its field, so the drawing
+    // surface itself — not the field — is where the gesture has to land.
+    const canvas = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
+    await canvas.scrollIntoViewIfNeeded();
     const canvasBox = await bounds(canvas, `canvas at ${suffix}`);
     await page.mouse.move(canvasBox.x + 80, canvasBox.y + 80);
     await page.mouse.down();
     await page.mouse.move(canvasBox.x + 240, canvasBox.y + 180, { steps: 5 });
     await page.mouse.up();
 
-    await expect(page.getByText("przypisano: 7")).toBeVisible();
+    await expect(page.getByText("assigned: 7")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }),
+      page.getByRole("button", { name: "Change class: assign another class to this box" }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Porzuć box" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Discard box" })).toBeVisible();
     // The long class name must not widen the panel past its column.
     const panelBox = await bounds(page.locator(".df-annotation-popover"), `panel at ${suffix}`);
     const columnBox = await bounds(
@@ -178,13 +188,13 @@ test("FE-017 pokazuje uporządkowany panel, licznik źródła i klasę przypisan
     ).toBeLessThanOrEqual(columnBox.x + columnBox.width + 0.5);
 
     // D: the drawn box is in the frame, so the panel's count went up by one.
-    await expect(countBadge).toHaveText(new RegExp(`${String(countBefore + 1)}$`));
+    await expect.poll(annotationTotal).toBe(countBefore + 1);
 
-    // The action row is the point of this shot: "Porzuć box" and "Zmień nazwę"
+    // The action row is the point of this shot: "Discard box" and "Zmień nazwę"
     // have to be reachable without scrolling the panel.
-    await expect(page.getByRole("button", { name: "Porzuć box" })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Discard box" })).toBeInViewport();
     await expect(
-      page.getByRole("button", { name: "Zmień nazwę: przypisz inną klasę do tego boxa" }),
+      page.getByRole("button", { name: "Change class: assign another class to this box" }),
     ).toBeInViewport();
 
     await shoot(page, `drawn-box-${suffix}`);
@@ -227,10 +237,11 @@ test("FE-017 B: długa nazwa klasy łamie się zamiast być ucinana", async ({ p
   );
   await page.setViewportSize({ height: 1000, width: 1440 });
   await page.goto("/annotations/run-1");
+  await showWholeFrame(page);
 
-  const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
+  const inspector = page.getByRole("region", { name: "Annotations" });
   await expect(inspector).toBeVisible({ timeout: 30_000 });
-  const longRow = inspector.getByRole("button", { name: /^Klasa health & armour/ });
+  const longRow = inspector.getByRole("button", { name: /^Class health & armour/ });
   await expect(longRow).toBeVisible();
 
   const measured = await longRow.locator(".df-review-classes__name").evaluate(

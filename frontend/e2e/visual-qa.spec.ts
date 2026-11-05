@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ApiHarness, type DashboardMode, type HarnessPhase } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -33,9 +34,11 @@ interface AnnotationViewportMetrics {
 }
 
 async function assertAnnotationPopoverIsDocked(page: Page): Promise<AnnotationViewportMetrics> {
-  const popover = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const popover = page.getByRole("dialog", { name: /Edit annotation/ });
   await expect(popover).toBeVisible();
-  const image = page.getByRole("img", { name: /Klatka .* runu/ });
+  // FE-022: the picture is cropped to its field (IMAGE FILL), so the field —
+  // the overlay viewport — is the box the panel must stay left of.
+  const image = page.locator(".df-review-workspace__preview .df-region-overlay");
   const popoverBounds = await popover.boundingBox();
   const imageBounds = await image.boundingBox();
   expect(popoverBounds).not.toBeNull();
@@ -60,91 +63,60 @@ async function assertAnnotationPopoverIsDocked(page: Page): Promise<AnnotationVi
 }
 
 async function assertFrameFilterCountsFit(page: Page): Promise<void> {
-  const filters = page.getByRole("group", { name: "Filtr statusu klatek" });
+  const filters = page.getByRole("group", { name: "Frame status filter" });
   const buttons = filters.getByRole("button");
   await expect(buttons).toHaveCount(4);
 
   for (const button of await buttons.all()) {
-    const metrics = await button.locator(".df-button__content").evaluate((content) => {
-      const label = content.querySelector("span");
-      const count = content.querySelector("strong");
-      if (!(label instanceof HTMLElement) || !(count instanceof HTMLElement)) {
-        throw new Error("Filter button is missing its label or count");
-      }
-      const contentBox = content.getBoundingClientRect();
-      const labelBox = label.getBoundingClientRect();
-      const countBox = count.getBoundingClientRect();
-      return {
-        contentRight: contentBox.right,
-        countRight: countBox.right,
-        gap: countBox.left - labelBox.right,
-      };
-    });
-    expect(metrics.gap, "frame filter label and count must have visible spacing").toBeGreaterThanOrEqual(4);
-    expect(metrics.countRight, "frame filter count must stay inside its content box").toBeLessThanOrEqual(
-      metrics.contentRight + 0.5,
+    // FE-022: "Pending (1)" — label and count are one pill text; it must fit.
+    const metrics = await button.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      text: element.textContent ?? "",
+    }));
+    expect(metrics.text, "a filter pill names its count").toMatch(/^\S+ \(\d+\)$/);
+    expect(metrics.scrollWidth, "frame filter text must stay inside its pill").toBeLessThanOrEqual(
+      metrics.clientWidth,
     );
   }
 }
 
+/** FE-022 Review: header row, 261 px column left, picture field right. */
 async function assertCompactReviewLayout(page: Page): Promise<void> {
-  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
-  const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
-  const annotationPanel = page.getByRole("region", { name: "Anotacja bez zaznaczenia" });
-  const details = page.getByRole("region", { name: "Dane klatki" });
-  const toolbar = page.locator(".df-review-toolbar");
-  const preview = page.locator(".df-review-workspace__preview");
-  const overlayBounds = await overlay.boundingBox();
-  const inspectorBounds = await inspector.boundingBox();
-  const annotationPanelBounds = await annotationPanel.boundingBox();
-  const toolbarBounds = await toolbar.boundingBox();
-  const previewBounds = await preview.boundingBox();
-  expect(overlayBounds).not.toBeNull();
-  expect(inspectorBounds).not.toBeNull();
-  expect(annotationPanelBounds).not.toBeNull();
-  expect(toolbarBounds).not.toBeNull();
-  expect(previewBounds).not.toBeNull();
-  await expect(details).toHaveCount(0);
-  if (
-    overlayBounds === null ||
-    inspectorBounds === null ||
-    annotationPanelBounds === null ||
-    toolbarBounds === null ||
-    previewBounds === null
-  ) {
-    throw new Error("Review toolbar, canvas or supporting content has no browser geometry");
+  const field = page.locator(".df-review-workspace__preview .df-region-overlay");
+  const header = page.locator(".df-review-header");
+  const sideColumn = page.getByRole("complementary", { name: "Current frame panels" });
+  const navigator = page.getByRole("group", { name: "Frame navigation" });
+  const fieldBounds = await field.boundingBox();
+  const headerBounds = await header.boundingBox();
+  const sideBounds = await sideColumn.boundingBox();
+  const navigatorBounds = await navigator.boundingBox();
+  if (fieldBounds === null || headerBounds === null || sideBounds === null || navigatorBounds === null) {
+    throw new Error("Review header, column or picture has no browser geometry");
   }
-  expect(overlayBounds.y, "review image should remain above the fold at 1000 px").toBeLessThan(600);
-  // FE-014: the canvas keeps the toolbar's right edge but yields the side
-  // column's fixed 288 px plus the 24 px gap on the left.
-  expect(
-    previewBounds.width,
-    "canvas row should span the workspace minus the side column",
-  ).toBeGreaterThanOrEqual(toolbarBounds.width - 312 - 1);
-  expect(
-    previewBounds.x + previewBounds.width,
-    "canvas row should end with the toolbar",
-  ).toBeGreaterThanOrEqual(toolbarBounds.x + toolbarBounds.width - 1);
-  expect(
-    overlayBounds.width,
-    "review image should be wider than either supporting column",
-  ).toBeGreaterThan(inspectorBounds.width);
-  expect(
-    inspectorBounds.x + inspectorBounds.width,
-    "class inspector should sit left of the canvas",
-  ).toBeLessThanOrEqual(overlayBounds.x);
-  expect(
-    annotationPanelBounds.x + annotationPanelBounds.width,
-    "always-mounted annotation panel should sit left of the canvas",
-  ).toBeLessThanOrEqual(overlayBounds.x);
-  expect(toolbarBounds.y + toolbarBounds.height, "toolbar should precede the canvas").toBeLessThanOrEqual(
-    overlayBounds.y,
+  await expect(page.getByRole("region", { name: "Dane klatki" })).toHaveCount(0);
+  expect(fieldBounds.y, "review picture should start above the fold").toBeLessThan(200);
+  expect(Math.round(sideBounds.width), "left column is Figma's 261 px").toBe(261);
+  expect(sideBounds.x + sideBounds.width, "column sits left of the picture").toBeLessThanOrEqual(
+    fieldBounds.x,
   );
-  await expect(page.getByLabel("Wybierz klatkę")).toBeVisible();
-  await expect(page.getByLabel("Klasa nowego bbox")).toHaveCount(0);
-  await expect(page.getByLabel("Nowy x")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Dodaj bbox z pól" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Obraz i bbox" })).toHaveCount(0);
+  expect(headerBounds.y + headerBounds.height, "header precedes the workspace").toBeLessThanOrEqual(
+    navigatorBounds.y,
+  );
+  expect(fieldBounds.width, "picture is wider than the column").toBeGreaterThan(sideBounds.width);
+  await expect(page.getByRole("button", { name: /choose a frame/ })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Workspace steps" })).toHaveCount(0);
+  await expect(page.locator(".df-region-overlay__corner-label")).toHaveCount(0);
+}
+
+/** FE-022: the canvas opens cropped; Reset shows the whole frame at 100 %. */
+async function resetToWholeFrame(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Reset view" }).click();
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
+  // Leave focus where a fresh page has it: on the body.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
 }
 
 async function assertResolvedCssVariables(page: Page): Promise<void> {
@@ -322,34 +294,35 @@ async function capture(
 test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA layoutu", async ({
   page,
 }) => {
-  await capture(page, "dashboard", "/", { phase: "queued" }, (current) =>
-    current.getByRole("button", { name: "Uruchom" }));
-  // FE-021: a new profile starts from its screenshot and is named in the
-  // "Save as" dialog, so the route's first own input is the screenshot path.
+  // FE-022: no Dashboard. The run controls live on Run Setup.
+  await capture(page, "run-setup", "/run", { phase: "queued" }, (current) =>
+    current.getByRole("button", { name: "Start" }));
+  // A new profile starts from its screenshot: the tile's own fallback.
   await capture(page, "profile", "/profiles/new", {}, (current) =>
-    current.getByLabel("Ścieżka zrzutu ekranu"));
+    current.getByRole("button", { name: "Add screenshot (JPG/PNG)" }));
   await capture(page, "materials", "/materials", { phase: "review" }, (current) =>
-    current.getByLabel("Ścieżka pliku wideo"));
+    current.getByRole("button", { name: "Upload Video" }));
   await capture(
     page,
     "annotations",
     "/annotations/run-1",
     { fullPage: false, phase: "review" },
-    (current) => current.getByRole("button", { name: /Klasa .* 1 anotacji/ }),
+    (current) => current.getByRole("button", { name: /Class .* 1 annotations/ }),
     async (current) => {
-      await expect(current.getByRole("listbox", { name: "Bbox anotacji na klatce" })).toBeVisible();
+      await expect(current.getByRole("listbox", { name: "Annotation boxes on the frame" })).toBeVisible();
+      await showWholeFrame(current);
       await assertFrameFilterCountsFit(current);
       await assertCompactReviewLayout(current);
       await current.setViewportSize({ width: 1280, height: 1000 });
-      await current.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
+      await current.getByRole("button", { name: /Class .* 1 annotations/ }).click();
       await assertAnnotationPopoverIsDocked(current);
       await current.setViewportSize({ width: 1440, height: 1000 });
     },
     async (current) => {
       await current.keyboard.press("Enter");
       await assertAnnotationPopoverIsDocked(current);
-      await current.getByRole("button", { name: /Klasa .* 1 anotacji/ }).focus();
-      const overlay = current.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+      await current.getByRole("button", { name: /Class .* 1 annotations/ }).focus();
+      const overlay = current.getByRole("listbox", { name: "Annotation boxes on the frame" });
       const overlayBeforeNudge = await overlay.boundingBox();
       expect(overlayBeforeNudge).not.toBeNull();
       /*
@@ -366,12 +339,12 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
         "the unsaved notice must not move the drawing surface during an edit",
       ).toBe(overlayBeforeNudge?.y);
       await expect(
-        current.getByText("Przesunięcie bboxa nie jest jeszcze zapisane.", { exact: false }),
+        current.getByText("The box move is not saved yet.", { exact: false }),
       ).toBeVisible();
       await expect(
-        current.getByRole("status", { name: "Niezapisane przesunięcie bboxa" }),
+        current.getByRole("status", { name: "Unsaved box move" }),
       ).toBeVisible();
-      await expect(current.getByRole("button", { name: "Zaakceptuj klatkę" })).toBeDisabled();
+      await expect(current.getByRole("button", { name: "Accept frame" })).toBeDisabled();
       // Focusing the inspector below the canvas scrolls the SVG above the
       // viewport. Bring it back without changing the pinned keyboard focus so
       // the real pointermove (and therefore the screenshot) can show the guide.
@@ -392,36 +365,35 @@ test("pięć tras i stany loading/empty/error mają uczciwe screenshoty oraz QA 
     "exports",
     "/exports",
     { phase: "accepted" },
-    (current) => current.getByRole("button", { name: "Zamknij run" }),
+    (current) => current.getByRole("button", { name: "Close run" }),
     async (current) => {
-      await current.getByRole("button", { name: "Uruchom eksport" }).click();
-      await expect(current.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible({
+      await current.getByRole("button", { name: "Start export" }).click();
+      await expect(current.getByRole("heading", { name: "COCO export result" })).toBeVisible({
         timeout: 8_000,
       });
     },
     async (current) => {
       await expect(current).toHaveURL(/\/exports\?export_id=export-1$/);
-      await expect(current.getByRole("heading", { name: "Wynik eksportu COCO" })).toBeVisible();
-      await expect(current.getByRole("region", { name: "Pochodzenie anotacji" })).toContainText(
+      await expect(current.getByRole("heading", { name: "COCO export result" })).toBeVisible();
+      await expect(current.getByRole("region", { name: "Annotation sources" })).toContainText(
         "OCR",
       );
       await expect(current.getByText("exports/export-1", { exact: true })).toBeVisible();
     },
   );
-  // These states have no control of their own, so the checkpoint is the shell
-  // navigation. FE-021 moved the Dashboard link from a rail into the menu that
-  // holds every destination; its trigger is the reachable navigation control.
-  await capture(page, "loading", "/", { dashboardMode: "loading" }, (current) =>
-    current.getByRole("button", { name: "Wszystkie sekcje" }), async (current) => {
-      await expect(current.getByText("Ładowanie stanu systemu…")).toBeVisible();
+  // These states have no control of their own, so the checkpoint is the
+  // shell's ⋮ menu. FE-022 shows them on Run Setup, which lists materials.
+  await capture(page, "loading", "/run", { dashboardMode: "loading" }, (current) =>
+    current.getByRole("button", { name: "More" }), async (current) => {
+      await expect(current.getByText("Loading source files and profiles…")).toBeVisible();
     });
-  await capture(page, "empty", "/", { dashboardMode: "empty" }, (current) =>
-    current.getByRole("button", { name: "Wszystkie sekcje" }), async (current) => {
-      await expect(current.getByText("Brak aktywnego projektu")).toBeVisible();
+  await capture(page, "empty", "/run", { dashboardMode: "empty" }, (current) =>
+    current.getByRole("button", { name: "More" }), async (current) => {
+      await expect(current.getByText("Choose a profile to see its screenshot.")).toBeVisible();
     });
-  await capture(page, "error", "/", { dashboardMode: "error" }, (current) =>
-    current.getByRole("button", { name: "Spróbuj ponownie" }), async (current) => {
-      await expect(current.getByText("Nie udało się wczytać dashboardu")).toBeVisible();
+  await capture(page, "error", "/run", { dashboardMode: "error" }, (current) =>
+    current.getByRole("button", { name: "Try again" }), async (current) => {
+      await expect(current.getByText("Source files and profiles could not be loaded")).toBeVisible();
     });
 });
 
@@ -439,14 +411,19 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
 
-  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   const canvas = page.locator(".df-region-overlay");
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
-  const image = page.getByRole("img", { name: /Klatka .* runu/ });
-  const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
-  const annotationPanel = page.getByRole("region", { name: "Anotacja bez zaznaczenia" });
+  const image = page.getByRole("img", { name: /Frame .* of run/ });
+  const inspector = page.getByRole("region", { name: "Annotations" });
+  const annotationPanel = page.getByRole("region", { name: "Annotation — nothing selected" });
   const details = page.getByRole("region", { name: "Dane klatki" });
   await expect(overlay).toBeVisible();
+  // FE-022: the field opens cropped (IMAGE FILL). Reset shows the whole
+  // frame at scale 1 — the geometry this test has always measured from.
+  await expect(page.getByLabel("Canvas zoom")).not.toHaveText("100%");
+  await page.getByRole("button", { name: "Reset view" }).click();
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
   const initial = await overlay.boundingBox();
   const initialCanvas = await canvas.boundingBox();
   const imageBounds = await image.boundingBox();
@@ -506,7 +483,7 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   });
   expect(minimumCtrlWheel).toEqual({ dispatched: true, prevented: false });
 
-  const classButton = page.getByRole("button", { name: /Klasa .* 1 anotacji/ });
+  const classButton = page.getByRole("button", { name: /Class .* 1 annotations/ });
   await classButton.click();
   await classButton.evaluate((element) => {
     if (element instanceof HTMLElement) {
@@ -515,11 +492,11 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   });
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
-  const editDialog = page.getByRole("dialog", { name: /Edytuj anotację/ });
+  const editDialog = page.getByRole("dialog", { name: /Edit annotation/ });
   const selectedShape = overlay.getByRole("option").first();
   await expect(editDialog).toBeVisible();
   await expect(selectedShape).toHaveAttribute("aria-label", /x 102, y 120/);
-  await expect(page.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
   const nudgedGeometryLabel = await selectedShape.getAttribute("aria-label");
   expect(mutationRequests).toEqual([]);
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -532,7 +509,7 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("125%");
   const zoomed = await overlay.boundingBox();
   expect(zoomed).not.toBeNull();
   if (zoomed === null) {
@@ -556,7 +533,7 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   expect(afterMiddlePan).not.toBe(beforeMiddlePan);
   await expect(editDialog).toBeVisible();
   expect(await selectedShape.getAttribute("aria-label")).toBe(nudgedGeometryLabel);
-  await expect(page.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
   expect(mutationRequests).toEqual([]);
 
   await page.mouse.move(center.x, center.y);
@@ -576,7 +553,7 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   expect(afterSpacePan).not.toBe(beforeSpacePan);
   await expect(editDialog).toBeVisible();
   expect(await selectedShape.getAttribute("aria-label")).toBe(nudgedGeometryLabel);
-  await expect(page.getByRole("status", { name: "Niezapisane przesunięcie bboxa" })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Unsaved box move" })).toBeVisible();
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   expect(mutationRequests).toEqual([]);
 
@@ -594,7 +571,7 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
       );
     }
   });
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("800%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("800%");
   const maximumCtrlWheel = await overlay.evaluate((element) => {
     const event = new WheelEvent("wheel", {
       bubbles: true,
@@ -606,12 +583,12 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   });
   expect(maximumCtrlWheel).toEqual({ dispatched: true, prevented: false });
 
-  await page.getByRole("button", { name: "Dopasuj kanwę do widoku" }).click();
+  await page.getByRole("button", { name: "Reset view" }).click();
   await page.mouse.move(center.x, center.y);
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("125%");
   await expect(editDialog).toBeVisible();
   expect(await selectedShape.getAttribute("aria-label")).toBe(nudgedGeometryLabel);
   expect(mutationRequests).toEqual([]);
@@ -631,42 +608,23 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   await page.mouse.move(drawStart.x + 48, drawStart.y + 32, { steps: 3 });
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   await page.mouse.up();
-  const createdDialog = page.getByRole("dialog", { name: "Edytuj anotację 7" });
+  const createdDialog = page.getByRole("dialog", { name: "Edit annotation 7" });
   await expect(createdDialog).toBeVisible();
-  await expect(createdDialog.getByText("przypisano: 7")).toBeVisible();
+  await expect(createdDialog.getByText("assigned: 7")).toBeVisible();
   expect(mutationRequests).toEqual(["POST /api/v1/frames/frame-1/annotations"]);
 
-  const created = overlay.getByRole("option", { name: /^7, źródło ręczna:/ });
+  const created = overlay.getByRole("option", { name: /^7, source manual:/ });
   const createdBeforeReset = await created.getAttribute("aria-label");
-  await page.getByRole("button", { name: "Dopasuj kanwę do widoku" }).click();
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  await page.getByRole("button", { name: "Reset view" }).click();
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
   await expect(createdDialog).toBeVisible();
   expect(await created.getAttribute("aria-label")).toBe(createdBeforeReset);
   expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
   expect(mutationRequests).toEqual(["POST /api/v1/frames/frame-1/annotations"]);
 
-  const frameLabel = page.locator(".df-region-overlay__corner-label");
-  await expect(frameLabel).toHaveCSS("pointer-events", "none");
-  const labelBounds = await frameLabel.boundingBox();
-  expect(labelBounds).not.toBeNull();
-  if (labelBounds === null) {
-    throw new Error("Frame label has no browser geometry");
-  }
-  const labelPoint = {
-    x: labelBounds.x + labelBounds.width / 2,
-    y: labelBounds.y + labelBounds.height / 2,
-  };
-  await page.mouse.move(labelPoint.x, labelPoint.y);
-  await page.mouse.down();
-  await page.mouse.move(labelPoint.x + 48, labelPoint.y + 48, { steps: 3 });
-  await page.mouse.up();
-  await expect(createdDialog).toBeVisible();
-  await expect(createdDialog.getByText("przypisano: 7")).toBeVisible();
-  expect((await canvas.boundingBox())?.height).toBe(initialCanvas.height);
-  expect(mutationRequests).toEqual([
-    "POST /api/v1/frames/frame-1/annotations",
-    "POST /api/v1/frames/frame-1/annotations",
-  ]);
+  // FE-022 removed the "Klatka NN" corner label, so nothing pinned over the
+  // picture can intercept a draw any more.
+  await expect(page.locator(".df-region-overlay__corner-label")).toHaveCount(0);
 
   await page.mouse.move(8, 8);
   await expect(crosshair).toHaveCount(0);
@@ -678,13 +636,14 @@ test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
 
-  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   const canvas = page.locator(".df-region-overlay");
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
   await expect(overlay).toBeVisible();
-  await page.getByRole("button", { name: /Klasa .* 1 anotacji/ }).click();
-  const dialog = page.getByRole("dialog", { name: /Edytuj anotację/ });
-  const deleteButton = dialog.getByRole("button", { name: "Usuń" });
+  await resetToWholeFrame(page);
+  await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
+  const dialog = page.getByRole("dialog", { name: /Edit annotation/ });
+  const deleteButton = dialog.getByRole("button", { name: "Delete" });
   await expect(deleteButton).toBeVisible();
 
   await overlay.scrollIntoViewIfNeeded();
@@ -700,7 +659,7 @@ test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("125%");
 
   await page.mouse.move(8, 8);
   await deleteButton.evaluate((element) => {
@@ -726,7 +685,7 @@ test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({
   );
   expect(deletesAfterPan).toHaveLength(0);
 
-  const resetButton = page.getByRole("button", { name: "Dopasuj kanwę do widoku" });
+  const resetButton = page.getByRole("button", { name: "Reset view" });
   await page.mouse.move(center.x, center.y);
   await resetButton.evaluate((element) => {
     if (element instanceof HTMLElement) {
@@ -736,7 +695,7 @@ test("Space zachowuje natywny przycisk bez panu i blokuje go po panie", async ({
   await expect(resetButton).toBeFocused();
   await page.keyboard.press("Space");
 
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("100%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
   const deletesAfterNativeReset = api.requests.filter(
     (request) => request.method === "DELETE" && request.pathname === "/annotations/ann-1",
   );
@@ -767,10 +726,11 @@ test("Space nad kanwą nie przewija dokumentu przy naturalnym fokusie body", asy
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
 
-  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   const canvas = page.locator(".df-region-overlay");
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
   await expect(overlay).toBeVisible();
+  await resetToWholeFrame(page);
   await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
@@ -786,7 +746,7 @@ test("Space nad kanwą nie przewija dokumentu przy naturalnym fokusie body", asy
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("125%");
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
 
   const beforeSpacePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
@@ -824,10 +784,11 @@ test("wciąż trzymany Space nie przewija dokumentu po zakończeniu panu poza ka
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/annotations/run-1");
 
-  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   const canvas = page.locator(".df-region-overlay");
   const zoomStage = page.locator("[data-overlay-zoom-stage]");
   await expect(overlay).toBeVisible();
+  await resetToWholeFrame(page);
   await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
@@ -843,7 +804,7 @@ test("wciąż trzymany Space nie przewija dokumentu po zakończeniu panu poza ka
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);
   await page.keyboard.up("Control");
-  await expect(page.getByLabel("Powiększenie kanwy")).toHaveText("125%");
+  await expect(page.getByLabel("Canvas zoom")).toHaveText("125%");
 
   const beforePan = await zoomStage.evaluate((element) => getComputedStyle(element).transform);
   await page.keyboard.down("Space");
@@ -881,8 +842,8 @@ test("zamrożona klatka nie pokazuje celownika", async ({ page }) => {
   const api = new ApiHarness({ phase: "accepted" });
   await api.install(page);
   await page.goto("/annotations/run-1");
-  await page.getByRole("button", { name: /Zaakceptowane\s*1/ }).click();
-  const overlay = page.getByRole("listbox", { name: "Bbox anotacji na klatce" });
+  await page.getByRole("button", { name: /Accepted\s*1/ }).click();
+  const overlay = page.getByRole("listbox", { name: "Annotation boxes on the frame" });
   await expect(overlay).toBeVisible();
   const bounds = await overlay.boundingBox();
   expect(bounds).not.toBeNull();
@@ -898,7 +859,7 @@ test("nie zapisuje screenshotu po utracie route-specific focusu", async ({ page 
   await api.install(page);
   await page.goto("/materials");
   await freezeMotion(page);
-  const focusCheckpoint = page.getByLabel("Ścieżka pliku wideo");
+  const focusCheckpoint = page.getByRole("button", { name: "Upload Video" });
   await assertKeyboardFocus(page, focusCheckpoint);
   await pinScreenshotFocusRing(page, focusCheckpoint);
   await focusCheckpoint.evaluate((element) => {

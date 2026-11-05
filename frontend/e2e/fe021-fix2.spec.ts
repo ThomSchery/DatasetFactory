@@ -1,5 +1,6 @@
 ﻿import { expect, test } from "@playwright/test";
 import path from "node:path";
+import { showWholeFrame } from "./profileFlow";
 
 const apiBase = `http://127.0.0.1:${process.env.DF_E2E_BACKEND_PORT ?? "8000"}/api/v1`;
 const imagePath = path.resolve(process.cwd(), "../backend/tests/fixtures/video/synthetic-frame.png");
@@ -14,10 +15,11 @@ test("FIX2: move and resize the selected profile region and persist its geometry
   const profile = await created.json();
   expect((await request.post(`${apiBase}/profiles/${profile.id}/activate`)).ok()).toBe(true);
   await page.goto("/profiles");
-  await page.getByRole("button", { name: "Zaznacz region HUD" }).click();
+  await showWholeFrame(page);
+  await page.getByRole("button", { name: "Select region HUD" }).click();
   const shape = page.getByRole("option", { name: "HUD" });
   await expect(shape.locator('[data-overlay-handle="south-east"]')).toBeAttached();
-  const surface = page.getByRole("listbox", { name: "Regiony HUD na zrzucie referencyjnym" });
+  const surface = page.getByRole("listbox", { name: "HUD regions on the reference screenshot" });
   await surface.scrollIntoViewIfNeeded();
   const box = await surface.boundingBox();
   if (!box) throw new Error("No surface");
@@ -50,9 +52,9 @@ test("FIX2: move and resize the selected profile region and persist its geometry
   expect((await saved).status()).toBe(200);
   const reloaded = await (await request.get(`${apiBase}/profiles/${profile.id}`)).json();
   expect(reloaded.regions[0]).toMatchObject({ x: 150, y: 140, width: 650, height: 340 });
-  await page.getByRole("button", { name: "Zaznacz region HUD" }).click();
+  await page.getByRole("button", { name: "Select region HUD" }).click();
   await page.getByRole("button", { name: "Draw region" }).click();
   await move(point(300, 200), point(500, 350));
-  await expect(page.getByLabel("Nazwa narysowanego regionu")).toBeVisible();
+  await expect(page.getByLabel("Name of the drawn region")).toBeVisible();
   await expect(rect).toHaveAttribute("x", "150");
 });

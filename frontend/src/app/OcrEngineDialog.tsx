@@ -2,6 +2,7 @@ import { describeApiError, requiresOcrWarning, ocrProvenanceOf } from "../api";
 import { Button } from "../components/common/Button";
 import { DataList } from "../components/common/DataList";
 import { Dialog } from "../components/common/Dialog";
+import { StatusBadge } from "../components/common/StatusBadge";
 import { FatalError, Loading } from "../components/common/UiStates";
 import { useDashboard } from "../features/dashboard/dashboardQuery";
 
@@ -79,6 +80,28 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
           {run !== null && run.warning !== "" ? (
             <p className="df-ocr-engine__note">{run.warning}</p>
           ) : null}
+          {/* With the Dashboard gone (FE-022), the state of the local
+              dependencies is reported here, beside the OCR engine. */}
+          <h3 className="df-ocr-engine__subtitle">Local dependencies</h3>
+          <ul className="df-ocr-engine__dependencies">
+            {(
+              [
+                ["Tesseract", dashboard.data.system.tesseract],
+                ["FFmpeg", dashboard.data.system.ffmpeg],
+                ["Workspace", dashboard.data.system.workspace],
+                ["Database", dashboard.data.system.database],
+                ["GPU", dashboard.data.system.gpu],
+              ] as const
+            ).map(([name, status]) => (
+              <li key={name}>
+                <span>{name}</span>
+                <StatusBadge srLabel={`${name}:`} tone={status.available ? "success" : status.critical ? "error" : "warning"}>
+                  {status.available ? "Available" : "Unavailable"}
+                </StatusBadge>
+                <span className="df-ocr-engine__detail">{status.detail}</span>
+              </li>
+            ))}
+          </ul>
         </>
       ) : null}
     </Dialog>

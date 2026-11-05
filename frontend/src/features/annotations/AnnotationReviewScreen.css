@@ -297,6 +297,9 @@ p.df-review-classes {
   width: 100%;
   max-height: var(--df-annotation-popover-viewport-room);
   min-width: 0;
+  /* FE-011-FIX1: a tall panel scrolls inside the viewport instead of
+     pushing its actions out of reach. */
+  overflow-y: auto;
 }
 
 .df-annotation-popover .df-grouped-options__control {

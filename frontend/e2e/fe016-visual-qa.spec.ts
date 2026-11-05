@@ -121,24 +121,21 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
     await page.goto("/profiles");
     await freezeMotion(page);
 
-    await page.getByRole("button", { name: "Rozwiń grupę Nazwy klas OCR" }).click();
-    await page.getByRole("button", { name: "Zmień nazwę klasy 7" }).click();
-    const renameInput = page.getByRole("textbox", { name: "Nowa nazwa klasy 7" });
+    await page.getByRole("button", { name: "Expand group OCR settings" }).click();
+    await page.getByRole("button", { name: "Rename class 7" }).click();
+    const renameInput = page.getByRole("textbox", { name: "New name of class 7" });
     await renameInput.fill("osiem");
 
-    const immutableNotice = page.getByRole("status", {
-      name: "Ukończone eksporty pozostają niezmienne",
-    });
-    const kindWarning = page.getByRole("status", { name: "Klasa zmieni grupę" });
-    const profileBody = page.getByRole("region", { name: "Klasy" }).locator(".df-panel__body");
+    // FE-022 moved the durability note into the Save as dialog; the group
+    // change is a one-line status under the rename field.
+    const kindWarning = page.getByText(/Moves the class:/);
+    const profileBody = page.getByRole("region", { name: "Classes" }).locator(".df-panel__body");
     await kindWarning.scrollIntoViewIfNeeded();
     await expect(kindWarning).toBeInViewport();
-    await expect(kindWarning).toContainText("Liczby");
-    await expect(kindWarning).toContainText("Pola HUD (gra)");
+    await expect(kindWarning).toContainText("Numbers");
+    await expect(kindWarning).toContainText("Custom");
     await expectInsideViewport(kindWarning, viewport, `kind warning at ${suffix}`);
     await expectInsideContainer(kindWarning, profileBody, `kind warning at ${suffix}`);
-    await immutableNotice.scrollIntoViewIfNeeded();
-    await expectInsideViewport(immutableNotice, viewport, `immutable notice at ${suffix}`);
 
     await writeFile(
       path.join(screenshotDirectory, `profile-rename-${suffix}.png`),
@@ -149,16 +146,16 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
 
     await page.goto("/exports");
     await freezeMotion(page);
-    const variant = page.getByRole("combobox", { name: "Wariant eksportu" });
+    const variant = page.getByRole("combobox", { name: "Export variant" });
     await variant.selectOption("roboflow_coco");
-    const exportPanel = page.getByRole("region", { name: "Nowy eksport" });
+    const exportPanel = page.getByRole("region", { name: "New export" });
     const exportBody = exportPanel.locator(".df-panel__body");
     const controls = [
       variant,
       page.getByRole("spinbutton", { name: "Train (%)" }),
       page.getByRole("spinbutton", { name: "Valid (%)" }),
       page.getByRole("spinbutton", { name: "Test (%)" }),
-      page.getByRole("spinbutton", { name: "Ziarno podziału" }),
+      page.getByRole("spinbutton", { name: "Split seed" }),
     ];
     for (const [index, control] of controls.entries()) {
       await expect(control).toBeVisible();

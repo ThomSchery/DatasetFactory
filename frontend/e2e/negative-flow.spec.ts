@@ -25,13 +25,6 @@ async function apiJson<T>(request: APIRequestContext, pathname: string): Promise
   return response.json() as Promise<T>;
 }
 
-function isDashboardGet(response: { request(): { method(): string }; url(): string }): boolean {
-  return (
-    response.request().method() === "GET" &&
-    new URL(response.url()).pathname === "/api/v1/dashboard"
-  );
-}
-
 function currentWindowsIdentity(): string {
   const result = spawnSync("whoami.exe", [], { encoding: "utf8" });
   expect(result.status, result.stderr).toBe(0);
@@ -63,10 +56,18 @@ function restoreWorkspaceWrites(workspaceRoot: string, identity: string): void {
 
 async function createProfile(page: Page): Promise<void> {
   await createProfileInWorkspace(page, referenceImage, "Gra testowa E2E błędy");
-  const initialDashboardResponse = page.waitForResponse(isDashboardGet);
   await page.goto("/materials");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Materiały");
-  expect((await initialDashboardResponse).ok()).toBe(true);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Upload");
+}
+
+/** FE-022 Upload: the tile's Enter path fallback. */
+async function importPath(page: Page, localPath: string): Promise<void> {
+  const field = page.getByLabel("Video file path");
+  if (!(await field.isVisible())) {
+    await page.getByRole("button", { name: "Enter path" }).click();
+  }
+  await field.fill(localPath);
+  await page.getByRole("button", { name: "Open", exact: true }).click();
 }
 
 async function cancelRunBestEffort(request: APIRequestContext, runId: string | null) {
@@ -109,56 +110,31 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
   let slotOwnerRunId: string | null = null;
   let workspaceWriteDenied = false;
   try {
-    const initialMaterialsDashboard = page.waitForResponse(isDashboardGet);
     await page.goto("/materials");
-    expect((await initialMaterialsDashboard).ok()).toBe(true);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Upload");
     const missingSource = path.join(runtimeRoot, "missing-source.mkv");
     expect(fs.existsSync(missingSource)).toBe(false);
-    await page.getByLabel("Ścieżka pliku wideo").fill(missingSource);
     const sourceResponsePromise = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === "/api/v1/materials" &&
         response.request().method() === "POST",
     );
-    await page.getByRole("button", { name: "Zaimportuj materiał" }).click();
+    await importPath(page, missingSource);
     const sourceResponse = await sourceResponsePromise;
     expect(sourceResponse.status()).toBe(404);
     expect((await sourceResponse.json()) as { error: { code: string } }).toMatchObject({
       error: { code: "source_missing" },
     });
     const sourceAlert = page.getByRole("alert");
-    await expect(sourceAlert).toContainText("Plik źródłowy nie istnieje pod zapisaną ścieżką.");
-    await expect(sourceAlert).toContainText("Przywróć plik w tym samym miejscu");
-    await expect(page.getByText("source_missing", { exact: true })).toBeVisible();
+    await expect(sourceAlert).toContainText("The source file no longer exists at its saved path.");
+    await expect(sourceAlert).toContainText("Put the file back in the same place");
+    await expect(sourceAlert).toContainText("source_missing");
 
     await createProfile(page);
-    await page.getByLabel("Ścieżka pliku wideo").fill(fixtureVideo);
-    await page.getByRole("button", { name: "Zaimportuj materiał" }).click();
-    await expect(page.getByText("synthetic-hud.mkv").first()).toBeVisible();
-    await page.goto("/run");
-    const materialSelect = page.getByRole("combobox", { name: "Materiał", exact: true });
-    await expect(materialSelect).toContainText("synthetic-hud.mkv");
-    await materialSelect.selectOption({ index: 1 });
-    await page
-      .getByRole("combobox", { name: "Profil gry", exact: true })
-      .selectOption({ index: 1 });
-    const createRunResponse = page.waitForResponse(
-      (response) =>
-        response.request().method() === "POST" &&
-        new URL(response.url()).pathname === "/api/v1/runs",
-    );
-    await page.getByRole("button", { name: "Utwórz run" }).click();
-    const createdRunResponse = await createRunResponse;
-    expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
-    const queuedRun = (await createdRunResponse.json()) as RunSnapshot;
-    await expect(page.getByRole("button", { name: "Utwórz run" })).toBeEnabled({ timeout: 15000 });
-    queuedRunId = queuedRun.id;
-    await expect.poll(async () => (await apiJson<{ run: RunSnapshot | null }>(request, "/dashboard")).run)
-      .toMatchObject({ id: queuedRunId, status: "queued" });
-    await expect(page.getByRole("region", { name: "Aktywny run" })).toContainText(queuedRunId, { timeout: 15000 });
-    const visibleStart = page.getByRole("button", { name: "Uruchom" });
-    await expect(visibleStart).toBeVisible();
+    await importPath(page, fixtureVideo);
+    await expect(page.getByText(/synthetic-hud\.mkv/).first()).toBeVisible();
 
+    // A second run takes the single run slot first, through the API.
     const profile = await apiJson<{ id: string }>(request, "/profiles/current");
     const materials = await apiJson<{ items: { id: string }[] }>(
       request,
@@ -175,27 +151,42 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
     expect(createSlotOwner.status(), await createSlotOwner.text()).toBe(201);
     const slotOwner = (await createSlotOwner.json()) as RunSnapshot;
     slotOwnerRunId = slotOwner.id;
-
     fs.writeFileSync(holdOcr, "0", "utf8");
     const startSlotOwner = await request.post(`${apiBase}/runs/${slotOwner.id}/start`, {
       data: { expected_version: slotOwner.version },
     });
     expect(startSlotOwner.status(), await startSlotOwner.text()).toBe(202);
 
+    // FE-022: Run creates the run and starts it; the start meets 409.
+    await page.goto("/run");
+    await page.getByLabel("Source file", { exact: true }).click();
+    await page.getByRole("option", { name: /synthetic-hud\.mkv/ }).click();
+    await page.getByLabel("Profile", { exact: true }).click();
+    await page.getByRole("option", { name: "Gra testowa E2E błędy" }).click();
+    const createRunResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/runs",
+    );
     const conflictResponsePromise = page.waitForResponse(
       (response) =>
-        new URL(response.url()).pathname === `/api/v1/runs/${queuedRunId}/start` &&
+        /\/api\/v1\/runs\/[^/]+\/start$/.test(new URL(response.url()).pathname) &&
         response.request().method() === "POST",
     );
-    await visibleStart.click();
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    const createdRunResponse = await createRunResponse;
+    expect(createdRunResponse.status(), await createdRunResponse.text()).toBe(201);
+    queuedRunId = ((await createdRunResponse.json()) as RunSnapshot).id;
     const conflictResponse = await conflictResponsePromise;
     expect(conflictResponse.status()).toBe(409);
     expect((await conflictResponse.json()) as { error: { code: string } }).toMatchObject({
       error: { code: "active_run" },
     });
-    const activeRunAlert = page.getByRole("alert");
-    await expect(activeRunAlert).toContainText("Inny run jest już aktywny.");
-    await expect(activeRunAlert).toContainText("Zatrzymaj lub dokończ bieżący run");
+    const activeRunAlert = page.getByRole("alert").filter({ hasText: "active_run" });
+    await expect(activeRunAlert).toContainText("Another run is already active.");
+    await expect(activeRunAlert).toContainText("Pause or finish the current run");
+    // The run the operator asked for waits, queued; the URL stays on Run.
+    expect(new URL(page.url()).pathname).toBe("/run");
     await expect.poll(() => fs.existsSync(ocrEntered), { timeout: 20_000 }).toBe(true);
 
     fs.rmSync(holdOcr, { force: true });
@@ -226,11 +217,14 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
       },
     });
 
-    await page.goto("/");
-    const systemPanel = page.getByRole("region", { name: "Stan systemu" });
-    await expect(systemPanel).toContainText("Niedostępny");
-    const workspaceRow = systemPanel.getByRole("listitem").filter({ hasText: "Katalog roboczy" });
-    await expect(workspaceRow).toContainText("Niedostępny");
+    // FE-022: with no Dashboard, local dependencies are reported next to the
+    // OCR engine, behind ⋮.
+    await page.goto("/materials");
+    await page.getByRole("button", { name: "More" }).click();
+    await page.getByRole("button", { name: "OCR engine" }).click();
+    const report = page.getByRole("dialog", { name: "OCR engine" });
+    const workspaceRow = report.getByRole("listitem").filter({ hasText: "Workspace" });
+    await expect(workspaceRow).toContainText("Unavailable");
     await expect(workspaceRow).toContainText("unavailable");
   } finally {
     fs.rmSync(holdOcr, { force: true });

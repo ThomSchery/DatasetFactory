@@ -1,9 +1,15 @@
 // Read-only DOM geometry of the running app. No screenshots; non-GET API calls are aborted.
 // Rows use the same shape as the Figma geometry rows: f = painted box, t = text, m = image, i = icon.
 const fs = require('node:fs'), path = require('node:path');
-process.env.PLAYWRIGHT_BROWSERS_PATH = 'D:/DatasetFactory/cache/ms-playwright';
-const { chromium } = require('C:/Users/t.wisniewski/.traycer/worktrees/thomschery__datasetfactory/feat-figma-datasetfactory-redesign/frontend/node_modules/playwright');
-const routes = { upload: '/materials', profile: '/profiles', run: '/run', review: '/annotations/b4a755c9-4e55-4142-bc09-50f7469e124b' };
+process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || 'D:/DatasetFactory/cache/ms-playwright';
+// FE-022: the worktree's own Playwright, the isolated E2E port and the run id
+// to review are parameters: `node measure-app-geometry.cjs <runId> [outFile]`.
+const { chromium } = require(path.resolve(__dirname, '../../frontend/node_modules/playwright'));
+const port = process.env.DF_E2E_FRONTEND_PORT || '5193';
+const runId = process.argv[2];
+if (!runId) throw new Error('usage: node measure-app-geometry.cjs <runId> [outFile]');
+const outFile = process.argv[3] || path.resolve(__dirname, '../../docs/tickets/FE-022/app-geometry.json');
+const routes = { upload: '/materials', profile: '/profiles', run: '/run', review: '/annotations/' + runId };
 const widths = [360, 576, 768, 992, 1200, 1400];
 
 function collect() {
@@ -78,16 +84,19 @@ function collect() {
   }
   for (const [screen, route] of Object.entries(routes)) {
     await page.setViewportSize({ width: 1200, height: 900 });
-    await page.goto('http://127.0.0.1:5173' + route); await page.waitForLoadState('networkidle'); await page.evaluate(() => document.fonts.ready);
+    await page.goto('http://127.0.0.1:' + port + route); await page.waitForLoadState('networkidle'); await page.evaluate(() => document.fonts.ready);
     if (screen !== 'upload') await page.locator('main img').first().waitFor({ state: 'visible' });
     for (const width of widths) { await page.setViewportSize({ width, height: 900 }); await settle(); await capture(screen, width, 'default'); }
     if (screen === 'review') {
       await page.setViewportSize({ width: 768, height: 900 }); await settle();
-      const close = page.getByRole('button', { name: 'Zwiń listę Klasy profilu', exact: true });
-      if (await close.isVisible()) { await close.click(); await settle(); await capture(screen, 768, 'class-picker-closed'); }
+      // FE-022: the class field rests closed; the strip-collapsed state is
+      // the one that has to match Figma literally.
+      const collapse = page.getByRole('button', { name: 'Collapse sections', exact: true });
+      if (await collapse.isVisible()) { await collapse.click(); await settle(); await capture(screen, 768, 'strip-collapsed'); await page.getByRole('button', { name: 'Sections', exact: true }).click(); await settle(); }
     }
   }
   await browser.close();
-  fs.writeFileSync(path.join(__dirname, 'app-geometry.json'), JSON.stringify({ capturedAt: new Date().toISOString(), source: 'http://127.0.0.1:5173', method: 'Playwright DOM geometry; no screenshots; non-GET API aborted', viewportHeight: 900, blockedWrites: blocked, results }));
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  fs.writeFileSync(outFile, JSON.stringify({ capturedAt: new Date().toISOString(), source: 'http://127.0.0.1:' + port, method: 'Playwright DOM geometry; no screenshots; non-GET API aborted', viewportHeight: 900, blockedWrites: blocked, results }));
   console.log('blocked writes', blocked.length);
 })().catch(e => { console.error(e); process.exitCode = 1; });

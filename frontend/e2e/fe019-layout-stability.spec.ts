@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { profileFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
+import { showWholeFrame } from "./profileFlow";
 
 test.use({
   launchOptions: {
@@ -46,23 +47,25 @@ async function installRoutes(page: Page): Promise<void> {
 
 interface LayoutMeasurement {
   canvasRight: number;
-  controlHeight: number;
   documentOverflows: boolean;
   pickerHeight: number;
 }
 
+/**
+ * FE-022: Repeat Previous is an inline list box now (Figma), so the control
+ * that still grows the column is the class field in Annotations — closed at
+ * rest, open with its list once a box is selected.
+ */
 async function measure(page: Page): Promise<LayoutMeasurement> {
   return page.evaluate(() => {
-    const canvas = document.querySelector(".df-region-overlay");
-    const control = document.querySelector(".df-review-copy .df-grouped-options__control");
-    const picker = document.querySelector(".df-review-copy .df-grouped-options");
-    if (canvas === null || control === null || picker === null) {
+    const canvas = document.querySelector(".df-review-workspace__preview .df-region-overlay");
+    const picker = document.querySelector(".df-annotation-popover .df-grouped-options");
+    if (canvas === null || picker === null) {
       throw new Error("FE-019 layout surfaces are missing");
     }
     const root = document.documentElement;
     return {
       canvasRight: canvas.getBoundingClientRect().right,
-      controlHeight: control.getBoundingClientRect().height,
       documentOverflows: root.scrollHeight > root.clientHeight,
       pickerHeight: picker.getBoundingClientRect().height,
     };
@@ -78,46 +81,37 @@ test("FE-019: prawa krawędź kanwy nie drgnie po rozwinięciu pola z zawinięty
   for (const width of [1280, 1440, 1920]) {
     await page.setViewportSize({ height: 1400, width });
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
 
-    const copyPanel = page.getByRole("region", { name: "Powtórz z poprzedniej klatki" });
+    const copyPanel = page.getByRole("region", { name: "Repeat Previous" });
     await expect(copyPanel).toBeVisible({ timeout: 30_000 });
-    const tags = copyPanel.locator(".df-grouped-options__tag");
-    await expect(tags).toHaveCount(4);
-    const expand = copyPanel.getByRole("button", {
-      name: /Rozwiń listę Klasy z poprzedniej klatki/,
-    });
-    await expect(expand).toBeVisible();
 
-    // Fit the collapsed document exactly, then let the real dropdown make the
-    // document overflow. This forces a scrollbar transition at every required
-    // width instead of hoping a fixed viewport happens to hit the boundary.
-    // `<main>` still has its own bottom padding below the last panel — a flat
-    // buffer here previously missed exactly that padding and the "collapsed"
-    // viewport it computed already overflowed before anything expanded.
+    // From 992 px the picture grows with the window; measure at a short
+    // window, where it sits at its 543 px minimum, so the fit is real.
+    await page.setViewportSize({ height: 600, width });
     const fittedHeight = await page.evaluate(() => {
       const copy = document.querySelector(".df-review-copy");
+      const preview = document.querySelector(".df-review-workspace__preview");
       const main = document.querySelector(".df-shell__main");
-      if (copy === null || main === null) {
-        throw new Error("Copy panel or main landmark is missing");
+      if (copy === null || preview === null || main === null) {
+        throw new Error("Copy panel, preview or main landmark is missing");
       }
-      const bottom = copy.getBoundingClientRect().bottom + window.scrollY;
+      const bottom =
+        Math.max(copy.getBoundingClientRect().bottom, preview.getBoundingClientRect().bottom) +
+        window.scrollY;
       const mainPaddingBottom = Number.parseFloat(getComputedStyle(main).paddingBottom);
       return Math.ceil(bottom + mainPaddingBottom + 2);
     });
     await page.setViewportSize({ height: fittedHeight, width });
 
     const before = await measure(page);
-    expect(before.documentOverflows, `collapsed document already overflows at ${String(width)}`).toBe(
+    expect(before.documentOverflows, `resting document already overflows at ${String(width)}`).toBe(
       false,
     );
-    expect(before.controlHeight, `tags did not wrap at ${String(width)}`).toBeGreaterThan(40);
 
-    await expand.click();
-    await expect(
-      copyPanel.getByRole("group", {
-        name: "Klasy z poprzedniej klatki i liczba ich wystąpień",
-      }),
-    ).toBeVisible();
+    // Selecting a box opens the class list inside Annotations.
+    await page.getByRole("button", { name: "Class 7, 1 annotations" }).click();
+    await expect(page.getByRole("listbox", { name: "Profile classes" })).toBeVisible();
     const expanded = await measure(page);
 
     expect(expanded.pickerHeight, `picker did not grow at ${String(width)}`).toBeGreaterThan(
@@ -130,13 +124,8 @@ test("FE-019: prawa krawędź kanwy nie drgnie po rozwinięciu pola z zawinięty
       before.canvasRight,
     );
 
-    await copyPanel
-      .getByRole("button", { name: /Zwiń listę Klasy z poprzedniej klatki/ })
-      .click();
+    await page.getByRole("button", { name: "Collapse list Profile classes" }).click();
     const after = await measure(page);
-    expect(after.documentOverflows, `collapsed document still overflows at ${String(width)}`).toBe(
-      false,
-    );
     expect(after.canvasRight, `canvas moved when the picker closed at ${String(width)}`).toBe(
       before.canvasRight,
     );

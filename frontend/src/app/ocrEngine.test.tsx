@@ -60,8 +60,23 @@ describe("OCR engine disclosure", () => {
     renderApp(["/materials"]);
 
     const dialog = await openOcrEngine(user);
-    expect(await within(dialog).findByText("Tesseract")).toBeInTheDocument();
+    expect((await within(dialog).findAllByText("Tesseract")).length).toBeGreaterThan(0);
     expect(dialog).toHaveTextContent("full manual review");
+  });
+
+  it("reports the local dependencies the Dashboard used to show", async () => {
+    const user = userEvent.setup();
+    const dashboard = emptyDashboard();
+    dashboard.system.workspace = { available: false, critical: true, detail: "unavailable" };
+    stubFetch(() => ({ status: 200, body: dashboard }));
+    renderApp(["/materials"]);
+
+    const dialog = await openOcrEngine(user);
+    const workspace = (await within(dialog).findAllByRole("listitem")).find((item) =>
+      item.textContent?.startsWith("Workspace"),
+    );
+    expect(workspace).toHaveTextContent("Unavailable");
+    expect(workspace).toHaveTextContent("unavailable");
   });
 
   it("keeps OCR warning blocks off the screens", async () => {

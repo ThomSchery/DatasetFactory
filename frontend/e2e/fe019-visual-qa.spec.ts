@@ -6,6 +6,7 @@ import path from "node:path";
 import { profileFixture, profileSummaryFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
+import { showWholeFrame } from "./profileFlow";
 
 const screenshotDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -112,69 +113,61 @@ test("FE-019 pokazuje dwa stany pickerów, trzy panele i wspólny trójkąt prof
     const suffix = `${String(viewport.width)}x${String(viewport.height)}`;
     await page.setViewportSize(viewport);
     await page.goto("/annotations/run-1");
+    await showWholeFrame(page);
     await freezeMotion(page);
 
-    await page.getByRole("button", { name: "Klasa 7, 1 anotacji" }).click();
-    const sideColumn = page.getByRole("complementary", { name: "Panele bieżącej klatki" });
-    const inspector = page.getByRole("region", { name: "Anotacje na klatce" });
-    const annotation = page.getByRole("dialog", { name: "Edytuj anotację 7" });
-    const copy = page.getByRole("region", { name: "Powtórz z poprzedniej klatki" });
+    await page.getByRole("button", { name: "Class 7, 1 annotations" }).click();
+    const sideColumn = page.getByRole("complementary", { name: "Current frame panels" });
+    const inspector = page.getByRole("region", { name: "Annotations" });
+    const annotation = page.getByRole("dialog", { name: "Edit annotation 7" });
+    const copy = page.getByRole("region", { name: "Repeat Previous" });
     await expect(annotation).toBeVisible({ timeout: 30_000 });
     await expect(copy).toBeVisible();
 
+    // FE-022: the class field and its actions sit inside Annotations, and
+    // Repeat Previous follows it.
     const inspectorBox = await bounds(inspector, `inspector at ${suffix}`);
     const annotationBox = await bounds(annotation, `annotation at ${suffix}`);
     const copyBox = await bounds(copy, `copy at ${suffix}`);
-    expect(annotationBox.y, `annotation is not second at ${suffix}`).toBeGreaterThan(
+    expect(annotationBox.y, `class field is not inside Annotations at ${suffix}`).toBeGreaterThan(inspectorBox.y);
+    expect(annotationBox.y + annotationBox.height).toBeLessThanOrEqual(inspectorBox.y + inspectorBox.height + 0.5);
+    expect(copyBox.y, `copy is not after Annotations at ${suffix}`).toBeGreaterThan(
       inspectorBox.y + inspectorBox.height,
     );
-    expect(copyBox.y, `copy is not third at ${suffix}`).toBeGreaterThan(
-      annotationBox.y + annotationBox.height,
-    );
 
-    const annotationFilter = annotation.getByRole("textbox", { name: "Klasa" });
+    const annotationFilter = annotation.getByRole("textbox", { name: "Class" });
     await expect(annotationFilter).toBeFocused();
-    await expect(annotation.getByRole("listbox", { name: "Klasy profilu" })).toBeVisible();
+    await expect(annotation.getByRole("listbox", { name: "Profile classes" })).toBeVisible();
     await annotation.scrollIntoViewIfNeeded();
     await shoot(page, `annotation-expanded-${suffix}`);
 
-    await annotation.getByRole("button", { name: "Zwiń listę Klasy profilu" }).click();
-    await expect(annotation.getByRole("listbox", { name: "Klasy profilu" })).toBeHidden();
+    await annotation.getByRole("button", { name: "Collapse list Profile classes" }).click();
+    await expect(annotation.getByRole("listbox", { name: "Profile classes" })).toBeHidden();
     await sideColumn.scrollIntoViewIfNeeded();
     await shoot(page, `three-panels-annotation-collapsed-${suffix}`);
 
-    const tags = copy.locator(".df-grouped-options__tag");
-    await expect(tags).toHaveCount(4);
-    const control = copy.locator(".df-grouped-options__control");
-    const wrapped = await control.evaluate((element) => ({
+    // Repeat Previous is an inline list box: rows with counts, no tags.
+    const copyList = copy.getByRole("group", { name: "Classes of the previous frame and their counts" });
+    await expect(copyList).toBeVisible();
+    const box = copy.locator(".df-review-copy__box");
+    const metrics = await box.evaluate((element) => ({
       clientWidth: element.clientWidth,
-      height: element.getBoundingClientRect().height,
+      overflowY: getComputedStyle(element).overflowY,
       scrollWidth: element.scrollWidth,
     }));
-    expect(wrapped.height, `copy tags did not wrap at ${suffix}`).toBeGreaterThan(40);
-    expect(wrapped.scrollWidth, `copy control scrolls horizontally at ${suffix}`).toBeLessThanOrEqual(
-      wrapped.clientWidth,
-    );
-
-    await copy
-      .getByRole("button", { name: /Rozwiń listę Klasy z poprzedniej klatki/ })
-      .click();
-    await expect(
-      copy.getByRole("group", {
-        name: "Klasy z poprzedniej klatki i liczba ich wystąpień",
-      }),
-    ).toBeVisible();
+    expect(metrics.overflowY).toBe("auto");
+    expect(metrics.scrollWidth, `copy list scrolls horizontally at ${suffix}`).toBeLessThanOrEqual(metrics.clientWidth);
     await copy.scrollIntoViewIfNeeded();
     await shoot(page, `copy-tags-expanded-${suffix}`);
 
     await page.goto("/profiles");
     await freezeMotion(page);
-    await page.getByRole("button", { name: "Zaznacz region Pasek zdrowia" }).click();
-    await page.getByLabel("Filtruj znaki").focus();
-    const profileGroups = page.getByRole("region", { name: "Klasy" });
+    await page.getByRole("button", { name: "Select region Pasek zdrowia" }).click();
+    const profileGroups = page.getByRole("region", { name: "Classes" });
     await expect(profileGroups).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Zwiń grupę Numbers" }).click();
-    await expect(page.getByRole("button", { name: "Rozwiń grupę Numbers" })).toBeVisible();
+    await page.getByRole("button", { name: "Expand group Numbers" }).click();
+    await page.getByRole("button", { name: "Collapse group Numbers" }).click();
+    await expect(page.getByRole("button", { name: "Expand group Numbers" })).toBeVisible();
     await profileGroups.scrollIntoViewIfNeeded();
     await shoot(page, `profile-triangles-${suffix}`);
   }
