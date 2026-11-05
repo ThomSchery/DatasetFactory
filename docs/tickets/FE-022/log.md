@@ -91,3 +91,35 @@ Izolacja kontekstu mutacji (`selectionContext`, `reviewMutationKey`), blokada na
 - Upload: `pick-video` w katalogu kontrolnym E2E zastępuje systemowe okno (vertical-flow), negative-flow używa „Enter path”. Run: comboboxy Source file / Profile; start z 409 `active_run` zostawia run w kolejce i pokazuje alert.
 - Dashboard: zrzuty loading/empty/error przeniesione na Run Setup; stan zależności lokalnych (workspace niedostępny) sprawdzany w oknie „OCR engine”.
 - Zrzuty historyczne w `docs/tickets/FE-0xx/` nadpisywane przez E2E przywracane `git checkout` po każdym przebiegu; nowego `run-setup-1440.png` nie commituję.
+
+## Bramka końcowa (2026-11-05)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe022-gate-pytest`: **9/9 PASS, 0 SKIP** — ruff format, ruff check, mypy, pytest 466/466, tsc, Vitest 732/732 (40 plików), vite build, Playwright 58/58 (w tym 26 testów `fe022-figma-parity`), E2E root safety 4/4. Historyczne PNG w `docs/tickets/FE-0xx/` przywrócone `git checkout` (byte-for-byte); nowy `FE-001/screenshots/run-setup-1440.png` z bramki usunięty.
+
+Pomiar aplikacji: `designs/figma-2026-11-05/measure-app-geometry.cjs` (parametry: run id, port z `DF_E2E_FRONTEND_PORT`, wyjście) na Vite 5193 + backend dev 8033 z workspace `D:/DatasetFactory/fe022/workspace` (profil, materiał i run zasiane przez API), szerokości 360–1400, okno 900 px, Chromium desktop jak w pomiarze bazowym (gutter 15 px), zapisy API zablokowane (0 prób) → `docs/tickets/FE-022/app-geometry.json` (+ stan `strip-collapsed` dla Review 768).
+
+### Wynik specu zgodności (14 ramek + 7 z paskiem zwiniętym)
+
+| Ekran | Szer. | Ramka | Tryb | Margines L/P | Kolumna app/Figma | Pole obrazu (app vs oczekiwane) | Kontrolki y app/Figma | Etykiety | Dół app/Figma | Wynik |
+|---|---|---|---|---|---|---|---|---|---|---|
+| upload | 360 | 1248:831 | phone | 16/16 | — | 328×173 vs 328×173 (0.0%/0.0%) | — | ok | 297/281 | PASS |
+| profile | 360 | 1355:1291 | phone | 16/16 | — | 328×279 vs 328×279 (0.0%/0.0%) | Save profile 768/737; Class groups 810/779 | ok | 1144/1127 | PASS |
+| profile | 576 | 1395:1656 | phone | 16/16 | — | 544×279 vs 544×279 (0.0%/0.0%) | Save profile 768/737; Class groups 810/779 | ok | 1144/1127 | PASS |
+| profile | 768 | 1355:1306 | strip | 16/16 | 247/247 | 368×479 vs 368×479 (0.0%/0.0%) | Save profile 439/442; Class groups 481/484 | ok | 815/832 | PASS |
+| profile | 992 | 1355:1307 | strip | 16/16 | 247/247 | 592×479 vs 592×479 (0.0%/0.0%) | Save profile 439/442; Class groups 481/484 | ok | 815/832 | PASS |
+| profile | 1200 | 1355:1308 | strip | 16/16 | 247/247 | 800×479 vs 800×479 (0.0%/0.0%) | Save profile 439/442; Class groups 481/484 | ok | 815/832 | PASS |
+| run | 360 | 1378:2014 | phone | 16/16 | — | 328×173 vs 328×173 (0.0%/0.0%) | Run 586/612 | ok | 621/646 | PASS |
+| run | 576 | 1362:1567 | phone | 16/16 | — | 544×297 vs 544×297 (0.0%/0.0%) | Run 710/736 | ok | 745/770 | PASS |
+| run | 768 | 1362:1568 | strip | 16/16 | 205/205 | 444×244 vs 444×243 (0.0%/0.5%) | Run 408/487 | ok | 451/530 | PASS |
+| run | 992 | 1362:1569 | strip | 16/16 | 205/205 | 668×368 vs 668×367 (0.0%/0.1%) | Run 449/519 | ok | 492/562 | PASS |
+| run | 1200 | 1362:1570 | strip | 16/16 | 205/205 | 876×482 vs 876×482 (0.0%/-0.0%) | Run 563/618 | ok | 606/661 | PASS |
+| review | 360 | 1002:14 | phone | 16/16 | — | 328×511 vs 328×511 (0.0%/0.0%) | Filters 87/89; Repeat Previous 1030/1026 | ok | 1174/1247 | PASS |
+| review | 576 | 1473:4993 | phone | 16/16 | 261/261 | 275×543 vs 273×543 (0.7%/0.0%) | Filters 60/60; Repeat Previous 429/428 | ok | 691/649 | PASS |
+| review | 768 | 1473:5012 | strip | 16/16 | 261/261 | 396×543 vs 394×543 (0.5%/0.0%) | Filters 60/60; Repeat Previous 429/428 | ok | 691/649 | PASS |
+| profile | 768 | 1355:1306 | collapsed | 16/16 | 247/247 | 424×479 vs 439×479 (-3.4%/0.0%) | Save profile 439/442; Class groups 481/484 | ok | 815/832 | PASS |
+| profile | 992 | 1355:1307 | collapsed | 16/16 | 247/247 | 648×479 vs 663×479 (-2.3%/0.0%) | Save profile 439/442; Class groups 481/484 | ok | 815/832 | PASS |
+| profile | 1200 | 1355:1308 | collapsed | 16/16 | 247/247 | 856×479 vs 871×479 (-1.7%/0.0%) | Save profile 439/442; Class groups 481/484 | ok | 815/832 | PASS |
+| run | 768 | 1362:1568 | collapsed | 16/16 | 205/205 | 500×275 vs 515×282 (-2.9%/-2.5%) | Run 408/487 | ok | 451/530 | PASS |
+| run | 992 | 1362:1569 | collapsed | 16/16 | 205/205 | 724×398 vs 739×406 (-2.0%/-1.9%) | Run 479/519 | ok | 522/562 | PASS |
+| run | 1200 | 1362:1570 | collapsed | 16/16 | 205/205 | 932×513 vs 947×521 (-1.6%/-1.6%) | Run 594/618 | ok | 637/661 | PASS |
+| review | 768 | 1473:5012 | collapsed | 16/16 | 261/261 | 452×543 vs 465×543 (-2.8%/0.0%) | Filters 60/60; Repeat Previous 429/428 | ok | 691/649 | PASS |
