@@ -17,6 +17,7 @@ import pytest
         "frames",
         "exports",
         "dashboard",
+        "local_files",
     ],
 )
 def test_api_router_does_not_import_composition_root(module_name: str) -> None:

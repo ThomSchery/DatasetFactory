@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from backend.app.access.desktop import LocalFilePicker, SystemFilePicker
 from backend.app.access.media.image import ReferenceImageProbe
 from backend.app.access.media.probe import FfprobeMediaProbe, ProcessTreeRunner
 from backend.app.access.media.processing import MediaProcessingAccess
@@ -71,6 +72,7 @@ class CompositionRoot:
     dataset_workflow: DatasetWorkflow
     logger: logging.Logger
     log_path: Path
+    file_picker: LocalFilePicker = field(default_factory=SystemFilePicker)
 
     def close(self) -> None:
         self.export_use_cases.shutdown()
@@ -86,6 +88,7 @@ def build_composition(
     media_probe: MaterialProbe | None = None,
     disk_space: DiskSpaceReader | None = None,
     ocr_engine: OcrEngine | None = None,
+    file_picker: LocalFilePicker | None = None,
 ) -> CompositionRoot:
     """Build the local application graph after filesystem and schema initialization."""
     workspace = Workspace(settings.workspace_dir, settings.cache_dir)
@@ -238,4 +241,5 @@ def build_composition(
         dataset_workflow,
         logger,
         log_path,
+        file_picker or SystemFilePicker(),
     )

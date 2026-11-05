@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import BaseRoute
 
 from backend.app import __version__
+from backend.app.access.desktop import LocalFilePicker
 from backend.app.api.annotations import create_annotations_router
 from backend.app.api.assets import create_assets_router
 from backend.app.api.dashboard import create_dashboard_router
@@ -21,6 +22,7 @@ from backend.app.api.errors import error_envelope
 from backend.app.api.exports import create_exports_router
 from backend.app.api.frames import create_frames_router
 from backend.app.api.health import SystemStatusReader, create_health_router
+from backend.app.api.local_files import create_local_files_router
 from backend.app.api.materials import create_materials_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.profiles import create_profiles_router
@@ -134,6 +136,10 @@ def create_app(
         active_composition: CompositionRoot = application.state.composition
         return active_composition.export_use_cases
 
+    def get_file_picker() -> LocalFilePicker:
+        active_composition: CompositionRoot = application.state.composition
+        return active_composition.file_picker
+
     def get_dashboard_use_cases() -> DashboardUseCases:
         active_composition: CompositionRoot = application.state.composition
         return active_composition.dashboard_use_cases
@@ -147,6 +153,7 @@ def create_app(
     application.include_router(create_frames_router(get_review_use_cases))
     application.include_router(create_exports_router(get_export_use_cases))
     application.include_router(create_dashboard_router(get_dashboard_use_cases))
+    application.include_router(create_local_files_router(get_file_picker))
 
     if runtime_settings.spa_dir is not None:
         _mount_spa(application, runtime_settings.spa_dir)

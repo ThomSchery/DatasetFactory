@@ -8,6 +8,7 @@ from pathlib import Path
 
 import uvicorn
 
+from backend.app.access.desktop import FileKind, PickedFile
 from backend.app.composition import build_composition
 from backend.app.config import Settings
 from backend.app.engines.definition import BBox, OcrCandidate, OcrProvenance
@@ -71,6 +72,24 @@ class DeterministicE2eOcrEngine:
         return None
 
 
+class ControlledE2eFilePicker:
+    """Replaces the native dialog: the spec writes the answer to a control file.
+
+    `pick-video` / `pick-image` holds the path to return; a missing file is the
+    user cancelling the dialog.
+    """
+
+    def __init__(self, control_root: Path) -> None:
+        self._control_root = control_root
+
+    def pick(self, kind: FileKind) -> PickedFile:
+        answer = self._control_root / f"pick-{kind}"
+        if not answer.is_file():
+            return PickedFile(None)
+        path = answer.read_text(encoding="utf-8").strip()
+        return PickedFile(path or None)
+
+
 def _runtime_root() -> Path:
     cache_root_value = os.environ.get("DATASETFACTORY_CACHE_ROOT")
     configured = os.environ.get("DATASETFACTORY_E2E_ROOT")
@@ -124,6 +143,7 @@ def main() -> None:
     composition = build_composition(
         settings,
         ocr_engine=DeterministicE2eOcrEngine(control_root),
+        file_picker=ControlledE2eFilePicker(control_root),
     )
     try:
         uvicorn.run(
