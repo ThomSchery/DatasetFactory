@@ -73,3 +73,21 @@ Izolacja kontekstu mutacji (`selectionContext`, `reviewMutationKey`), blokada na
 - Review: decyzje Reject/Accept/Reopen w panelu Annotations; Repeat Previous jako lista inline z licznikami + Accept (kopiowanie). Filtrowanie listy Repeat Previous tekstem zniknęło (Figma: lista bez pola) — test FE-019 przepisany na „wszystkie klasy inline z licznikami”. Pole klasy domyślnie zamknięte i nieaktywne bez zaznaczonego boxa.
 - Telefon (< 576 px) w Review: rząd narzędzi zoomu pływa w prawym dolnym rogu obrazu (Figma nie ma na niego miejsca pod obrazem 511 px). Na Profile narzędzia są zawsze pod obrazem („nie nad nim”); wartość zoomu < 992 px tylko dla czytnika.
 - OCR (CONTEXT.md:235–236): „OCR engine” w ⋮ pokazuje `engine_id`, wersję, oba SHA-256, `quality_gate`, `experimental` i zdanie o pełnej ręcznej weryfikacji; propozycja OCR w Review ma plakietkę „Pending”. Test: `src/app/ocrEngine.test.tsx`.
+
+## Bramka zgodności z Figmą (e2e/fe022-figma-parity.spec.ts)
+
+- Źródło: `designs/figma-2026-11-05/geometry.json` (14 ramek z `screenToFrame`). Dane API deterministyczne (mock w specu, zapisy przerywane), obrazy z `backend/tests/fixtures/video/synthetic-frame.png`.
+- Na ramkę: margines 16 ± 1 po obu stronach obszaru treści; lewa kolumna ± 4 px (Profile 247, Run 205, Review 261 — tylko gdy Figma ma kolumnę węższą niż ekran); pole obrazu ± 4 % w obu wymiarach (Profile/Review: wysokość stała z Figmy, Upload/Run: wysokość z proporcji); kontrolki kluczowe (Save profile, grupy klas, Run, filtry, Repeat Previous) nie niżej niż y Figmy + 32 i nad krawędzią 900 px, gdy w Figmie są nad nią; wszystkie etykiety tekstowe ramki widoczne (dane przykładowe pominięte, liczniki „(n)” sprawdzane bez liczby); koniec treści ≤ `contentBottom` + 10 %; promienie paneli i kontrolek z obrysem ∈ {4, 8} (pigułki filtrów i przełącznika poza regułą — Figma 16/40); brak bloków `.df-notice`; brak tekstu w pasku; brak przewijania w poziomie.
+- Panel boczny (decyzja koordynatora, opcja A): z paskiem 56 px początek obszaru treści = prawa krawędź paska; szerokości płynne porównywane z Figmą przeliczoną na szerokość obszaru treści (`main`), kolumny stałe bez zmian. Dodatkowo 768/992/1200 z paskiem zwiniętym (|←) — porównanie dosłowne z Figmą (7 testów).
+- Pasek przewijania: Chromium desktop rezerwuje 15 px (`scrollbar-gutter: stable` zostaje), a `documentElement.clientWidth` nie odejmuje tej rezerwy — prawą krawędź obszaru treści mierzę na `main`. 360 i 576 w emulacji telefonu (`isMobile`, `hasTouch`): nakładany pasek jak na telefonie, pole 328 px jak w Figmie.
+- Każdy ekran × 360/576/768/992/1200/1400/1440/1920: brak przewijania w poziomie; < 768 pasek schowany, ☰ otwiera szufladę, Escape zamyka i oddaje fokus; ≥ 768 pasek widoczny.
+- Wyniki: po jednej linii JSON na ramkę w `D:/DatasetFactory/cache/playwright/fe022-parity.jsonl`.
+- Kontrola mutacyjna (2026-11-05): `--site-padding: 24px` → profile 1200 i run 360 FAIL („margin 24/24 ≠ 16±1”, obraz run 360 −4,9 %); `.df-panel--radius-md` → `--radius-lg` → review 768 FAIL („radii … df-review-workspace__inspector=16; … df-review-copy=16”). Obie zmiany cofnięte (`git diff` czysty).
+
+## Dopasowania E2E do nowego układu (2026-11-05)
+
+- Wspólny pomocnik `showWholeFrame` (Reset → 100 %, fokus wraca na body) przed asercjami geometrii FE-010…FE-019: kanwa startuje w kadrze `IMAGE FILL`, a stare testy mierzą od całej klatki. Cel testów zostaje: zoom/pan zakotwiczony, brak skoku kanwy przy zmianie stanu, panel w kolumnie i w oknie.
+- FE-019 layout: Repeat Previous jest listą inline, więc rosnącą kontrolką jest teraz pole klasy w Annotations (otwiera listę po zaznaczeniu boxa); asercja „prawa krawędź kanwy nie drgnie, gdy dokument zaczyna się przewijać” bez zmian.
+- Upload: `pick-video` w katalogu kontrolnym E2E zastępuje systemowe okno (vertical-flow), negative-flow używa „Enter path”. Run: comboboxy Source file / Profile; start z 409 `active_run` zostawia run w kolejce i pokazuje alert.
+- Dashboard: zrzuty loading/empty/error przeniesione na Run Setup; stan zależności lokalnych (workspace niedostępny) sprawdzany w oknie „OCR engine”.
+- Zrzuty historyczne w `docs/tickets/FE-0xx/` nadpisywane przez E2E przywracane `git checkout` po każdym przebiegu; nowego `run-setup-1440.png` nie commituję.

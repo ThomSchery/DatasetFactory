@@ -206,7 +206,9 @@ test("restartuje backend w OCR, wznawia bez duplikatów i przechodzi pełny revi
   }
   await page.goto("/run");
   await page.getByLabel("Source file", { exact: true }).click();
-  await page.getByRole("option", { name: /synthetic-hud\.mkv/ }).click();
+  // The E2E workspace is shared across specs, so the same file may already
+  // be imported once; any copy will do.
+  await page.getByRole("option", { name: /synthetic-hud\.mkv/ }).first().click();
   await page.getByLabel("Profile", { exact: true }).click();
   await page.getByRole("option", { name: "Gra testowa E2E restart" }).click();
   await page.getByLabel("Sample rate").fill("500");

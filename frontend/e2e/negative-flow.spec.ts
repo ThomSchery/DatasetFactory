@@ -160,7 +160,7 @@ test("pokazuje kod i copy dla brakującego źródła, active_run i workspace", a
     // FE-022: Run creates the run and starts it; the start meets 409.
     await page.goto("/run");
     await page.getByLabel("Source file", { exact: true }).click();
-    await page.getByRole("option", { name: /synthetic-hud\.mkv/ }).click();
+    await page.getByRole("option", { name: /synthetic-hud\.mkv/ }).first().click();
     await page.getByLabel("Profile", { exact: true }).click();
     await page.getByRole("option", { name: "Gra testowa E2E błędy" }).click();
     const createRunResponse = page.waitForResponse(
