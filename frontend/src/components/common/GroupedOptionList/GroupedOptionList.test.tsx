@@ -269,6 +269,29 @@ describe("GroupedOptionList in multiple mode", () => {
 });
 
 describe("GroupedOptionList in single mode", () => {
+  it("FE-022 FIX1: exposes the selected value and navigates with an active descendant without committing on Escape", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Harness initial={["score"]} initialOpen={false} mode="single" onChange={onChange} />);
+    const combo = screen.getByRole("combobox", { name: "Filtruj klasy" });
+    expect(combo).toHaveValue("Score");
+    expect(combo).toHaveAttribute("aria-expanded", "false");
+    await user.click(combo);
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}{ArrowDown}");
+    expect(combo).toHaveFocus();
+    const active = document.getElementById(combo.getAttribute("aria-activedescendant")!);
+    expect(active).toHaveAttribute("role", "option");
+    expect(active).toHaveTextContent("Score");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith(["timer"]);
+    expect(combo).toHaveValue("Timer");
+    expect(combo).toHaveAttribute("aria-expanded", "false");
+    await user.keyboard("{ArrowUp}{Escape}");
+    expect(combo).toHaveValue("Timer");
+    expect(combo).not.toHaveAttribute("aria-activedescendant");
+    expect(combo).toHaveAttribute("aria-expanded", "false");
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
   it("does not render selection tags in single mode", () => {
     render(<Harness initial={["score"]} mode="single" />);
 
@@ -287,12 +310,13 @@ describe("GroupedOptionList in single mode", () => {
 
     await user.type(filter, "znak");
     await user.keyboard("{ArrowDown}");
-    expect(screen.getByRole("option", { name: "0" })).toHaveFocus();
+    expect(filter).toHaveFocus();
+    expect(filter).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: "0" }).id);
 
     await user.keyboard("{End}");
-    expect(screen.getByRole("option", { name: "2" })).toHaveFocus();
+    expect(filter).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: "2" }).id);
     await user.keyboard("{Home}");
-    expect(screen.getByRole("option", { name: "0" })).toHaveFocus();
+    expect(filter).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: "0" }).id);
 
     await user.keyboard("{ArrowUp}");
     expect(filter).toHaveFocus();
@@ -328,6 +352,8 @@ describe("GroupedOptionList in single mode", () => {
     expect(screen.getByRole("option", { name: "0" })).toHaveAttribute("aria-selected", "true");
 
     await user.click(screen.getByRole("option", { name: "Timer" }));
+    expect(screen.getByRole("combobox")).toHaveValue("Timer");
+    await user.click(screen.getByRole("combobox"));
     expect(screen.getByRole("option", { name: "Timer" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("option", { name: "0" })).toHaveAttribute("aria-selected", "false");
   });

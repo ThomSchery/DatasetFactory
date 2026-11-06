@@ -92,6 +92,56 @@ Izolacja kontekstu mutacji (`selectionContext`, `reviewMutationKey`), blokada na
 - Dashboard: zrzuty loading/empty/error przeniesione na Run Setup; stan zależności lokalnych (workspace niedostępny) sprawdzany w oknie „OCR engine”.
 - Zrzuty historyczne w `docs/tickets/FE-0xx/` nadpisywane przez E2E przywracane `git checkout` po każdym przebiegu; nowego `run-setup-1440.png` nie commituję.
 
+## FIX1 — Design Plan (2026-11-05, przed zmianami frontend/src)
+
+Zakres: sześć uwag z cold review. Zachowuję źródło geometry.json/variables.json,
+bez Figma MCP i eksportów PNG. Korzystam z traycer-implement i impeccable/harden.
+
+- [x] Layout/Siatka: Run Setup — osobny „Created run” z ID i Start/Cancel obok
+  dotychczasowego „Active run”; OCR engine — dane runu z trasy, osobno zależności;
+  Source file, Profile, Search profile, PSM i frame picker — combobox; inputy,
+  checkboxy/opcje, linki, sidebar, filtry, kafel pliku i przyciski — hit areas.
+  GRID-01/02/03/04/05/06/10/12, SPACING-01/03/04/07/08/10/13. Istniejące
+  --element-gap-lg/md, --field-height, --control-height-lg, --site-padding.
+  Konflikt 48 px vs odstępy 36 px przekazany koordynatorowi; nie zmieniam
+  arbitralnie tolerancji parity. Decyzję i rozwiązanie dopiszę poniżej.
+- [x] Typografia: --font-size-xs/sm, --font-weight-light/regular/semibold,
+  --line-height-standard; TYPO-02..11/18..21, FONTSIZE-02..10, LHEIGHT-09..11,
+  LSPACE-02/03/09, CASING-02. Kopie systemowe po angielsku z kodów/provenance.
+- [x] Kolory: istniejące surface/text/stroke/status, COLOR-01..10; aktywna
+  opcja klawiatury ma widoczny obrys, wybór aria-selected/checked.
+- [x] Obramowania: stroke-control/strong, radius-sm/md, focus-ring;
+  BORDER-01..03/05/06, BWIDTH-03/06/10..14, RADIUS-02..05. Bez nowej palety.
+- [x] Cienie: istniejące elevation-high list/dialogu; SHADOW-01..05,
+  OVERLAY-03/06, bez nowej dekoracji.
+- [x] Interakcje: loading/error/disabled jak dotąd (COLOR-07, OPACITY-02);
+  combobox Up/Down/Enter/Escape/Alt+Down, accessible value i active descendant;
+  powrót fokusu, retry/cancel na ID i wersji utworzonego runu, brak optimistic write.
+- [x] Komponenty: ponowne użycie RunPanel, Button, Field/TextField,
+  GroupedOptionList, NavItem, SideNav, FilePickerTile, Dialog, DataList,
+  StatusBadge, UiStates; katalog new-component.md przeczytany.
+
+Weryfikacja: regresje odtwarzające każdą uwagę przed poprawką; prawdziwy proces
+potomny pickera, Vitest dla runu/OCR/combobox, Playwright hit testy coarse,
+przywrócenie realnych asercji scroll FE-015/019, pełna bramka 9/9 i parity.
+
+### FIX1 — decyzja #5 koordynatora (2026-11-06)
+
+Geometria Figmy i progi phone parity zostają bez zmian, zgodnie z decyzją
+użytkownika 2026-11-05 „dokładnie jak w Figmie”. Izolowane kontrolki dostają
+niewidoczne 48 px, o ile nie nachodzą na sąsiada. Gęste listy/paski (odległość
+środków <48 px) dzielą przerwę w połowie; cel >=32 px. To świadome odstępstwo
+od GRID-04 wyłącznie dla gęstych układów, ponad minimum 24×24 CSS px
+[WCAG 2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html).
+
+Wspólny hook `common/TouchTargets/useTouchTargets` wylicza niewidoczne insety
+na coarse pointer z rzeczywistych prostokątów kontrolek. Sąsiadów rozdziela
+środek przerwy, także po zawinięciu paska/filtrów. ResizeObserver, mutacje DOM
+i scroll odświeżają pomiar; CSS zmienia tylko pseudo-elementy, nie layout.
+Field ma natywną, pustą etykietę htmlFor rozszerzającą kliknięcie input/select
+(same inputy nie obsługują pseudo-elementów). Button, NavItem i wiersze
+GroupedOptionList używają pseudo-elementów. Brak nowej widocznej kontrolki.
+
 ## Bramka końcowa (2026-11-05)
 
 `scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe022-gate-pytest`: **9/9 PASS, 0 SKIP** — ruff format, ruff check, mypy, pytest 466/466, tsc, Vitest 732/732 (40 plików), vite build, Playwright 58/58 (w tym 26 testów `fe022-figma-parity`), E2E root safety 4/4. Historyczne PNG w `docs/tickets/FE-0xx/` przywrócone `git checkout` (byte-for-byte); nowy `FE-001/screenshots/run-setup-1440.png` z bramki usunięty.
@@ -123,3 +173,86 @@ Pomiar aplikacji: `designs/figma-2026-11-05/measure-app-geometry.cjs` (parametry
 | run | 992 | 1362:1569 | collapsed | 16/16 | 205/205 | 724×398 vs 739×406 (-2.0%/-1.9%) | Run 479/519 | ok | 522/562 | PASS |
 | run | 1200 | 1362:1570 | collapsed | 16/16 | 205/205 | 932×513 vs 947×521 (-1.6%/-1.6%) | Run 594/618 | ok | 637/661 | PASS |
 | review | 768 | 1473:5012 | collapsed | 16/16 | 261/261 | 452×543 vs 465×543 (-2.8%/0.0%) | Filters 60/60; Repeat Previous 429/428 | ok | 691/649 | PASS |
+
+## FIX1 — poprawki po cold review (2026-11-06)
+
+1. **Picker UTF-8.** Proces Tk uruchamiany z `-I -X utf8` zapisuje jawne bajty
+   UTF-8, rodzic dekoduje je jawnie. Błąd procesu/dekodowania daje typowany
+   `file_picker_unavailable` (HTTP 503). Testy `test_system_picker_round_trips_non_ascii_paths_through_a_real_child`
+   obejmują ASCII, łódź, Łukasz Żółć i CJK; podmienione jest wyłącznie ciało Tk,
+   subprocess jest rzeczywisty. Osobne testy sprawdzają API round trip,
+   niepoprawne bajty cp1250 i awarię procesu. Kontrola mutacyjna starego
+   transportu: 5 regresji przed poprawką; po poprawce zielone.
+2. **409 po utworzeniu runu.** `result.run` zostaje zachowany i odpytywany po
+   własnym ID. Osobny blok „Created run” pokazuje ID i Start/Cancel; „Active run”
+   pokazuje właściciela slotu z dashboardu. Fixture dashboardu zachowuje właściciela
+   slotu. Parametryzowany test `retains the created run after 409 and binds %s to
+   its own id/version` sprawdza oba przyciski, expected_version, brak POST do
+   właściciela i potwierdzony stan Cancelled.
+3. **Historyczna proweniencja OCR.** `/annotations/:runId` odczytuje dany run;
+   pozostałe trasy pokazują aktywny run. Brak runu jest jawny, lokalna diagnostyka
+   pozostaje dostępna. Test `uses historical provenance when an active run
+   exists: %s` obejmuje innego właściciela slotu oraz brak aktywnego runu.
+4. **Combobox.** Jednokrotny wybór w GroupedOptionList ma `role=combobox`,
+   rzeczywistą wartość zamiast placeholdera, `aria-controls`, `aria-expanded`
+   i `aria-activedescendant`. Up/Down/Home/End poruszają aktywną opcję, Enter
+   wybiera, Escape zamyka i przywraca wybraną wartość, Alt+Down otwiera.
+   Fokus pozostaje w polu. Zachowany explicit Save dla klasy anotacji.
+   Test wspólnego komponentu był czerwony na braku roli przed poprawką;
+   testy konsumentów sprawdzają wartości Source/Profile/Search profile/PSM/frame.
+   Starsze lokatory klasy w Vitest/E2E zaktualizowane do combobox.
+5. **Hit areas bez zmiany geometrii.** `fe022-touch-targets.spec.ts` używa
+   rzeczywistego `elementFromPoint` na coarse pointer: siatka punktów ±23 px
+   dla izolowanych pól, filtrów, segmentów, tile i nawigacji; dla gęstych
+   kontrolek minimum 32 px i punkty po obu stronach środka przerwy oraz w środku.
+   Obejmuje listę opcji, checkboxy, narzędzia zoom, zawinięte filtry, drawer
+   i tablet strip. Pierwsza wersja testów: 4/4 FAIL przed rozszerzeniem hit areas.
+   W trakcie naprawy test wykrył martwą połowę odstępu obok szerokiego checkboxa
+   oraz kolizję drawer z kontrolkami tła. Poprawka dzieli cały odstęp i rozdziela
+   pomiary warstw dialog/drawer/popover. Decyzja GRID-04 jest zapisana wyżej;
+   żaden próg parity ani widoczny rozmiar nie został poluzowany.
+6. **English.** Diagnostyka backendu dostarcza stabilne `code`; frontend mapuje
+   je na angielskie komunikaty i zachowuje kod. Ostrzeżenia historyczne są
+   prezentowane z experimental/quality_gate, bez renderowania polskiego tekstu.
+   `presents persisted Polish warnings and dependency diagnostics in English
+   from provenance/codes` oraz macierz `systemMessages.test.ts` sprawdzają
+   przypadki kodów, awarie zależności i legacy warning. Łącznie regresje #2/#3/#6
+   dały 5 FAIL przed poprawkami, potem wszystkie przeszły.
+
+Przywrócone pokrycie: FE-015 używa 18 rozłącznych anotacji i sprawdza rzeczywisty
+scroll do końca, podróż pierwszego wiersza i powrót na początek. FE-019 ponownie
+sprawdza brak overflow dokumentu po zwinięciu; baseline ma tę samą wybraną
+anotację, żeby wysokość nagłówka nie zmieniała warunków pomiaru.
+
+Pomiar `app-geometry.json` odświeżony na istniejącym workspace FE-022,
+run `3bab7279-6d4e-4101-ba67-d7ba55d7d0c5`, 25 stanów, **0 zapisów API**.
+Upload/Review oraz geometria pól profilu bez zmian. Wybrany profil ma teraz kolor
+wartości zamiast placeholdera; blok runu zawiera dodatkowy wiersz ID. Osobny
+spec parity (stan projektowy bez aktywnego runu) zachowuje wszystkie progi.
+
+Próby bramki FIX1: pierwszy pełny przebieg backendu dał 472 PASS / 1 FAIL:
+`test_real_local_ffmpeg_and_ffprobe_are_available` oczekiwał starego słownika
+health bez `code`. Asercja uzupełniona o `code=available`. Osobny pełny Vitest
+pod równoległym obciążeniem dał 749 PASS / 1 timeout przy pierwszym ładowaniu
+regionu w `blocks both saves while an unaccepted sketch exists`; czas oczekiwania
+na tę kontrolkę zwiększony z domyślnej 1 s do 5 s, bez zmiany asercji.
+Końcowe testy dotyku (także minimum 32 px) przeszły 4/4; parity + dotyk 30/30.
+
+Druga pełna bramka (2026-11-06): 8/9 PASS — backend 473/473, Vitest i build
+zielone; E2E 61/62. FAIL `visual-qa.spec.ts:294` (`assertResolvedCssVariables`):
+`touchTargets.css` odwoływał się do `--touch-top/right/bottom/left`, które
+istniały tylko jako inline style z `useTouchTargets`, więc arkusz miał
+niezadeklarowane zmienne. Poprawka: domyślne `0px` na `[data-touch-target]`
+w `touchTargets.css` (inline z hooka nadal wygrywa; brak zmiany geometrii).
+`visual-qa` + `fe022-touch-targets` po poprawce: 11/11 PASS.
+
+### Bramka końcowa FIX1 (2026-11-06)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe022-gate-pytest`:
+**9/9 PASS, 0 SKIP** — ruff format (290 plików), ruff check, mypy, pytest
+473/473, tsc, Vitest 750/750 (41 plików), vite build, Playwright 62/62
+(w tym 26 `fe022-figma-parity` i 4 `fe022-touch-targets`), E2E root safety 4/4.
+Historyczne PNG w `docs/tickets/` przywrócone `git checkout`; wygenerowany
+przez bramkę `FE-001/screenshots/run-setup-1440.png` usunięty. Poprawka
+`--touch-*` nie zmienia geometrii desktop, więc `app-geometry.json` bez ponownego
+pomiaru.

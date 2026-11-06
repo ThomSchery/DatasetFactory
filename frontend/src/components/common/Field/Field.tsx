@@ -72,12 +72,15 @@ export function Field({
           {description}
         </p>
       )}
-      {children({
-        "aria-describedby": describedBy === "" ? undefined : describedBy,
-        "aria-invalid": error === undefined ? undefined : true,
-        className: "df-field__control",
-        id: controlId,
-      })}
+      <div className="df-field__target">
+        <label aria-hidden="true" className="df-field__touch" htmlFor={controlId} />
+        {children({
+          "aria-describedby": describedBy === "" ? undefined : describedBy,
+          "aria-invalid": error === undefined ? undefined : true,
+          className: "df-field__control",
+          id: controlId,
+        })}
+      </div>
       {/* SPACING-04: the message gets a slot only while it exists; it opens
           below the control and does not move the control itself. */}
       <p

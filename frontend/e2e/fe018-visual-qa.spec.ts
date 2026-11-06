@@ -159,7 +159,7 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
 
     // Falsyfikowalność wymagania filtra: `8` is hidden above, then a query
     // must reveal it without forgetting that Numbers was collapsed.
-    const filter = popover.getByRole("textbox", { name: "Class" });
+    const filter = popover.getByRole("combobox", { name: "Class" });
     await filter.fill("8");
     await expect(popover.getByRole("option", { name: "8" })).toBeVisible();
     await filter.fill("");

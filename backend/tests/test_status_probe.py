@@ -152,6 +152,7 @@ def test_real_local_ffmpeg_and_ffprobe_are_available(
     assert response.status_code == 200
     assert response.json()["ffmpeg"] == {
         "available": True,
+        "code": "available",
         "critical": False,
         "detail": "available",
     }

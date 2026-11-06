@@ -10,7 +10,7 @@ import { createRequestFrom, draftFromProfile, isDirty, saveRequestFrom } from ".
 /** FE-022: the open profile is named in the closed Search profile combobox. */
 async function expectOpenProfile(name: string) {
   await waitFor(() => {
-    expect(screen.getByLabelText("Search profile")).toHaveAttribute("placeholder", name);
+    expect(screen.getByRole("combobox", { name: "Search profile" })).toHaveValue(name);
   });
 }
 
@@ -225,8 +225,9 @@ describe("the profile workspace", () => {
     renderApp(["/profiles"]);
     await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }, { timeout: 5000 }));
     await user.click(screen.getByRole("button", { name: "Expand group OCR settings" }));
-    await user.click(screen.getByLabelText("Text layout (PSM)"));
+    await user.click(screen.getByRole("combobox", { name: "Text layout (PSM)" }));
     await user.click(screen.getByRole("option", { name: /^6 —/ }));
+    expect(screen.getByRole("combobox", { name: "Text layout (PSM)" })).toHaveValue("6 — One uniform block of text");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", page_segmentation_mode: 6 }] }));
   });
@@ -235,7 +236,7 @@ describe("the profile workspace", () => {
     const user = userEvent.setup();
     stubProfiles();
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }, { timeout: 5000 }));
     await user.clear(screen.getByLabelText(/^Region name/));
     await user.type(screen.getByLabelText(/^Region name/), "Zdrowie");
     const surface = await loadScreenshot();

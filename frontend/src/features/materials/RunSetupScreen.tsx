@@ -8,10 +8,12 @@ import {
   createRun,
   describeApiError,
   getProfile,
+  getRun,
   invalidateFor,
   listMaterials,
   listProfiles,
   queryKeys,
+  runPollInterval,
   startRun,
 } from "../../api";
 import type { ErrorPresentation, PipelineRun, RunAction } from "../../api";
@@ -65,6 +67,15 @@ export function RunSetupScreen() {
   });
   const requestedProfileId = searchParams.get("profile");
   const [startError, setStartError] = useState<ErrorPresentation | null>(null);
+  const [createdRun, setCreatedRun] = useState<PipelineRun | null>(null);
+  const retainedRun = useQuery({
+    queryKey: queryKeys.run(createdRun?.id ?? "none"),
+    queryFn: ({ signal }) => getRun(createdRun!.id, signal),
+    enabled: createdRun !== null,
+    initialData: createdRun ?? undefined,
+    refetchInterval: (query) => runPollInterval(query.state.data?.status),
+  });
+  const displayedCreatedRun = retainedRun.data ?? createdRun;
 
   const form = useForm<RunLaunchValues>({
     resolver: zodResolver(runLaunchSchema),
@@ -103,6 +114,7 @@ export function RunSetupScreen() {
     onSuccess: async (result) => {
       await invalidateFor(queryClient, { type: "run-created" });
       if (result.startError !== null) {
+        setCreatedRun(result.run);
         setStartError(describeApiError(result.startError));
         return;
       }
@@ -113,6 +125,10 @@ export function RunSetupScreen() {
   });
 
   const onTransitioned = (run: PipelineRun, action: RunAction) => {
+    if (run.id === createdRun?.id) {
+      setCreatedRun(run);
+      setStartError(null);
+    }
     if (action === "start") {
       void navigate(annotationsPath(run.id));
     }
@@ -299,7 +315,11 @@ export function RunSetupScreen() {
         {dashboard.isError ? (
           <InlineError message={errorText(describeApiError(dashboard.error))} />
         ) : null}
-        {dashboard.isSuccess && dashboard.data.run !== null ? (
+        {displayedCreatedRun !== null ? (
+          <RunPanel title="Created run" onTransitioned={onTransitioned} run={displayedCreatedRun} />
+        ) : null}
+        {retainedRun.isError ? <InlineError message={errorText(describeApiError(retainedRun.error))} /> : null}
+        {dashboard.isSuccess && dashboard.data.run !== null && dashboard.data.run.id !== displayedCreatedRun?.id ? (
           <RunPanel onTransitioned={onTransitioned} run={dashboard.data.run} />
         ) : null}
       </Panel>

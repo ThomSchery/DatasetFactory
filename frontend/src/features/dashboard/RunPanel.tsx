@@ -20,6 +20,7 @@ const ACTION_LABELS: Readonly<Record<RunAction, string>> = {
 };
 
 export interface RunPanelProps {
+  title?: string;
   /** Called after a transition the backend confirmed, e.g. to navigate away. */
   onTransitioned?: (run: PipelineRun, action: RunAction) => void;
   run: PipelineRun;
@@ -33,7 +34,7 @@ export interface RunPanelProps {
  * Progress counts frames the run has finished against the frames it planned
  * (`total_frames`), never the frame rows that already exist.
  */
-export function RunPanel({ onTransitioned, run }: RunPanelProps) {
+export function RunPanel({ onTransitioned, run, title = "Active run" }: RunPanelProps) {
   const status = describeRunStatus(run.status);
   const stage = describeRunStage(run.current_stage);
   const actions = availableRunActions(run.status);
@@ -43,13 +44,14 @@ export function RunPanel({ onTransitioned, run }: RunPanelProps) {
   const mutationError = mutation.isError ? describeApiError(mutation.error) : null;
 
   return (
-    <section aria-label="Active run" className="df-run-panel">
+    <section aria-label={title} className="df-run-panel">
       <div className="df-run-panel__heading">
-        <span className="df-run-panel__title">Active run</span>
+        <span className="df-run-panel__title">{title}</span>
         <StatusBadge srLabel="Run status:" tone={status.tone}>
           {status.label}
         </StatusBadge>
       </div>
+      <p className="df-run-panel__meta">Run {run.id}</p>
       <p className="df-run-panel__meta">
         {stage ?? "No stage"} · {String(run.interval_ms)} ms · attempt {String(run.attempt)}
       </p>

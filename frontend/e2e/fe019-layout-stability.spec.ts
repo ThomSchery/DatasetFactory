@@ -85,6 +85,10 @@ test("FE-019: prawa krawędź kanwy nie drgnie po rozwinięciu pola z zawinięty
 
     const copyPanel = page.getByRole("region", { name: "Repeat Previous" });
     await expect(copyPanel).toBeVisible({ timeout: 30_000 });
+    // Compare the same selected annotation in both states. Selecting a box
+    // also introduces its header/actions, independently of opening the list.
+    await page.getByRole("button", { name: "Class 7, 1 annotations" }).click();
+    await page.getByRole("button", { name: "Collapse list Profile classes" }).click();
 
     // From 992 px the picture grows with the window; measure at a short
     // window, where it sits at its 543 px minimum, so the fit is real.
@@ -109,8 +113,7 @@ test("FE-019: prawa krawędź kanwy nie drgnie po rozwinięciu pola z zawinięty
       false,
     );
 
-    // Selecting a box opens the class list inside Annotations.
-    await page.getByRole("button", { name: "Class 7, 1 annotations" }).click();
+    await page.getByRole("button", { name: "Expand list Profile classes" }).click();
     await expect(page.getByRole("listbox", { name: "Profile classes" })).toBeVisible();
     const expanded = await measure(page);
 
@@ -126,6 +129,7 @@ test("FE-019: prawa krawędź kanwy nie drgnie po rozwinięciu pola z zawinięty
 
     await page.getByRole("button", { name: "Collapse list Profile classes" }).click();
     const after = await measure(page);
+    expect(after.documentOverflows, `collapsed document still overflows at ${String(width)}`).toBe(false);
     expect(after.canvasRight, `canvas moved when the picker closed at ${String(width)}`).toBe(
       before.canvasRight,
     );

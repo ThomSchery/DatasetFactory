@@ -29,6 +29,9 @@ function frameCounter(): HTMLElement {
 
 async function chooseFrame(user: ReturnType<typeof userEvent.setup>, frameId: string) {
   await user.click(frameCounter());
+  const combo = screen.getByRole("combobox", { name: "Choose frame" });
+  const selected = screen.getByRole("listbox", { name: "Frames of this run" }).querySelector('[aria-selected="true"] .df-grouped-options__label');
+  expect(combo).toHaveValue(selected?.textContent ?? "");
   const option = document.querySelector(`[data-option-id="${frameId}"]`);
   if (!(option instanceof HTMLElement)) {
     throw new Error(`Frame option ${frameId} is missing`);
@@ -272,7 +275,7 @@ describe("annotation review query states", () => {
     const panel = screen.getByRole("region", { name: "Annotation — nothing selected" });
     // FE-022: the class field rests closed (35 px) and inert until a box is
     // selected; nothing in it can reach the API.
-    const field = within(panel).getByRole("textbox", { name: "Class" });
+    const field = within(panel).getByRole("combobox", { name: "Class" });
     expect(field).toHaveValue("");
     expect(field).toBeDisabled();
     expect(within(panel).queryAllByRole("option")).toHaveLength(0);
@@ -295,7 +298,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     expect(filter).toHaveFocus();
     expect(within(popover).getByRole("button", { name: "Collapse list Profile classes" })).toHaveAttribute(
       "aria-expanded",
@@ -649,7 +652,7 @@ describe("annotation review query states", () => {
     await drawDraft();
 
     const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "8");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "8");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
@@ -718,7 +721,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "Score");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "Score");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “Score”" }),
     );
@@ -780,7 +783,7 @@ describe("annotation review query states", () => {
       name: "Choose a class for the new box",
     });
     expect(await within(draftPopover).findByRole("alert")).toHaveTextContent("Code: internal_error");
-    await user.type(within(draftPopover).getByRole("textbox", { name: "Class" }), "8");
+    await user.type(within(draftPopover).getByRole("combobox", { name: "Class" }), "8");
     await user.click(
       within(draftPopover).getByRole("button", { name: "Create and assign class “8”" }),
     );
@@ -788,7 +791,7 @@ describe("annotation review query states", () => {
     await waitFor(() => {
       expect(mutations).toHaveLength(3);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: "Class" })).toBeDisabled();
+      expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
     });
 
     fireEvent.pointerDown(overlay, { clientX: 500, clientY: 200, pointerId: 2 });
@@ -849,7 +852,7 @@ describe("annotation review query states", () => {
 
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "8");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "8");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
@@ -857,7 +860,7 @@ describe("annotation review query states", () => {
 
     fireEvent.pointerDown(document.body);
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Class" })).toBeDisabled();
+      expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
     });
     await drawDraft();
 
@@ -924,7 +927,7 @@ describe("annotation review query states", () => {
 
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "8");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "8");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “8”" }),
     );
@@ -952,7 +955,7 @@ describe("annotation review query states", () => {
             (item.body as { category_id?: string }).category_id === "category-8",
         ),
       ).toBe(true);
-      expect(screen.getByRole("textbox", { name: "Class" })).toBeDisabled();
+      expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
     });
 
     await drawDraft();
@@ -985,7 +988,7 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
     const overlay = await drawDraft();
     const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "8");
 
     await user.click(
@@ -1041,7 +1044,7 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
     await drawDraft();
     const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "s");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
@@ -1055,7 +1058,7 @@ describe("annotation review query states", () => {
 
     await drawDraft();
     const nextPopover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    await user.type(within(nextPopover).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(nextPopover).getByRole("combobox", { name: "Class" }), "s");
     expect(
       within(nextPopover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
@@ -1093,7 +1096,7 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
     await drawDraft();
     const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "s");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
@@ -1118,7 +1121,7 @@ describe("annotation review query states", () => {
 
     await drawDraft();
     const nextPopover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    await user.type(within(nextPopover).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(nextPopover).getByRole("combobox", { name: "Class" }), "s");
     expect(
       within(nextPopover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
@@ -1147,7 +1150,7 @@ describe("annotation review query states", () => {
     renderApp(["/annotations/run-1"]);
     await drawDraft();
     const popover = await screen.findByRole("dialog", { name: /Edit annotation/ });
-    await user.type(within(popover).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(popover).getByRole("combobox", { name: "Class" }), "s");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
     );
@@ -1211,7 +1214,7 @@ describe("annotation review query states", () => {
 
       await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
       const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-      const filter = within(popover).getByRole("textbox", { name: "Class" });
+      const filter = within(popover).getByRole("combobox", { name: "Class" });
       await user.type(filter, typed);
       await user.click(
         within(popover).getByRole("button", {
@@ -1276,7 +1279,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(within(popover).getByRole("button", { name: "Create and assign class “S”" }));
 
@@ -1339,7 +1342,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
@@ -1392,7 +1395,7 @@ describe("annotation review query states", () => {
     });
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const reopened = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const reopenedFilter = within(reopened).getByRole("textbox", { name: "Class" });
+    const reopenedFilter = within(reopened).getByRole("combobox", { name: "Class" });
     await user.type(reopenedFilter, "s");
     expect(
       within(reopened).getByRole("button", { name: "Create and assign class “S”" }),
@@ -1422,7 +1425,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
 
     await user.type(filter, "s");
     await user.click(
@@ -1491,7 +1494,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
 
     await user.type(filter, "s");
     await user.click(
@@ -1550,7 +1553,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
 
     await user.type(filter, "s");
     await user.click(
@@ -1618,7 +1621,7 @@ describe("annotation review query states", () => {
     await user.click(screen.getByRole("checkbox", { name: "Numbers" }));
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     const oldPopover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const oldFilter = within(oldPopover).getByRole("textbox", { name: "Class" });
+    const oldFilter = within(oldPopover).getByRole("combobox", { name: "Class" });
     await user.type(oldFilter, "s");
     await user.click(
       within(oldPopover).getByRole("button", { name: "Create and assign class “S”" }),
@@ -1646,7 +1649,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const copiedPopover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    await user.type(within(copiedPopover).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(copiedPopover).getByRole("combobox", { name: "Class" }), "s");
     expect(
       within(copiedPopover).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
@@ -1687,7 +1690,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
@@ -1788,7 +1791,7 @@ describe("annotation review query states", () => {
     user: ReturnType<typeof userEvent.setup>,
   ): Promise<void> {
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(within(popover).getByRole("button", { name: "Create and assign class “S”" }));
     await within(popover).findByRole("alert");
@@ -1829,12 +1832,12 @@ describe("annotation review query states", () => {
     expect(column).not.toBeInTheDocument();
     expect(nextColumn).not.toBe(column);
     const empty = within(nextColumn).getByRole("region", { name: "Annotation — nothing selected" });
-    expect(within(empty).getByRole("textbox", { name: "Class" })).toHaveValue("");
+    expect(within(empty).getByRole("combobox", { name: "Class" })).toHaveValue("");
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     const reopened = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    await user.type(within(reopened).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(reopened).getByRole("combobox", { name: "Class" }), "s");
     expect(
       within(reopened).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
@@ -1866,7 +1869,7 @@ describe("annotation review query states", () => {
 
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     const reopened = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    await user.type(within(reopened).getByRole("textbox", { name: "Class" }), "s");
+    await user.type(within(reopened).getByRole("combobox", { name: "Class" }), "s");
     expect(
       within(reopened).getByRole("button", { name: "Create and assign class “S”" }),
     ).toBeInTheDocument();
@@ -1957,7 +1960,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     for (const name of ["s", "Timer"]) {
       await user.type(filter, name);
       await user.click(
@@ -2010,7 +2013,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     let popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    let filter = within(popover).getByRole("textbox", { name: "Class" });
+    let filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "s");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
@@ -2034,7 +2037,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    filter = within(popover).getByRole("textbox", { name: "Class" });
+    filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "s");
     expect(
       within(popover).getByRole("button", { name: "Create and assign class “S”" }),
@@ -2072,7 +2075,7 @@ describe("annotation review query states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Class 7, 1 annotations" }));
     const popover = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    const filter = within(popover).getByRole("textbox", { name: "Class" });
+    const filter = within(popover).getByRole("combobox", { name: "Class" });
     await user.type(filter, "Score");
     await user.click(
       within(popover).getByRole("button", { name: "Create and assign class “Score”" }),
@@ -2330,7 +2333,7 @@ describe("annotation review query states", () => {
     const overlay = await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));
     const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    within(dialog).getByRole("textbox", { name: "Class" }).focus();
+    within(dialog).getByRole("combobox", { name: "Class" }).focus();
     await user.keyboard("{ArrowRight}");
     expect(within(overlay).getByRole("option")).toHaveAttribute(
       "aria-label",
@@ -2480,7 +2483,7 @@ describe("annotation review query states", () => {
     expect(screen.getByRole("dialog", { name: "Choose a class for the new box" })).toBeVisible();
     expect(within(overlay).getByRole("option", { name: /^Box — choose a class:/ })).toBeVisible();
 
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
     await user.clear(field);
     await user.type(field, "health");
     await user.click(screen.getByRole("option", { name: "health" }));
@@ -2654,7 +2657,7 @@ describe("annotation review query states", () => {
     await user.keyboard("{ArrowDown}");
 
     const secondDialog = screen.getByRole("dialog", { name: "Edit annotation health" });
-    expect(within(secondDialog).getByLabelText("Class")).toHaveValue("");
+    expect(within(secondDialog).getByRole("combobox", { name: "Class" })).toHaveValue("health");
     expect(within(secondDialog).getByRole("option", { name: "health" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -3465,7 +3468,7 @@ describe("keyboard-complete annotation list", () => {
     await waitFor(() => {
       expect(requests.filter((request) => request.method === "POST")).toHaveLength(1);
     });
-    await user.click(screen.getByRole("textbox", { name: "Class" }));
+    await user.click(screen.getByRole("combobox", { name: "Class" }));
     await user.click(screen.getByRole("option", { name: "7" }));
     const createButton = screen.getByRole("button", { name: "Save class" });
     createButton.focus();

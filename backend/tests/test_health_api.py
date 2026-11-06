@@ -65,6 +65,15 @@ def test_health_200_reports_all_dependencies(
     assert body["ffmpeg"]["available"] is True
     assert body["tesseract"]["available"] is True
     assert body["gpu"]["available"] is True
+    # FE-022 FIX1: every dependency carries a stable code the UI presents in English.
+    names = ("database", "workspace", "ffmpeg", "tesseract", "gpu")
+    assert {name: body[name]["code"] for name in names} == {
+        "database": "available",
+        "workspace": "available",
+        "ffmpeg": "available",
+        "tesseract": "verified",
+        "gpu": "stub_available",
+    }
     assert UUID(response.headers["X-Request-ID"]) == UUID(
         body.get("request_id", response.headers["X-Request-ID"])
     )
@@ -118,6 +127,7 @@ def test_missing_operator_tesseract_is_an_explicit_degraded_200_without_tracebac
             "Stan zdegradowany: brak zweryfikowanej instalacji operatora; "
             "realny OCR jest wyłączony (TD-015)."
         ),
+        "code": "missing_installation",
     }
 
 
@@ -139,21 +149,24 @@ def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_ava
             "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna; "
             "realny OCR jest wyłączony (TD-015)."
         ),
+        "code": "checksum_mismatch",
     }
 
 
 @pytest.mark.parametrize(
-    ("missing_setting", "missing_name", "expected_detail"),
+    ("missing_setting", "missing_name", "expected_detail", "expected_code"),
     [
         (
             "ffmpeg_path",
             "missing-ffmpeg.exe",
             "Stan zdegradowany: FFmpeg jest niedostępny (not_found).",
+            "ffmpeg_not_found",
         ),
         (
             "ffprobe_path",
             "missing-ffprobe.exe",
             "Stan zdegradowany: ffprobe jest niedostępny (not_found).",
+            "ffprobe_not_found",
         ),
     ],
 )
@@ -164,6 +177,7 @@ def test_missing_configured_media_dependency_is_explicit_degraded_200(
     missing_setting: str,
     missing_name: str,
     expected_detail: str,
+    expected_code: str,
 ) -> None:
     settings.ffmpeg_path.write_bytes(b"fixture ffmpeg runtime")
     settings.ffprobe_path.write_bytes(b"fixture ffprobe runtime")
@@ -198,6 +212,7 @@ def test_missing_configured_media_dependency_is_explicit_degraded_200(
         "available": False,
         "critical": False,
         "detail": expected_detail,
+        "code": expected_code,
     }
 
 

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { profileFixture } from "../src/test/fixtures";
+import { annotationFixture, frameDetailFixture, profileFixture } from "../src/test/fixtures";
 import { ApiHarness } from "./apiHarness";
 import { deterministicPng } from "./deterministicPng";
 import { showWholeFrame } from "./profileFlow";
@@ -44,6 +44,12 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
   const api = new ApiHarness({ phase: "review" });
   await api.install(page);
   await installVisualProfile(page);
+  await page.route(/\/api\/v1\/frames\/frame-1$/, (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify(frameDetailFixture({ width: 1280, height: 852,
+      annotations: visualProfile.categories.map((category, index) => annotationFixture({ id: `scroll-${index}`, category_id: category.id, x: 100 + (index % 6) * 80, y: 120 + Math.floor(index / 6) * 80 })),
+    })),
+  }));
   await mkdir(screenshotDirectory, { recursive: true });
 
   for (const viewport of [
@@ -64,8 +70,8 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
     await expect(page.getByRole("region", { name: "Dane klatki" })).toHaveCount(0);
     // FE-022: with nothing selected the class field rests closed and inert.
     await expect(panel.getByRole("option")).toHaveCount(0);
-    await expect(panel.getByRole("textbox", { name: "Class" })).toHaveValue("");
-    await expect(panel.getByRole("textbox", { name: "Class" })).toBeDisabled();
+    await expect(panel.getByRole("combobox", { name: "Class" })).toHaveValue("");
+    await expect(panel.getByRole("combobox", { name: "Class" })).toBeDisabled();
     await expect(panel.getByRole("button", { name: "Delete" })).toHaveCount(0);
     await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
     await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();
@@ -94,6 +100,17 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
     }));
     expect(listMetrics.overflowY).toBe("auto");
     expect(Math.round(listMetrics.height)).toBe(140);
+    const firstRow = classList.getByRole("button").first();
+    const beforeScroll = await firstRow.evaluate((element) => element.getBoundingClientRect().top);
+    const maxScroll = await classList.evaluate((element) => element.scrollHeight - element.clientHeight);
+    expect(maxScroll).toBeGreaterThan(0);
+    await classList.hover();
+    await page.mouse.wheel(0, maxScroll + 140);
+    await expect.poll(() => classList.evaluate((element) => element.scrollTop)).toBe(maxScroll);
+    const afterScroll = await firstRow.evaluate((element) => element.getBoundingClientRect().top);
+    expect(Math.round(beforeScroll - afterScroll)).toBe(maxScroll);
+    await page.mouse.wheel(0, -maxScroll - 140);
+    await expect.poll(() => classList.evaluate((element) => element.scrollTop)).toBe(0);
 
     await writeFile(
       path.join(screenshotDirectory, `editor-no-selection-${suffix}.png`),

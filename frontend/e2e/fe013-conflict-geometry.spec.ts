@@ -81,7 +81,7 @@ for (const conflict of conflicts) {
 
     await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
     const panel = page.getByRole("dialog", { name: /Edit annotation/ });
-    const filter = panel.getByRole("textbox", { name: "Class" });
+    const filter = panel.getByRole("combobox", { name: "Class" });
     await filter.fill(conflict.typed);
     await panel
       .getByRole("button", { name: `Create and assign class “${conflict.proposed}”` })
@@ -148,7 +148,7 @@ test("FE-013 offers manual recovery when the backend names no winner", async ({ 
 
   await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
   const panel = page.getByRole("dialog", { name: /Edit annotation/ });
-  const filter = panel.getByRole("textbox", { name: "Class" });
+  const filter = panel.getByRole("combobox", { name: "Class" });
   await filter.fill("s");
   await panel.getByRole("button", { name: "Create and assign class “S”" }).click();
 

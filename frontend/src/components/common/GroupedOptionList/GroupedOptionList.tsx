@@ -208,6 +208,8 @@ export function GroupedOptionList({
   selectedIds,
 }: GroupedOptionListProps) {
   const listId = useId();
+  const combobox = mode === "single" && !inline;
+  const [editing, setEditing] = useState(false);
   const [uncontrolledQuery, setUncontrolledQuery] = useState("");
   const [openState, setOpen] = useState(defaultOpen);
   const open = inline || openState;
@@ -228,7 +230,7 @@ export function GroupedOptionList({
   // effect, never rendered.
   const pendingTagFocusIndex = useRef<number | null>(null);
 
-  const query = filterValue ?? uncontrolledQuery;
+  const query = combobox && !editing ? "" : filterValue ?? uncontrolledQuery;
   const filtering = normalize(query) !== "";
   const shown = useMemo(
     () => visibleGroups(groups, query, collapsedIds, inline),
@@ -390,6 +392,13 @@ export function GroupedOptionList({
     }
     const next = row.kind === "group" ? toggleGroup(row) : toggleOption(row.option.id);
     onChange(next);
+    if (combobox && onConfirm === undefined) {
+      setEditing(false);
+      setUncontrolledQuery("");
+      setRequestedActiveId(null);
+      filterRef.current?.focus();
+      setOpen(false);
+    }
     if (confirm) {
       onConfirm?.(next);
     }
@@ -486,6 +495,41 @@ export function GroupedOptionList({
   }
 
   function handleFilterKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (combobox) {
+      const choices = rows.filter((row): row is OptionRow => row.kind === "option");
+      const index = choices.findIndex((row) => row.id === requestedActiveId);
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        setEditing(false);
+        setRequestedActiveId(null);
+        return;
+      }
+      if (event.altKey && event.key === "ArrowDown") {
+        event.preventDefault();
+        setOpen(true);
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp" || ((event.key === "Home" || event.key === "End") && index >= 0)) {
+        event.preventDefault();
+        setOpen(true);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1
+          : index < 0 ? (event.key === "ArrowUp" ? choices.length - 1 : 0)
+          : Math.max(0, Math.min(choices.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
+        const row = choices[next];
+        setRequestedActiveId(row?.id ?? null);
+        if (row !== undefined) rowRefs.current.get(row.id)?.scrollIntoView?.({ block: "nearest" });
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const row = open && index >= 0 ? choices[index] : normalize(query) !== "" && choices.length === 1 ? choices[0] : undefined;
+        if (row !== undefined) activate(row, true);
+        return;
+      }
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       // FE-008-FIX1: the filter enters the choices, not the disclosure chrome.
@@ -525,6 +569,13 @@ export function GroupedOptionList({
       data-open={open || undefined}
       data-outside-click-exempt={exemptFromOutsideClick || undefined}
       data-shortcut-scope="list"
+      onBlur={(event) => {
+        if (combobox && onConfirm === undefined && !event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+          setEditing(false);
+          setRequestedActiveId(null);
+        }
+      }}
     >
       {inline ? null : (
       <div className="df-grouped-options__control">
@@ -558,6 +609,9 @@ export function GroupedOptionList({
         )}
         <div className="df-grouped-options__filter">
           <TextField
+            role={combobox ? "combobox" : undefined}
+            aria-autocomplete={combobox ? "list" : undefined}
+            aria-activedescendant={combobox && open && requestedActiveId !== null && rows.some((row) => row.kind === "option" && row.id === requestedActiveId) ? `${listId}-option-${requestedActiveId}` : undefined}
             aria-controls={listId}
             aria-expanded={open}
             autoComplete="off"
@@ -566,6 +620,7 @@ export function GroupedOptionList({
             label={filterLabel}
             maxLength={filterMaxLength}
             onChange={(event) => {
+              setEditing(true);
               const nextQuery = limitCodePoints(event.target.value, filterMaxCodePoints);
               if (filterValue === undefined) {
                 setUncontrolledQuery(nextQuery);
@@ -574,16 +629,18 @@ export function GroupedOptionList({
               setRequestedActiveId(null);
               onFilterChange?.(nextQuery);
             }}
-            onClick={() => {
+            onClick={(event) => {
+              if (combobox && !editing) event.currentTarget.select();
               setOpen(true);
             }}
-            onFocus={() => {
+            onFocus={(event) => {
+              if (combobox) event.target.select();
               setOpen(true);
             }}
             onKeyDown={handleFilterKeyDown}
             placeholder={placeholder ?? filterLabel}
             ref={filterRef}
-            value={query}
+            value={combobox && !editing ? selectedOptions[0]?.label ?? "" : query}
           />
         </div>
         <div className="df-grouped-options__control-actions">
@@ -688,7 +745,9 @@ export function GroupedOptionList({
             >
               {options.map((option) => (
                 <OptionRowElement
-                  active={activeId === option.id}
+                  active={!combobox && activeId === option.id}
+                  keyboardActive={combobox && requestedActiveId === option.id}
+                  domId={`${listId}-option-${option.id}`}
                   checked={selected.has(option.id) ? "true" : "false"}
                   detail={option.detail}
                   disabled={disabled}
@@ -743,6 +802,8 @@ function checkedState(
 }
 
 interface OptionRowElementProps {
+  domId?: string;
+  keyboardActive?: boolean;
   active: boolean;
   /** Group rows announce their own collapse state; `Left`/`Right` change it. */
   ariaExpanded?: boolean;
@@ -759,6 +820,8 @@ interface OptionRowElementProps {
 }
 
 function OptionRowElement({
+  domId,
+  keyboardActive,
   active,
   ariaExpanded,
   checked,
@@ -783,6 +846,8 @@ function OptionRowElement({
 
   return (
     <div
+      id={domId}
+      data-keyboard-active={keyboardActive || undefined}
       aria-checked={single ? undefined : checked}
       aria-disabled={disabled || undefined}
       aria-expanded={ariaExpanded}

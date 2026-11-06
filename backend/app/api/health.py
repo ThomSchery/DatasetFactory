@@ -21,6 +21,7 @@ class DependencyStatusResponse(StrictModel):
     available: bool
     critical: bool
     detail: str
+    code: str
 
 
 class HealthResponse(StrictModel):
@@ -38,6 +39,7 @@ def _status_response(status: DependencyStatus) -> DependencyStatusResponse:
         available=status.available,
         critical=status.critical,
         detail=status.detail,
+        code=status.code,
     )
 
 

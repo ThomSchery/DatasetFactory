@@ -97,22 +97,8 @@
   cursor: not-allowed;
 }
 
-/*
- * GRID-04/06: on a touch screen the hit area grows to 48 px without changing
- * what is drawn — Figma's 34 px controls keep their size, and the layout does
- * not move between mouse and finger (FE-022 §4).
- */
-@media (pointer: coarse) {
-  .df-button::after {
-    position: absolute;
-    inset-block-start: 50%;
-    inset-inline-start: 50%;
-    width: max(100%, var(--control-height-lg));
-    height: max(100%, var(--control-height-lg));
-    content: "";
-    transform: translate(-50%, -50%);
-  }
-}
+/* Coarse-pointer expansion is shared with fields, rows and links in
+   TouchTargets; neighbouring controls partition their gap (FE-022 FIX1). */
 
 /* `Icon` is a block so it never sits on a text baseline; a button carrying an
    icon lays its content out in one row. */

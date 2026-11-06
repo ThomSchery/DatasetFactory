@@ -6,6 +6,7 @@ import { Button } from "../components/common/Button";
 import { Icon } from "../components/common/Icon";
 import { NavItem } from "../components/common/NavItem";
 import { SideNav } from "../components/common/SideNav";
+import { useTouchTargets } from "../components/common/TouchTargets/useTouchTargets";
 import { OcrEngineDialog } from "./OcrEngineDialog";
 import {
   MENU_DESTINATIONS,
@@ -60,6 +61,7 @@ function useStripLayout(): boolean {
  * technology even where the design draws none.
  */
 export function AppShell() {
+  useTouchTargets();
   const handle = useRouteHandle();
   const location = useLocation();
   const strip = useStripLayout();

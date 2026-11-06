@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,10 +69,15 @@ function stubBackend(state: BackendState) {
     if (url.includes("/api/v1/runs") && url.endsWith("/start")) {
       return state.startResponse ?? { status: 202, body: state.run };
     }
+    if (url.endsWith("/runs/run-1/cancel")) {
+      state.run = runFixture({ status: "cancelled", version: 2 });
+      return { status: 200, body: state.run };
+    }
     if (url.includes("/api/v1/runs") && method === "POST") {
       const created = runFixture();
       state.run = created;
-      state.dashboard = dashboardFixture({ run: created });
+      // The backend prioritizes the workflow slot owner over a new queued run.
+      if (state.dashboard.run === null) state.dashboard = dashboardFixture({ run: created });
       return { status: 201, body: created };
     }
     if (url.includes("/api/v1/runs/run-1/frames")) {
@@ -107,7 +112,7 @@ async function choose(
   field: string,
   option: RegExp,
 ) {
-  await user.click(await screen.findByLabelText(field));
+  await user.click(await screen.findByRole("combobox", { name: field }));
   await user.click(await screen.findByRole("option", { name: option }));
 }
 
@@ -322,6 +327,7 @@ describe("Run Setup: from a file to a started run", () => {
 
     expect(document.querySelector("select")).toBeNull();
     await choose(user, "Profile", /Druga gra/);
+    expect(screen.getByRole("combobox", { name: "Profile" })).toHaveValue("Druga gra");
     expect(
       await screen.findByAltText("Reference screenshot of profile Druga gra"),
     ).toHaveAttribute("src", "/api/v1/assets/references/asset-2");
@@ -330,9 +336,9 @@ describe("Run Setup: from a file to a started run", () => {
   it("takes the profile from the address when Profile sends the operator here", async () => {
     stubBackend(state);
     renderApp(["/run?profile=profile-1"]);
-    const field = await screen.findByLabelText("Profile");
+    const field = await screen.findByRole("combobox", { name: "Profile" });
     await waitFor(() => {
-      expect(field).toHaveAttribute("placeholder", "Gra testowa");
+      expect(field).toHaveValue("Gra testowa");
     });
   });
 
@@ -371,20 +377,32 @@ describe("Run Setup: from a file to a started run", () => {
     expect(JSON.parse(String(startCall?.[1]?.body))).toEqual({ expected_version: 1 });
   });
 
-  it("keeps a run that could not start, with Start under the button", async () => {
+  it.each(["Start", "Cancel"])("retains the created run after 409 and binds %s to its own id/version", async (action) => {
     const user = userEvent.setup();
     state.materials = [materialFixture()];
     state.startResponse = { status: 409, body: errorEnvelope("active_run") };
-    stubBackend(state);
+    state.dashboard = dashboardFixture({ run: runFixture({ id: "slot-owner", status: "running", version: 3 }) });
+    const fetchSpy = stubBackend(state);
     renderApp(["/run"]);
 
     await choose(user, "Source file", /mecz\.mp4/);
+    expect(screen.getByRole("combobox", { name: "Source file" })).toHaveValue("mecz.mp4");
     await choose(user, "Profile", /Gra testowa/);
     await user.click(screen.getByRole("button", { name: "Run" }));
 
     expect(await screen.findByText(/Another run is already active/)).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "Active run" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    const created = screen.getByRole("region", { name: "Created run" });
+    expect(created).toHaveTextContent("run-1");
+    expect(within(screen.getByRole("region", { name: "Active run" })).getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    await user.click(within(created).getByRole("button", { name: action }));
+    const call = fetchSpy.mock.calls.filter(([url]) => String(url).endsWith(`/runs/run-1/${action.toLowerCase()}`)).at(-1);
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ expected_version: 1 });
+    expect(fetchSpy.mock.calls.some(([url, init]) => String(url).includes("/runs/slot-owner/") && init?.method === "POST")).toBe(false);
+    if (action === "Cancel") {
+      await waitFor(() => expect(created).toHaveTextContent("Cancelled"));
+      expect(within(created).queryByRole("button", { name: "Cancel" })).toBeNull();
+    }
   });
 
   it("asks for a source file before creating anything", async () => {

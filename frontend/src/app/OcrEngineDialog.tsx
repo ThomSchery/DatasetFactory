@@ -1,4 +1,6 @@
-import { describeApiError, requiresOcrWarning, ocrProvenanceOf } from "../api";
+import { useQuery } from "@tanstack/react-query";
+import { useMatch } from "react-router";
+import { describeApiError, describeDependency, describeOcrWarning, getRun, queryKeys, requiresOcrWarning, ocrProvenanceOf } from "../api";
 import { Button } from "../components/common/Button";
 import { DataList } from "../components/common/DataList";
 import { Dialog } from "../components/common/Dialog";
@@ -23,8 +25,16 @@ export interface OcrEngineDialogProps {
  */
 export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
   const dashboard = useDashboard(open);
-  const run = dashboard.data?.run ?? null;
+  const reviewedRunId = useMatch("/annotations/:runId")?.params.runId;
+  const reviewedRun = useQuery({
+    queryKey: queryKeys.run(reviewedRunId ?? "none"),
+    queryFn: ({ signal }) => getRun(reviewedRunId!, signal),
+    enabled: open && reviewedRunId !== undefined,
+  });
+  // A historical request must never fall back to the slot owner's provenance.
+  const run = reviewedRunId === undefined ? dashboard.data?.run ?? null : reviewedRun.data ?? null;
   const provenance = ocrProvenanceOf(run);
+  const warning = describeOcrWarning(provenance);
   const needsReview = run === null || requiresOcrWarning(provenance);
 
   return (
@@ -53,15 +63,21 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
       {dashboard.isSuccess ? (
         <>
           {run === null ? (
+            reviewedRunId !== undefined ? (
+              reviewedRun.isError ? <FatalError title="Run provenance could not be loaded" description={describeApiError(reviewedRun.error).message} onRetry={() => void reviewedRun.refetch()} /> : <Loading label="Loading this run's OCR provenance…" />
+            ) : <>
+            <p>No active run. Showing the local OCR engine status.</p>
             <DataList
               items={[
                 { label: "Engine", value: "Tesseract" },
-                { label: "Status", value: dashboard.data.system.tesseract.detail },
+                { label: "Status", value: describeDependency(dashboard.data.system.tesseract) },
               ]}
             />
+            </>
           ) : (
             <DataList
               items={[
+                { label: reviewedRunId === undefined ? "Active run" : "Reviewed run", value: run.id },
                 { label: "Engine id", value: run.ocr_engine },
                 { label: "Version", value: run.ocr_engine_version },
                 { label: "Runtime SHA-256", value: run.ocr_runtime_sha256 },
@@ -77,8 +93,8 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
               before export — proposals stay Pending in Review until you accept them.
             </p>
           ) : null}
-          {run !== null && run.warning !== "" ? (
-            <p className="df-ocr-engine__note">{run.warning}</p>
+          {warning !== null ? (
+            <p className="df-ocr-engine__note">{warning}</p>
           ) : null}
           {/* With the Dashboard gone (FE-022), the state of the local
               dependencies is reported here, beside the OCR engine. */}
@@ -98,7 +114,7 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
                 <StatusBadge srLabel={`${name}:`} tone={status.available ? "success" : status.critical ? "error" : "warning"}>
                   {status.available ? "Available" : "Unavailable"}
                 </StatusBadge>
-                <span className="df-ocr-engine__detail">{status.detail}</span>
+                <span className="df-ocr-engine__detail">{describeDependency(status)}</span>
               </li>
             ))}
           </ul>

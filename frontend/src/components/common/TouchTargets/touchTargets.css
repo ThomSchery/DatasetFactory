@@ -1,0 +1,19 @@
+.df-field__target { position: relative; min-width: 0; }
+.df-field__touch { display: none; }
+/* useTouchTargets writes the measured insets inline; these defaults keep every
+   referenced variable declared (no expansion until measured). */
+[data-touch-target] { --touch-top: 0px; --touch-right: 0px; --touch-bottom: 0px; --touch-left: 0px; }
+
+@media (pointer: coarse) {
+  .df-nav-item, .df-grouped-options__row { position: relative; }
+  :is(.df-button, .df-nav-item, .df-grouped-options__row)[data-touch-target]::after,
+  .df-field__target[data-touch-target] > .df-field__touch {
+    display: block;
+    position: absolute;
+    inset: var(--touch-top) var(--touch-right) var(--touch-bottom) var(--touch-left);
+    content: "";
+  }
+  /* The label extends the native input action outside its visible rectangle.
+     Within the input, pointer placement/selection keeps working natively. */
+  .df-field__target > :not(.df-field__touch) { position: relative; z-index: 1; }
+}

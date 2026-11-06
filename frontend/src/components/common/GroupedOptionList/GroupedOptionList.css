@@ -246,6 +246,11 @@
   background: var(--color-surface-neutral-hover);
 }
 
+.df-grouped-options__row[data-keyboard-active] {
+  outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .df-grouped-options__row--checked {
   background: var(--color-fill-brand-impeccable-soft);
 }

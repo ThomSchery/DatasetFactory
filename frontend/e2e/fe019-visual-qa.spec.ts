@@ -135,7 +135,7 @@ test("FE-019 pokazuje dwa stany pickerów, trzy panele i wspólny trójkąt prof
       inspectorBox.y + inspectorBox.height,
     );
 
-    const annotationFilter = annotation.getByRole("textbox", { name: "Class" });
+    const annotationFilter = annotation.getByRole("combobox", { name: "Class" });
     await expect(annotationFilter).toBeFocused();
     await expect(annotation.getByRole("listbox", { name: "Profile classes" })).toBeVisible();
     await annotation.scrollIntoViewIfNeeded();

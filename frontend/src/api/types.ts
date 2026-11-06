@@ -42,6 +42,8 @@ export interface Page<TItem> {
 // --- system ---------------------------------------------------------------
 
 export interface DependencyStatus {
+  /** Stable reason; optional for older local backends. */
+  code?: string;
   available: boolean;
   critical: boolean;
   detail: string;

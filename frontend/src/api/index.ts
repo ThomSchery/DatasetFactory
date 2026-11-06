@@ -73,7 +73,8 @@ export type {
   StatusPresentation,
 } from "./frameReview";
 
-export { ocrProvenanceOf, requiresOcrWarning } from "./ocrQuality";
+export { ocrProvenanceOf, requiresOcrWarning, describeOcrWarning } from "./ocrQuality";
+export { describeDependency } from "./systemMessages";
 export type { OcrProvenanceView } from "./ocrQuality";
 
 export {

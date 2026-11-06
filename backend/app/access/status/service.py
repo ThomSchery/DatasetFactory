@@ -14,8 +14,20 @@ from backend.app.config import Settings
 
 @dataclass(frozen=True)
 class ProbeResult:
+    """`detail` is the operator text; `code` is the stable machine reason.
+
+    Probes whose detail is already a code (`not_found`, `timeout`) leave `code`
+    empty and `reason` falls back to the detail. The UI presents the reason in
+    its own language, so it never has to parse the detail text (FE-022 FIX1).
+    """
+
     available: bool
     detail: str
+    code: str = ""
+
+    @property
+    def reason(self) -> str:
+        return self.code or self.detail
 
 
 class ResourceProbe(Protocol):
@@ -111,11 +123,11 @@ class TesseractDependencyProbe:
 
     def probe(self) -> ProbeResult:
         if not self._runtime.executable.is_file() or not self._runtime.model.is_file():
-            return ProbeResult(False, self._MISSING_DETAIL)
+            return ProbeResult(False, self._MISSING_DETAIL, "missing_installation")
         try:
             self._runtime.verified_hashes(language=self._language)
         except OcrProcessError:
-            return ProbeResult(False, self._MISMATCH_DETAIL)
+            return ProbeResult(False, self._MISMATCH_DETAIL, "checksum_mismatch")
 
         executable = self._resource_probe.executable(
             self._runtime.executable,
@@ -128,8 +140,9 @@ class TesseractDependencyProbe:
                 False,
                 "Stan zdegradowany: zweryfikowany runtime nie odpowiada "
                 f"({executable.detail}); realny OCR jest wyłączony (TD-015).",
+                f"runtime_{executable.reason}",
             )
-        return ProbeResult(True, "Zweryfikowana instalacja operatora (SHA-256).")
+        return ProbeResult(True, "Zweryfikowana instalacja operatora (SHA-256).", "verified")
 
 
 @dataclass(frozen=True)
@@ -138,6 +151,7 @@ class DependencyStatus:
     available: bool
     critical: bool
     detail: str
+    code: str
 
 
 @dataclass(frozen=True)
@@ -194,16 +208,26 @@ class SystemStatusAccess:
                 database_available,
                 True,
                 "available" if database_available else "unavailable",
+                "available" if database_available else "unavailable",
             ),
             workspace=DependencyStatus(
                 "workspace",
                 workspace_available,
                 True,
                 "available" if workspace_available else "unavailable",
+                "available" if workspace_available else "unavailable",
             ),
-            ffmpeg=DependencyStatus("ffmpeg", ffmpeg_status.available, False, ffmpeg_status.detail),
-            tesseract=DependencyStatus("tesseract", tesseract.available, False, tesseract.detail),
-            gpu=DependencyStatus("gpu", gpu.available, False, gpu.detail),
+            ffmpeg=DependencyStatus(
+                "ffmpeg",
+                ffmpeg_status.available,
+                False,
+                ffmpeg_status.detail,
+                ffmpeg_status.reason,
+            ),
+            tesseract=DependencyStatus(
+                "tesseract", tesseract.available, False, tesseract.detail, tesseract.reason
+            ),
+            gpu=DependencyStatus("gpu", gpu.available, False, gpu.detail, gpu.reason),
         )
 
     @staticmethod
@@ -212,10 +236,12 @@ class SystemStatusAccess:
             return ProbeResult(
                 False,
                 f"Stan zdegradowany: FFmpeg jest niedostępny ({ffmpeg.detail}).",
+                f"ffmpeg_{ffmpeg.reason}",
             )
         if not ffprobe.available:
             return ProbeResult(
                 False,
                 f"Stan zdegradowany: ffprobe jest niedostępny ({ffprobe.detail}).",
+                f"ffprobe_{ffprobe.reason}",
             )
         return ProbeResult(True, "available")

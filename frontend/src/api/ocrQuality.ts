@@ -21,8 +21,17 @@ const QUALITY_GATE_PASSED = "passed";
 export interface OcrProvenanceView {
   experimental: boolean;
   quality_gate: string;
-  /** Free text from the backend; rendered verbatim when present. */
+  /** Legacy localized text; presentation is derived from provenance below. */
   warning: string;
+}
+
+export function describeOcrWarning(provenance: OcrProvenanceView | null): string | null {
+  if (provenance === null) return null;
+  const parts: string[] = [];
+  if (provenance.experimental) parts.push("This OCR engine is experimental.");
+  if (provenance.quality_gate !== QUALITY_GATE_PASSED) parts.push("This OCR engine has not passed its quality gate.");
+  if (parts.length === 0 && provenance.warning !== "") parts.push("This run carries an OCR warning. Review every proposal before accepting it.");
+  return parts.length === 0 ? null : parts.join(" ");
 }
 
 /**

@@ -82,7 +82,7 @@ describe("AnnotationPopover", () => {
   it("opens the class field expanded with the cursor already in its filter", () => {
     renderPopover();
 
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
     expect(field).toHaveFocus();
     expect(screen.getByRole("button", { name: "Collapse list Profile classes" })).toHaveAttribute(
       "aria-expanded",
@@ -94,7 +94,7 @@ describe("AnnotationPopover", () => {
   it("filters profile classes and saves the active result with Enter", async () => {
     const user = userEvent.setup();
     const { onCategoryChange } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
 
     await user.clear(field);
     await user.type(field, "hea{Enter}");
@@ -123,7 +123,7 @@ describe("AnnotationPopover", () => {
   it("stays open while the pointer works inside it", async () => {
     const { onClose } = renderPopover();
 
-    fireEvent.pointerDown(screen.getByRole("textbox", { name: "Class" }));
+    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Class" }));
     fireEvent.pointerDown(screen.getByRole("option", { name: "Health" }));
 
     expect(onClose).not.toHaveBeenCalled();
@@ -143,7 +143,7 @@ describe("AnnotationPopover", () => {
     const user = userEvent.setup();
     const { onClose } = renderPopover();
 
-    await user.type(screen.getByRole("textbox", { name: "Class" }), "{Escape}");
+    await user.type(screen.getByRole("combobox", { name: "Class" }), "{Escape}");
     await user.keyboard("{Escape}");
 
     expect(onClose).not.toHaveBeenCalled();
@@ -156,7 +156,7 @@ describe("AnnotationPopover", () => {
       annotation: { ...annotation, category_id: "" },
       draft: true,
     });
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
 
     await user.type(field, "health and armour{Enter}");
 
@@ -179,7 +179,7 @@ describe("AnnotationPopover", () => {
   it("canonicalises a lowercase character and hides the action for an existing name", async () => {
     const user = userEvent.setup();
     renderPopover();
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
 
     await user.type(field, "a");
     expect(
@@ -199,7 +199,7 @@ describe("AnnotationPopover", () => {
       annotation: { ...annotation, category_id: "" },
       draft: true,
     });
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
     await user.type(field, "8");
 
     update({ categoryError: "The new class could not be saved." });
@@ -211,7 +211,7 @@ describe("AnnotationPopover", () => {
   it("reveals and selects the backend-authoritative class after a name conflict", async () => {
     const user = userEvent.setup();
     const { onCategoryChange, update } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
     await user.type(field, "s");
 
     update({
@@ -231,7 +231,7 @@ describe("AnnotationPopover", () => {
   it("claims no selection when the conflict winner stays unknown", async () => {
     const user = userEvent.setup();
     const { onCategoryChange, update } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
     await user.type(field, "s");
 
     update({
@@ -257,7 +257,7 @@ describe("AnnotationPopover", () => {
   it("keeps the create action away while the conflict winner is unknown", async () => {
     const user = userEvent.setup();
     const { update } = renderPopover();
-    const field = screen.getByRole("textbox", { name: "Class" });
+    const field = screen.getByRole("combobox", { name: "Class" });
     await user.type(field, "s");
     expect(screen.getByRole("button", { name: "Create and assign class “S”" })).toBeVisible();
 

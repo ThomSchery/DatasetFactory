@@ -471,7 +471,7 @@ describe("FE-009-FIX1 — one geometry on the overlay and in the request", () =>
     await selectAndNudge(user);
 
     const dialog = screen.getByRole("dialog", { name: "Edit annotation 7" });
-    within(dialog).getByRole("textbox", { name: "Class" }).focus();
+    within(dialog).getByRole("combobox", { name: "Class" }).focus();
     await user.keyboard("{ArrowRight}");
 
     expect(overlayShape()).toHaveAttribute(

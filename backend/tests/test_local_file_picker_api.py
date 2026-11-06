@@ -102,11 +102,11 @@ def test_system_picker_runs_one_dialog_at_a_time(monkeypatch: pytest.MonkeyPatch
     release = threading.Event()
     calls: list[list[str]] = []
 
-    def fake_run(arguments: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+    def fake_run(arguments: list[str], **_: Any) -> subprocess.CompletedProcess[bytes]:
         calls.append(arguments)
         started.set()
         release.wait(timeout=10)
-        return subprocess.CompletedProcess(arguments, 0, stdout="D:/clip.mp4\n", stderr="")
+        return subprocess.CompletedProcess(arguments, 0, stdout=b"D:/clip.mp4\n", stderr=b"")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     picker = SystemFilePicker()
@@ -122,13 +122,14 @@ def test_system_picker_runs_one_dialog_at_a_time(monkeypatch: pytest.MonkeyPatch
     assert busy.value.code == "file_picker_busy"
     assert answers == [PickedFile("D:/clip.mp4")]
     assert "-I" in calls[0]
+    assert calls[0][calls[0].index("-X") + 1] == "utf8"
 
 
 def test_system_picker_reports_cancel_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     outcomes = iter(
         [
-            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
-            subprocess.CompletedProcess([], 1, stdout="", stderr="no display"),
+            subprocess.CompletedProcess([], 0, stdout=b"", stderr=b""),
+            subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"no display"),
         ]
     )
     monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: next(outcomes))
@@ -137,4 +138,55 @@ def test_system_picker_reports_cancel_and_failure(monkeypatch: pytest.MonkeyPatc
     assert picker.pick("image") == PickedFile(None)
     with pytest.raises(FilePickerError) as failure:
         picker.pick("image")
+    assert failure.value.code == "file_picker_unavailable"
+
+
+# FE-022 FIX1: a real child process, only the Tk dialog body replaced. The
+# answer has to survive the Windows code page (cp1250 here) both ways.
+@pytest.mark.parametrize(
+    "chosen",
+    [
+        "D:/videos/clip.mp4",
+        "D:/wideo/łódź.mp4",
+        "C:/Users/Łukasz Żółć/zrzut ekranu.png",
+        "D:/视频/片段.mp4",
+    ],
+)
+def test_system_picker_round_trips_non_ascii_paths_through_a_real_child(chosen: str) -> None:
+    picker = SystemFilePicker(timeout_seconds=60, dialog_body=f"path = {chosen!r}\n")
+
+    assert picker.pick("video") == PickedFile(chosen)
+
+
+def test_system_picker_round_trip_through_the_api_never_answers_500(
+    composition: CompositionRoot,
+) -> None:
+    composition.file_picker = SystemFilePicker(
+        timeout_seconds=60, dialog_body="path = 'D:/wideo/łódź.mp4'\n"
+    )
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        response = client.post("/api/v1/local-files/pick", json={"kind": "video"})
+
+    assert response.status_code == 200
+    assert response.json() == {"path": "D:/wideo/łódź.mp4"}
+
+
+def test_system_picker_maps_undecodable_child_output_to_a_typed_error(
+    composition: CompositionRoot,
+) -> None:
+    # The child bypasses the UTF-8 tail and writes cp1250 bytes itself.
+    body = "sys.stdout.buffer.write('łódź'.encode('cp1250'))\nsys.stdout.flush()\npath = None\n"
+    composition.file_picker = SystemFilePicker(timeout_seconds=60, dialog_body=body)
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        response = client.post("/api/v1/local-files/pick", json={"kind": "image"})
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "file_picker_unavailable"
+
+
+def test_system_picker_maps_a_crashing_child_to_a_typed_error() -> None:
+    picker = SystemFilePicker(timeout_seconds=60, dialog_body="raise SystemExit(3)\n")
+
+    with pytest.raises(FilePickerError) as failure:
+        picker.pick("video")
     assert failure.value.code == "file_picker_unavailable"

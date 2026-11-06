@@ -21,7 +21,7 @@ test("FE-013 pokazuje jawną akcję utworzenia klasy bez efektu pustego Enter", 
 
   await page.getByRole("button", { name: /Class .* 1 annotations/ }).click();
   const panel = page.getByRole("dialog", { name: /Edit annotation/ });
-  const filter = panel.getByRole("textbox", { name: "Class" });
+  const filter = panel.getByRole("combobox", { name: "Class" });
   await expect(panel).toBeVisible();
   await expect(filter).toBeFocused();
 
