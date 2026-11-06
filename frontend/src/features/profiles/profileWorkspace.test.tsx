@@ -1,11 +1,17 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 import type { GameProfile } from "../../api";
 import { createRequestFrom, draftFromProfile, isDirty, saveRequestFrom } from "./profileDraft";
+
+/* The workspace's first render waits on several queries. Under the full parallel
+ * suite that can pass Testing Library's 1 s default (FE-022 FIX1/FIX2 gate runs),
+ * so waits in this file get 5 s. No assertion changes. */
+beforeAll(() => configure({ asyncUtilTimeout: 5000 }));
+afterAll(() => configure({ asyncUtilTimeout: 1000 }));
 
 /** FE-022: the open profile is named in the closed Search profile combobox. */
 async function expectOpenProfile(name: string) {
@@ -223,7 +229,7 @@ describe("the profile workspace", () => {
     profile.regions[0].page_segmentation_mode = null;
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }, { timeout: 5000 }));
+    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
     await user.click(screen.getByRole("button", { name: "Expand group OCR settings" }));
     await user.click(screen.getByRole("combobox", { name: "Text layout (PSM)" }));
     await user.click(screen.getByRole("option", { name: /^6 —/ }));
@@ -236,7 +242,7 @@ describe("the profile workspace", () => {
     const user = userEvent.setup();
     stubProfiles();
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }, { timeout: 5000 }));
+    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
     await user.clear(screen.getByLabelText(/^Region name/));
     await user.type(screen.getByLabelText(/^Region name/), "Zdrowie");
     const surface = await loadScreenshot();

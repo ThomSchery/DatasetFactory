@@ -256,3 +256,88 @@ Historyczne PNG w `docs/tickets/` przywrócone `git checkout`; wygenerowany
 przez bramkę `FE-001/screenshots/run-setup-1440.png` usunięty. Poprawka
 `--touch-*` nie zmienia geometrii desktop, więc `app-geometry.json` bez ponownego
 pomiaru.
+
+## FIX2 — Design Plan (2026-11-06)
+
+Zakres: N1 (P2) i N2/N3 (P3) z re-review a5a81ab. Źródło geometrii bez zmian
+(geometry.json/variables.json); bez Figma MCP i eksportów PNG.
+
+- [x] Layout/Siatka: brak zmiany widocznej geometrii. Niewidoczne obszary
+  dotyku (FIX1 #5) przycinane do przodków z overflow/contain:paint i do okna;
+  kanwa `svg.df-region-overlay__surface` jest przeszkodą dla rozszerzeń
+  i podziału przerw. GRID-04 (odstępstwo z FIX1 bez zmian), GRID-12,
+  SPACING-08. Tokeny: --control-height-lg (cel 48 px), bez nowych.
+- [x] Typografia: dialog OCR engine — istniejące style akapitu i DataList;
+  TYPO-02/18, CASING-02.
+- [x] Kolory/Obramowania/Cienie: bez zmian.
+- [x] Interakcje: swipe w listach i popoverze nie przewija treści; dotyk przy
+  krawędzi kanwy i wokół nakładanego paska zoom trafia kanwę (rysowanie/pan).
+- [x] Komponenty: useTouchTargets (+ czysty moduł touchGeometry), OcrEngineDialog,
+  DataList; katalog new-component.md bez nowego komponentu.
+
+## FIX2 — poprawki po re-review (2026-11-06)
+
+1. **N1 phantom scroll.** `clipRect(host)` wylicza prostokąt klienta wszystkich
+   przodków, które przycinają pseudo-element (overflow-x/y ≠ visible lub
+   contain: paint), z regułą containing block dla absolute/fixed (przodkowie
+   poniżej containing block nie przycinają). `clampToClip` ogranicza
+   rozszerzenie do tego prostokąta, nigdy nie tnie widocznego pudełka
+   kontrolki — wiersz częściowo przewinięty traci tylko rozszerzenie po
+   niewidocznej stronie. Clamp przed i po podziale przerw. Scroll kontenera
+   odświeża pomiar (listener scroll w fazie capture z FIX1).
+   Testy E2E `FE-022 touch: hit areas add no scroll overflow on Run and Profiles`
+   oraz `… in Review` porównują `scrollWidth−clientWidth`/`scrollHeight−clientHeight`
+   każdego kontenera przewijania i dokumentu na coarse z wartością fine
+   (`Emulation.setTouchEmulationEnabled` przez CDP, ten sam layout `isMobile`).
+   Stany: Imported videos, Saved profiles, Profiles 360/992 (Regions, Profile
+   classes, Characters), Review 360 nic nie zaznaczone / annotation 7, 992
+   z Repeat Previous. Przed poprawką: 2/2 FAIL (`[0,4]` vs `[0,0]`, `[3,7]` vs `[0,0]`).
+2. **N2 kanwa.** Przeszkody: widoczna część `svg.df-region-overlay__surface`
+   (przycięta jak wyżej), tylko w tej samej warstwie co kontrolka. Kontrolka
+   obok kanwy zatrzymuje rozszerzenie na jej krawędzi; kontrolka nałożona na
+   kanwę (pasek zoom w Review przy 360) nie rozszerza się na stronach nad kanwą
+   i zostaje przy widocznych 34×34 px (powyżej minimum 24 px WCAG 2.5.8) —
+   rozszerzenie zostaje tylko na stronach poza kanwą. Uzupełnia odstępstwo
+   GRID-04 z decyzji #5: „bez nakładania na sąsiada” obejmuje teraz także kanwę.
+   Test E2E `FE-022 touch: hit areas leave the annotation canvas to the canvas`
+   próbkuje co 1 px pasy 24 px przy krawędziach widocznej kanwy i wokół
+   kontrolek: każdy punkt trafia kanwę albo widoczny prostokąt elementu
+   (tolerancja 1 px na snapping scrimu paska). Stany: Review 360 crop,
+   992 crop i cała klatka, Profiles 992 (region, Numbers rozwinięte, cała klatka)
+   i 360. Przed poprawką: FAIL (`176.5,686.7 Zoom out` — pierścień nad kanwą).
+   Mutacja (przeszkody wyłączone, clip zostaje): FAIL w tym samym stanie.
+   Przypadek wiersza Numbers przy 992 z re-review nie odtworzył się w stanach
+   harnessu (pierścień w popoverze/liście i tak przycina overflow, teraz także
+   clip N1). Pokrywa go deterministyczny Vitest `touchGeometry.test.ts`:
+   `stops a side-column row's gap share at the canvas edge` (oraz kontrolka nad
+   kanwą, pasek pod kanwą, brak kontaktu, clamp przewiniętego wiersza).
+3. **N3 etykieta.** Poza `/annotations/:runId` dialog podpisuje run jako
+   „Current workflow run” z akapitem „Provenance of the run that holds the
+   workflow slot. Open a run in Review to see its own.”; brak runu: „No run
+   holds the workflow slot.”. Trasa review bez zmian („Reviewed run”, własna
+   proweniencja). Test `FE-022 FIX2: names the run that holds the workflow slot
+   off the review route` (FAIL przed poprawką); test historyczny sprawdza też
+   „Reviewed run”.
+
+Próby bramki FIX2: pierwszy pełny przebieg — backend 473/473, Vitest 756/757:
+timeout `findByRole("Rename class health")` przy pierwszym ładowaniu w
+`keeps a renamed class when the server rejects a duplicate name` (1,6 s pod
+równoległym obciążeniem; w izolacji 3× 27/27). Ten sam wzorzec co w FIX1, więc
+zamiast łatać pojedyncze wywołania `profileWorkspace.test.tsx` ustawia
+`asyncUtilTimeout` 5 s dla całego pliku (beforeAll/afterAll); dwa jawne
+`{ timeout: 5000 }` z FIX1 usunięte jako zbędne. Asercje bez zmian.
+Drugi przebieg przerwany restartem hosta w E2E (47/65), bez wyniku — powtórzony.
+
+### Bramka końcowa FIX2 (2026-11-06)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe022-gate-pytest`:
+**9/9 PASS, 0 SKIP** — ruff format (290 plików), ruff check, mypy (107 plików),
+pytest 473/473, tsc, Vitest 757/757 (42 pliki), vite build, Playwright 65/65
+(26 `fe022-figma-parity` z niezmienionymi progami, 7 `fe022-touch-targets`),
+E2E root safety 4/4. Historyczne PNG przywrócone `git checkout`; wygenerowany
+`FE-001/screenshots/run-setup-1440.png` usunięty. FIX2 nie zmienia widocznej
+geometrii (tylko niewidoczne pseudo-elementy na coarse pointer i tekst dialogu
+OCR), więc `app-geometry.json` bez ponownego pomiaru.
+
+Uwaga środowiskowa: jednorazowe `npx eslint` (projekt nie ma ESLint) pobrało
+pakiet do domyślnego cache npm na C:; wpis `_npx/515228b7c8d004a2` usunięty.

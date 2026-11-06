@@ -36,7 +36,19 @@ describe("OCR engine disclosure", () => {
     expect(await within(dialog).findByText("HISTORICAL-VERSION")).toBeInTheDocument();
     expect(within(dialog).getByText("historical-hash")).toBeInTheDocument();
     expect(within(dialog).queryByText("ACTIVE-VERSION")).toBeNull();
+    expect(within(dialog).getByText("Reviewed run")).toBeInTheDocument();
     expect(dialog).toHaveTextContent("Local dependencies");
+  });
+
+  it("FE-022 FIX2: names the run that holds the workflow slot off the review route", async () => {
+    const user = userEvent.setup();
+    stubFetch(() => ({ status: 200, body: dashboardFixture({ run: runFixture({ id: "slot-owner" }) }) }));
+    renderApp(["/materials"]);
+    const dialog = await openOcrEngine(user);
+    expect(await within(dialog).findByText("Current workflow run")).toBeInTheDocument();
+    expect(within(dialog).getByText("slot-owner")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("holds the workflow slot");
+    expect(dialog).not.toHaveTextContent(/Active run|Reviewed run/);
   });
 
   it("presents persisted Polish warnings and dependency diagnostics in English from provenance/codes", async () => {

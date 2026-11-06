@@ -66,7 +66,7 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
             reviewedRunId !== undefined ? (
               reviewedRun.isError ? <FatalError title="Run provenance could not be loaded" description={describeApiError(reviewedRun.error).message} onRetry={() => void reviewedRun.refetch()} /> : <Loading label="Loading this run's OCR provenance…" />
             ) : <>
-            <p>No active run. Showing the local OCR engine status.</p>
+            <p>No run holds the workflow slot. Showing the local OCR engine status.</p>
             <DataList
               items={[
                 { label: "Engine", value: "Tesseract" },
@@ -75,9 +75,15 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
             />
             </>
           ) : (
+            <>
+            {/* FE-022 FIX2 N3: off the review route the provenance is that of
+                the run holding the workflow slot, not of any screen's run. */}
+            {reviewedRunId === undefined ? (
+              <p>Provenance of the run that holds the workflow slot. Open a run in Review to see its own.</p>
+            ) : null}
             <DataList
               items={[
-                { label: reviewedRunId === undefined ? "Active run" : "Reviewed run", value: run.id },
+                { label: reviewedRunId === undefined ? "Current workflow run" : "Reviewed run", value: run.id },
                 { label: "Engine id", value: run.ocr_engine },
                 { label: "Version", value: run.ocr_engine_version },
                 { label: "Runtime SHA-256", value: run.ocr_runtime_sha256 },
@@ -86,6 +92,7 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
                 { label: "Experimental", value: run.experimental ? "yes" : "no" },
               ]}
             />
+            </>
           )}
           {needsReview ? (
             <p className="df-ocr-engine__note">
