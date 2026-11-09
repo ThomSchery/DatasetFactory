@@ -6,37 +6,80 @@ const TARGETS = ".df-button, .df-nav-item, .df-field__control, .df-grouped-optio
 /** Interactive surfaces that keep every pixel of their own (FE-022 FIX2 N2). */
 const OBSTACLES = ".df-region-overlay__surface";
 const LAYERS = "dialog, .df-side-nav-drawer, .df-annotation-popover";
-interface Target { host: HTMLElement; layer: Element; box: DOMRect; hit: Rect; clip: Rect }
+interface Target { host: HTMLElement; layer: Element; box: DOMRect; hit: Rect; clip: Readonly<Rect> }
 interface Obstacle { layer: Element; rect: Rect }
 
-/** The client rectangle left visible by every ancestor that clips `element`.
- * Absolutely positioned hit areas count towards a scroll container's overflow,
- * so the part outside it would only add phantom scroll (FE-022 FIX2 N1).
- * An ancestor clips an absolute/fixed box only from its containing block up. */
-function clipRect(element: Element): Rect {
-  const clip = { ...UNBOUNDED };
-  let position = getComputedStyle(element).position;
-  for (let node = element.parentElement; node !== null && node !== document.body; node = node.parentElement) {
-    const style = getComputedStyle(node);
-    if (style.display === "contents") continue;
-    const containsFixed = style.transform !== "none" || style.filter !== "none" || /paint|layout|strict|content/.test(style.contain);
-    if (position === "fixed" && !containsFixed) continue;
-    if (position === "absolute" && style.position === "static" && !containsFixed) continue;
-    const paint = /paint|strict|content/.test(style.contain);
-    const box = node.getBoundingClientRect();
-    const left = box.left + node.clientLeft;
-    const top = box.top + node.clientTop;
-    if (paint || style.overflowX !== "visible") {
-      clip.left = Math.max(clip.left, left);
-      clip.right = Math.min(clip.right, left + node.clientWidth);
+type Positioning = "flow" | "absolute" | "fixed";
+
+const positioning = (position: string): Positioning =>
+  position === "fixed" ? "fixed" : position === "absolute" ? "absolute" : "flow";
+
+/** Computed styles and clip rectangles for one update (FE-023 P3-b).
+ *
+ * `clip(element)` is the client rectangle left visible by every ancestor that
+ * clips `element`. Absolutely positioned hit areas count towards a scroll
+ * container's overflow, so the part outside it would only add phantom scroll
+ * (FE-022 FIX2 N1). An ancestor clips an absolute/fixed box only from its
+ * containing block up.
+ *
+ * The clip an ancestor chain applies depends only on the ancestor and on how
+ * the box below it is positioned, so it is memoised per (ancestor,
+ * positioning): targets that share a list or a panel walk it once per update,
+ * not once each, and every element's style is read at most once. Nothing is
+ * kept between updates — scrolling and layout change the rectangles. */
+function createUpdateCache() {
+  const styles = new Map<Element, CSSStyleDeclaration>();
+  const clips = new Map<Element, Partial<Record<Positioning, Rect>>>();
+  const style = (element: Element): CSSStyleDeclaration => {
+    let computed = styles.get(element);
+    if (computed === undefined) {
+      computed = getComputedStyle(element);
+      styles.set(element, computed);
     }
-    if (paint || style.overflowY !== "visible") {
-      clip.top = Math.max(clip.top, top);
-      clip.bottom = Math.min(clip.bottom, top + node.clientHeight);
+    return computed;
+  };
+  /** The clip `node` and its ancestors apply to a box positioned as `below`. */
+  const from = (node: Element | null, below: Positioning): Rect => {
+    if (node === null || node === document.body) return UNBOUNDED;
+    const known = clips.get(node)?.[below];
+    if (known !== undefined) return known;
+    const own = style(node);
+    const containsFixed = own.transform !== "none" || own.filter !== "none" || /paint|layout|strict|content/.test(own.contain);
+    let result: Rect;
+    if (own.display === "contents"
+      || (below === "fixed" && !containsFixed)
+      || (below === "absolute" && own.position === "static" && !containsFixed)) {
+      result = from(node.parentElement, below);
+    } else {
+      const outer = from(node.parentElement, positioning(own.position));
+      const paint = /paint|strict|content/.test(own.contain);
+      const clipsX = paint || own.overflowX !== "visible";
+      const clipsY = paint || own.overflowY !== "visible";
+      if (!clipsX && !clipsY) {
+        result = outer;
+      } else {
+        const box = node.getBoundingClientRect();
+        const left = box.left + node.clientLeft;
+        const top = box.top + node.clientTop;
+        result = { ...outer };
+        if (clipsX) {
+          result.left = Math.max(result.left, left);
+          result.right = Math.min(result.right, left + node.clientWidth);
+        }
+        if (clipsY) {
+          result.top = Math.max(result.top, top);
+          result.bottom = Math.min(result.bottom, top + node.clientHeight);
+        }
+      }
     }
-    position = style.position;
-  }
-  return clip;
+    clips.set(node, { ...clips.get(node), [below]: result });
+    return result;
+  };
+  return {
+    style,
+    /** Read-only: the rectangle may be shared with other targets. */
+    clip: (element: Element): Readonly<Rect> => from(element.parentElement, positioning(style(element).position)),
+  };
 }
 
 /** Invisible coarse-pointer targets. Partition tight gaps rather than letting
@@ -66,7 +109,8 @@ export function useTouchTargets(): void {
         return;
       }
       for (const host of modified) if (!host.isConnected) modified.delete(host);
-      const minimum = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--control-height-lg"));
+      const cache = createUpdateCache();
+      const minimum = Number.parseFloat(cache.style(document.documentElement).getPropertyValue("--control-height-lg"));
       const targets: Target[] = [];
       const elements = new Set(document.querySelectorAll<HTMLElement>(TARGETS));
       for (const element of observed) if (!elements.has(element)) resize.unobserve(element);
@@ -81,14 +125,14 @@ export function useTouchTargets(): void {
         const dy = Math.max(0, (minimum - box.height) / 2);
         const layer = element.closest(LAYERS) ?? document.body;
         const hit = { left: box.left - dx, right: box.right + dx, top: box.top - dy, bottom: box.bottom + dy };
-        targets.push({ host, layer, box, hit, clip: clipRect(host) });
+        targets.push({ host, layer, box, hit, clip: cache.clip(host) });
       }
       observed = elements;
       // Only the visible part of a surface is interactive.
       const obstacles: Obstacle[] = [];
       for (const surface of document.querySelectorAll(OBSTACLES)) {
         const rect = surface.getBoundingClientRect();
-        const clip = clipRect(surface);
+        const clip = cache.clip(surface);
         const shown = {
           left: Math.max(rect.left, clip.left), top: Math.max(rect.top, clip.top),
           right: Math.min(rect.right, clip.right), bottom: Math.min(rect.bottom, clip.bottom),
@@ -132,7 +176,7 @@ export function useTouchTargets(): void {
       for (const { host, box, hit } of targets) {
         // Pseudo-elements are positioned from the padding box, so compensate
         // for the control's border to reach the measured outer boundary.
-        const style = getComputedStyle(host);
+        const style = cache.style(host);
         const bounds = host.getBoundingClientRect();
         const values = {
           top: hit.top - bounds.top - parseFloat(style.borderTopWidth || "0"),

@@ -1,4 +1,4 @@
-import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, getConfig, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -9,7 +9,11 @@ import { createRequestFrom, draftFromProfile, isDirty, saveRequestFrom } from ".
 
 /* The workspace's first render waits on several queries. Under the full parallel
  * suite that can pass Testing Library's 1 s default (FE-022 FIX1/FIX2 gate runs),
- * so waits in this file get 5 s. No assertion changes. */
+ * so waits in this file get 5 s. FE-023 P3-a: that equalled Vitest's 5 s test
+ * limit, so one slow wait used up the whole test ("sends a complete explicit
+ * OCR pair…" timed out in 2 of 3 review runs). The tests of this file get
+ * 15 s (`describe` below), three slow waits' worth. No assertion changes. */
+const TEST_TIMEOUT_MS = 15_000;
 beforeAll(() => configure({ asyncUtilTimeout: 5000 }));
 afterAll(() => configure({ asyncUtilTimeout: 1000 }));
 
@@ -208,7 +212,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("the profile workspace", () => {
+describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
+  it("gives each test room for several slow waits, not just one (FE-023 P3-a)", ({ task }) => {
+    // A test that spends one full `asyncUtilTimeout` on a slow first render
+    // must still have time for the rest of its steps under the parallel suite.
+    expect(task.timeout).toBeGreaterThanOrEqual(getConfig().asyncUtilTimeout * 3);
+  });
+
   it("preserves inherited OCR on edits and copies, and distinguishes an empty whitelist", () => {
     const profile = alpha();
     profile.regions[0].allowed_chars = null;

@@ -36,7 +36,7 @@ import {
  * strip, which Figma's frames do not contain. With the strip open the content
  * area starts at its right edge and fluid widths are compared with Figma
  * re-flowed to that narrower area (coordinator decision, option A). With the
- * strip collapsed (|←) the 768/992/1200 frames are compared literally.
+ * strip collapsed (☰, FE-023) the 768/992/1200 frames are compared literally.
  *
  * 360 and 576 run in phone emulation (`isMobile`, overlay scrollbar), because
  * a desktop browser reserves a 15 px gutter (`scrollbar-gutter: stable`) a
@@ -407,7 +407,10 @@ async function openScreen(
   await page.goto(SCREENS[screen].route);
   await page.locator(SCREENS[screen].ready).first().waitFor({ state: "visible" });
   if (options.collapseStrip === true) {
-    await page.getByRole("button", { name: "Collapse sections" }).click();
+    // FE-023: ☰ collapses the strip; the side bar has no |← control any more.
+    const toggle = page.getByRole("button", { name: "Sections", exact: true });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
   }
   // Fonts, images and the fill layout settle before measuring.
   await page.evaluate(() => document.fonts.ready);

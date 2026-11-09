@@ -17,7 +17,19 @@ html {
      scrollbar's width is a platform number, not a value from the 8-point scale
      (GRID-01). */
   scrollbar-gutter: stable;
-  background: var(--color-background-primary-default);
+  /* FE-023: the root background paints the whole canvas, including the gutter
+     strip that `body` and the shell never cover. A band in the bar's colour,
+     exactly as tall as the bar and repeated along x, carries the bar to the
+     right edge of the window; everywhere else `body` paints the page colour
+     over it. The band scrolls with the document, as the bar does. */
+  background-color: var(--color-background-primary-default);
+  background-image: linear-gradient(
+    var(--color-surface-neutral-default),
+    var(--color-surface-neutral-default)
+  );
+  background-position: 0 0;
+  background-repeat: repeat-x;
+  background-size: 100% var(--topbar-height);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-sans);
   font-size: 100%;

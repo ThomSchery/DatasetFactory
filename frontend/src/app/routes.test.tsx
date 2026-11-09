@@ -190,19 +190,31 @@ describe("navigation shell", () => {
     }
   });
 
-  it("collapses the strip with |← and brings it back with ☰", async () => {
+  it("collapses and restores the strip with ☰ alone, and keeps the choice across routes", async () => {
     const user = userEvent.setup();
     renderApp(["/materials"]);
+    // FE-023: the side bar has no |← control of its own any more.
+    expect(screen.queryByRole("button", { name: /Collapse sections|Close sections/ })).toBeNull();
     const toggle = screen.getByRole("button", { name: "Sections" });
+    const controlled = () => document.getElementById(toggle.getAttribute("aria-controls") ?? "");
     expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(controlled()).toBe(sections());
 
-    await user.click(screen.getByRole("button", { name: "Collapse sections" }));
+    await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("navigation", { name: "Sections" })).toBeNull();
+    // `aria-controls` still names an element that exists, now hidden.
+    expect(controlled()).not.toBeNull();
+    expect(controlled()).not.toBeVisible();
+
+    const steps = screen.getByRole("navigation", { name: "Workspace steps" });
+    await user.click(within(steps).getByRole("link", { name: "Profile" }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Setup for scan");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
 
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(sections()).toBeInTheDocument();
+    expect(controlled()).toBe(sections());
   });
 
   it("hides the sections below 768 px and opens them as a drawer from ☰", async () => {
@@ -216,10 +228,26 @@ describe("navigation shell", () => {
     await user.click(toggle);
     const drawer = screen.getByRole("dialog", { name: "Sections" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(within(drawer).getByRole("button", { name: "Close sections" })).toHaveFocus();
+    expect(document.getElementById(toggle.getAttribute("aria-controls") ?? "")).toContainElement(drawer);
+    expect(within(drawer).queryByRole("button")).toBeNull();
+    expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+    expect(toggle).toHaveFocus();
+  });
+
+  it("closes the drawer with the same ☰ that opened it", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    const toggle = screen.getByRole("button", { name: "Sections" });
+    await user.click(toggle);
+    expect(screen.getByRole("dialog", { name: "Sections" })).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(toggle).toHaveFocus();
   });
 
@@ -233,7 +261,7 @@ describe("navigation shell", () => {
     await user.tab({ shift: true });
     expect(within(drawer).getByRole("link", { name: "Annotations" })).toHaveFocus();
     await user.tab();
-    expect(within(drawer).getByRole("button", { name: "Close sections" })).toHaveFocus();
+    expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
 
     await user.click(within(drawer).getByRole("link", { name: "Setup for scan" }));
     await waitFor(() => {
@@ -325,9 +353,8 @@ describe("navigation shell", () => {
     expect(screen.getByRole("button", { name: "More" })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("button", { name: "Collapse sections" })).toHaveFocus();
+    expect(within(sections()).getByRole("link", { name: "Upload" })).toHaveFocus();
 
-    await user.tab();
     await user.tab();
     expect(within(sections()).getByRole("link", { name: "Setup for scan" })).toHaveFocus();
 

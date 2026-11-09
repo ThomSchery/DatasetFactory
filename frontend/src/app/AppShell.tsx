@@ -53,7 +53,9 @@ function useStripLayout(): boolean {
 
 /**
  * Application shell, as the Figma document of 2026-11-05 draws it (FE-022):
- * a 44 px bar holding only ☰ and ⋮, the side bar with the four sections, the
+ * a 44 px bar holding only ☰ and ⋮ (☰ is the side bar's only control, FE-023:
+ * the strip collapses and returns from it, the drawer opens and closes from it),
+ * the side bar with the four sections, the
  * Upload / Profile / Run switch on those three screens, and the routed region.
  *
  * Every route stays reachable: the sections are in the side bar, Exports and
@@ -127,11 +129,8 @@ export function AppShell() {
         label="Sections"
         mode={strip ? "strip" : "drawer"}
         onClose={() => {
-          if (strip) {
-            setStripOpen(false);
-          } else {
-            setDrawerOpen(false);
-          }
+          // Only the drawer closes itself; the strip answers to ☰ alone.
+          setDrawerOpen(false);
         }}
         open={navVisible}
         returnFocusRef={toggleRef}
