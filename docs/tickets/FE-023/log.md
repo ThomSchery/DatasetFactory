@@ -270,3 +270,80 @@ Vitest 765/765 (43 pliki), vite build, Playwright 75/75 (26 `fe022-figma-parity`
 z niezmienionymi progami, 7 `fe022-touch-targets`, 8 `fe023-shell`,
 2 `fe023-icon-geometry`), E2E root safety 4/4. Historyczne PNG przywrócone
 `git checkout`; wygenerowany `FE-001/screenshots/run-setup-1440.png` usunięty.
+
+## FIX2 — Design Plan (2026-11-09, przed zmianą `frontend/src/`)
+
+Źródło: sekcja „FIX1 re-review” w `fe-023-cold-review`, dwa P2:
+(1) dokumentowy `keydown` szuflady przejmował Tab i Escape natywnego okna
+„Unsaved changes” (zablokowana nawigacja z szuflady otwierała okno nad
+otwartą szufladą), a obsłużone Escape docierało do skrótów strony
+(`ProfileWorkspaceScreen` kończył tryb rysowania); (2) dialog bez
+`aria-modal` nie obejmował ☰.
+
+- [x] Layout/Siatka, Typografia, Kolory, Obramowania, Cienie: bez zmian
+  (GRID-*, SPACING-*, COLOR-*, BORDER-*, BWIDTH-*, RADIUS-* jak w planie FE-023).
+- [x] Nakładki (OVERLAY-03/06): scrim i `inert` bez zmian; warstwy
+  koordynowane jawnie (natywny `<dialog>` nad szufladą ma pierwszeństwo).
+- [x] Interakcje (COLOR-07, OPACITY-*): bez zmian wyglądu.
+- [x] Komponenty: `SideNav`, `AppShell`, `Dialog` (bez zmian w nim),
+  `NavItem` (bez zmian).
+
+## FIX2 — wykonanie (2026-11-09)
+
+1. **Koordynacja warstw** (`SideNav`):
+   - Wybór sekcji w szufladzie zamyka ją przed nawigacją (klik w link listy),
+     więc strażnik „Unsaved changes” otwiera się sam, nad stroną bez `inert`.
+     Po „Back to the draft” / Escape fokus wraca na ☰ (okno zapamiętuje ☰ jako
+     otwierającego, bo sprzątanie szuflady oddaje fokus przed `showModal`).
+   - Klawisze: nasłuch `window` w fazie capture tylko na czas otwarcia.
+     Szuflada bierze Tab / Escape wyłącznie, gdy cel zdarzenia leży w jej
+     zakresie (☰, panel albo `body` po tapnięciu w nieaktywną stronę) i nie ma
+     otwartego `<dialog>` poza panelem. Wtedy `preventDefault` +
+     `stopPropagation`: zdarzenie nie dociera do skrótów strony na `window`
+     (tryb rysowania, edytor klatek, `RegionOverlay`). Zamiast polegać na
+     `defaultPrevented`, warstwa wyżej po prostu jest pomijana.
+2. **Semantyczny zakres modalny** (`AppShell`): przy otwartej szufladzie
+   kontener powłoki `.df-shell` — najbliższy wspólny przodek ☰ i panelu —
+   dostaje `role="dialog"`, `aria-modal="true"`, `aria-label="Sections"`;
+   reszta jego zawartości (skip link, ⋮ More, `main`) jest `inert`, więc
+   w dialogu zostają tylko ☰ i panel. Panel traci własne `role="dialog"`
+   (zostaje `nav` „Sections”). Nic nie jest przenoszone w DOM, ☰ to ten sam
+   węzeł i nie traci fokusu. Zamknięta szuflada: kontener bez roli, ☰ zwykły
+   przycisk paska z `aria-expanded` / `aria-controls`. Odrzucone: wrapper
+   z `display: contents` wokół paska i panelu — ryzyko utraty roli
+   w drzewie dostępności części przeglądarek; przeniesienie ☰ do szuflady —
+   utrata fokusu przy przemontowaniu.
+
+Testy (czerwone przed poprawką, zielone po):
+
+- E2E `fe023-shell.spec.ts`:
+  - „a section blocked by unsaved changes leaves the confirmation alone
+    (FIX2)” — 360×900 telefon, `/profiles`, region zaznaczony, zmieniona nazwa,
+    ☰ → Upload: okno „Unsaved changes” samo (brak dialogu „Sections”, szuflada
+    ukryta, `aria-expanded=false`, URL `/profiles`); fokus na „Back to the
+    draft”, Tab → „Discard changes”, Shift+Tab z powrotem; jedno Escape zamyka
+    tylko okno, szkic zostaje, fokus na ☰; potem szuflada otwiera się
+    i zamyka normalnie. Przed: FAIL (dialog „Sections” wciąż otwarty).
+  - „the drawer's Escape does not reach the page underneath (FIX2)” — tryb
+    rysowania włączony, ☰, Escape zamyka szufladę, `Draw region` zostaje
+    `aria-pressed=true`; kolejne Escape (bez szuflady) kończy rysowanie jak
+    dotąd. Przed: FAIL.
+  - „below 768 px ☰ opens and closes the drawer” rozszerzony: dialog
+    „Sections” ma `aria-modal=true` i zawiera ☰ oraz panel z `aria-controls`;
+    po zamknięciu ☰ nie leży w żadnym dialogu. Przed: FAIL (`aria-modal`).
+- Vitest `routes.test.tsx`: „makes one labelled modal of ☰ and the drawer while
+  it is open (FIX2)” (rola, `aria-modal`, nazwa, ☰ i `nav` „Sections” jako
+  potomkowie, ten sam węzeł ☰, po zamknięciu brak dialogu i fokus na ☰) oraz
+  „hides the sections below 768 px…” (`aria-controls` wewnątrz modalu) —
+  przed: 2 FAIL. Zapytania o linki szuflady idą przez `nav` „Sections”, bo
+  modal obejmuje też (nieaktywną) stronę; tak samo jedna linia w specu
+  zgodności FE-022 (bez zmiany progów).
+
+### Bramka końcowa FIX2 (2026-11-09)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe023-gate-pytest`:
+**9/9 PASS, 0 SKIP** — ruff format, ruff check, mypy, pytest 473/473, tsc,
+Vitest 766/766 (43 pliki), vite build, Playwright 77/77 (26 `fe022-figma-parity`
+z niezmienionymi progami, 7 `fe022-touch-targets`, 10 `fe023-shell`,
+2 `fe023-icon-geometry`), E2E root safety 4/4. Historyczne PNG przywrócone
+`git checkout`; wygenerowany `FE-001/screenshots/run-setup-1440.png` usunięty.

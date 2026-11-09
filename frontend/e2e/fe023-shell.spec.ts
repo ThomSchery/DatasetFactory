@@ -157,15 +157,24 @@ test.describe("FE-023 ☰ is the side bar's only control", () => {
       const drawer = page.getByRole("dialog", { name: "Sections" });
       await expect(drawer).toBeVisible();
       await expect(toggle).toHaveAttribute("aria-expanded", "true");
-      expect(await page.locator(`[id="${String(controls)}"]`).evaluate((element, dialog) => element.contains(dialog), await drawer.elementHandle())).toBe(true);
-      await expect(drawer.getByRole("button")).toHaveCount(0);
-      await expect(drawer.getByRole("link", { name: "Upload" })).toBeFocused();
+      // FIX2: the modal element holds ☰ and the panel ☰ controls.
+      await expect(drawer).toHaveAttribute("aria-modal", "true");
+      expect(await drawer.evaluate((dialog, id) => {
+        const toggleElement = document.querySelector(".df-shell__toggle");
+        const panel = document.getElementById(String(id));
+        return dialog.contains(toggleElement) && panel !== null && dialog.contains(panel);
+      }, controls)).toBe(true);
+      const panel = page.locator(".df-side-nav--drawer");
+      await expect(panel.getByRole("button")).toHaveCount(0);
+      await expect(panel.getByRole("link", { name: "Upload" })).toBeFocused();
 
       // ☰ stays above the drawer's scrim and closes it like a toggle.
       await toggle.click();
       await expect(drawer).toBeHidden();
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
       await expect(toggle).toBeFocused();
+      // Closed, ☰ is an ordinary header button outside any dialog.
+      expect(await toggle.evaluate((element) => element.closest("[role=dialog], dialog"))).toBeNull();
     } finally {
       await context.close();
     }
@@ -179,7 +188,7 @@ test.describe("FE-023 ☰ is the side bar's only control", () => {
       await toggle.click();
       const drawer = page.getByRole("dialog", { name: "Sections" });
       await expect(drawer).toBeVisible();
-      const links = drawer.getByRole("link");
+      const links = page.locator(".df-side-nav--drawer").getByRole("link");
       await expect(links.first()).toBeFocused();
 
       // ⋮ More is visible above the scrim but inert: a tap does nothing and
@@ -224,6 +233,72 @@ test.describe("FE-023 ☰ is the side bar's only control", () => {
       await expect(drawer).toBeHidden();
       await expect(toggle).toBeFocused();
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a section blocked by unsaved changes leaves the confirmation alone (FIX2)", async ({ browser }) => {
+    const { context, page } = await openAt(browser, 360, 900, "/profiles", true);
+    try {
+      await page.getByRole("listbox", { name: "HUD regions on the reference screenshot" }).getByRole("option").first().click();
+      const name = page.getByLabel(/^Region name/);
+      await name.fill("Renamed region");
+      const toggle = page.getByRole("button", { name: "Sections", exact: true });
+      await toggle.click();
+      await page.locator(".df-side-nav--drawer").getByRole("link", { name: "Upload" }).click();
+
+      // The drawer closes before the navigation it asked for, so the guard opens alone.
+      const confirm = page.getByRole("dialog", { name: "Unsaved changes" });
+      await expect(confirm).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Sections" })).toHaveCount(0);
+      await expect(page.locator(".df-side-nav-drawer")).toBeHidden();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(page).toHaveURL(/\/profiles$/);
+
+      // The confirmation owns Tab and Escape.
+      const back = confirm.getByRole("button", { name: "Back to the draft" });
+      const discard = confirm.getByRole("button", { name: "Discard changes" });
+      await expect(back).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(discard).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(back).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(confirm).toBeHidden();
+      await expect(page).toHaveURL(/\/profiles$/);
+      await expect(name).toHaveValue("Renamed region");
+      await expect(toggle).toBeFocused();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+      // The drawer still opens and closes normally afterwards.
+      await toggle.click();
+      await expect(page.getByRole("dialog", { name: "Sections" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Sections" })).toHaveCount(0);
+      await expect(toggle).toBeFocused();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the drawer's Escape does not reach the page underneath (FIX2)", async ({ browser }) => {
+    const { context, page } = await openAt(browser, 360, 900, "/profiles", true);
+    try {
+      const draw = page.getByRole("button", { name: "Draw region", exact: true });
+      await draw.click();
+      await expect(draw).toHaveAttribute("aria-pressed", "true");
+      const toggle = page.getByRole("button", { name: "Sections", exact: true });
+      await toggle.click();
+      await expect(page.getByRole("dialog", { name: "Sections" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Sections" })).toHaveCount(0);
+      await expect(toggle).toBeFocused();
+      // Escape belonged to the drawer; draw mode is still on.
+      await expect(draw).toHaveAttribute("aria-pressed", "true");
+      // And with no drawer, Escape still ends drawing as before.
+      await page.keyboard.press("Escape");
+      await expect(draw).toHaveAttribute("aria-pressed", "false");
     } finally {
       await context.close();
     }

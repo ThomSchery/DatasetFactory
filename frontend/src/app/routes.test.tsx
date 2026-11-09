@@ -30,6 +30,12 @@ function sections() {
   return screen.getByRole("navigation", { name: "Sections" });
 }
 
+/** The drawer's own list inside the open "Sections" modal (FE-023 FIX2: the
+ * modal element also holds ☰ and the inert page, so links are looked up here). */
+function drawerNav(dialog: HTMLElement) {
+  return within(dialog).getByRole("navigation", { name: "Sections" });
+}
+
 beforeEach(() => {
   // The built screens query the API on mount; an empty install is the
   // quietest backdrop for assertions about routing rather than about data.
@@ -228,13 +234,36 @@ describe("navigation shell", () => {
     await user.click(toggle);
     const drawer = screen.getByRole("dialog", { name: "Sections" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(document.getElementById(toggle.getAttribute("aria-controls") ?? "")).toContainElement(drawer);
-    expect(within(drawer).queryByRole("button")).toBeNull();
-    expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
+    expect(drawer).toContainElement(document.getElementById(toggle.getAttribute("aria-controls") ?? ""));
+    expect(within(drawerNav(drawer)).queryByRole("button")).toBeNull();
+    expect(within(drawerNav(drawer)).getByRole("link", { name: "Upload" })).toHaveFocus();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
     expect(toggle).toHaveFocus();
+  });
+
+  it("makes one labelled modal of ☰ and the drawer while it is open (FIX2)", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    const toggle = screen.getByRole("button", { name: "Sections" });
+    expect(toggle.closest("[role=dialog]")).toBeNull();
+
+    await user.click(toggle);
+    const modal = screen.getByRole("dialog", { name: "Sections" });
+    expect(modal).toHaveAttribute("aria-modal", "true");
+    expect(modal).toContainElement(toggle);
+    expect(modal).toContainElement(drawerNav(modal));
+    expect(modal).toContainElement(document.getElementById(toggle.getAttribute("aria-controls") ?? ""));
+    // ☰ is the same node: nothing was moved into the modal.
+    expect(screen.getByRole("button", { name: "Sections" })).toBe(toggle);
+
+    await user.click(toggle);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(toggle.closest("[role=dialog]")).toBeNull();
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 
   it("closes the drawer with the same ☰ that opened it", async () => {
@@ -258,19 +287,19 @@ describe("navigation shell", () => {
     const toggle = screen.getByRole("button", { name: "Sections" });
     await user.click(toggle);
     const drawer = screen.getByRole("dialog", { name: "Sections" });
-    expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
+    expect(within(drawerNav(drawer)).getByRole("link", { name: "Upload" })).toHaveFocus();
 
     // FE-023 FIX1: the modal scope is ☰ plus the drawer's sections.
     await user.tab({ shift: true });
     expect(toggle).toHaveFocus();
     await user.tab({ shift: true });
-    expect(within(drawer).getByRole("link", { name: "Annotations" })).toHaveFocus();
+    expect(within(drawerNav(drawer)).getByRole("link", { name: "Annotations" })).toHaveFocus();
     await user.tab();
     expect(toggle).toHaveFocus();
     await user.tab();
-    expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
+    expect(within(drawerNav(drawer)).getByRole("link", { name: "Upload" })).toHaveFocus();
 
-    await user.click(within(drawer).getByRole("link", { name: "Setup for scan" }));
+    await user.click(within(drawerNav(drawer)).getByRole("link", { name: "Setup for scan" }));
     await waitFor(() => {
       expect(app.router.state.location.pathname).toBe("/profiles");
     });
@@ -314,7 +343,7 @@ describe("navigation shell", () => {
     await user.click(toggle);
     const drawer = screen.getByRole("dialog", { name: "Sections" });
     await user.tab();
-    expect(within(drawer).getByRole("link", { name: "Setup for scan" })).toHaveFocus();
+    expect(within(drawerNav(drawer)).getByRole("link", { name: "Setup for scan" })).toHaveFocus();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
     expect(toggle).toHaveFocus();

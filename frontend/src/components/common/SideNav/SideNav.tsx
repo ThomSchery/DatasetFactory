@@ -16,13 +16,21 @@ import "./SideNav.css";
  *
  * FE-023: ☰ is the only control; the side bar has no `|←` of its own. The
  * drawer opens below the top bar, so ☰ stays visible and clickable above the
- * scrim. FE-023 FIX1: the modal scope is ☰ plus the drawer. Focus moves to the
- * first section, Tab and Shift+Tab cycle ☰ ↔ the sections, Escape from anywhere
- * closes it (a layer that handles Escape first wins), a click on the scrim
- * closes it, and focus returns to ☰. The shell makes everything else `inert`
- * while the drawer is open. Because ☰ sits outside the dialog element, the
- * dialog does not claim `aria-modal`: that would hide ☰ from assistive
- * technology, while `inert` already removes exactly what lies outside the scope.
+ * scrim. The open drawer is modal, and its scope is ☰ plus the panel:
+ *
+ *  - the shell (FIX2) turns the element holding both into the labelled modal
+ *    (`role="dialog"`, `aria-modal`) and makes everything else in it `inert`;
+ *    nothing moves in the DOM, so ☰ keeps focus and identity;
+ *  - focus moves to the first section, Tab and Shift+Tab cycle ☰ ↔ the
+ *    sections, Escape closes it and focus returns to ☰ (FIX1);
+ *  - those keys are the drawer's only when they come from its scope and no
+ *    other modal layer is open (FIX2): a native `<dialog>` above it keeps its
+ *    own Tab and Escape. A key the drawer handles stops there, so the page's
+ *    window-level shortcuts (e.g. Escape ending draw mode) never see it;
+ *  - choosing a section closes the drawer before the navigation runs, so a
+ *    guard such as "Unsaved changes" opens alone (FIX2); a click on the scrim
+ *    closes it too.
+ *
  * Both forms render the same `NavItem` links, so the active section keeps
  * `aria-current` and every item has a name — the strip shows it as a tooltip.
  */
@@ -86,21 +94,38 @@ export function SideNav({ id, items, label, mode, open, onClose, returnFocusRef 
     };
   }, [drawerOpen, returnFocusRef]);
 
-  // Keyboard scope of the open drawer: ☰ and the sections (FE-023 FIX1).
+  // Keyboard scope of the open drawer: ☰ and the sections (FE-023 FIX1/FIX2).
+  // Window capture runs before any page handler; the drawer takes a key only
+  // when it owns the interaction, and then stops it there.
   useEffect(() => {
     if (!drawerOpen) {
       return;
     }
+    const owns = (target: EventTarget | null): boolean => {
+      const panel = panelRef.current;
+      const toggle = returnFocusRef.current;
+      if (panel === null) {
+        return false;
+      }
+      // Another modal layer (a native dialog shown above the drawer) owns its keys.
+      const layerAbove = Array.from(document.querySelectorAll("dialog[open]")).some(
+        (dialog) => !panel.contains(dialog),
+      );
+      if (layerAbove || !(target instanceof Node)) {
+        return false;
+      }
+      // Focus may also have dropped to the page after a tap on the inert page.
+      return panel.contains(target) || (toggle?.contains(target) ?? false)
+        || target === document.body || target === document.documentElement;
+    };
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented) {
+      if ((event.key !== "Escape" && event.key !== "Tab") || !owns(event.target)) {
         return;
       }
+      event.preventDefault();
+      event.stopPropagation();
       if (event.key === "Escape") {
-        event.preventDefault();
         closeRef.current();
-        return;
-      }
-      if (event.key !== "Tab") {
         return;
       }
       const toggle = returnFocusRef.current;
@@ -108,7 +133,6 @@ export function SideNav({ id, items, label, mode, open, onClose, returnFocusRef 
       const scope = (toggle === null ? sections : [toggle, ...sections]).filter(
         (element) => element.closest("[hidden], [inert]") === null,
       );
-      event.preventDefault();
       if (scope.length === 0) {
         return;
       }
@@ -119,14 +143,23 @@ export function SideNav({ id, items, label, mode, open, onClose, returnFocusRef 
         : (current + step + scope.length) % scope.length;
       scope[next]?.focus();
     };
-    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [drawerOpen, returnFocusRef]);
 
   const list = (
-    <ul className="df-side-nav__list">
+    <ul
+      className="df-side-nav__list"
+      onClick={(event) => {
+        // A chosen section closes the drawer before its navigation lands, so a
+        // navigation guard (unsaved changes) never opens under the drawer.
+        if (mode === "drawer" && event.target instanceof Element && event.target.closest("a") !== null) {
+          closeRef.current();
+        }
+      }}
+    >
       {items.map((item) => (
         <li key={item.path}>
           <NavItem
@@ -159,12 +192,7 @@ export function SideNav({ id, items, label, mode, open, onClose, returnFocusRef 
         data-testid="side-nav-scrim"
         onPointerDown={onClose}
       />
-      <div
-        aria-label={label}
-        className="df-side-nav df-side-nav--drawer"
-        ref={panelRef}
-        role="dialog"
-      >
+      <div className="df-side-nav df-side-nav--drawer" ref={panelRef}>
         <nav aria-label={label}>{list}</nav>
       </div>
     </div>

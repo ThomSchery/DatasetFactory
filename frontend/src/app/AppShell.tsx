@@ -73,14 +73,25 @@ export function AppShell() {
   const navId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const navVisible = strip ? stripOpen : drawerOpen;
-  /* FE-023 FIX1: the open drawer is modal over everything but ☰. The rest of
-     the bar, the skip link and the page are inert — not clickable, not
-     focusable, not exposed to assistive technology — until it closes. */
-  const outsideDrawer = !strip && drawerOpen ? true : undefined;
+  /* FE-023 FIX1/FIX2: the open drawer is modal, and its scope is ☰ plus the
+     panel. The shell is the element that holds both, so while the drawer is
+     open it is the labelled modal dialog, and the rest of it — the bar's other
+     controls, the skip link and the page — is inert: not clickable, not
+     focusable, not exposed to assistive technology. No element moves, so ☰
+     keeps focus across open and close. Closed, the shell is a plain container
+     and ☰ an ordinary header button. */
+  const drawerModal = !strip && drawerOpen;
+  const outsideDrawer = drawerModal ? true : undefined;
   const showSwitch = WORKSPACE_SWITCH_PATHS.includes(location.pathname);
 
   return (
-    <div className="df-shell" data-strip={strip && stripOpen ? "open" : "closed"}>
+    <div
+      aria-label={drawerModal ? "Sections" : undefined}
+      aria-modal={drawerModal ? true : undefined}
+      className="df-shell"
+      data-strip={strip && stripOpen ? "open" : "closed"}
+      role={drawerModal ? "dialog" : undefined}
+    >
       <a className="df-shell__skip" href={`#${MAIN_CONTENT_ID}`} inert={outsideDrawer}>
         Skip to content
       </a>

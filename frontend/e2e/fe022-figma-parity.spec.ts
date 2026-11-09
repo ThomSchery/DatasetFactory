@@ -596,7 +596,7 @@ test.describe("FE-022 every screen at every width", () => {
             await toggle.click();
             const drawer = page.getByRole("dialog", { name: "Sections" });
             await expect(drawer).toBeVisible();
-            await expect(drawer.getByRole("link", { name: "Annotations" })).toBeVisible();
+            await expect(drawer.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Annotations" })).toBeVisible();
             await page.keyboard.press("Escape");
             await expect(drawer).toBeHidden();
             await expect(toggle).toBeFocused();
