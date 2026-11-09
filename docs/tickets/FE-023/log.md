@@ -209,3 +209,64 @@ Widoczna geometria ekranów bez zmian (parity zielone z tymi samymi progami),
 więc `FE-022/app-geometry.json` bez ponownego pomiaru. Zmiana widoczna:
 pas w kolorze paska w rezerwie przewijania, brak `|←` w panelu, szuflada
 pod paskiem górnym, nowy glif koła zębatego.
+
+## FIX1 — Design Plan (2026-11-09, przed zmianą `frontend/src/`)
+
+Źródło: cold review `70cc019` (artefakt `fe-023-cold-review`), jedno P2:
+szuflada pod paskiem górnym odsłaniała ⋮ More poza modalnym zakresem —
+klik w More przy otwartej szufladzie przenosił fokus poza dialog, a Escape
+szuflady (lokalny dla panelu) już do niej nie docierał. Decyzja koordynatora:
+szuflada zostaje modalna, ☰ jedynym przełącznikiem, zakres modalny = ☰ + panel.
+
+- [x] Layout/Siatka, Typografia, Kolory, Obramowania, Cienie: bez zmian
+  (GRID-*, SPACING-*, COLOR-*, BORDER-*, BWIDTH-*, RADIUS-* jak w planie FE-023).
+- [x] Nakładki (OVERLAY-03/06): scrim bez zmian; elementy poza zakresem
+  dostają `inert` — nieklikalne, poza kolejnością Tab, poza drzewem
+  dostępności — zamiast samego przykrycia scrimem.
+- [x] Interakcje (COLOR-07, OPACITY-*): ☰ bez zmian wyglądu i stanów.
+- [x] Komponenty: `SideNav`, `AppShell`, `Button`, `AppMenu` (bez zmian w nim).
+
+## FIX1 — wykonanie (2026-11-09)
+
+- `AppShell`: przy otwartej szufladzie (< 768) `inert` na link „Skip to
+  content”, `nav` ⋮ More (cała reszta paska poza ☰) i `main`. ☰ i szuflada
+  nigdy nie są `inert`. ≥ 768 (pasek ikon) nic nie jest `inert`.
+- `SideNav`: obsługa klawiatury przeniesiona z panelu na `document` na czas
+  otwarcia: Tab / Shift+Tab cyklicznie ☰ ↔ pozycje sekcji (z dowolnego miejsca,
+  także gdy fokus wypadł na `body`), Escape z dowolnego miejsca zamyka szufladę
+  i oddaje fokus ☰. Zdarzenie już obsłużone przez wyższą warstwę
+  (`defaultPrevented` albo zatrzymane przez nią) nie zamyka szuflady, więc
+  Escape zamyka najpierw warstwę najwyższą.
+- Semantyka: `role="dialog"` zostaje z nazwą „Sections”; `aria-modal` usunięte.
+  ☰ leży poza elementem dialogu (w pasku), więc `aria-modal="true"` kazałoby
+  technologii asystującej ukryć właśnie ☰ — jedyny przełącznik zakresu.
+  Modalność zapewnia `inert` na wszystkim poza ☰ i panelem, co Chromium
+  potwierdza w drzewie dostępności (test niżej). ☰: `aria-expanded` i
+  `aria-controls` bez zmian.
+
+Testy (czerwone przed poprawką, zielone po):
+
+- Vitest `routes.test.tsx`: „traps focus in ☰ and the drawer and closes it
+  after a choice” (Shift+Tab z Upload → ☰ → Annotations, Tab → ☰ → Upload),
+  „keeps ⋮ More, the skip link and the page out of reach while the drawer is
+  open”, „closes the drawer with Escape from ☰ as well as from a section” —
+  przed: 3 FAIL. „leaves the header and page live with the strip from 768 px”
+  (strażnik ≥ 768, zielony przed i po).
+- E2E `fe023-shell.spec.ts` „below 768 px ☰ and the drawer are one modal scope
+  (FIX1)”, 360×900 telefon: More i `main` ignorowane w drzewie dostępności
+  Chromium (CDP `Accessibility.getPartialAXTree`; role query Playwrighta nie
+  uwzględnia `inert`), ☰ nie; klik myszą w współrzędne More nie otwiera menu
+  i nie przenosi na nie fokusu, szuflada zostaje; jedno Escape zamyka ją
+  i fokus na ☰ (scenariusz z review); Tab / Shift+Tab ☰ ↔ 4 sekcje;
+  Escape z sekcji i z ☰ zamyka i fokus na ☰. Przed poprawką FAIL
+  (`ignoredByAccessibility(More) false`). Test „from 768 px ☰ collapses and
+  restores the strip” rozszerzony: brak `[inert]`, More otwiera i zamyka się.
+
+### Bramka końcowa FIX1 (2026-11-09)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe023-gate-pytest`:
+**9/9 PASS, 0 SKIP** — ruff format, ruff check, mypy, pytest 473/473, tsc,
+Vitest 765/765 (43 pliki), vite build, Playwright 75/75 (26 `fe022-figma-parity`
+z niezmienionymi progami, 7 `fe022-touch-targets`, 8 `fe023-shell`,
+2 `fe023-icon-geometry`), E2E root safety 4/4. Historyczne PNG przywrócone
+`git checkout`; wygenerowany `FE-001/screenshots/run-setup-1440.png` usunięty.

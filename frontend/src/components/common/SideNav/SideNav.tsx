@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { useLocation } from "react-router";
 
 import { Icon, type IconName } from "../Icon";
@@ -16,9 +16,14 @@ import "./SideNav.css";
  *
  * FE-023: ☰ is the only control; the side bar has no `|←` of its own. The
  * drawer opens below the top bar, so ☰ stays visible and clickable above the
- * scrim. It is a modal layer otherwise: focus moves to the first section and is
- * trapped there, Escape and a click on the scrim close it, and focus returns to
- * ☰. Both forms render the same `NavItem` links, so the active section keeps
+ * scrim. FE-023 FIX1: the modal scope is ☰ plus the drawer. Focus moves to the
+ * first section, Tab and Shift+Tab cycle ☰ ↔ the sections, Escape from anywhere
+ * closes it (a layer that handles Escape first wins), a click on the scrim
+ * closes it, and focus returns to ☰. The shell makes everything else `inert`
+ * while the drawer is open. Because ☰ sits outside the dialog element, the
+ * dialog does not claim `aria-modal`: that would hide ☰ from assistive
+ * technology, while `inert` already removes exactly what lies outside the scope.
+ * Both forms render the same `NavItem` links, so the active section keeps
  * `aria-current` and every item has a name — the strip shows it as a tooltip.
  */
 
@@ -43,7 +48,8 @@ export interface SideNavProps {
   open: boolean;
   /** Drawer: close (Escape, scrim, a chosen section). The strip closes only from ☰. */
   onClose: () => void;
-  /** Where focus goes when the drawer closes — the ☰ that opened it. */
+  /** The ☰ that opens the drawer: part of its focus cycle, and where focus
+   * returns when it closes. */
   returnFocusRef: RefObject<HTMLElement | null>;
 }
 
@@ -80,32 +86,44 @@ export function SideNav({ id, items, label, mode, open, onClose, returnFocusRef 
     };
   }, [drawerOpen, returnFocusRef]);
 
-  function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      onClose();
+  // Keyboard scope of the open drawer: ☰ and the sections (FE-023 FIX1).
+  useEffect(() => {
+    if (!drawerOpen) {
       return;
     }
-    if (event.key !== "Tab") {
-      return;
-    }
-    const focusable = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE),
-    ).filter((element) => element.closest("[hidden]") === null);
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (first === undefined || last === undefined) {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const toggle = returnFocusRef.current;
+      const sections = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+      const scope = (toggle === null ? sections : [toggle, ...sections]).filter(
+        (element) => element.closest("[hidden], [inert]") === null,
+      );
       event.preventDefault();
-      return;
-    }
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
+      if (scope.length === 0) {
+        return;
+      }
+      const current = scope.indexOf(document.activeElement as HTMLElement);
+      const step = event.shiftKey ? -1 : 1;
+      const next = current === -1
+        ? (event.shiftKey ? scope.length - 1 : 0)
+        : (current + step + scope.length) % scope.length;
+      scope[next]?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [drawerOpen, returnFocusRef]);
 
   const list = (
     <ul className="df-side-nav__list">
@@ -143,9 +161,7 @@ export function SideNav({ id, items, label, mode, open, onClose, returnFocusRef 
       />
       <div
         aria-label={label}
-        aria-modal="true"
         className="df-side-nav df-side-nav--drawer"
-        onKeyDown={trapFocus}
         ref={panelRef}
         role="dialog"
       >

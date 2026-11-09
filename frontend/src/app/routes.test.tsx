@@ -251,15 +251,22 @@ describe("navigation shell", () => {
     expect(toggle).toHaveFocus();
   });
 
-  it("traps focus inside the drawer and closes it after a choice", async () => {
+  it("traps focus in ☰ and the drawer and closes it after a choice", async () => {
     setViewportWidth(360);
     const user = userEvent.setup();
     const app = renderApp(["/materials"]);
-    await user.click(screen.getByRole("button", { name: "Sections" }));
+    const toggle = screen.getByRole("button", { name: "Sections" });
+    await user.click(toggle);
     const drawer = screen.getByRole("dialog", { name: "Sections" });
+    expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
 
+    // FE-023 FIX1: the modal scope is ☰ plus the drawer's sections.
+    await user.tab({ shift: true });
+    expect(toggle).toHaveFocus();
     await user.tab({ shift: true });
     expect(within(drawer).getByRole("link", { name: "Annotations" })).toHaveFocus();
+    await user.tab();
+    expect(toggle).toHaveFocus();
     await user.tab();
     expect(within(drawer).getByRole("link", { name: "Upload" })).toHaveFocus();
 
@@ -268,6 +275,60 @@ describe("navigation shell", () => {
       expect(app.router.state.location.pathname).toBe("/profiles");
     });
     expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+  });
+
+  it("keeps ⋮ More, the skip link and the page out of reach while the drawer is open", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    const more = screen.getByRole("button", { name: "More" });
+    const main = document.getElementById("df-main");
+    const skip = screen.getByRole("link", { name: "Skip to content" });
+    expect(more.closest("[inert]")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    expect(screen.getByRole("dialog", { name: "Sections" })).toBeInTheDocument();
+    // FE-023 FIX1: everything outside ☰ and the drawer is inert.
+    for (const outside of [more, main, skip]) expect(outside?.closest("[inert]")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Sections" }).closest("[inert]")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Sections" }).closest("[inert]")).toBeNull();
+
+    await user.keyboard("{Escape}");
+    expect(document.querySelector("[inert]")).toBeNull();
+  });
+
+  it("closes the drawer with Escape from ☰ as well as from a section", async () => {
+    setViewportWidth(360);
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    const toggle = screen.getByRole("button", { name: "Sections" });
+
+    await user.click(toggle);
+    await user.tab({ shift: true });
+    expect(toggle).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+    const drawer = screen.getByRole("dialog", { name: "Sections" });
+    await user.tab();
+    expect(within(drawer).getByRole("link", { name: "Setup for scan" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
+    expect(toggle).toHaveFocus();
+  });
+
+  it("leaves the header and page live with the strip from 768 px", async () => {
+    const user = userEvent.setup();
+    renderApp(["/materials"]);
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    expect(document.querySelector("[inert]")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    expect(document.querySelector("[inert]")).toBeNull();
+    await openMenu(user);
+    expect(screen.getByRole("button", { name: "More" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("closes the drawer on a click outside it", async () => {

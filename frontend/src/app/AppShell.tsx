@@ -73,11 +73,15 @@ export function AppShell() {
   const navId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const navVisible = strip ? stripOpen : drawerOpen;
+  /* FE-023 FIX1: the open drawer is modal over everything but ☰. The rest of
+     the bar, the skip link and the page are inert — not clickable, not
+     focusable, not exposed to assistive technology — until it closes. */
+  const outsideDrawer = !strip && drawerOpen ? true : undefined;
   const showSwitch = WORKSPACE_SWITCH_PATHS.includes(location.pathname);
 
   return (
     <div className="df-shell" data-strip={strip && stripOpen ? "open" : "closed"}>
-      <a className="df-shell__skip" href={`#${MAIN_CONTENT_ID}`}>
+      <a className="df-shell__skip" href={`#${MAIN_CONTENT_ID}`} inert={outsideDrawer}>
         Skip to content
       </a>
 
@@ -100,7 +104,7 @@ export function AppShell() {
         >
           <Icon name="hamburger" />
         </Button>
-        <nav aria-label="More destinations" className="df-shell__more">
+        <nav aria-label="More destinations" className="df-shell__more" inert={outsideDrawer}>
           <AppMenu
             actions={(close) => (
               <li>
@@ -136,7 +140,7 @@ export function AppShell() {
         returnFocusRef={toggleRef}
       />
 
-      <main className="df-shell__main" id={MAIN_CONTENT_ID}>
+      <main className="df-shell__main" id={MAIN_CONTENT_ID} inert={outsideDrawer}>
         {handle.headingInScreen === true ? null : (
           <h1 className="df-visually-hidden">{handle.heading}</h1>
         )}

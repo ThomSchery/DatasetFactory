@@ -60,6 +60,21 @@ async function shell(page: Page) {
   });
 }
 
+/** Whether Chromium's accessibility tree ignores the first match (e.g. `inert`).
+ * Playwright's role queries do not apply `inert`, so this asks the browser. */
+async function ignoredByAccessibility(page: Page, selector: string): Promise<boolean> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+    const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector });
+    if (nodeId === 0) throw new Error(`no ${selector}`);
+    const { nodes } = await cdp.send("Accessibility.getPartialAXTree", { nodeId, fetchRelatives: false });
+    return nodes[0]?.ignored === true;
+  } finally {
+    await cdp.detach();
+  }
+}
+
 async function openAt(browser: Browser, width: number, height: number, route: string, phone = false) {
   const context = await browser.newContext({
     deviceScaleFactor: 1,
@@ -156,6 +171,64 @@ test.describe("FE-023 ☰ is the side bar's only control", () => {
     }
   });
 
+  test("below 768 px ☰ and the drawer are one modal scope (FIX1)", async ({ browser }) => {
+    const { context, page } = await openAt(browser, 360, 900, "/materials", true);
+    try {
+      const toggle = page.getByRole("button", { name: "Sections", exact: true });
+      const more = page.locator(".df-shell__more .df-button").first();
+      await toggle.click();
+      const drawer = page.getByRole("dialog", { name: "Sections" });
+      await expect(drawer).toBeVisible();
+      const links = drawer.getByRole("link");
+      await expect(links.first()).toBeFocused();
+
+      // ⋮ More is visible above the scrim but inert: a tap does nothing and
+      // assistive technology does not see it.
+      expect(await ignoredByAccessibility(page, ".df-shell__more .df-button")).toBe(true);
+      expect(await ignoredByAccessibility(page, "main")).toBe(true);
+      expect(await ignoredByAccessibility(page, ".df-shell__toggle")).toBe(false);
+      const box = await more.boundingBox();
+      if (box === null) throw new Error("More has no box");
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(more).toHaveAttribute("aria-expanded", "false");
+      await expect(more).not.toBeFocused();
+      await expect(drawer).toBeVisible();
+      // Wherever that tap left focus, one Escape closes the drawer onto ☰.
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
+      await expect(toggle).toBeFocused();
+      expect(await ignoredByAccessibility(page, ".df-shell__more .df-button")).toBe(false);
+
+      // Tab cycles ☰ ↔ the four sections, in both directions.
+      await toggle.click();
+      await expect(links.first()).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(toggle).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(links.last()).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(toggle).toBeFocused();
+      for (let index = 0; index < 4; index += 1) {
+        await page.keyboard.press("Tab");
+        await expect(links.nth(index)).toBeFocused();
+      }
+
+      // Escape from a section and from ☰ closes it and focuses ☰.
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
+      await expect(toggle).toBeFocused();
+      await toggle.click();
+      await page.keyboard.press("Shift+Tab");
+      await expect(toggle).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
+      await expect(toggle).toBeFocused();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      await context.close();
+    }
+  });
+
   test("from 768 px ☰ collapses and restores the strip, across routes", async ({ browser }) => {
     const { context, page } = await openAt(browser, 992, 900, "/materials");
     try {
@@ -179,6 +252,15 @@ test.describe("FE-023 ☰ is the side bar's only control", () => {
       await toggle.click();
       await expect(strip).toBeVisible();
       await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+      // The strip is not modal: nothing is inert and ⋮ More works as before.
+      expect(await page.locator("[inert]").count()).toBe(0);
+      const more = page.getByRole("button", { name: "More", exact: true });
+      await more.click();
+      await expect(more).toHaveAttribute("aria-expanded", "true");
+      await page.keyboard.press("Escape");
+      await expect(more).toHaveAttribute("aria-expanded", "false");
+      await expect(strip).toBeVisible();
     } finally {
       await context.close();
     }
