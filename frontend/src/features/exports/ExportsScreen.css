@@ -68,7 +68,9 @@
   align-items: start;
 }
 
-@media (max-width: 960px) {
+/* FE-024: below the `lg` breakpoint (breakpoints.ts); was 960, which no Figma
+   frame defines. */
+@media (max-width: 991.98px) {
   .df-exports__split-ratios {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

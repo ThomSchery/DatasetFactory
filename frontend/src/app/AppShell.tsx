@@ -7,6 +7,7 @@ import { Icon } from "../components/common/Icon";
 import { NavItem } from "../components/common/NavItem";
 import { SideNav } from "../components/common/SideNav";
 import { useTouchTargets } from "../components/common/TouchTargets/useTouchTargets";
+import { BREAKPOINTS } from "../styles/breakpoints";
 import { OcrEngineDialog } from "./OcrEngineDialog";
 import {
   MENU_DESTINATIONS,
@@ -17,8 +18,8 @@ import {
 import "./AppShell.css";
 
 const MAIN_CONTENT_ID = "df-main";
-/** Figma: below 768 px the side bar is hidden and ☰ opens it as a drawer. */
-const STRIP_MIN_WIDTH = 768;
+/** Figma: below the `md` breakpoint the side bar is hidden and ☰ opens it as a drawer. */
+const STRIP_MIN_WIDTH = BREAKPOINTS.md;
 
 interface RouteHandle {
   heading?: string;

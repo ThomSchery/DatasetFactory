@@ -131,7 +131,7 @@
 
 /* Phone: Figma leaves no row for tools under the 511 px picture, so they float
    in its lower corner instead of pushing the panels down. */
-@media (max-width: 575px) {
+@media (max-width: 575.98px) {
   .df-review-workspace__preview .df-region-canvas {
     position: relative;
     grid-template-rows: minmax(0, 1fr);

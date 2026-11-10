@@ -65,7 +65,9 @@
   justify-content: center;
 }
 
-@media (max-width: 720px) {
+/* FE-024: below the `md` breakpoint (breakpoints.ts); was 720, which no Figma
+   frame defines. */
+@media (max-width: 767.98px) {
   .df-run-list__heading {
     align-items: flex-start;
     flex-direction: column;

@@ -1,0 +1,57 @@
+/* Preset_3 | Colors: Dark; Dimensions: Mode 1; Borders: Mode 1; Typography: Mode 1; Variable collection: Mode 1 */
+/* Add after @import "tailwindcss". Values resolve the selected modes. */
+@theme static {
+  --spacing-2: 2px;
+  --spacing-4: 4px;
+  --spacing-6: 6px;
+  --spacing-site-padding-xs: 16px;
+  --spacing-site-padding-l: 32px;
+  --spacing-site-padding-m: 24px;
+  --radius-element-s: 4px;
+  --spacing-element-padding-l-r-l: 16px;
+  --spacing-element-padding-u-d-l: 8px;
+  --spacing-element-gap-l: 8px;
+  --spacing-element-padding-l-r-m: 8px;
+  --spacing-element-padding-u-d-m: 4px;
+  --spacing-element-gap-m: 6px;
+  --spacing-element-padding-l-r-s: 6px;
+  --color-surface-page: #23262c;
+  --color-surface-panel: #2b303a;
+  --color-surface-panel-hover: #383f4c;
+  --color-surface-panel-pressed: #23262c;
+  --color-surface-panel-selected: #4b5465;
+  --color-text-primary: #f6f7f8;
+  --color-text-secondary: #b9bfcb;
+  --color-text-placeholder: #959eb0;
+  --color-icon-primary: #f6f7f8;
+  --color-icon-secondary: #b9bfcb;
+  --color-icon-placeholder: #959eb0;
+  --color-icon-inverse: #23262c;
+  --color-border-default: #4b5465;
+  --color-border-strong: #626c80;
+  --color-border-focus: #f6f7f8;
+  --spacing-gap-16: 16px;
+  --spacing-gap-48: 48px;
+  --spacing-gap-32: 32px;
+  --spacing-size-16: 16px;
+  --spacing-size-40: 40px;
+  --spacing-0: 0px;
+  --spacing-8: 8px;
+  --spacing-16: 16px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --radius-0: 0px;
+  --radius-4: 4px;
+  --radius-8: 8px;
+  --radius-16: 16px;
+  --radius-32: 32px;
+  --radius-40: 40px;
+  --text-p-xxs: 8px;
+  --text-p-xs: 10px;
+  --text-p-sm: 12px;
+  --text-p-md: 16px;
+}
+
+:root {
+  --border-width-1: 1px;
+}

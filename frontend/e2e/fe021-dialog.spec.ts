@@ -150,7 +150,10 @@ test("FIX2: draw mode has a visible high-contrast pressed state", async ({ page 
   const parse = (color: string) => {
     const parts = color.match(/[\d.]+/g)?.map(Number);
     if (!parts || parts.length < 3) throw new Error(`Not an RGB color: ${color}`);
-    return [parts[0], parts[1], parts[2], parts[3] ?? 1];
+    // FE-024: the alpha layers are `color-mix()` over a preset colour, which
+    // Chromium serialises as `color(srgb r g b / a)` with 0–1 channels.
+    const scale = color.startsWith("color(srgb") ? 255 : 1;
+    return [parts[0] * scale, parts[1] * scale, parts[2] * scale, parts[3] ?? 1];
   };
   const composite = (foreground: number[], background: number[]) => {
     if (background[3] !== 1) throw new Error("Expected an opaque panel background");

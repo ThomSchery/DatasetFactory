@@ -69,7 +69,7 @@
 
 /* Up to 991 px the zoom value stays readable to a screen reader but gives its
    room to the tools, so the tool row stays one line beside the picture. */
-@media (max-width: 991px) {
+@media (max-width: 991.98px) {
   .df-profile-workspace .df-region-overlay__zoom-value {
     position: absolute;
     overflow: hidden;

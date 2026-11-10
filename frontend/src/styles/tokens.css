@@ -1,48 +1,128 @@
 /*
- * DatasetFactory design tokens.
+ * DatasetFactory design tokens — the mapping layer over the design preset.
  *
- * Source: the user's Figma document `DataSetFactory`, captured on 2026-11-03
- * into `designs/figma-2026-11-03/` (`token-values.json` holds the 102 variables
- * this file is derived from). That capture supersedes the earlier
- * `designs/baseline-impeccable` extraction as the visual source (FE-021).
+ * The design centre is `design-preset.css`, the export of the user's
+ * figma-tailwind-tokens plugin (Preset_3, Figma document `DataSetFactory`,
+ * values equal to the capture of 2026-11-05 in `designs/figma-2026-11-05/`).
+ * Its `@theme` block is converted to `:root` variables at build time
+ * (`designPreset.ts`, FE-024). Overwriting that file with a new export changes
+ * the look of the whole application without touching this one.
  *
- * This is the single runtime source of UI values; do not duplicate it per
- * feature. Colours are written as `hsl()` because the contrast test parses
- * them; the Figma hex each one comes from is in the comment beside it.
+ * This file has two sections, and `src/test/architecture.test.ts` polices
+ * both:
+ *
+ *  1. Mappings. Every application token that has a counterpart in the preset
+ *     refers to it with `var(--…)` (or `color-mix(…)` over one preset colour
+ *     for alpha layers, COLOR-07). No value is written here.
+ *  2. "Not in the preset yet". Values the plugin does not export, each with
+ *     the source it comes from. When the preset grows a variable for one of
+ *     them, move the token up into section 1.
+ *
+ * The `*-impeccable` names are kept because `new-component.md` is immutable
+ * and names them; they map onto the document's own accent, `border/focus`.
+ * How to swap the preset, and the full table: `README.md` beside this file.
  */
 
 :root {
-  /* GRID-01/02, SPACING-01..13 — 8-point grid.
-     Figma's 4, 6 and 12 px steps are rounded onto this grid, except for the
-     half-step below, which compact rows in the design genuinely need. */
-  --size-none: 0;
-  --size-xxs: 4px;
-  --size-xs: 8px;
-  --size-sm: 16px;
-  --size-md: 24px;
-  --size-lg: 32px;
-  --size-xl: 48px;
+  /* ================================================================
+   * 1. Mappings onto the preset (value lives in design-preset.css)
+   * ================================================================ */
+
+  /* GRID-01/02, SPACING-01..13 — the spacing scale is Figma `spacing/N`;
+     48 is the document's `gap/48`. */
+  --size-none: var(--spacing-0);
+  --size-xxs: var(--spacing-4);
+  --size-xs: var(--spacing-8);
+  --size-sm: var(--spacing-16);
+  --size-md: var(--spacing-24);
+  --size-lg: var(--spacing-32);
+  --size-xl: var(--spacing-gap-48);
+  /* FE-022 decision D07 (2026-11-05): Figma's element paddings and gaps
+     (`element/padding/L-R/*`, `element/padding/U-D/*`, `element/gap/*`) and
+     the page margin `site/padding/XS` at every width. */
+  --site-padding: var(--spacing-site-padding-xs);
+  --element-padding-x-lg: var(--spacing-element-padding-l-r-l);
+  --element-padding-x-md: var(--spacing-element-padding-l-r-m);
+  --element-padding-x-sm: var(--spacing-element-padding-l-r-s);
+  --element-padding-y-lg: var(--spacing-element-padding-u-d-l);
+  --element-padding-y-md: var(--spacing-element-padding-u-d-m);
+  --element-gap-lg: var(--spacing-element-gap-l);
+  --element-gap-md: var(--spacing-element-gap-m);
+
+  /* FONTSIZE-02..10 — `text/p/md` is the body size. The smallest text is
+     `text/p/sm` (12 px): the document labels compact controls with `text/p/xs`
+     (10) and `text/p/xxs` (8), raised here because a label nobody can read is
+     not a label (deviation recorded in docs/tickets/FE-021/log.md). */
+  --font-size-xs: var(--text-p-sm);
+  --font-size-md: var(--text-p-md);
+
+  /* RADIUS-02/03 — Figma radius/0, radius/4, radius/8 and radius/16. */
+  --radius-none: var(--radius-0);
+  --radius-sm: var(--radius-4);
+  --radius-md: var(--radius-8);
+  --radius-lg: var(--radius-16);
+
+  /* BWIDTH-06, BORDER-05/06 — the preset's one border width. */
+  --border-width-default: var(--border-width-1);
+
+  /* COLOR-01..10 — the Figma semantic palette. The document is monochrome
+     slate: there is no brand hue, and the accent that marks focus, selection
+     and a drawn region is the document's own `border/focus` = `text/primary`.
+     COLOR-02: `surface/page` is the 60 %, `surface/panel` the 30 %,
+     `border/focus` the 10 %. */
+  --color-background-primary-default: var(--color-surface-page);
+  --color-surface-neutral-default: var(--color-surface-panel);
+  --color-surface-neutral-raised: var(--color-surface-panel-hover);
+  --color-surface-neutral-selected: var(--color-surface-panel-selected);
+  /* COLOR-07, OPACITY-02 — the hover layer is `text/primary` at 6 %. */
+  --color-surface-neutral-hover: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  /* Figma `border/subtle` (#383F4C) is not exported by the plugin; it has the
+     same value as `surface/panel-hover`, which stands in for it. */
+  --color-stroke-weak-default: var(--color-surface-panel-hover);
+  /* FE-022: the outline every Figma panel, list and tile carries. */
+  --color-stroke-panel-default: var(--color-border-default);
+  /*
+   * BORDER-03/COLOR-08 — the outline of an interactive control, which has to
+   * clear 3:1 against every surface a control can sit on. Figma's
+   * `border/strong` (#626C80) measures 2.87:1 on the page and 2.0:1 on a
+   * raised panel, so the next value up in the same family is used instead:
+   * `icon/placeholder` #959EB0, at 5.63:1 / 4.91:1 / 3.93:1. The deviation is
+   * deliberate and recorded in the FE-021 log.
+   *
+   * Kept distinct from `--color-stroke-strong-default` because the two are a
+   * hierarchy, not a duplicate: `muted` sits above `secondary`.
+   */
+  --color-stroke-control-default: var(--color-icon-placeholder);
+  --color-stroke-strong-default: var(--color-text-secondary);
+  --color-text-strong-default: var(--color-text-primary);
+  --color-text-weak-default: var(--color-text-secondary);
+  --color-text-placeholder-default: var(--color-text-placeholder);
+  /* Figma `text/inverse` = `icon/inverse` (#23262C); the plugin exports the icon one. */
+  --color-text-on-brand: var(--color-icon-inverse);
+  --color-fill-brand-default: var(--color-surface-panel-selected);
+  --color-fill-brand-impeccable: var(--color-border-focus);
+  /* COLOR-07 — interaction states as alpha over the accent: 80 % hover and
+     active (`--opacity-hover`), 12 % for the soft fill. */
+  --color-fill-brand-impeccable-hover: color-mix(in srgb, var(--color-border-focus) 80%, transparent);
+  --color-fill-brand-impeccable-active: color-mix(in srgb, var(--color-border-focus) 80%, transparent);
+  --color-fill-brand-impeccable-soft: color-mix(in srgb, var(--color-border-focus) 12%, transparent);
+
+  /* ================================================================
+   * 2. Not in the preset yet (the plugin exports no variable for these)
+   * ================================================================ */
+
+  /* GRID-01 — the 8-point scale above the preset's 48 (FE-SETUP). */
   --size-xxl: 64px;
   --size-3xl: 80px;
+  /* GRID-04/05 — control heights 32 / 40 / 48 (FE-SETUP; the preset's
+     `size/16` and `size/40` are icon-frame sizes, not control heights). */
   --control-height-sm: 32px;
   --control-height-md: 40px;
   --control-height-lg: 48px;
   --measure-copy: 65ch;
-  /* FE-022 — Figma 05.11 element tokens. `element/padding/L-R/L|M|S` = 16/8/6,
-     `element/padding/U-D/L|M` = 8/4, `element/gap/L|M` = 8/6, and the page
-     margin `site/padding/XS` = 16 at every width. Decision D07 (2026-11-05)
-     takes these over the 8-point rounding FE-021 applied (GRID-01 deviation,
-     recorded in docs/tickets/FE-022/log.md). */
-  --site-padding: 16px;
-  --element-padding-x-lg: 16px;
-  --element-padding-x-md: 8px;
-  --element-padding-x-sm: 6px;
-  --element-padding-y-lg: 8px;
-  --element-padding-y-md: 4px;
-  --element-gap-lg: 8px;
-  --element-gap-md: 6px;
-  /* Figma geometry: 44 px top bar, 24 px icons, 34–42 px fields, the 56 px
-     icon strip (FE-022), and the fixed left columns of the three workspaces. */
+  /* Figma 05.11 geometry read from `designs/figma-2026-11-05/geometry.json`
+     (FE-022): 44 px top bar, 24 px icons, 34–42 px fields, the 56 px icon
+     strip, and the fixed left columns of the three workspaces. */
   --topbar-height: 44px;
   --icon-size: 24px;
   --sidenav-width: 56px;
@@ -67,9 +147,16 @@
   /* GRID-10 — the profile and run workspaces put controls in a column beside
      the image. 320px = 40 x 8, wide enough for a label plus a control. */
   --workspace-panel-width: 320px;
+  /* GRID-10 — the narrowest column of a `DataList` in its `columns` layout
+     (FE-SETUP; tokenised in FE-024). */
+  --data-list-column-min: 160px;
+  /* Width thresholds (576 / 768 / 992 / 1200; `max-width` queries use the
+     value − 0.02) live in `breakpoints.ts`, because `@media` cannot read a
+     custom property. Figma's frames: 360 / 576 / 768 / 992 / 1200. */
 
   /* TYPO-02..11 — Inter everywhere, as the Figma document does, bundled
-     locally (see `fonts.css`) with explicit offline system fallbacks. */
+     locally (see `fonts.css`) with explicit offline system fallbacks. The
+     preset carries no font family or weight. */
   --font-family-sans: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-family-ui: var(--font-family-sans);
   --font-family-mono: "JetBrains Mono", "Cascadia Mono", "Segoe UI Mono", ui-monospace, monospace;
@@ -78,17 +165,14 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* FONTSIZE-02..10. The Figma document labels compact controls at 8 and
-     10 px; those are raised to the 12 px step here, because a label nobody can
-     read is not a label. Everything above follows the document's scale. */
-  --font-size-xs: 0.75rem;
+  /* FONTSIZE-02..10 — the steps of the Figma 03.11 scale the preset does not
+     export (`text/p/*` stops at 16). */
   --font-size-sm: 0.875rem;
-  --font-size-md: 1rem;
   --font-size-lg: 1.25rem;
   --font-size-xl: 1.5rem;
   --font-size-2xl: 2rem;
 
-  /* LHEIGHT-09/10/11 and LSPACE-02/03/09. */
+  /* LHEIGHT-09/10/11 and LSPACE-02/03/09 (FE-SETUP). */
   --line-height-tight: 1.2;
   --line-height-standard: 1.5;
   --line-height-loose: 1.8;
@@ -96,68 +180,35 @@
   --letter-spacing-tight: -0.02em;
   --letter-spacing-wide: 0.05em;
 
-  /* RADIUS-02/03 — Figma radius/4, radius/8 and radius/16. */
-  --radius-none: 0;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
+  /* RADIUS-02 — the pill (FE-SETUP). */
   --radius-pill: 9999px;
 
-  /* BWIDTH-06/10/11, BORDER-05/06 — functional borders drawn inward. */
-  --border-width-default: 1px;
+  /* BWIDTH-10/11, BORDER-05/06 — the 2 px accent and the focus ring
+     (FE-SETUP); the preset has `border-width-1` only. */
   --border-width-emphasis: 2px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
 
-  /* SHADOW-03 — two layers, tuned to the Figma page colour. */
+  /* SHADOW-03 — two layers, tuned to the Figma page colour (FE-021). */
   --shadow-elevation-low: 0 1px 2px -1px hsl(220 11% 6% / 0.48),
     0 8px 24px -16px hsl(220 11% 6% / 0.72);
   --shadow-elevation-high: 0 4px 8px -4px hsl(220 11% 6% / 0.56),
     0 24px 48px -24px hsl(220 11% 6% / 0.8);
 
-  /* COLOR-01..10 — the Figma semantic palette. The document is monochrome
-     slate: there is no brand hue, and the accent that marks focus, selection
-     and a drawn region is the document's own `border/focus` = `text/primary`.
-     The `*-impeccable` names are kept because `new-component.md` is immutable
-     and names them; only their values moved to Figma. */
-  --color-background-primary-default: hsl(220 11% 15%); /* surface/page #23262C */
-  --color-surface-neutral-default: hsl(220 15% 20%); /* surface/panel #2B303A */
-  --color-surface-neutral-raised: hsl(219 15% 26%); /* surface/panel-hover #383F4C */
-  --color-surface-neutral-selected: hsl(219 15% 35%); /* surface/panel-selected #4B5465 */
-  --color-surface-neutral-hover: hsl(216 18% 92% / 0.06);
-  --color-surface-transparent: hsl(220 11% 15% / 0);
-  --color-stroke-weak-default: hsl(219 15% 26%); /* border/subtle #383F4C */
-  /* FE-022: the outline every Figma panel, list and tile carries. */
-  --color-stroke-panel-default: hsl(219 15% 35%); /* border/default #4B5465 */
-  /*
-   * BORDER-03/COLOR-08 — the outline of an interactive control, which has to
-   * clear 3:1 against every surface a control can sit on. Figma's
-   * `border/strong` (#626C80) measures 2.87:1 on the page and 2.0:1 on a
-   * raised panel, so the next value up in the same family is used instead:
-   * `icon/placeholder` #959EB0, at 5.63:1 / 4.91:1 / 3.93:1. The deviation is
-   * deliberate and recorded in the FE-021 log.
-   *
-   * Kept distinct from `--color-stroke-strong-default` because the two are a
-   * hierarchy, not a duplicate: `muted` sits above `secondary`.
-   */
-  --color-stroke-control-default: hsl(220 15% 64%); /* icon/placeholder #959EB0 */
-  --color-stroke-strong-default: hsl(220 15% 76%); /* text/secondary #B9BFCB */
-  --color-text-strong-default: hsl(210 12% 97%); /* text/primary #F6F7F8 */
-  --color-text-weak-default: hsl(220 15% 76%); /* text/secondary #B9BFCB */
-  --color-text-placeholder-default: hsl(220 15% 64%); /* text/placeholder #959EB0 */
-  --color-text-on-brand: hsl(220 11% 15%); /* text/inverse #23262C */
-  --color-fill-brand-default: hsl(220 15% 35%);
-  --color-fill-brand-impeccable: hsl(210 12% 97%); /* border/focus #F6F7F8 */
-  --color-fill-brand-impeccable-hover: hsl(210 12% 97% / 0.8);
-  --color-fill-brand-impeccable-active: hsl(210 12% 97% / 0.8);
-  --color-fill-brand-impeccable-soft: hsl(210 12% 97% / 0.12);
+  /* A fully transparent surface for borders and fills that keep their box but
+     show nothing (FE-SETUP). */
+  --color-surface-transparent: transparent;
+  /* COLOR-09 — status colours. Error is Figma 03.11 `text/error` #F3877D on
+     `surface/error` #3E1916 (`designs/figma-2026-11-03/token-values.json`);
+     success and warning come from FE-SETUP, the document has none. */
   --color-status-success-default: hsl(146 53% 63%);
   --color-status-warning-default: hsl(40 85% 60%);
-  --color-status-error-default: hsl(5 83% 72%); /* text/error #F3877D */
-  --color-status-error-soft: hsl(4 48% 16%); /* surface/error #3E1916 */
+  --color-status-error-default: #f3877d;
+  --color-status-error-soft: #3e1916;
+  /* OVERLAY-03 — the drawer and dialog scrim (FE-021). */
   --color-overlay-scrim: hsl(220 11% 10% / 0.72);
 
-  /* COLOR-07 and OPACITY-02 — interaction multipliers. */
+  /* COLOR-07 and OPACITY-02 — interaction multipliers (FE-SETUP). */
   --opacity-hover: 0.8;
   --opacity-disabled: 0.2;
   --spinner-duration: 800ms;
