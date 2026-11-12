@@ -106,6 +106,14 @@
   --color-fill-brand-impeccable-hover: color-mix(in srgb, var(--color-border-focus) 80%, transparent);
   --color-fill-brand-impeccable-active: color-mix(in srgb, var(--color-border-focus) 80%, transparent);
   --color-fill-brand-impeccable-soft: color-mix(in srgb, var(--color-border-focus) 12%, transparent);
+  /* FE-025 — the state surfaces and icon roles of the preset, by name: a
+     pressed control is `surface/panel-pressed`; a glyph is `icon/secondary` at
+     rest, `icon/primary` when hovered, active or selected, and the Figma
+     export's #959EB0 paints are `icon/placeholder`. */
+  --color-surface-neutral-pressed: var(--color-surface-panel-pressed);
+  --color-icon-strong-default: var(--color-icon-primary);
+  --color-icon-weak-default: var(--color-icon-secondary);
+  --color-icon-muted-default: var(--color-icon-placeholder);
 
   /* ================================================================
    * 2. Not in the preset yet (the plugin exports no variable for these)

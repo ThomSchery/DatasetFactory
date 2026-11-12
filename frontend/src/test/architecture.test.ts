@@ -163,6 +163,11 @@ describe("tokens.css is a mapping layer over the design preset", () => {
     "--color-fill-brand-impeccable-hover": "--color-border-focus",
     "--color-fill-brand-impeccable-active": "--color-border-focus",
     "--color-fill-brand-impeccable-soft": "--color-border-focus",
+    // FE-025: icon roles and the pressed surface, by the preset's own names.
+    "--color-icon-strong-default": "--color-icon-primary",
+    "--color-icon-weak-default": "--color-icon-secondary",
+    "--color-icon-muted-default": "--color-icon-placeholder",
+    "--color-surface-neutral-pressed": "--color-surface-panel-pressed",
   };
 
   it("has the two sections in order", () => {

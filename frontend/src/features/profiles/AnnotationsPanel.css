@@ -33,8 +33,29 @@
   min-height: var(--list-row-height);
 }
 
-.df-annotations__row[data-selected] {
+/* FE-025: hover `surface/panel-hover`, pressed `surface/panel-pressed`,
+   the selected region `surface/panel-selected` with `text/primary`. */
+.df-annotations__row:hover {
   background: var(--color-surface-neutral-raised);
+}
+
+.df-annotations__row[data-selected] {
+  background: var(--color-surface-neutral-selected);
+}
+
+.df-annotations__row .df-button--muted,
+.df-annotations__row .df-button--muted:hover:not(:disabled),
+.df-annotations__row .df-button--muted[aria-pressed="true"] {
+  border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+}
+
+.df-annotations__row .df-button--muted:active:not(:disabled) {
+  background: var(--color-surface-neutral-pressed);
+}
+
+.df-annotations__row[data-selected] .df-annotations__row-select.df-button {
+  color: var(--color-text-strong-default);
 }
 
 .df-annotations__row-select.df-button {

@@ -16,9 +16,9 @@ export interface ReferenceImageProps {
  *
  * `RegionOverlay` owns every image that carries geometry; this is for the
  * screens that only need to show which picture is in play — the run setup, and
- * a profile being previewed rather than edited. Since FE-022 it fills the box
- * its consumer sizes and is cropped to it, like Figma's `IMAGE FILL`: the
- * preview shows which picture is in play, not every pixel of it.
+ * a profile being previewed rather than edited. It sits in the box its
+ * consumer sizes (FE-022) and, since FE-025, shows the whole frame inside it
+ * (contain, centred) instead of cropping.
  */
 export function ReferenceImage({ url, alt, caption }: ReferenceImageProps) {
   const [failed, setFailed] = useState(false);

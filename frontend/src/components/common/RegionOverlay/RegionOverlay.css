@@ -27,7 +27,8 @@
   line-height: var(--line-height-tight);
 }
 
-/* `IMAGE FILL`: the consumer sizes the canvas; the picture is cropped to it. */
+/* The consumer sizes the canvas; the whole picture fits inside it, centred
+   (FE-025, replacing the FE-022 `IMAGE FILL` crop). */
 .df-region-canvas--fill {
   height: 100%;
 }
@@ -50,7 +51,7 @@
   width: 100%;
   height: 100%;
   max-width: none;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: var(--radius-none);
 }
 
@@ -124,10 +125,10 @@
 .df-region-overlay__shape-fill {
   fill: var(--color-surface-transparent);
   stroke: var(--color-fill-brand-impeccable);
-  /* BWIDTH: the outline is 2 CSS px at every window size and every viewBox
-     scale. Without `non-scaling-stroke` a 1920 px source would render it at a
-     fraction of a pixel and the region would read as a hairline. */
-  stroke-width: var(--border-width-emphasis);
+  /* FE-025: the preset's one border width, 1 screen px at every window size,
+     every viewBox scale and every zoom (`non-scaling-stroke`). Selection and
+     focus differ by handles, fill and line shape, never by thickness. */
+  stroke-width: var(--border-width-default);
   vector-effect: non-scaling-stroke;
   /* RADIUS-01: a region is an exact pixel rectangle handed to the cropper.
      A rounded corner would depict a crop shape that does not exist. */
@@ -157,7 +158,6 @@
    the error in text. */
 .df-region-overlay__shape--error .df-region-overlay__shape-fill {
   stroke: var(--color-status-error-default);
-  stroke-width: calc(var(--border-width-emphasis) + var(--border-width-default));
   stroke-dasharray: 6 4;
 }
 
@@ -221,9 +221,11 @@
   outline: none;
 }
 
+/* FE-025: focus is `border/focus` drawn as a short dash — the same 1 px, a
+   different line, so it never reads as the selected (handled) shape. */
 .df-region-overlay__shape:focus-visible .df-region-overlay__shape-fill {
-  stroke: var(--color-text-strong-default);
-  stroke-width: calc(var(--border-width-emphasis) + var(--focus-ring-width));
+  stroke: var(--color-fill-brand-impeccable);
+  stroke-dasharray: 2 2;
 }
 
 /* COLOR-09: the draft differs from a saved region by line *shape*, not only by
@@ -231,7 +233,7 @@
 .df-region-overlay__draft {
   fill: var(--color-fill-brand-impeccable-soft);
   stroke: var(--color-stroke-strong-default);
-  stroke-width: var(--border-width-emphasis);
+  stroke-width: var(--border-width-default);
   stroke-dasharray: 6 4;
   vector-effect: non-scaling-stroke;
   pointer-events: none;

@@ -132,3 +132,13 @@
 .df-profile-workspace__tool.df-button[aria-pressed="true"]:hover {
   background: var(--color-fill-brand-impeccable-hover);
 }
+
+.df-profile-workspace__tool.df-button[aria-pressed="true"] .df-icon {
+  color: var(--color-text-on-brand);
+}
+
+/* FE-025: Figma `game-x` — Save profile rests on `surface/page` with the
+   `save-line` glyph; once the draft differs it is the `emphasis` button. */
+.df-profile-workspace__save-profile.df-button--secondary {
+  background: var(--color-background-primary-default);
+}

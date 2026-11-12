@@ -153,7 +153,8 @@ test("FE-022 touch: profile checkbox rows and tool buttons", async ({ page }) =>
   await page.getByRole("listbox", { name: "HUD regions on the reference screenshot" }).getByRole("option").first().click();
   const numbers = page.getByRole("checkbox", { name: "Numbers", exact: true });
   await expect(numbers).toBeVisible();
-  await expectSharedGap(page.getByRole("button", { name: "Expand group Numbers" }), numbers, "x");
+  // FE-025: Figma order — checkbox on the left, chevron on the right.
+  await expectSharedGap(numbers, page.getByRole("button", { name: "Expand group Numbers" }), "x");
   await page.getByRole("button", { name: "Expand group Numbers" }).click();
   await expectSharedGap(numbers, page.getByRole("checkbox", { name: "7", exact: true }), "y");
   await expectSharedGap(page.getByRole("button", { name: "Zoom out", exact: true }),

@@ -1,16 +1,24 @@
 /*
- * Figma `class-list`: one panel (radius 4) of 40 px group rows on
- * `surface/page`, 8 px apart (FE-022).
+ * Figma `class-list`: one panel (radius 4) of 40 px rows on `surface/page`,
+ * 8 px apart (FE-022). FE-025: every row — group header and item alike — is
+ * its own `analyzed-classes` block: 40 px, radius 4, checkbox 16 px in on the
+ * left, 12 / 300 label 8 px after it, chevron on the right. A checked item is
+ * `surface/panel-selected` with the `border/focus` outline the document draws.
  */
 .df-class-groups__group,
-.df-class-groups .df-grouped-options--inline .df-collapsible-group {
+.df-class-groups .df-grouped-options--inline .df-collapsible-group__header {
   border-radius: var(--radius-sm);
   background: var(--color-background-primary-default);
 }
 
 .df-class-groups .df-collapsible-group__header {
   min-height: var(--class-row-height);
-  padding-inline: var(--element-padding-x-lg);
+  padding-inline: var(--element-padding-x-lg) var(--element-padding-y-md);
+}
+
+/* Hover is the whole row, never a grey square behind the checkbox. */
+.df-class-groups .df-collapsible-group__header:hover:not(:has([aria-disabled="true"])) {
+  background: var(--color-surface-neutral-raised);
 }
 
 .df-class-groups .df-collapsible-group__title {
@@ -21,18 +29,68 @@
   text-transform: none;
 }
 
-.df-class-groups .df-grouped-options--inline .df-grouped-options__list {
+.df-class-groups .df-grouped-options--inline .df-grouped-options__list,
+.df-class-groups .df-grouped-options--inline .df-collapsible-group,
+.df-class-groups .df-grouped-options--inline .df-collapsible-group__content {
   gap: var(--element-gap-lg);
 }
 
-.df-class-groups .df-grouped-options--inline .df-grouped-options__row--group {
+.df-class-groups .df-grouped-options--inline .df-collapsible-group__header {
+  padding-inline-start: var(--size-none);
+}
+
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row {
+  gap: var(--element-gap-lg);
   min-height: var(--class-row-height);
-  color: var(--color-text-weak-default);
+  margin-inline-start: var(--size-none);
+  padding-block: var(--size-none);
+  padding-inline: var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-surface-transparent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-transparent);
+  color: var(--color-text-strong-default);
   font-weight: var(--font-weight-light);
+}
+
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--group {
+  color: var(--color-text-weak-default);
+}
+
+/* The header row paints its own hover above; its checkbox row stays clear. */
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--group:hover,
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--group:active {
+  background: var(--color-surface-transparent);
+}
+
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--option {
+  background: var(--color-background-primary-default);
+}
+
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--option:hover:not([aria-disabled="true"]) {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--option:active:not([aria-disabled="true"]) {
+  background: var(--color-surface-neutral-pressed);
+}
+
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row--option[aria-checked="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-surface-neutral-selected);
+}
+
+/* FE-022: inactive until a region is selected — dimmed, still legible as a
+   list of names (the label keeps `text/secondary`, not the 0.2 multiplier). */
+.df-class-groups .df-grouped-options--inline .df-grouped-options__row[aria-disabled="true"] {
+  opacity: var(--opacity-hover);
 }
 
 .df-class-groups .df-collapsible-group__content {
   padding: var(--size-none) var(--element-padding-x-lg) var(--element-padding-y-lg);
+}
+
+.df-class-groups .df-grouped-options--inline .df-collapsible-group__content {
+  padding: var(--size-none);
 }
 
 .df-class-groups__list {
@@ -48,6 +106,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--element-gap-md);
+  min-width: 0;
   min-height: var(--field-height);
 }
 
@@ -61,18 +120,34 @@
 
 .df-class-groups__actions {
   display: flex;
+  flex: none;
   gap: var(--element-padding-y-md);
 }
 
 .df-class-groups__actions .df-button--muted {
+  width: var(--field-height);
   min-width: var(--field-height);
   padding: var(--size-none);
 }
 
+/* FE-025: the rename field takes the row (the Figma 34 px field), the two
+   icon actions stay inside it; the move note wraps under both. */
 .df-class-groups__rename {
-  display: grid;
-  gap: var(--element-padding-y-md);
   min-width: 0;
+}
+
+.df-class-groups__rename .df-field {
+  min-width: 0;
+}
+
+.df-class-groups__rename .df-field__control {
+  min-width: 0;
+  min-height: var(--field-height);
+}
+
+.df-class-groups__move {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
 }
 
 .df-class-groups__note,

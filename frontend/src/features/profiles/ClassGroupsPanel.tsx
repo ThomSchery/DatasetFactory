@@ -85,7 +85,10 @@ export function ClassGroupsPanel({
       editingName.trim() !== "" &&
       categoryGroupIdOf({ name: editingName.trim(), kind: nextKind }) !== categoryGroupIdOf(category);
     return (
-      <li className="df-class-groups__row" key={category.key}>
+      <li
+        className={editing ? "df-class-groups__row df-class-groups__row--editing" : "df-class-groups__row"}
+        key={category.key}
+      >
         {editing ? (
           <div className="df-class-groups__rename">
             <TextField
@@ -107,12 +110,6 @@ export function ClassGroupsPanel({
               }}
               value={editingName}
             />
-            {movesGroup ? (
-              <p className="df-class-groups__note" role="status">
-                Moves the class: {categoryGroupLabelOf(category)} →{" "}
-                {categoryGroupLabelOf({ name: editingName.trim(), kind: nextKind })}.
-              </p>
-            ) : null}
           </div>
         ) : (
           <span className="df-class-groups__name">{category.name}</span>
@@ -120,11 +117,24 @@ export function ClassGroupsPanel({
         <div className="df-class-groups__actions">
           {editing ? (
             <>
-              <Button disabled={disabled || editingName.trim() === ""} onClick={finish} size="sm">
-                Done
+              {/* FE-025: icon actions that fit the row; Enter and Escape do the same. */}
+              <Button
+                aria-label={`Save the new name of class ${category.name}`}
+                disabled={disabled || editingName.trim() === ""}
+                onClick={finish}
+                title="Save the name (Enter)"
+                variant="muted"
+              >
+                <Icon name="check" />
               </Button>
-              <Button disabled={disabled} onClick={() => setEditingKey(null)} size="sm">
-                Cancel
+              <Button
+                aria-label={`Cancel renaming class ${category.name}`}
+                disabled={disabled}
+                onClick={() => setEditingKey(null)}
+                title="Cancel (Escape)"
+                variant="muted"
+              >
+                <Icon name="close" />
               </Button>
             </>
           ) : (
@@ -153,6 +163,12 @@ export function ClassGroupsPanel({
             </Button>
           ) : null}
         </div>
+        {editing && movesGroup ? (
+          <p className="df-class-groups__note df-class-groups__move" role="status">
+            Moves the class from {categoryGroupLabelOf(category)} to{" "}
+            {categoryGroupLabelOf({ name: editingName.trim(), kind: nextKind })}.
+          </p>
+        ) : null}
       </li>
     );
   }

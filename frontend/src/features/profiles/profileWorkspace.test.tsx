@@ -358,11 +358,34 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const field = screen.getByLabelText("New name of class health");
     await user.clear(field);
     await user.type(field, "armour");
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(savedBody(spy)).toMatchObject({
       categories: expect.arrayContaining([{ id: "category-hud", kind: "game", name: "armour" }]),
     }));
+  });
+
+  it("FE-025: renames in the row with icon actions; Enter saves, Escape cancels", async () => {
+    const user = userEvent.setup();
+    stubProfiles();
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Rename class health" }));
+    const confirm = screen.getByRole("button", { name: "Save the new name of class health" });
+    const cancel = screen.getByRole("button", { name: "Cancel renaming class health" });
+    // Icon buttons: the Figma-sized glyph, no text label to overflow the row.
+    expect(confirm.textContent).toBe("");
+    expect(cancel.textContent).toBe("");
+    expect(confirm.querySelector("svg[data-icon]")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+    const field = screen.getByLabelText("New name of class health");
+    await user.clear(field);
+    await user.type(field, "armour{Escape}");
+    expect(screen.getByRole("button", { name: "Rename class health" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Rename class health" }));
+    const again = screen.getByLabelText("New name of class health");
+    await user.clear(again);
+    await user.type(again, "armour{Enter}");
+    expect(screen.getByRole("button", { name: "Rename class armour" })).toBeVisible();
   });
 
   it("keeps a renamed class when the server rejects a duplicate name", async () => {
@@ -373,7 +396,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const field = screen.getByLabelText("New name of class health");
     await user.clear(field);
     await user.type(field, "armour");
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     expect(await screen.findByRole("alert")).toBeVisible();
     expect(screen.getByRole("button", { name: "Rename class armour" })).toBeVisible();
@@ -392,8 +415,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const field = screen.getByLabelText("New name of class 7");
     await user.clear(field);
     await user.type(field, "score");
-    expect(screen.getByText(/Moves the class:/)).toHaveTextContent("Numbers → Custom");
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.getByText(/Moves the class from/)).toHaveTextContent("Moves the class from Numbers to Custom.");
+    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(savedBody(spy)).toMatchObject({
       categories: expect.arrayContaining([{ id: "category-7", kind: "game", name: "score" }]),
@@ -409,7 +432,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const field = screen.getByLabelText("New name of class 7");
     await user.clear(field);
     await user.type(field, "8");
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
     expect(screen.getByRole("alert")).toHaveTextContent("First change the OCR character range of these regions: “Pasek zdrowia”");
   });
 

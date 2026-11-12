@@ -19,6 +19,10 @@
   max-width: 12ch;
 }
 
+.df-field__label .df-icon {
+  color: var(--color-icon-strong-default); /* Figma: label glyphs in icon/primary. */
+}
+
 .df-field__label {
   display: flex;
   align-items: center;
@@ -56,7 +60,13 @@
   color: var(--color-text-placeholder-default);
 }
 
+/* FE-025, by the preset's names: hover is `surface/panel-hover`; the white
+   `border/focus` frame belongs to the active field only. */
 .df-field__control:hover:not(:disabled) {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-field__control:focus {
   border-color: var(--color-fill-brand-impeccable);
 }
 

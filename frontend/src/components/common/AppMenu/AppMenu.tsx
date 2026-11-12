@@ -89,7 +89,7 @@ export function AppMenu({ actions, destinations, label }: AppMenuProps) {
         title={label}
         variant="muted"
       >
-        <Icon name="menu" />
+        <Icon name="more" />
       </Button>
       <ul className="df-app-menu__list" hidden={!open} id={listId}>
         {destinations.map((destination) => (

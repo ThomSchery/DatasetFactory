@@ -32,7 +32,7 @@ export const SECTION_DESTINATIONS: readonly NavDestination[] = [
     path: "/profiles",
     label: "Setup for scan",
     description: "Reference screenshot, HUD regions and classes",
-    icon: "profile",
+    icon: "setting",
   },
   {
     path: "/run",
@@ -55,9 +55,9 @@ export const WORKSPACE_DESTINATIONS: readonly NavDestination[] = [
     path: "/profiles",
     label: "Profile",
     description: "Reference screenshot, HUD regions and classes",
-    icon: "profile",
+    icon: "setting",
   },
-  { path: "/run", label: "Run", description: "Source file, profile and sample rate", icon: "run" },
+  { path: "/run", label: "Run", description: "Source file, profile and sample rate", icon: "arrow-right-square" },
 ];
 
 /** Routes on which the switch is drawn (Figma: Upload, Profile and Run frames). */

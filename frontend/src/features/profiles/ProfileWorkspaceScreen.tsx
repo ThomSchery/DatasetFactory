@@ -478,7 +478,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             size="md"
             title={draft.profileId === null ? "Save the profile first" : "Run with this profile"}
           >
-            <Icon name="run" />
+            <Icon name="arrow-right-square" />
             Run
           </Button>
         }
@@ -568,6 +568,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
 
         <div className="df-profile-workspace__save">
           <Button
+            className="df-profile-workspace__save-profile"
             disabled={!canSave || editingDisabled || sketch !== null}
             loading={save.isPending}
             loadingLabel="Saving the profile…"
@@ -590,7 +591,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
               setSaveAsOpen(true);
             }}
           >
-            <Icon name="plus" />
+            <Icon name="add" />
             Save as
           </Button>
         </div>

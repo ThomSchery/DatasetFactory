@@ -36,7 +36,7 @@ interface AnnotationViewportMetrics {
 async function assertAnnotationPopoverIsDocked(page: Page): Promise<AnnotationViewportMetrics> {
   const popover = page.getByRole("dialog", { name: /Edit annotation/ });
   await expect(popover).toBeVisible();
-  // FE-022: the picture is cropped to its field (IMAGE FILL), so the field —
+  // The picture sits in its field (FE-025: whole, contained), so the field —
   // the overlay viewport — is the box the panel must stay left of.
   const image = page.locator(".df-review-workspace__preview .df-region-overlay");
   const popoverBounds = await popover.boundingBox();
@@ -109,9 +109,10 @@ async function assertCompactReviewLayout(page: Page): Promise<void> {
   await expect(page.locator(".df-region-overlay__corner-label")).toHaveCount(0);
 }
 
-/** FE-022: the canvas opens cropped; Reset shows the whole frame at 100 %. */
+/** FE-025: the canvas opens on the whole frame at 100 % (Reset is a no-op there). */
 async function resetToWholeFrame(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Reset view" }).click();
+  const reset = page.getByRole("button", { name: "Reset view" });
+  if (await reset.isEnabled()) await reset.click();
   await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
   // Leave focus where a fresh page has it: on the body.
   await page.evaluate(() => {
@@ -419,11 +420,10 @@ test("pełnoszeroka kanwa, celownik, zoom i pan zachowują źródłową geometri
   const annotationPanel = page.getByRole("region", { name: "Annotation — nothing selected" });
   const details = page.getByRole("region", { name: "Dane klatki" });
   await expect(overlay).toBeVisible();
-  // FE-022: the field opens cropped (IMAGE FILL). Reset shows the whole
-  // frame at scale 1 — the geometry this test has always measured from.
-  await expect(page.getByLabel("Canvas zoom")).not.toHaveText("100%");
-  await page.getByRole("button", { name: "Reset view" }).click();
+  // FE-025: the field opens on the whole frame at scale 1 (contain, centred)
+  // — the geometry this test has always measured from; Reset stays there.
   await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
+  await expect(page.getByRole("button", { name: "Reset view" })).toBeDisabled();
   const initial = await overlay.boundingBox();
   const initialCanvas = await canvas.boundingBox();
   const imageBounds = await image.boundingBox();

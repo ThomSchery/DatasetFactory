@@ -18,8 +18,7 @@
   min-width: 0;
 }
 
-/* The hit target stays 32 px, while the field-like picker and the editable
-   profile list share the same quiet, unboxed disclosure marker. */
+/* The hit target stays 32 px around the 24 px Figma chevron. */
 .df-collapsible-group__toggle.df-button {
   flex: none;
   width: var(--control-height-sm);
@@ -29,28 +28,43 @@
   border-radius: var(--radius-sm);
 }
 
+/* FE-025: no grey square behind the chevron on hover or press — the glyph
+   itself brightens from icon/secondary to icon/primary. */
+.df-collapsible-group__toggle.df-button,
 .df-collapsible-group__toggle.df-button:hover,
 .df-collapsible-group__toggle.df-button:active {
   border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+  color: var(--color-icon-weak-default);
 }
 
-.df-collapsible-group__marker {
-  color: var(--color-text-weak-default);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-tight);
+.df-collapsible-group__toggle.df-button:hover:not(:disabled) {
+  color: var(--color-icon-strong-default);
+}
+
+/* The Figma class groups: header content first, the chevron at the end. */
+.df-collapsible-group__header--marker-end > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.df-collapsible-group__header--marker-end > .df-collapsible-group__toggle {
+  margin-inline-start: auto;
 }
 
 .df-collapsible-group__title {
   min-width: 0;
   margin: var(--size-none);
   overflow: hidden;
+  /* FE-025: a section heading reads like the Figma panel labels — 12 / 400
+     in text/secondary, no capitals or tracking. */
   color: var(--color-text-weak-default);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: var(--letter-spacing-normal);
   line-height: var(--line-height-tight);
   text-overflow: ellipsis;
-  text-transform: uppercase;
+  text-transform: none;
   white-space: nowrap;
 }
 

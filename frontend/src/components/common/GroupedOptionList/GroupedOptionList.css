@@ -28,6 +28,17 @@
   border-end-end-radius: var(--radius-none);
 }
 
+/* FE-025 states, by the preset's names: hover `surface/panel-hover`; the
+   active or open field `border/focus` (the white frame is the design). */
+.df-grouped-options__control:hover {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-grouped-options__control:focus-within,
+.df-grouped-options[data-open] .df-grouped-options__control {
+  border-color: var(--color-fill-brand-impeccable);
+}
+
 .df-grouped-options__control:focus-within {
   outline: var(--focus-ring-width) solid var(--color-fill-brand-impeccable);
   outline-offset: var(--focus-ring-offset);
@@ -64,7 +75,14 @@
   padding-inline: var(--size-none);
   border-color: var(--color-surface-transparent);
   border-radius: var(--radius-sm);
-  color: var(--color-text-weak-default);
+  background: var(--color-surface-transparent);
+  color: var(--color-icon-weak-default);
+}
+
+.df-grouped-options__tag-remove.df-button:hover:not(:disabled),
+.df-grouped-options__clear.df-button:hover:not(:disabled),
+.df-grouped-options__toggle.df-button:hover:not(:disabled) {
+  color: var(--color-icon-strong-default);
 }
 
 .df-grouped-options__tag-remove.df-button:hover,
@@ -74,6 +92,7 @@
 .df-grouped-options__toggle.df-button:hover,
 .df-grouped-options__toggle.df-button:active {
   border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
 }
 
 .df-grouped-options__control .df-button,
@@ -85,7 +104,7 @@
 .df-grouped-options__icon {
   display: inline-flex;
   flex: none;
-  color: var(--color-text-placeholder-default);
+  color: var(--color-icon-weak-default);
 }
 
 .df-grouped-options__filter {
@@ -116,8 +135,10 @@
   background: var(--color-surface-transparent);
 }
 
-.df-grouped-options__filter .df-field__control:hover:not(:disabled) {
+.df-grouped-options__filter .df-field__control:hover:not(:disabled),
+.df-grouped-options__filter .df-field__control:focus {
   border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
 }
 
 .df-grouped-options__filter .df-field__control:focus-visible {
@@ -153,7 +174,9 @@
      call site. */
   max-height: calc(var(--size-xxl) * 3);
   padding: calc(var(--size-xs) / 2);
-  border: var(--border-width-default) solid var(--color-stroke-strong-default);
+  /* FE-025: the open list continues the focused field, so it carries the
+     same `border/focus` frame (no third outline colour). */
+  border: var(--border-width-default) solid var(--color-fill-brand-impeccable);
   border-top: var(--size-none);
   border-radius: var(--radius-none) var(--radius-none) var(--radius-sm) var(--radius-sm);
   background: var(--color-background-primary-default);
@@ -242,8 +265,12 @@
   margin-inline-start: var(--size-md);
 }
 
-.df-grouped-options__row:hover {
-  background: var(--color-surface-neutral-hover);
+.df-grouped-options__row:hover:not([aria-disabled="true"]) {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-grouped-options__row:active:not([aria-disabled="true"]) {
+  background: var(--color-surface-neutral-pressed);
 }
 
 .df-grouped-options__row[data-keyboard-active] {
@@ -251,8 +278,10 @@
   outline-offset: calc(-1 * var(--focus-ring-width));
 }
 
-.df-grouped-options__row--checked {
-  background: var(--color-fill-brand-impeccable-soft);
+/* A chosen row of a single choice is `surface/panel-selected`; a checked
+   checkbox row keeps the page surface — the Figma checkbox carries it. */
+.df-grouped-options__row--option[aria-selected="true"] {
+  background: var(--color-surface-neutral-selected);
 }
 
 .df-grouped-options__row[aria-disabled="true"] {
@@ -260,36 +289,12 @@
   opacity: var(--opacity-disabled);
 }
 
-/* BWIDTH-03: a checkbox is one of the few elements that natively needs a
-   visible border in its resting state. */
+/* FE-025: the Figma checkbox glyph, 24 px. The partial state is its own
+   shape (box with a bar), never a shade (COLOR-09). */
 .df-grouped-options__mark {
+  display: inline-flex;
   flex: none;
-  width: var(--size-sm);
-  height: var(--size-sm);
-  border: var(--border-width-default) solid var(--color-stroke-strong-default);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-transparent);
-}
-
-.df-grouped-options__row[data-checked="true"] .df-grouped-options__mark {
-  border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-fill-brand-impeccable);
-}
-
-/* The partial state differs from the full one in shape, not only in colour: a
-   centred bar instead of a filled square (COLOR-09). */
-.df-grouped-options__row[data-checked="mixed"] .df-grouped-options__mark {
-  border-color: var(--color-fill-brand-impeccable);
-  background:
-    linear-gradient(
-      to bottom,
-      var(--color-surface-transparent) 0%,
-      var(--color-surface-transparent) 40%,
-      var(--color-fill-brand-impeccable) 40%,
-      var(--color-fill-brand-impeccable) 60%,
-      var(--color-surface-transparent) 60%,
-      var(--color-surface-transparent) 100%
-    );
+  color: var(--color-icon-strong-default);
 }
 
 .df-grouped-options__label {
@@ -306,7 +311,9 @@
   flex: 0 0 auto;
   margin-inline-start: auto;
   color: var(--color-text-weak-default);
-  font-family: var(--font-family-mono);
+  /* FE-025: the interface face, not monospace; tabular figures keep the
+     column of counts steady. */
+  font-family: var(--font-family-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -324,4 +331,13 @@
   padding: var(--size-none);
   border: var(--size-none);
   background: var(--color-surface-transparent);
+}
+
+/* FE-025: a single choice (Search profile, Source file, Profile) is the Figma
+   list pattern — 35 px rows on `surface/page`, 12 / 300, text 16 px in, no
+   indent under the section label and no mark. */
+.df-grouped-options__row[role="option"] {
+  min-height: var(--list-row-height);
+  margin-inline-start: var(--size-none);
+  padding-inline: var(--element-padding-x-lg);
 }

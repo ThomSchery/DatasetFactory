@@ -1749,7 +1749,7 @@ describe("the picture itself", () => {
   });
 });
 
-describe("fill: the Figma IMAGE FILL crop (FE-022)", () => {
+describe("fill: the whole frame fits the field (FE-025, replaces the FE-022 crop)", () => {
   function squareViewport(this: Element): DOMRect {
     const size = this.classList.contains("df-region-overlay") ? 400 : 0;
     return {
@@ -1765,7 +1765,7 @@ describe("fill: the Figma IMAGE FILL crop (FE-022)", () => {
     } as DOMRect;
   }
 
-  it("starts cropped to cover the box and Reset shows the whole frame", async () => {
+  it("starts with the whole frame in the field, centred, and zoom still works", async () => {
     const user = userEvent.setup();
     const spy = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
@@ -1782,18 +1782,23 @@ describe("fill: the Figma IMAGE FILL crop (FE-022)", () => {
         />,
       );
 
-      // 1920 × 1080 in a 400 × 400 box: the whole frame is 400 × 225, so the
-      // cover crop is 400 / 225 ≈ 178 %.
+      // 1920 × 1080 in a 400 × 400 field: the whole frame is 400 × 225,
+      // centred 87.5 px from the top, at 100 % — nothing is cropped.
       const zoom = screen.getByRole("status", { name: "Canvas zoom" });
-      expect(zoom).toHaveTextContent("178%");
+      expect(zoom).toHaveTextContent("100%");
       const stage = document.querySelector<HTMLElement>(".df-region-overlay__zoom-stage");
       expect(stage?.style.width).toBe("400px");
       expect(stage?.style.height).toBe("225px");
+      expect(stage?.style.top).toBe("87.5px");
+      expect(stage?.style.left).toBe("0px");
+      expect(stage?.style.transform).toBe("translate(0px, 0px) scale(1)");
+      expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
 
+      await user.click(screen.getByRole("button", { name: "Zoom in" }));
+      expect(zoom).not.toHaveTextContent("100%");
       await user.click(screen.getByRole("button", { name: "Reset view" }));
       expect(zoom).toHaveTextContent("100%");
       expect(stage?.style.transform).toBe("translate(0px, 0px) scale(1)");
-      expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
     } finally {
       spy.mockRestore();
     }

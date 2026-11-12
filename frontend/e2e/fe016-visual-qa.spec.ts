@@ -128,7 +128,7 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
 
     // FE-022 moved the durability note into the Save as dialog; the group
     // change is a one-line status under the rename field.
-    const kindWarning = page.getByText(/Moves the class:/);
+    const kindWarning = page.getByText(/Moves the class from/);
     const profileBody = page.getByRole("region", { name: "Classes" }).locator(".df-panel__body");
     await kindWarning.scrollIntoViewIfNeeded();
     await expect(kindWarning).toBeInViewport();

@@ -383,6 +383,73 @@ describe("GroupedOptionList in single mode", () => {
   });
 });
 
+/* FE-025: the glyphs are the Figma icons, and no text arrow or triangle is drawn. */
+describe("GroupedOptionList draws the Figma icons", () => {
+  function iconOf(element: Element | null): string | null {
+    return element?.querySelector("svg[data-icon]")?.getAttribute("data-icon") ?? null;
+  }
+
+  it("draws each checkbox state with the Figma checkbox (mixed differs in shape)", async () => {
+    const user = userEvent.setup();
+    render(<Harness mode="multiple" />);
+    expect(iconOf(checkbox("Custom"))).toBe("checkbox-empty");
+    expect(iconOf(checkbox("Timer"))).toBe("checkbox-empty");
+    await user.click(checkbox("Timer"));
+    expect(iconOf(checkbox("Timer"))).toBe("checkbox-selected");
+    expect(iconOf(checkbox("Custom"))).toBe("checkbox-mixed");
+    await user.click(checkbox("Score"));
+    expect(iconOf(checkbox("Custom"))).toBe("checkbox-selected");
+  });
+
+  it("chooses one row in single mode without any checkbox mark", () => {
+    render(<Harness initial={["score"]} mode="single" />);
+    for (const option of screen.getAllByRole("option")) {
+      expect(option.querySelector("svg")).toBeNull();
+      expect(option.querySelector(".df-grouped-options__mark")).toBeNull();
+    }
+  });
+
+  it("draws search-2 on the left and Arrow - Down 2 on the right of a combobox", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <GroupedOptionList
+        emptyMessage="None."
+        filterLabel="Search profile"
+        groups={GROUPS}
+        icon="search"
+        label="Profiles"
+        mode="single"
+        onChange={() => undefined}
+        selectedIds={[]}
+      />,
+    );
+    expect(iconOf(container.querySelector(".df-grouped-options__icon"))).toBe("search");
+    const toggle = screen.getByRole("button", { name: "Expand list Profiles" });
+    expect(iconOf(toggle)).toBe("chevron-down");
+    await user.click(toggle);
+    expect(iconOf(screen.getByRole("button", { name: "Collapse list Profiles" }))).toBe("chevron-down");
+    expect(container.textContent).not.toMatch(/[▸▾▴◂←→×⋮☰]/);
+  });
+
+  it("puts the group chevron at the end of the row in the inline class groups", () => {
+    render(
+      <GroupedOptionList
+        emptyMessage="None."
+        filterLabel="Filter"
+        groups={GROUPS}
+        inline
+        label="Characters"
+        mode="multiple"
+        onChange={() => undefined}
+        selectedIds={[]}
+      />,
+    );
+    const header = checkbox("Znaki").parentElement as HTMLElement;
+    expect(header.firstElementChild).toBe(checkbox("Znaki"));
+    expect(header.lastElementChild).toBe(screen.getByRole("button", { name: "Collapse group Znaki" }));
+  });
+});
+
 describe("GroupedOptionList boundaries", () => {
   it("marks itself as the owner of its keystrokes", () => {
     render(<Harness mode="multiple" />);

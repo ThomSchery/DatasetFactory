@@ -5,11 +5,24 @@
   height: var(--icon-size);
   flex: none;
   fill: none;
-  stroke: currentcolor;
+  stroke: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.5;
-  /* The glyph must keep its drawn weight at every control size, exactly as the
-     region outline does in `RegionOverlay` (BWIDTH-14). */
+}
+
+/* FE-025: the paints of the Figma export, through the tokens of the same
+   name. `current` is the colour of the role around the glyph (icon/secondary
+   at rest, icon/primary when hovered or selected — set by the control). */
+.df-icon [data-fill="current"] { fill: currentcolor; }
+.df-icon [data-stroke="current"] { stroke: currentcolor; }
+.df-icon [data-fill="icon-secondary"] { fill: var(--color-icon-weak-default); }
+.df-icon [data-stroke="icon-secondary"] { stroke: var(--color-icon-weak-default); }
+.df-icon [data-fill="icon-placeholder"] { fill: var(--color-icon-muted-default); }
+.df-icon [data-stroke="icon-placeholder"] { stroke: var(--color-icon-muted-default); }
+.df-icon [data-fill="surface-page"] { fill: var(--color-background-primary-default); }
+
+/* The stroke keeps its drawn weight at every control size, exactly as the
+   region outline does in `RegionOverlay` (BWIDTH-08). */
+.df-icon [data-stroke] {
   vector-effect: non-scaling-stroke;
 }

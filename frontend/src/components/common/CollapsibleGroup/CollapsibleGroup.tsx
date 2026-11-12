@@ -1,12 +1,18 @@
 import { useId, type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 import { Button } from "../Button";
+import { Icon } from "../Icon";
 import "./CollapsibleGroup.css";
 
 export interface CollapsibleGroupProps {
   children: ReactNode;
   /** Accessible name of the group and the subject of its disclosure control. */
   label: string;
+  /**
+   * Where the chevron sits: before the header content (default), or after it
+   * as the Figma class groups draw it (FE-025: checkbox left, chevron right).
+   */
+  markerPlacement?: "start" | "end";
   onToggle: () => void;
   open: boolean;
   /**
@@ -22,7 +28,7 @@ export interface CollapsibleGroupProps {
 }
 
 /**
- * One named group of rows that a triangle expands and collapses.
+ * One named group of rows that a chevron expands and collapses.
  *
  * It exists so the two places FE-018 B splits classes in — the annotation
  * panel's picker and the game profile screen — share one disclosure rather than
@@ -37,6 +43,7 @@ export interface CollapsibleGroupProps {
 export function CollapsibleGroup({
   children,
   label,
+  markerPlacement = "start",
   onToggle,
   open,
   summary,
@@ -49,7 +56,14 @@ export function CollapsibleGroup({
 
   return (
     <div aria-label={label} className="df-collapsible-group" role="group">
-      <div className="df-collapsible-group__header">
+      <div
+        className={
+          markerPlacement === "end"
+            ? "df-collapsible-group__header df-collapsible-group__header--marker-end"
+            : "df-collapsible-group__header"
+        }
+      >
+        {markerPlacement === "end" ? (summary ?? <p className="df-collapsible-group__title">{label}</p>) : null}
         <Button
           aria-controls={contentId}
           aria-expanded={open}
@@ -63,16 +77,10 @@ export function CollapsibleGroup({
           tabIndex={toggleTabIndex}
           variant="muted"
         >
-          {/*
-            A glyph, not a triangle assembled from borders: borders would need
-            pixel values outside the token scale, while the glyph scales with
-            `--font-size-xs` like the label it sits beside.
-          */}
-          <span aria-hidden="true" className="df-collapsible-group__marker">
-            {open ? "▾" : "▸"}
-          </span>
+          {/* FE-025: the Figma chevrons — Arrow - Right 2 collapsed, Arrow - Down 2 open. */}
+          <Icon name={open ? "chevron-down" : "chevron-right"} />
         </Button>
-        {summary ?? <p className="df-collapsible-group__title">{label}</p>}
+        {markerPlacement === "end" ? null : (summary ?? <p className="df-collapsible-group__title">{label}</p>)}
       </div>
       <div className="df-collapsible-group__content" hidden={!open} id={contentId}>
         {children}

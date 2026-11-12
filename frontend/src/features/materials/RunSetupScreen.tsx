@@ -150,7 +150,7 @@ export function RunSetupScreen() {
       size="lg"
       type="submit"
     >
-      <Icon name="run" />
+      <Icon name="play" />
       Run
     </Button>
   );
@@ -206,7 +206,7 @@ export function RunSetupScreen() {
             render={({ field, fieldState }) => (
               <div className="df-run-setup__picker">
                 <p className="df-run-setup__label">
-                  <Icon name="folder" />
+                  <Icon name="film" />
                   <span>Source file</span>
                 </p>
                 <GroupedOptionList
@@ -217,6 +217,7 @@ export function RunSetupScreen() {
                       : "No source file matches."
                   }
                   filterLabel="Source file"
+                  icon="search"
                   groups={[
                     {
                       id: "materials",
@@ -265,6 +266,7 @@ export function RunSetupScreen() {
                       : "No profile matches."
                   }
                   filterLabel="Profile"
+                  icon="search"
                   groups={[
                     {
                       id: "profiles",
@@ -301,7 +303,7 @@ export function RunSetupScreen() {
             error={form.formState.errors.interval_ms?.message}
             inputMode="numeric"
             label="Sample rate"
-            labelIcon="settings"
+            labelIcon="setting"
             suffix="ms"
           />
         </form>

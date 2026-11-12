@@ -1,0 +1,2119 @@
+{
+ "source": "Figma MCP use_figma exportAsync SVG_STRING, read-only, 2026-11-10",
+ "note": "The checkbox instances in the frames are named \"Arrow - Down 3\"; their main components are \"Checkbox- selected\" (1008:1372, has the tick) and \"Checkbox - Empty\" (1008:1376). Colours in the SVGs are the Figma fills/strokes at the point of use; map them to currentColor + the matching icon token.",
+ "icons": [
+  {
+   "key": "Frame 1",
+   "figmaName": "Frame 1",
+   "file": "icons/frame-1-frame-1.svg",
+   "usedIn": [
+    "Bootstrap 5 XS 360px > header",
+    "header-group > header"
+   ]
+  },
+  {
+   "key": "1008:1092",
+   "figmaName": "Profile",
+   "file": "icons/profile-1008-1092.svg",
+   "usedIn": [
+    "header > Frame 2",
+    "section-two > Frame 143"
+   ]
+  },
+  {
+   "key": "1008:1453",
+   "figmaName": "more-horizontal",
+   "file": "icons/more-horizontal-1008-1453.svg",
+   "usedIn": [
+    "header > Frame 2"
+   ]
+  },
+  {
+   "key": "1008:1383",
+   "figmaName": "Upload",
+   "file": "icons/upload-1008-1383.svg",
+   "usedIn": [
+    "Flow > Frame 52",
+    "sidebar > sidebar-menu"
+   ]
+  },
+  {
+   "key": "1008:1155",
+   "figmaName": "Setting",
+   "file": "icons/setting-1008-1155.svg",
+   "usedIn": [
+    "Flow > Frame 52",
+    "section-three > Frame 144",
+    "sidebar > sidebar-menu"
+   ]
+  },
+  {
+   "key": "1008:1397",
+   "figmaName": "Arrow - Right Square",
+   "file": "icons/arrow-right-square-1008-1397.svg",
+   "usedIn": [
+    "Flow > Frame 52"
+   ]
+  },
+  {
+   "key": "1292:1548",
+   "figmaName": "search-2",
+   "file": "icons/search-2-1292-1548.svg",
+   "usedIn": [
+    "Frame 130 > Frame 52"
+   ]
+  },
+  {
+   "key": "1008:1434",
+   "figmaName": "Arrow - Down 2",
+   "file": "icons/arrow-down-2-1008-1434.svg",
+   "usedIn": [
+    "analyzed-clases-dropdown > Frame 52",
+    "search-profile > Frame 130",
+    "section-one > search-source",
+    "section-two > search-profile"
+   ]
+  },
+  {
+   "key": "1372:1792",
+   "figmaName": "save-line",
+   "file": "icons/save-line-1372-1792.svg",
+   "usedIn": [
+    "game-x > Frame 52"
+   ]
+  },
+  {
+   "key": "1355:1458",
+   "figmaName": "add-fill",
+   "file": "icons/add-fill-1355-1458.svg",
+   "usedIn": [
+    "game-x > Frame 52"
+   ]
+  },
+  {
+   "key": "1008:1372",
+   "figmaName": "Checkbox- selected",
+   "file": "icons/arrow-down-3-1008-1372.svg",
+   "usedIn": [
+    "Frame 52 > Frame 52",
+    "Frame 53 > Frame 52",
+    "analyzed-classes > Frame 52"
+   ]
+  },
+  {
+   "key": "1008:1399",
+   "figmaName": "Arrow - Right 2",
+   "file": "icons/arrow-right-2-1008-1399.svg",
+   "usedIn": [
+    "class-list > analyzed-classes"
+   ]
+  },
+  {
+   "key": "1008:1376",
+   "figmaName": "Checkbox - Empty",
+   "file": "icons/arrow-down-3-1008-1376.svg",
+   "usedIn": [
+    "Frame 54 > Frame 52",
+    "analyzed-classes > Frame 52"
+   ]
+  },
+  {
+   "key": "1436:2394",
+   "figmaName": "film-line",
+   "file": "icons/film-line-1436-2394.svg",
+   "usedIn": [
+    "section-one > Frame 142"
+   ]
+  },
+  {
+   "key": "1008:1198",
+   "figmaName": "Play",
+   "file": "icons/play-1008-1198.svg",
+   "usedIn": [
+    "Frame 130 > Frame 52"
+   ]
+  },
+  {
+   "key": "1008:1420",
+   "figmaName": "Arrow - Left",
+   "file": "icons/arrow-left-1008-1420.svg",
+   "usedIn": [
+    "frame-navi-slides > Frame 136"
+   ]
+  },
+  {
+   "key": "1008:1395",
+   "figmaName": "Arrow - Right",
+   "file": "icons/arrow-right-1008-1395.svg",
+   "usedIn": [
+    "frame-navi-slides > Frame 137"
+   ]
+  },
+  {
+   "key": "1553:2313",
+   "figmaName": "contract-left-line",
+   "file": "icons/contract-left-line-1553-2313.svg",
+   "usedIn": [
+    "Setup > sidebar"
+   ]
+  },
+  {
+   "key": "1008:1064",
+   "figmaName": "Scan",
+   "file": "icons/scan-1008-1064.svg",
+   "usedIn": [
+    "sidebar > sidebar-menu"
+   ]
+  },
+  {
+   "key": "1008:1448",
+   "figmaName": "Edit",
+   "file": "icons/edit-1008-1448.svg",
+   "usedIn": [
+    "sidebar > sidebar-menu"
+   ]
+  }
+ ],
+ "uses": [
+  {
+   "frame": "1248:831",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1248:831",
+   "x": 278,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1248:831",
+   "x": 320,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1248:831",
+   "x": 38,
+   "y": 61,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1248:831",
+   "x": 146,
+   "y": 61,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1248:831",
+   "x": 259,
+   "y": 61,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 278,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 320,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 38,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 146,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 259,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 25,
+   "y": 418,
+   "size": 24,
+   "instanceName": "search-2",
+   "mainComponent": "search-2",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 311,
+   "y": 418,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 130",
+   "grandparent": "search-profile"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 85,
+   "y": 736,
+   "size": 24,
+   "instanceName": "save-line",
+   "mainComponent": "save-line",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 262,
+   "y": 736,
+   "size": 24,
+   "instanceName": "add-fill",
+   "mainComponent": "add-fill",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 49,
+   "y": 790,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 287,
+   "y": 790,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 49,
+   "y": 838,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 287,
+   "y": 838,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-clases-dropdown"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 49,
+   "y": 886,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 49,
+   "y": 934,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 53"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 50,
+   "y": 983,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "Frame 54"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 49,
+   "y": 1032,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 287,
+   "y": 1032,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 49,
+   "y": 1080,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1291",
+   "x": 287,
+   "y": 1080,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 32,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 478,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 520,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 128,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 254,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 384,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 25,
+   "y": 418,
+   "size": 24,
+   "instanceName": "search-2",
+   "mainComponent": "search-2",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 527,
+   "y": 418,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 130",
+   "grandparent": "search-profile"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 193,
+   "y": 736,
+   "size": 24,
+   "instanceName": "save-line",
+   "mainComponent": "save-line",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 478,
+   "y": 736,
+   "size": 24,
+   "instanceName": "add-fill",
+   "mainComponent": "add-fill",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 49,
+   "y": 790,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 503,
+   "y": 790,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 49,
+   "y": 838,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 503,
+   "y": 838,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-clases-dropdown"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 49,
+   "y": 886,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 49,
+   "y": 934,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 53"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 50,
+   "y": 983,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "Frame 54"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 49,
+   "y": 1032,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 503,
+   "y": 1032,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 49,
+   "y": 1080,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1395:1656",
+   "x": 503,
+   "y": 1080,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 32,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 670,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 712,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 224,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 350,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 480,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 33,
+   "y": 123,
+   "size": 24,
+   "instanceName": "search-2",
+   "mainComponent": "search-2",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 222,
+   "y": 123,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 130",
+   "grandparent": "search-profile"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 45,
+   "y": 441,
+   "size": 24,
+   "instanceName": "save-line",
+   "mainComponent": "save-line",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 173,
+   "y": 441,
+   "size": 24,
+   "instanceName": "add-fill",
+   "mainComponent": "add-fill",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 57,
+   "y": 495,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 198,
+   "y": 495,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 57,
+   "y": 543,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 198,
+   "y": 543,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-clases-dropdown"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 57,
+   "y": 591,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 57,
+   "y": 639,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 53"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 58,
+   "y": 688,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "Frame 54"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 57,
+   "y": 737,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 198,
+   "y": 737,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 57,
+   "y": 785,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 198,
+   "y": 785,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1306",
+   "x": 648,
+   "y": 619,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 32,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 894,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 936,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 336,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 462,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 592,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 33,
+   "y": 123,
+   "size": 24,
+   "instanceName": "search-2",
+   "mainComponent": "search-2",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 222,
+   "y": 123,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 130",
+   "grandparent": "search-profile"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 45,
+   "y": 441,
+   "size": 24,
+   "instanceName": "save-line",
+   "mainComponent": "save-line",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 173,
+   "y": 441,
+   "size": 24,
+   "instanceName": "add-fill",
+   "mainComponent": "add-fill",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 57,
+   "y": 495,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 198,
+   "y": 495,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 57,
+   "y": 543,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 198,
+   "y": 543,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-clases-dropdown"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 57,
+   "y": 591,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 57,
+   "y": 639,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 53"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 58,
+   "y": 688,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "Frame 54"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 57,
+   "y": 737,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 198,
+   "y": 737,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 57,
+   "y": 785,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 198,
+   "y": 785,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1307",
+   "x": 872,
+   "y": 619,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 32,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 1102,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 1144,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 440,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 566,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 696,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 33,
+   "y": 123,
+   "size": 24,
+   "instanceName": "search-2",
+   "mainComponent": "search-2",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 222,
+   "y": 123,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 130",
+   "grandparent": "search-profile"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 45,
+   "y": 441,
+   "size": 24,
+   "instanceName": "save-line",
+   "mainComponent": "save-line",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 173,
+   "y": 441,
+   "size": 24,
+   "instanceName": "add-fill",
+   "mainComponent": "add-fill",
+   "parent": "Frame 52",
+   "grandparent": "game-x"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 57,
+   "y": 495,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 198,
+   "y": 495,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 57,
+   "y": 543,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 198,
+   "y": 543,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-clases-dropdown"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 57,
+   "y": 591,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 52"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 57,
+   "y": 639,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "Frame 53"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 58,
+   "y": 688,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "Frame 54"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 57,
+   "y": 737,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox - Empty",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 198,
+   "y": 737,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 57,
+   "y": 785,
+   "size": 24,
+   "instanceName": "Arrow - Down 3",
+   "mainComponent": "Checkbox- selected",
+   "parent": "Frame 52",
+   "grandparent": "analyzed-classes"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 198,
+   "y": 785,
+   "size": 24,
+   "instanceName": "Arrow - Right 2",
+   "mainComponent": "Arrow - Right 2",
+   "parent": "analyzed-classes",
+   "grandparent": "class-list"
+  },
+  {
+   "frame": "1355:1308",
+   "x": 1080,
+   "y": 619,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 278,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 320,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 38,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 146,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 259,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 33,
+   "y": 316,
+   "size": 24,
+   "instanceName": "film-line",
+   "mainComponent": "film-line",
+   "parent": "Frame 142",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 286,
+   "y": 357,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-source",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 33,
+   "y": 414,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 143",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 286,
+   "y": 455,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-profile",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 33,
+   "y": 512,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 144",
+   "grandparent": "section-three"
+  },
+  {
+   "frame": "1378:2014",
+   "x": 150,
+   "y": 611,
+   "size": 24,
+   "instanceName": "Play",
+   "mainComponent": "Play",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 494,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 536,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 128,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 254,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 384,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 33,
+   "y": 440,
+   "size": 24,
+   "instanceName": "film-line",
+   "mainComponent": "film-line",
+   "parent": "Frame 142",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 502,
+   "y": 481,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-source",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 33,
+   "y": 538,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 143",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 502,
+   "y": 579,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-profile",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 33,
+   "y": 636,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 144",
+   "grandparent": "section-three"
+  },
+  {
+   "frame": "1362:1567",
+   "x": 258,
+   "y": 735,
+   "size": 24,
+   "instanceName": "Play",
+   "mainComponent": "Play",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 686,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 728,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 224,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 350,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 480,
+   "y": 69,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 25,
+   "y": 162,
+   "size": 24,
+   "instanceName": "film-line",
+   "mainComponent": "film-line",
+   "parent": "Frame 142",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 171,
+   "y": 203,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-source",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 25,
+   "y": 244,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 143",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 171,
+   "y": 285,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-profile",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 25,
+   "y": 326,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 144",
+   "grandparent": "section-three"
+  },
+  {
+   "frame": "1362:1568",
+   "x": 88,
+   "y": 486,
+   "size": 24,
+   "instanceName": "Play",
+   "mainComponent": "Play",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 910,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 952,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 336,
+   "y": 85,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 462,
+   "y": 85,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 592,
+   "y": 85,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 25,
+   "y": 194,
+   "size": 24,
+   "instanceName": "film-line",
+   "mainComponent": "film-line",
+   "parent": "Frame 142",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 171,
+   "y": 235,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-source",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 25,
+   "y": 276,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 143",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 171,
+   "y": 317,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-profile",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 25,
+   "y": 358,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 144",
+   "grandparent": "section-three"
+  },
+  {
+   "frame": "1362:1569",
+   "x": 88,
+   "y": 518,
+   "size": 24,
+   "instanceName": "Play",
+   "mainComponent": "Play",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 1118,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 1160,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 440,
+   "y": 77,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 566,
+   "y": 77,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 696,
+   "y": 77,
+   "size": 24,
+   "instanceName": "Arrow - Right Square",
+   "mainComponent": "Arrow - Right Square",
+   "parent": "Frame 52",
+   "grandparent": "Flow"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 25,
+   "y": 178,
+   "size": 24,
+   "instanceName": "film-line",
+   "mainComponent": "film-line",
+   "parent": "Frame 142",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 171,
+   "y": 219,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-source",
+   "grandparent": "section-one"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 25,
+   "y": 260,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 143",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 171,
+   "y": 301,
+   "size": 24,
+   "instanceName": "Arrow - Down 2",
+   "mainComponent": "Arrow - Down 2",
+   "parent": "search-profile",
+   "grandparent": "section-two"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 25,
+   "y": 342,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "Frame 144",
+   "grandparent": "section-three"
+  },
+  {
+   "frame": "1362:1570",
+   "x": 88,
+   "y": 617,
+   "size": 24,
+   "instanceName": "Play",
+   "mainComponent": "Play",
+   "parent": "Frame 52",
+   "grandparent": "Frame 130"
+  },
+  {
+   "frame": "1002:14",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "Bootstrap 5 XS 360px"
+  },
+  {
+   "frame": "1002:14",
+   "x": 278,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1002:14",
+   "x": 320,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1002:14",
+   "x": 33,
+   "y": 184,
+   "size": 24,
+   "instanceName": "Arrow - Left",
+   "mainComponent": "Arrow - Left",
+   "parent": "Frame 136",
+   "grandparent": "frame-navi-slides"
+  },
+  {
+   "frame": "1002:14",
+   "x": 303,
+   "y": 184,
+   "size": 24,
+   "instanceName": "Arrow - Right",
+   "mainComponent": "Arrow - Right",
+   "parent": "Frame 137",
+   "grandparent": "frame-navi-slides"
+  },
+  {
+   "frame": "1473:4993",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1473:4993",
+   "x": 494,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1473:4993",
+   "x": 536,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1473:4993",
+   "x": 33,
+   "y": 115,
+   "size": 24,
+   "instanceName": "Arrow - Left",
+   "mainComponent": "Arrow - Left",
+   "parent": "Frame 136",
+   "grandparent": "frame-navi-slides"
+  },
+  {
+   "frame": "1473:4993",
+   "x": 236,
+   "y": 115,
+   "size": 24,
+   "instanceName": "Arrow - Right",
+   "mainComponent": "Arrow - Right",
+   "parent": "Frame 137",
+   "grandparent": "frame-navi-slides"
+  },
+  {
+   "frame": "1473:5012",
+   "x": 16,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Frame 1",
+   "mainComponent": null,
+   "parent": "header",
+   "grandparent": "header-group"
+  },
+  {
+   "frame": "1473:5012",
+   "x": 686,
+   "y": 10,
+   "size": 24,
+   "instanceName": "Profile",
+   "mainComponent": "Profile",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1473:5012",
+   "x": 728,
+   "y": 10,
+   "size": 24,
+   "instanceName": "more-horizontal",
+   "mainComponent": "more-horizontal",
+   "parent": "Frame 2",
+   "grandparent": "header"
+  },
+  {
+   "frame": "1473:5012",
+   "x": 33,
+   "y": 115,
+   "size": 24,
+   "instanceName": "Arrow - Left",
+   "mainComponent": "Arrow - Left",
+   "parent": "Frame 136",
+   "grandparent": "frame-navi-slides"
+  },
+  {
+   "frame": "1473:5012",
+   "x": 236,
+   "y": 115,
+   "size": 24,
+   "instanceName": "Arrow - Right",
+   "mainComponent": "Arrow - Right",
+   "parent": "Frame 137",
+   "grandparent": "frame-navi-slides"
+  },
+  {
+   "frame": "1248:991",
+   "x": 22,
+   "y": 8,
+   "size": 24,
+   "instanceName": "contract-left-line",
+   "mainComponent": "contract-left-line",
+   "parent": "sidebar",
+   "grandparent": "Setup"
+  },
+  {
+   "frame": "1248:991",
+   "x": 22,
+   "y": 64,
+   "size": 24,
+   "instanceName": "Upload",
+   "mainComponent": "Upload",
+   "parent": "sidebar-menu",
+   "grandparent": "sidebar"
+  },
+  {
+   "frame": "1248:991",
+   "x": 22,
+   "y": 112,
+   "size": 24,
+   "instanceName": "Setting",
+   "mainComponent": "Setting",
+   "parent": "sidebar-menu",
+   "grandparent": "sidebar"
+  },
+  {
+   "frame": "1248:991",
+   "x": 22,
+   "y": 160,
+   "size": 24,
+   "instanceName": "Scan",
+   "mainComponent": "Scan",
+   "parent": "sidebar-menu",
+   "grandparent": "sidebar"
+  },
+  {
+   "frame": "1248:991",
+   "x": 22,
+   "y": 208,
+   "size": 24,
+   "instanceName": "Edit",
+   "mainComponent": "Edit",
+   "parent": "sidebar-menu",
+   "grandparent": "sidebar"
+  }
+ ]
+}

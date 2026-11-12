@@ -5,14 +5,15 @@
   margin: var(--size-none);
 }
 
-/* `IMAGE FILL`: the picture covers the box and is cropped to it. OVERLAY-03:
+/* FE-025: the whole picture fits the box, centred (contain) — replacing the
+   FE-022 `IMAGE FILL` crop. The box keeps its Figma size. OVERLAY-03:
    an image is content, so it is separated by a border, not by a shadow. */
 .df-reference-image__img {
   display: block;
   width: 100%;
   height: 100%;
   min-height: 0;
-  object-fit: cover;
+  object-fit: contain;
   border: var(--border-width-default) solid var(--color-stroke-panel-default);
   border-radius: var(--radius-sm);
   background: var(--color-surface-neutral-default);

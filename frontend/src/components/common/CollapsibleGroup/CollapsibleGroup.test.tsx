@@ -58,6 +58,28 @@ describe("CollapsibleGroup", () => {
     expect(screen.getByText("Letters · 26")).toBeVisible();
   });
 
+  it("marks the state with the Figma chevrons, not text glyphs (FE-025)", async () => {
+    const user = userEvent.setup();
+    render(<Harness initialOpen={false} />);
+    const collapsed = screen.getByRole("button", { name: "Expand group Numbers" });
+    expect(collapsed.querySelector("svg")?.getAttribute("data-icon")).toBe("chevron-right");
+    expect(collapsed.textContent).toBe("");
+    await user.click(collapsed);
+    const open = screen.getByRole("button", { name: "Collapse group Numbers" });
+    expect(open.querySelector("svg")?.getAttribute("data-icon")).toBe("chevron-down");
+  });
+
+  it("puts the chevron after the header content when asked (Figma class groups)", () => {
+    render(
+      <CollapsibleGroup label="Custom" markerPlacement="end" onToggle={() => undefined} open>
+        <p>A</p>
+      </CollapsibleGroup>,
+    );
+    const header = screen.getByRole("group", { name: "Custom" }).firstElementChild as HTMLElement;
+    expect(header.lastElementChild).toBe(screen.getByRole("button", { name: "Collapse group Custom" }));
+    expect(header.firstElementChild).toHaveTextContent("Custom");
+  });
+
   it("leaves the triangle out of the tab order when the caller rovers focus", async () => {
     const user = userEvent.setup();
     render(

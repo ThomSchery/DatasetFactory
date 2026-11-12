@@ -1,13 +1,20 @@
 /*
+ * FE-025: every state takes the preset colour of the same name — rest
+ * `surface/panel`, hover `surface/panel-hover`, pressed
+ * `surface/panel-pressed`, a pressed toggle `surface/panel-selected`, focus
+ * `border/focus`. A glyph is `icon/secondary` at rest and `icon/primary` only
+ * when hovered, pressed or selected (the Figma icons in icon/primary were too
+ * bright, user 2026-11-10).
+ *
  * FE-022: every Figma button is outlined — radius 4, `surface/panel` fill,
  * 12/300 label, 24 px icon. Only two things are ever filled: `emphasis`
  * (Save profile once the draft differs, per the Figma note) and a pressed
  * toggle (`aria-pressed="true"`), which is a state rather than a variant.
  *
  * `primary` and `secondary` keep their names because callers and the protected
- * catalogue use them, but they now draw the same outlined button; `primary`
- * only sits on the raised surface so the main action of a row still reads
- * first. The outline is `--color-stroke-control-default`, not Figma's
+ * catalogue use them, and draw the same outlined button on `surface/panel`, as
+ * every Figma button does (FE-025: `primary` no longer rests on the hover
+ * colour). The outline is `--color-stroke-control-default`, not Figma's
  * `border/default`, because a control outline must clear 3:1 (FE-021 log :33).
  */
 
@@ -47,20 +54,18 @@
   font-size: var(--font-size-md);
 }
 
-.df-button--primary {
-  background: var(--color-surface-neutral-raised);
-}
-
 .df-button--muted {
   border-color: var(--color-surface-transparent);
   background: var(--color-surface-transparent);
   color: var(--color-text-weak-default);
 }
 
+/* FE-025: Save profile once the draft differs (Figma note: "the colour
+   changes"). No white fill: `surface/panel-selected` with `text/primary`, and
+   the control outline that already clears 3:1 against the panel. */
 .df-button--emphasis {
-  border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-fill-brand-impeccable);
-  color: var(--color-text-on-brand);
+  background: var(--color-surface-neutral-selected);
+  color: var(--color-text-strong-default);
 }
 
 .df-button:hover:not(:disabled) {
@@ -68,15 +73,26 @@
   color: var(--color-text-strong-default);
 }
 
-.df-button--primary:hover:not(:disabled) {
-  background: var(--color-surface-neutral-selected);
+.df-button:active:not(:disabled) {
+  background: var(--color-surface-neutral-pressed);
 }
 
+/* Selected stays selected under the pointer. */
 .df-button--emphasis:hover:not(:disabled),
 .df-button--emphasis:active:not(:disabled) {
-  border-color: var(--color-fill-brand-impeccable-hover);
-  background: var(--color-fill-brand-impeccable-hover);
-  color: var(--color-text-on-brand);
+  background: var(--color-surface-neutral-selected);
+  color: var(--color-text-strong-default);
+}
+
+.df-button .df-icon {
+  color: var(--color-icon-weak-default);
+}
+
+.df-button:hover:not(:disabled) .df-icon,
+.df-button:active:not(:disabled) .df-icon,
+.df-button[aria-pressed="true"] .df-icon,
+.df-button--emphasis .df-icon {
+  color: var(--color-icon-strong-default);
 }
 
 /* COLOR-09: a pressed toggle changes fill and outline, and says so with

@@ -597,7 +597,7 @@ export function GroupedOptionList({
                   size="sm"
                   variant="muted"
                 >
-                  <span aria-hidden="true">×</span>
+                  <Icon name="close" />
                 </Button>
               </span>
             ))
@@ -656,7 +656,7 @@ export function GroupedOptionList({
               size="sm"
               variant="muted"
             >
-              <span aria-hidden="true">×</span>
+              <Icon name="close" />
             </Button>
           ) : null}
           <span aria-hidden="true" className="df-grouped-options__separator" />
@@ -676,7 +676,8 @@ export function GroupedOptionList({
             size="sm"
             variant="muted"
           >
-            <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+            {/* FE-025: Figma `Arrow - Down 2`, open or closed; `aria-expanded` carries the state. */}
+            <Icon name="chevron-down" />
           </Button>
         </div>
       </div>
@@ -695,6 +696,7 @@ export function GroupedOptionList({
             <CollapsibleGroup
               key={group.id}
               label={group.label}
+              markerPlacement={inline ? "end" : "start"}
               onToggle={() => {
                 toggleCollapsed(group.id);
               }}
@@ -865,7 +867,12 @@ function OptionRowElement({
       role={single ? "option" : "checkbox"}
       tabIndex={active && !disabled ? 0 : -1}
     >
-      <span aria-hidden="true" className="df-grouped-options__mark" />
+      {single ? null : (
+        // FE-025: the Figma checkboxes. A single choice carries no mark at all.
+        <span aria-hidden="true" className="df-grouped-options__mark">
+          <Icon name={checked === "true" ? "checkbox-selected" : checked === "mixed" ? "checkbox-mixed" : "checkbox-empty"} />
+        </span>
+      )}
       <span className="df-grouped-options__label">{label}</span>
       {detail === undefined ? null : (
         <>

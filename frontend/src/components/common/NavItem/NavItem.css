@@ -63,9 +63,10 @@
   white-space: nowrap;
 }
 
+/* FE-025: selected is `surface/panel-selected`, not the hover colour. */
 .df-nav-item--segment.df-nav-item--active {
   border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-surface-neutral-raised);
+  background: var(--color-surface-neutral-selected);
 }
 
 /* The FE-022 side bar: a 24 px glyph on a 40 px square, label for assistive
@@ -95,6 +96,17 @@
   justify-content: center;
   width: var(--icon-size);
   height: var(--icon-size);
+}
+
+/* FE-025: the glyph is `icon/secondary` at rest, `icon/primary` on hover and
+   on the current destination (side bar, switch, menu). */
+.df-nav-item__icon {
+  color: var(--color-icon-weak-default);
+}
+
+.df-nav-item:hover .df-nav-item__icon,
+.df-nav-item--active .df-nav-item__icon {
+  color: var(--color-icon-strong-default);
 }
 
 .df-nav-item--rail .df-nav-item__icon {

@@ -114,7 +114,7 @@ export function AppShell() {
           title="Sections"
           variant="muted"
         >
-          <Icon name="hamburger" />
+          <Icon name="menu" />
         </Button>
         <nav aria-label="More destinations" className="df-shell__more" inert={outsideDrawer}>
           <AppMenu

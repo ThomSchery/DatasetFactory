@@ -56,8 +56,8 @@ export interface RegionOverlayProps {
   /** Disables drawing, selection and removal without unmounting the picture. */
   disabled?: boolean;
   /**
-   * FE-022: the picture fills a box whose size the consumer sets, the way
-   * Figma's `IMAGE FILL` crops it, and Reset shows the whole frame. Without it
+   * FE-022: the picture sits in a box whose size the consumer sets. FE-025:
+   * it starts whole in that box (contain, centred); Reset returns there. Without it
    * the box takes the picture's own proportion, as before.
    */
   fill?: boolean;
@@ -172,8 +172,9 @@ function rounded(value: number): number {
 /**
  * Where the picture sits in the viewport at scale 1. Without `fill` it is the
  * whole viewport. With `fill` it is the largest box of the picture's
- * proportion that fits ("contain"), centred — scale 1 is then the whole frame,
- * and the starting view zooms that box until it covers the viewport.
+ * proportion that fits ("contain"), centred — scale 1 is then the whole frame.
+ * FE-025 (user, 2026-11-10: "fit the image in the window"): scale 1 is also
+ * where every picture starts; the FE-022 cover crop is gone.
  */
 interface StageLayout {
   baseHeight: number;
@@ -232,23 +233,6 @@ function fillLayout(viewport: { width: number; height: number }, source: SourceS
     viewportHeight: viewport.height,
     viewportWidth: viewport.width,
   };
-}
-
-/** `IMAGE FILL`: the smallest zoom at which the picture covers the box. */
-function coverView(layout: StageLayout): ViewTransform {
-  if (layout.baseWidth <= 0 || layout.baseHeight <= 0) {
-    return FIT_VIEW;
-  }
-  const scale = rounded(
-    Math.min(
-      MAX_ZOOM,
-      Math.max(1, layout.viewportWidth / layout.baseWidth, layout.viewportHeight / layout.baseHeight),
-    ),
-  );
-  if (scale === 1) {
-    return FIT_VIEW;
-  }
-  return { scale, ...clampPan({ x: 0, y: 0 }, scale, layout) };
 }
 
 const RESIZE_CORNERS: readonly ResizeCorner[] = [
@@ -365,7 +349,7 @@ export function RegionOverlay({
       : null;
   const fillLayoutRef = useRef<StageLayout | null>(fillLayoutValue);
   fillLayoutRef.current = fillLayoutValue;
-  /** The view is still the starting cover, so a resize may recompute it. */
+  /** The view is still the starting one, so a resize may recompute it. */
   const atStartViewRef = useRef(true);
 
   /** The geometry every pan and zoom is clamped against, read at call time. */
@@ -377,9 +361,9 @@ export function RegionOverlay({
     return viewport === null ? null : legacyLayout(viewport.getBoundingClientRect());
   }
 
+  /** FE-025: every picture starts whole, centred in its field. */
   function startView(): ViewTransform {
-    const layout = fillLayoutRef.current;
-    return layout === null ? FIT_VIEW : coverView(layout);
+    return FIT_VIEW;
   }
   const [contextMenu, setContextMenu] = useState<ShapeContextMenu | null>(null);
 
@@ -418,7 +402,7 @@ export function RegionOverlay({
     finishPanGesture(true);
   }
 
-  /** Reset shows the whole frame (FE-022), not the starting crop. */
+  /** Reset shows the whole frame (FE-022), which is also the starting view. */
   function resetView(): void {
     invalidatePanInteraction();
     updateView(FIT_VIEW);
@@ -486,10 +470,15 @@ export function RegionOverlay({
     }
     const measure = () => {
       const bounds = viewport.getBoundingClientRect();
+      // FE-025: the stage is placed inside the padding box, so the field it
+      // must fit is the border box minus the border; otherwise a contained
+      // picture loses its outermost pixel row to `overflow: hidden`.
+      const width = bounds.width - (viewport.offsetWidth - viewport.clientWidth);
+      const height = bounds.height - (viewport.offsetHeight - viewport.clientHeight);
       setViewportSize((current) =>
-        current !== null && current.width === bounds.width && current.height === bounds.height
+        current !== null && current.width === width && current.height === height
           ? current
-          : { width: bounds.width, height: bounds.height },
+          : { width, height },
       );
     };
     measure();
@@ -503,14 +492,14 @@ export function RegionOverlay({
     };
   }, [fill]);
 
-  // A new box size keeps an untouched view at its cover crop and keeps a
-  // chosen view inside the picture.
+  // A new box size keeps an untouched view whole and keeps a chosen view
+  // inside the picture.
   useLayoutEffect(() => {
     if (fillLayoutValue === null) {
       return;
     }
     if (atStartViewRef.current) {
-      updateView(coverView(fillLayoutValue), true);
+      updateView(startView(), true);
       return;
     }
     const current = viewRef.current;
