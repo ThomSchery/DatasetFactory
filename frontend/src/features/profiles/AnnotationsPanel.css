@@ -45,7 +45,8 @@
 
 .df-annotations__row .df-button--muted,
 .df-annotations__row .df-button--muted:hover:not(:disabled),
-.df-annotations__row .df-button--muted[aria-pressed="true"] {
+.df-annotations__row .df-button--muted[aria-pressed="true"],
+.df-annotations__row .df-button--muted[aria-pressed="true"]:hover:not(:disabled) {
   border-color: var(--color-surface-transparent);
   background: var(--color-surface-transparent);
 }

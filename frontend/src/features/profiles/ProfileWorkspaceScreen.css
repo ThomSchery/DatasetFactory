@@ -121,21 +121,10 @@
   }
 }
 
-/* FE-021 FIX2: drawing is a mode, so its pressed state reads at a glance —
-   filled, ≥ 3:1 against the panel, and announced by `aria-pressed`. */
-.df-profile-workspace__tool.df-button[aria-pressed="true"] {
-  border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-fill-brand-impeccable);
-  color: var(--color-text-on-brand);
-}
-
-.df-profile-workspace__tool.df-button[aria-pressed="true"]:hover {
-  background: var(--color-fill-brand-impeccable-hover);
-}
-
-.df-profile-workspace__tool.df-button[aria-pressed="true"] .df-icon {
-  color: var(--color-text-on-brand);
-}
+/* FE-021 FIX2 / FE-025 FIX1: drawing is a mode, and its pressed state is the
+   shared toggle state of `Button` — `surface/panel-selected`, the
+   `border/focus` outline (≥ 3:1 against the panel), an `icon/primary` glyph
+   and `aria-pressed`. No white fill. */
 
 /* FE-025: Figma `game-x` — Save profile rests on `surface/page` with the
    `save-line` glyph; once the draft differs it is the `emphasis` button. */

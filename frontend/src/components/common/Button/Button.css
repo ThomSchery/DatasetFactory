@@ -97,7 +97,8 @@
 
 /* COLOR-09: a pressed toggle changes fill and outline, and says so with
    `aria-pressed`, never with colour alone. */
-.df-button[aria-pressed="true"] {
+.df-button[aria-pressed="true"],
+.df-button[aria-pressed="true"]:hover:not(:disabled) {
   border-color: var(--color-fill-brand-impeccable);
   background: var(--color-surface-neutral-selected);
   color: var(--color-text-strong-default);

@@ -143,8 +143,11 @@ test("FIX2: draw mode has a visible high-contrast pressed state", async ({ page 
     await page.mouse.move(0, 0);
     await toggle.evaluate((element) => element.blur());
   };
+  // FE-025 FIX1: the pressed state is `surface/panel-selected` with the
+  // `border/focus` outline; the ≥ 3:1 non-text contrast against the panel is
+  // carried by that outline (the marker), not by a white fill.
   const colors = () => toggle.evaluate((element) => ({
-    button: getComputedStyle(element).backgroundColor,
+    button: getComputedStyle(element).borderTopColor,
     panel: getComputedStyle(element.closest("section")!).backgroundColor,
   }));
   const parse = (color: string) => {

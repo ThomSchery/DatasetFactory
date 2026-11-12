@@ -13,11 +13,10 @@ Szerokość obramowania (BWIDTH-01..14), Promień (RADIUS-01..05), Nakładki
 
 Źródło ikon: `designs/figma-2026-11-05/icons.json` + `icons/*.svg` (20 ikon,
 eksport wektorowy z 2026-11-10, commitowane z tym ticketem). Zestawy:
-**Iconly Light** (Piqo Design, licencja Iconly — darmowa do użytku
-komercyjnego i osobistego, bez wymogu przypisania; obrys 1.5) — Upload,
+**Iconly Light** (Piqo Design; obrys 1.5; licencja — zob. FIX1) — Upload,
 Setting, Scan, Edit, Arrow - Right Square, Arrow - Down 2, Arrow - Right 2,
 Arrow - Left, Arrow - Right, Play, Profile, Checkbox- selected / Checkbox -
-Empty, more-horizontal; **Remix Icon** (licencja Apache 2.0, ikony wypełniane)
+Empty, more-horizontal; **Remix Icon** (ikony wypełniane; licencja — zob. FIX1)
 — search-2, save-line, add-fill, film-line, contract-left-line (nieużywana,
 FE-023), oraz ☰ `Frame 1` (wypełnienie, kształt jak Remix `menu-line`).
 
@@ -322,3 +321,118 @@ tsc, Vitest 1026/1026 (45 plików), vite build, Playwright 92/92 (26
 PNG w `docs/tickets/` przywrócone `git checkout`; wygenerowany
 `FE-001/screenshots/run-setup-1440.png` usunięty. Bez zmian backendu, bez
 nowych zależności npm, preset nietknięty.
+
+## FIX1 — Design Plan (2026-11-12, przed zmianą `frontend/src/`)
+
+Źródło: cold review `fe-025-cold-review` (werdykt „fix first”), polecenie
+koordynatora FIX1 (5 punktów). Ta sama gałąź, baza `cf6b019`.
+
+### Elementy interfejsu i tokeny
+
+1. **Obrys regionu przy zoomie** (`RegionOverlay`, OVERLAY-*, BWIDTH-06/08):
+   `vector-effect: non-scaling-stroke` kompensuje tylko skalę `viewBox`, nie
+   CSS `scale()` sceny HTML. Grubość = `--border-width-default` ×
+   `--df-overlay-inverse-zoom` (już ustawiane przez komponent na `1 / skala`,
+   używane przez etykiety) dla wszystkich obrysów: region, `muted`, `draft`,
+   `error`, `manual`, szkic, fokus, celownik. Wynik: 1 px ekranu przy każdym
+   powiększeniu. Zaznaczenie / fokus nadal przez uchwyty, wypełnienie, wzór
+   linii i kolor.
+2. **Metadane wybranego wiersza** (`GroupedOptionList`, COLOR-08): na
+   `surface/panel-selected` tekst `detail` przechodzi z `text/secondary`
+   (4.13:1) na `text/primary` (7.1:1). Etykieta już `text/primary`.
+3. **Draw region wciśnięty** (`ProfileWorkspaceScreen`, COLOR-07/08,
+   BORDER-06): usunięte białe wypełnienie FE-021 FIX2. Wciśnięty =
+   wspólny stan przycisku `aria-pressed`: tło `surface/panel-selected`, obrys
+   `border/focus` (13:1 do panelu — kontrast ≥ 3:1 spełnia obrys), glif
+   `icon/primary`; hover wciśniętego zostaje `panel-selected` (nie
+   `panel-hover`). `aria-pressed` i widoczny znacznik bez zmian.
+4. **Preset LF** (bez UI): `.gitattributes` w korzeniu repo:
+   `frontend/src/styles/design-preset.css text eol=lf`; bez renormalizacji
+   reszty, bez edycji presetu.
+5. **Licencje** (bez UI): wpis w logu.
+
+Checklista §2.2: layout, typografia, promienie, cienie — bez zmian; kolory
+jak wyżej (tylko istniejące tokeny); obramowania: obrys `border/focus`
+wciśniętego toggle'a, grubość obrysów regionu 1 px ekranu; komponenty —
+bez nowych.
+
+## FIX1 — wykonanie (2026-11-12)
+
+Każdy nowy test uruchomiony najpierw na `cf6b019` i czerwony, potem zielony.
+
+1. **Obrys regionu 1 px ekranu przy każdym zoomie.** `RegionOverlay.css`:
+   obrys regionu, szkic i celownik `stroke-width: calc(var(--border-width-default)
+   * var(--df-overlay-inverse-zoom, 1))`. `--df-overlay-inverse-zoom` to
+   `1 / skala`, ustawiane na scenie przez komponent (wcześniej tylko dla
+   etykiet); `non-scaling-stroke` zostaje i zdejmuje skalę `viewBox`. Zastąpiony
+   fałszywie pozytywny test e2e: grubość na ekranie = obliczony `stroke-width`
+   × skala CSS przodków (szerokość narysowana / szerokość układu sceny),
+   |w − 1| ≤ 0.1 przy 100 %, po 3 i po 8 krokach zoomu (≈ 597 %), po
+   zaznaczeniu i przy fokusie. Na `cf6b019`: FAIL „3 zoom steps:
+   1.95293551010068 px”.
+2. **Kontrast metadanych wybranego wiersza.** `GroupedOptionList.css`:
+   `detail` wybranego wiersza `text/primary` (7.1:1 na `panel-selected`; było
+   `text/secondary` 4.13:1). Test e2e (wiersze): kolor = `text/primary`,
+   kontrast metadanych i etykiety do tła wiersza ≥ 4.5:1. Na `cf6b019`: FAIL.
+3. **Draw region wciśnięty bez białego wypełnienia.** Usunięte reguły
+   wyjątku FE-021 z `ProfileWorkspaceScreen.css`; obowiązuje wspólny stan
+   `Button[aria-pressed="true"]`: tło `surface/panel-selected`, obrys
+   `border/focus`, glif `icon/primary`; hover wciśniętego zostaje
+   `panel-selected` (`Button.css`; `AnnotationsPanel.css` utrzymuje
+   przezroczysty przycisk w wierszu także przy hover). Nowy test e2e FE-025:
+   tło, obrys ≠ spoczynek i ≥ 3:1 do panelu, glif, hover. Na `cf6b019`: FAIL
+   (tło `rgb(246, 247, 248)`). `fe021-dialog` FIX2: kontrast ≥ 3:1 mierzony
+   dla obrysu (znacznika) zamiast białego wypełnienia; próg 3:1 bez zmian.
+4. **Preset LF.** `.gitattributes` w korzeniu:
+   `frontend/src/styles/design-preset.css text eol=lf` (bez renormalizacji,
+   preset nietknięty). Sprawdzone: przy `core.autocrlf=true` usunięcie pliku i
+   `git checkout` daje `i/lf w/lf attr/text eol=lf`. Test w
+   `designPreset.test.ts`: `git check-attr eol` = `lf`, a
+   `git -c core.autocrlf=true cat-file --filters HEAD:…` bez `\r` i z
+   blokiem `:root` w LF — test FE-024 „untouched” przechodzi w takim
+   checkoucie. Na `cf6b019` (bez `.gitattributes`): FAIL.
+5. **Licencje ikon** — niżej.
+
+### Licencje ikon (FIX1, P3)
+
+Eksport z Figmy (2026-11-10) nie zapisuje wydania ani pliku źródłowego
+zestawów; poniżej to, co da się przypiąć, i co zostaje do potwierdzenia przez
+użytkownika (który plik / wersja leży w dokumencie DataSetFactory).
+
+- **Iconly Light** (Piqo Design, <https://iconly.pro>): Upload, Setting,
+  Scan, Edit, Profile, Play, Arrow - Right Square / Down 2 / Right 2 / Left /
+  Right, Checkbox- selected / Checkbox - Empty, more-horizontal (nazwy
+  komponentów zestawu Iconly 2.x „Light”). Licencja zależy od wydania:
+  przewodnik <https://iconly.pro/pages/licensing-guide> (stan 2026-11-12)
+  dopuszcza użycie komercyjne w produktach dla „Lifetime License”, zabrania
+  odsprzedaży / redystrybucji samych plików i użycia w logo; dla darmowych
+  zasobów prosi o podanie źródła („credit is appreciated”), nie opisuje ich
+  szczegółowych warunków. Do potwierdzenia: czy to darmowy zestaw z Figma
+  Community, czy płatny — wtedy obowiązują warunki tamtego wydania.
+- **Remix Icon** (<https://github.com/Remix-Design/RemixIcon>): search-2
+  (`search-2-line`), save-line, add-fill, film-line, menu (`Frame 1`, kształt
+  `menu-line`), contract-left-line (nieużywana). Do 2026 licencja Apache 2.0;
+  od ogłoszenia z 2026-01-25 (<https://github.com/Remix-Design/RemixIcon/issues/1069>)
+  bieżące wydania mają Remix Icon License v1.0
+  (<https://github.com/Remix-Design/RemixIcon/blob/master/License>):
+  użycie w aplikacjach i produktach komercyjnych jako element wspierający,
+  modyfikacje dozwolone, przypisanie opcjonalne; zakazane: sprzedaż ikon jako
+  osobnego produktu, ikony jako główna wartość płatnego produktu, logo /
+  znaki towarowe, konkurencyjne biblioteki. Użycie w DatasetFactory (glify
+  interfejsu) mieści się w obu licencjach. Nie wiadomo, z którego wydania
+  pochodzą ikony w pliku Figmy — do potwierdzenia przez użytkownika.
+
+Nie stwierdzam braku prawa użycia; obie licencje dopuszczają ten sposób
+użycia, ale wydanie trzeba potwierdzić.
+
+### FIX1 — bramka (2026-11-12)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe025-gate-pytest`,
+na kodzie FIX1 (bez zmian po starcie bramki): **9/9 PASS, 0 SKIP** — ruff format,
+ruff check, mypy, pytest 473/473, tsc, Vitest 1027/1027 (45 plików), vite build,
+Playwright 93/93 (fe025 13, fe021-dialog 5, fe022-parity 26 i touch 7 z
+niezmienionymi progami, fe023 12, fe024 3), E2E root safety. Przed pierwszym
+uruchomieniem testów FIX1 zatrzymany osierocony `vite` tego worktree na 5193
+(pid 3592); 5173/8000/8001 nietknięte. Historyczne PNG przywrócone
+`git checkout`; `FE-001/screenshots/run-setup-1440.png` (nie ma go w HEAD,
+artefakt bramki jak w FE-022/FE-024) usunięty.

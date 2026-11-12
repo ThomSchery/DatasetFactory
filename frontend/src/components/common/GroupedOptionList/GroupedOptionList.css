@@ -284,6 +284,12 @@
   background: var(--color-surface-neutral-selected);
 }
 
+/* FIX1 (COLOR-08): on panel-selected, text/secondary is 4.13:1; every text
+   of the chosen row — label and metadata — is text/primary (7.1:1). */
+.df-grouped-options__row--option[aria-selected="true"] .df-grouped-options__detail {
+  color: var(--color-text-strong-default);
+}
+
 .df-grouped-options__row[aria-disabled="true"] {
   cursor: default;
   opacity: var(--opacity-disabled);

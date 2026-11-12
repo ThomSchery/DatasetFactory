@@ -354,7 +354,13 @@ test.describe("FE-025 every state is the preset token of the same name", () => {
     expect(await style(heading, "color")).toBe(presetRgb("--color-text-secondary"));
     const detail = chosen.locator(".df-grouped-options__detail");
     expect(await style(detail, "font-family")).not.toMatch(/mono/i);
-    expect(await style(detail, "color")).toBe(presetRgb("--color-text-secondary"));
+    // FIX1: every text on a selected row reaches 4.5:1 — the label and the
+    // metadata both use text/primary on panel-selected.
+    await rest(page);
+    const rowBackground = await style(chosen, "background-color");
+    expect(await style(detail, "color")).toBe(presetRgb("--color-text-primary"));
+    expect(contrast(await style(detail, "color"), rowBackground)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(await style(chosen.locator(".df-grouped-options__label"), "color"), rowBackground)).toBeGreaterThanOrEqual(4.5);
   });
 
   test("Save profile: Figma at rest, panel-selected when dirty — not white, readable, ≥ 3:1", async ({ page }) => {
@@ -460,20 +466,62 @@ test.describe("FE-025 canvas: the whole picture fits, region outlines are 1 px",
 
   test("region outlines are 1 screen px at 100 % and when zoomed; selection and focus do not thicken", async ({ page }) => {
     await openProfile(page);
-    const outline = page.locator(".df-region-overlay__shape-fill").first();
-    const read = () =>
-      outline.evaluate((element) => ({
-        effect: getComputedStyle(element).getPropertyValue("vector-effect"),
-        width: getComputedStyle(element).strokeWidth,
-      }));
-    expect(await read()).toEqual({ effect: "non-scaling-stroke", width: "1px" });
+    // FIX1: the on-screen width is the computed stroke-width (viewBox scale
+    // neutralised by non-scaling-stroke) times every CSS scale above it —
+    // measured as the stage's drawn width over its layout width.
+    const onScreen = () =>
+      page.locator(".df-region-overlay__shape-fill").evaluateAll((elements) =>
+        elements.map((element) => {
+          let scale = 1;
+          for (let node = element.parentElement; node !== null; node = node.parentElement) {
+            if (node instanceof HTMLElement && node.offsetWidth > 0) {
+              const drawn = node.getBoundingClientRect().width;
+              scale = drawn / node.offsetWidth;
+              break;
+            }
+          }
+          const style = getComputedStyle(element);
+          return {
+            effect: style.getPropertyValue("vector-effect"),
+            width: Number.parseFloat(style.strokeWidth) * scale,
+          };
+        }),
+      );
+    const expectOnePixel = async (label: string) => {
+      for (const outline of await onScreen()) {
+        expect(outline.effect, label).toBe("non-scaling-stroke");
+        expect(Math.abs(outline.width - 1), `${label}: ${String(outline.width)} px`).toBeLessThanOrEqual(0.1);
+      }
+    };
+    await expectOnePixel("100 %");
     for (let step = 0; step < 3; step += 1) await page.getByRole("button", { name: "Zoom in" }).click();
     await expect(page.getByLabel("Canvas zoom")).not.toHaveText("100%");
-    expect(await read()).toEqual({ effect: "non-scaling-stroke", width: "1px" });
+    await expectOnePixel("3 zoom steps");
+    for (let step = 0; step < 5; step += 1) await page.getByRole("button", { name: "Zoom in" }).click();
+    await expectOnePixel(`8 zoom steps (${await page.getByLabel("Canvas zoom").innerText()})`);
     await page.getByRole("button", { name: "Select region Region A" }).click();
-    expect((await read()).width).toBe("1px");
+    await expectOnePixel("selected");
     await page.locator(".df-region-overlay__shape").first().focus();
-    expect((await read()).width).toBe("1px");
-    expect(await style(outline, "stroke")).toBe(presetRgb("--color-border-focus"));
+    await expectOnePixel("focused");
+    expect(await style(page.locator(".df-region-overlay__shape-fill").first(), "stroke")).toBe(presetRgb("--color-border-focus"));
+  });
+
+  test("FIX1: Draw region pressed is panel-selected with the border/focus outline, not white", async ({ page }) => {
+    await openProfile(page);
+    const draw = page.getByRole("button", { name: "Draw region" });
+    await rest(page);
+    const restBorder = await style(draw, "border-top-color");
+    await draw.click();
+    await expect(draw).toHaveAttribute("aria-pressed", "true");
+    await rest(page);
+    await draw.evaluate((element) => element.blur());
+    const panel = await style(page.locator(".df-profile-workspace__canvas"), "background-color");
+    expect(await style(draw, "background-color")).toBe(presetRgb("--color-surface-panel-selected"));
+    expect(await style(draw, "border-top-color")).toBe(presetRgb("--color-border-focus"));
+    expect(await style(draw, "border-top-color")).not.toBe(restBorder);
+    expect(contrast(await style(draw, "border-top-color"), panel)).toBeGreaterThanOrEqual(3);
+    expect(await style(draw.locator("svg[data-icon]"), "color")).toBe(presetRgb("--color-icon-primary"));
+    await draw.hover();
+    expect(await style(draw, "background-color")).toBe(presetRgb("--color-surface-panel-selected"));
   });
 });

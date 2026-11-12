@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
@@ -76,6 +77,19 @@ describe("the committed preset", () => {
     expect(variables.get("--border-width-1")).toBe("1px");
     // 49 variables in the `@theme static` block and `--border-width-1` on `:root`.
     expect(variables.size).toBe(50);
+  });
+
+  it("checks out with LF on every machine, core.autocrlf=true included (FE-025 FIX1)", () => {
+    const attribute = execFileSync("git", ["check-attr", "eol", "--", "src/styles/design-preset.css"], { encoding: "utf8" });
+    expect(attribute.trim()).toBe("src/styles/design-preset.css: eol: lf");
+    // What a Windows checkout with autocrlf would write for the committed blob.
+    const checkedOut = execFileSync(
+      "git",
+      ["-c", "core.autocrlf=true", "cat-file", "--filters", "HEAD:frontend/src/styles/design-preset.css"],
+      { encoding: "utf8" },
+    );
+    expect(checkedOut).not.toContain("\r");
+    expect(checkedOut).toMatch(/^:root \{\n {2}--border-width-1: 1px;\n\}\n$/m);
   });
 
   it("is still the plugin's export, untouched (FE-024: never edited by hand)", () => {

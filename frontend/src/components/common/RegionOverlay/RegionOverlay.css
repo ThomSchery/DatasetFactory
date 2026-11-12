@@ -108,7 +108,7 @@
 
 .df-region-overlay__crosshair-line {
   stroke: var(--color-text-strong-default);
-  stroke-width: var(--border-width-default);
+  stroke-width: calc(var(--border-width-default) * var(--df-overlay-inverse-zoom, 1));
   stroke-dasharray: var(--size-xs) var(--size-xs);
   opacity: var(--opacity-hover);
   vector-effect: non-scaling-stroke;
@@ -126,9 +126,12 @@
   fill: var(--color-surface-transparent);
   stroke: var(--color-fill-brand-impeccable);
   /* FE-025: the preset's one border width, 1 screen px at every window size,
-     every viewBox scale and every zoom (`non-scaling-stroke`). Selection and
-     focus differ by handles, fill and line shape, never by thickness. */
-  stroke-width: var(--border-width-default);
+     every viewBox scale and every zoom. `non-scaling-stroke` undoes the
+     viewBox scale only; the zoom is a CSS `scale()` on the HTML stage, so the
+     width is divided by it (FIX1: `--df-overlay-inverse-zoom` = 1 / scale).
+     Selection and focus differ by handles, fill and line shape, never by
+     thickness. */
+  stroke-width: calc(var(--border-width-default) * var(--df-overlay-inverse-zoom, 1));
   vector-effect: non-scaling-stroke;
   /* RADIUS-01: a region is an exact pixel rectangle handed to the cropper.
      A rounded corner would depict a crop shape that does not exist. */
@@ -233,7 +236,7 @@
 .df-region-overlay__draft {
   fill: var(--color-fill-brand-impeccable-soft);
   stroke: var(--color-stroke-strong-default);
-  stroke-width: var(--border-width-default);
+  stroke-width: calc(var(--border-width-default) * var(--df-overlay-inverse-zoom, 1));
   stroke-dasharray: 6 4;
   vector-effect: non-scaling-stroke;
   pointer-events: none;

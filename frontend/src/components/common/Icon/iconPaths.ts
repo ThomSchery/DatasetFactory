@@ -6,8 +6,9 @@
  * FE-025: the icons the Figma document draws are its own vectors, exported on
  * 2026-11-10 to `designs/figma-2026-11-05/icons/` (`figma.file`) and checked
  * element for element against those files in `Icon.test.tsx`. Two families:
- * Iconly Light (outlined, stroke 1.5, round caps — free for personal and
- * commercial use) and Remix Icon (filled, Apache 2.0). A colour in the export
+ * Iconly Light (outlined, stroke 1.5, round caps) and Remix Icon (filled).
+ * The export does not record either release; sources and licences as far as
+ * they can be pinned are in docs/tickets/FE-025/log.md (FIX1). A colour in the export
  * is the paint at its point of use, mapped onto the matching token:
  *
  *   #F6F7F8 → `current` (the role around the glyph decides: icon/secondary at
