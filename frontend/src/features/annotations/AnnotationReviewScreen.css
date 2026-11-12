@@ -202,8 +202,12 @@ p.df-review-classes {
   font-weight: var(--font-weight-regular);
 }
 
-.df-review-classes__item[data-selected] .df-button {
-  background: var(--color-surface-neutral-raised);
+/* FE-025 FIX2: the selected class is `surface/panel-selected` with
+   `text/primary` (7.1:1), at rest and under the pointer alike. */
+.df-review-classes__item[data-selected] .df-button,
+.df-review-classes__item[data-selected] .df-button:hover:not(:disabled) {
+  background: var(--color-surface-neutral-selected);
+  color: var(--color-text-strong-default);
 }
 
 .df-review-classes__item .df-button__content {

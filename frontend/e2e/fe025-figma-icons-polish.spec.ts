@@ -80,6 +80,9 @@ const PROFILE: GameProfile = profileFixture({
   regions: [
     { id: "region-a", name: "Region A", x: 40, y: 40, width: 220, height: 60, allowed_chars: "12", page_segmentation_mode: 7 },
     { id: "region-b", name: "Region B", x: 520, y: 30, width: 180, height: 50, allowed_chars: null, page_segmentation_mode: null },
+    // FIX2: around the centre of the frame, so it stays in view when Zoom in
+    // (which zooms about the centre) reaches 596 %.
+    { id: "region-c", name: "Region C", x: 560, y: 380, width: 160, height: 90, allowed_chars: "3", page_segmentation_mode: 7 },
   ],
   source_height: 852,
   source_width: 1280,
@@ -523,5 +526,253 @@ test.describe("FE-025 canvas: the whole picture fits, region outlines are 1 px",
     expect(await style(draw.locator("svg[data-icon]"), "color")).toBe(presetRgb("--color-icon-primary"));
     await draw.hover();
     expect(await style(draw, "background-color")).toBe(presetRgb("--color-surface-panel-selected"));
+  });
+});
+
+// --- 5. the canvas as it is drawn on screen (FIX2) ------------------------------
+
+interface Raster {
+  height: number;
+  /** Row-major luminance 0–255 of the overlay's own screenshot. */
+  lum: number[];
+  width: number;
+}
+
+/**
+ * The overlay as the screen shows it: an element screenshot with the picture
+ * and the HTML labels hidden, so only the SVG strokes remain on the field's
+ * surface. Decoded in the page through a canvas (no image library needed).
+ */
+/** Hides the picture and the HTML labels so only the SVG strokes remain. Done
+ * before zooming: changing the layer afterwards would make Chromium
+ * re-rasterise it and hide exactly the defect being measured. */
+async function hideForRaster(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll<HTMLElement>(
+      ".df-region-overlay__image, .df-region-overlay__labels, .df-region-overlay__corner-label",
+    )) {
+      element.style.visibility = "hidden";
+    }
+  });
+}
+
+async function overlayRaster(page: Page): Promise<{ origin: { x: number; y: number }; raster: Raster }> {
+  await page.mouse.move(1, 1);
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const overlay = page.locator(".df-region-overlay").first();
+  const box = await overlay.boundingBox();
+  if (box === null) throw new Error("no overlay box");
+  const png = await overlay.screenshot({ animations: "disabled" });
+  const raster = await page.evaluate(async (b64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${b64}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d");
+    if (context === null) throw new Error("no 2d context");
+    context.drawImage(image, 0, 0);
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const lum: number[] = [];
+    for (let index = 0; index < canvas.width * canvas.height; index += 1) {
+      lum.push(Math.round(0.2126 * data[index * 4] + 0.7152 * data[index * 4 + 1] + 0.0722 * data[index * 4 + 2]));
+    }
+    return { height: canvas.height, lum, width: canvas.width };
+  }, png.toString("base64"));
+  return { origin: { x: Math.round(box.x), y: Math.round(box.y) }, raster };
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/**
+ * Across a vertical edge at (x, y): the strongest of nine rows. A sharp 1 px
+ * line at a fractional position is antialiased over two pixels, so its
+ * strength is the brightest pair of neighbours above the surface (`pair`):
+ * ≈ the same at every zoom for a sharp line, a fraction of it for a stretched
+ * blur. `width` is the run at half its own peak.
+ */
+function edgeProfile(raster: Raster, x: number, y: number) {
+  let best = { pair: -1, peak: 0, width: 0, values: [] as number[] };
+  for (let dy = -4; dy <= 4; dy += 1) {
+    const row = Math.round(y) + dy;
+    const values: number[] = [];
+    for (let column = Math.round(x) - 8; column <= Math.round(x) + 8; column += 1) {
+      values.push(raster.lum[row * raster.width + column]);
+    }
+    const base = Math.max(median(values.slice(0, 4)), median(values.slice(-4)));
+    const peak = Math.max(...values) - base;
+    const width = values.filter((value) => value - base >= peak / 2).length;
+    const lift = values.map((value) => Math.max(0, value - base));
+    const pair = Math.max(...lift.slice(1).map((value, index) => value + lift[index]));
+    if (pair > best.pair) best = { pair, peak, width, values };
+  }
+  return best;
+}
+
+/** Period of a dashed vertical edge: distance between dash starts down the brightest column. */
+function dashPeriod(raster: Raster, x: number, y: number): number {
+  let column = Math.round(x);
+  let brightest = -1;
+  for (let candidate = Math.round(x) - 2; candidate <= Math.round(x) + 2; candidate += 1) {
+    let sum = 0;
+    for (let row = Math.round(y) - 24; row <= Math.round(y) + 24; row += 1) sum += raster.lum[row * raster.width + candidate];
+    if (sum > brightest) {
+      brightest = sum;
+      column = candidate;
+    }
+  }
+  const values: number[] = [];
+  for (let row = Math.round(y) - 24; row <= Math.round(y) + 24; row += 1) values.push(raster.lum[row * raster.width + column]);
+  const base = Math.min(...values);
+  const threshold = base + (Math.max(...values) - base) / 2;
+  const starts: number[] = [];
+  values.forEach((value, index) => {
+    if (value >= threshold && (index === 0 || values[index - 1] < threshold)) starts.push(index);
+  });
+  if (starts.length < 3) return values.length;
+  return (starts[starts.length - 1] - starts[0]) / (starts.length - 1);
+}
+
+/** Width of the corner marker: the bright run through (x, y) on its row. */
+function markerRun(raster: Raster, x: number, y: number): number {
+  const row = Math.round(y);
+  const at = (column: number) => raster.lum[row * raster.width + column];
+  let left = Math.round(x);
+  let right = Math.round(x);
+  while (left > 0 && at(left - 1) > 160) left -= 1;
+  while (right < raster.width - 1 && at(right + 1) > 160) right += 1;
+  return at(Math.round(x)) > 160 ? right - left + 1 : 0;
+}
+
+interface ZoomedState {
+  willChange: string;
+  focused: { pair: number; peak: number; period: number; width: number };
+  hitAt2: boolean;
+  hitAt6: boolean;
+  label: string;
+  marker: number;
+  rest: { pair: number; peak: number; width: number };
+  selected: { pair: number; peak: number; width: number };
+}
+
+/** Opens Profile, hides the picture, clicks Zoom in `steps` times and measures Region C. */
+async function measureRegionAt(page: Page, steps: number): Promise<ZoomedState> {
+  await openProfile(page);
+  await hideForRaster(page);
+  for (let step = 0; step < steps; step += 1) {
+    const before = await page.getByLabel("Canvas zoom").innerText();
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await expect(page.getByLabel("Canvas zoom")).not.toHaveText(before);
+  }
+  await page.mouse.move(1, 1);
+  const label = await page.getByLabel("Canvas zoom").innerText();
+  // Not panning: the stage must not be a composited layer pinned to its first
+  // raster scale (that stretches a 1 px stroke into a blur at high zoom).
+  const willChange = await page.locator(".df-region-overlay__zoom-stage").first().evaluate((element) => getComputedStyle(element).willChange);
+  const outline = page.locator(".df-region-overlay__shape-fill").nth(2);
+  const rect = await outline.boundingBox();
+  if (rect === null) throw new Error("no region after zoom");
+  const box = await page.locator(".df-region-overlay").first().boundingBox();
+  if (box === null) throw new Error("no overlay");
+  // Measure whichever vertical edge of Region C is on screen,
+  // halfway down its visible part, and the bottom corner on that side.
+  const pickEdge = (r: { x: number; y: number; width: number; height: number }) => {
+    const left = r.x > box.x + 12 && r.x < box.x + box.width - 12;
+    const top = Math.max(r.y, box.y + 12);
+    const bottom = Math.min(r.y + r.height, box.y + box.height - 12);
+    return { cornerY: r.y + r.height, outward: left ? -1 : 1, x: left ? r.x : r.x + r.width, y: (top + bottom) / 2 };
+  };
+  const edge = pickEdge(rect);
+  const edgeX = edge.x;
+  const edgeY = edge.y;
+
+  // A pointer a few screen px outside the outline: the hit band keeps its
+  // screen width, so 2 px out still grabs the edge and 6 px out does not.
+  const hits = await page.evaluate(({ x, y, outward }) => {
+    const hit = (dx: number) => document.elementFromPoint(x + outward * dx, y)?.closest(".df-region-overlay__shape") !== null;
+    return { at2: hit(2), at6: hit(6) };
+  }, { x: edgeX, y: edgeY, outward: edge.outward });
+
+  let shot = await overlayRaster(page);
+  const local = (point: { x: number; y: number }) => ({ x: point.x - shot.origin.x, y: point.y - shot.origin.y });
+  const rest = edgeProfile(shot.raster, local({ x: edgeX, y: edgeY }).x, local({ x: edgeX, y: edgeY }).y);
+
+  const shape = page.locator(".df-region-overlay__shape").nth(2);
+  await page.keyboard.press("Shift");
+  await shape.focus();
+  expect(await shape.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+  shot = await overlayRaster(page);
+  const focusedAt = local({ x: edgeX, y: edgeY });
+  const focusedProfile = edgeProfile(shot.raster, focusedAt.x, focusedAt.y);
+  const period = dashPeriod(shot.raster, focusedAt.x, focusedAt.y);
+  await shape.evaluate((element) => (element as unknown as HTMLElement).blur());
+
+  await page.getByRole("button", { name: "Select region Region C" }).click();
+  await expect(shape).toHaveAttribute("aria-selected", "true");
+  const selectedRect = await outline.boundingBox();
+  if (selectedRect === null) throw new Error("no selected region");
+  shot = await overlayRaster(page);
+  const selectedEdge = pickEdge(selectedRect);
+  const selectedAt = local({ x: selectedEdge.x, y: selectedEdge.y });
+  const selected = edgeProfile(shot.raster, selectedAt.x, selectedAt.y);
+  // The bottom corner marker on that side, read two px above the corner
+  // (inside the marker, below nothing but the edge it sits on).
+  const corner = local({ x: selectedEdge.x, y: selectedEdge.cornerY });
+  const marker = markerRun(shot.raster, corner.x, corner.y - 2);
+
+  return {
+    willChange,
+    focused: { pair: focusedProfile.pair, peak: focusedProfile.peak, period, width: focusedProfile.width },
+    hitAt2: hits.at2,
+    hitAt6: hits.at6,
+    label,
+    marker,
+    rest: { pair: rest.pair, peak: rest.peak, width: rest.width },
+    selected: { pair: selected.pair, peak: selected.peak, width: selected.width },
+  };
+}
+
+test.describe("FE-025 FIX2 region strokes as drawn on screen", () => {
+  test("outline, focus dashes, corner markers and hit band keep their 100 % screen size at 195 % and 596 %", async ({ page }) => {
+    const base = await measureRegionAt(page, 0);
+    expect(base.label).toBe("100%");
+    expect(base.willChange).toBe("auto");
+    expect(base.rest.width, JSON.stringify(base)).toBeLessThanOrEqual(2);
+    expect(base.rest.peak, JSON.stringify(base)).toBeGreaterThan(100);
+    expect(base.marker, JSON.stringify(base)).toBeGreaterThanOrEqual(6);
+    expect(base.hitAt2).toBe(true);
+    expect(base.hitAt6).toBe(false);
+    for (const steps of [3, 8]) {
+      const zoomed = await measureRegionAt(page, steps);
+      const report = JSON.stringify({ base, zoomed });
+      expect(zoomed.label, report).not.toBe("100%");
+      expect(zoomed.willChange, `${zoomed.label} stage will-change at rest: ${report}`).toBe("auto");
+      for (const state of ["rest", "focused", "selected"] as const) {
+        expect(zoomed[state].width, `${zoomed.label} ${state} width: ${report}`).toBeLessThanOrEqual(2);
+        expect(zoomed[state].pair, `${zoomed.label} ${state} strength: ${report}`).toBeGreaterThanOrEqual(0.8 * base[state].pair);
+      }
+      expect(Math.abs(zoomed.focused.period - base.focused.period), `${zoomed.label} dash period: ${report}`).toBeLessThanOrEqual(1.5);
+      expect(Math.abs(zoomed.marker - base.marker), `${zoomed.label} marker: ${report}`).toBeLessThanOrEqual(1);
+      expect(zoomed.hitAt2, `${zoomed.label} hit 2 px out: ${report}`).toBe(true);
+      expect(zoomed.hitAt6, `${zoomed.label} hit 6 px out: ${report}`).toBe(false);
+    }
+  });
+
+  test("Review: a selected class row is panel-selected with text/primary, at rest and under the pointer", async ({ page }) => {
+    await open(page, "/annotations/run-1");
+    const row = page.getByRole("button", { name: /^Class Life, 1 annotations/ });
+    await row.click();
+    await expect(row).toHaveAttribute("aria-pressed", "true");
+    await rest(page);
+    expect(await style(row, "background-color")).toBe(presetRgb("--color-surface-panel-selected"));
+    expect(await style(row, "color")).toBe(presetRgb("--color-text-primary"));
+    expect(contrast(await style(row, "color"), await style(row, "background-color"))).toBeGreaterThanOrEqual(4.5);
+    await row.hover();
+    expect(await style(row, "background-color")).toBe(presetRgb("--color-surface-panel-selected"));
+    expect(await style(row, "color")).toBe(presetRgb("--color-text-primary"));
   });
 });

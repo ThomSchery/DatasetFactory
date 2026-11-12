@@ -436,3 +436,97 @@ uruchomieniem testów FIX1 zatrzymany osierocony `vite` tego worktree na 5193
 (pid 3592); 5173/8000/8001 nietknięte. Historyczne PNG przywrócone
 `git checkout`; `FE-001/screenshots/run-setup-1440.png` (nie ma go w HEAD,
 artefakt bramki jak w FE-022/FE-024) usunięty.
+
+## FIX2 — Design Plan (2026-11-12, przed zmianą `frontend/src/`)
+
+Źródło: „FIX1 re-review” w `fe-025-cold-review` (werdykt „fix first”),
+polecenie koordynatora FIX2 (3 punkty). Baza `1a9fdb8`.
+
+### Elementy interfejsu i tokeny
+
+1. **Ostry obrys przy zoomie** (`RegionOverlay`, BWIDTH-06/08, OVERLAY-*):
+   `will-change: transform` na scenie każe Chromium zrasteryzować warstwę raz
+   (skala 1) i rozciągać ją przy zoomie — linia 0.17 px × 5.97 robi się
+   ~12 px rozmycia. `will-change` tylko w trakcie aktywnego panu
+   (`.df-region-overlay[data-panning]`), po geście zdjęte → ponowna
+   rasteryzacja w docelowej skali, linia 1 px ostra.
+2. **Stałe w pikselach ekranu** (`RegionOverlay`): ta sama kompensacja
+   `× var(--df-overlay-inverse-zoom, 1)` dla `stroke-width` markera narożnika
+   (`--size-xs`), pasa trafienia (`--size-xs`) i każdego `stroke-dasharray`
+   (celownik, szkic, `manual`, błąd, fokus, szkic rysowany). Marker (prostokąt
+   1 × 1 piksel źródła) dostaje CSS `width` / `height` = `1px` × odwrotność
+   zoomu, żeby nie rósł razem z obrazem. Wynik: marker, pas i okres kreski
+   stałe przy każdym powiększeniu.
+3. **Wybrany wiersz klasy w Review** (`AnnotationReviewScreen`, COLOR-07/08):
+   wybrany = `surface/panel-selected` w spoczynku i pod kursorem, tekst
+   `text/primary` (7.1:1); dotąd `panel-hover` w spoczynku i `panel-selected`
+   pod kursorem (efekt uboczny reguły hover wciśniętego przycisku z FIX1).
+
+Checklista §2.2: layout, typografia, promienie, cienie — bez zmian; kolory —
+istniejące tokeny; obramowania — grubości regionów bez zmian (1 px ekranu),
+uchwyty 8 px ekranu jak przy 100 %; komponenty — bez nowych.
+
+Test (wymóg koordynatora): pomiar rastra na prawdziwym `/profiles` — zrzut
+elementu `.df-region-overlay` z ukrytym zdjęciem i etykietami HTML,
+dekodowany w przeglądarce (canvas, bez nowych zależności). Zoom 3 i 8
+kroków (ZOOM_STEP, jak 3 i 8 kliknięć Zoom in) zakotwiczony Ctrl+kółkiem na
+lewej krawędzi regionu, żeby krawędź i narożniki zostały w polu widzenia.
+Zrzuty aplikacji, nie Figmy.
+
+## FIX2 — wykonanie (2026-11-12)
+
+1. **Ostry obrys przy zoomie.** `RegionOverlay.css`: `will-change: transform`
+   zdjęte ze sceny; zostaje tylko podczas aktywnego panu
+   (`.df-region-overlay[data-panning] .df-region-overlay__zoom-stage`), więc
+   pan pozostaje płynny, a po geście scena jest rasteryzowana w docelowej
+   skali.
+2. **Marker, pas trafienia, kreski stałe w px ekranu.** `× var(--df-overlay-
+   inverse-zoom, 1)` dla `stroke-width` markera i pasa trafienia (8 px) oraz
+   każdego `stroke-dasharray` (celownik 8/8, szkic / `manual` / błąd /
+   rysowany szkic 6/4, fokus 2/2). Marker (prostokąt 1 × 1 piksel źródła)
+   dostaje CSS `width` / `height` = `1px` × odwrotność zoomu, więc jego pole
+   nie rośnie razem z obrazem.
+3. **Wybrany wiersz klasy w Review.** `AnnotationReviewScreen.css`: wybrany
+   = `surface/panel-selected` + `text/primary` w spoczynku i pod kursorem
+   (reguła z `:hover:not(:disabled)`, wygrywa z hover wciśniętego przycisku).
+
+### Testy FIX2 (e2e `fe025`, każdy czerwony na `1a9fdb8`)
+
+- **Raster** (`FE-025 FIX2 region strokes as drawn on screen`): prawdziwe
+  `/profiles`, zdjęcie i etykiety HTML ukryte **przed** zoomem (zmiana warstwy
+  po zoomie wymusza ponowną rasteryzację i ukrywa defekt), 0 / 3 / 8 kliknięć
+  Zoom in (100 / 195 / 597 %), region C w środku klatki (dodany do danych
+  testu, żeby był w kadrze przy zoomie od środka). Zrzut elementu
+  `.df-region-overlay` dekodowany w przeglądarce (canvas). Dla spoczynku,
+  fokusu (`:focus-visible`) i zaznaczenia: szerokość linii w połowie jej
+  szczytu ≤ 2 px, siła linii ≥ 80 % tej przy 100 % — siła = najjaśniejsza
+  para sąsiednich pikseli ponad tłem, bo ostra linia 1 px w ułamkowej
+  pozycji jest antyaliasowana na 2 px (pojedynczy piksel przy 597 % miał 111
+  przy ostrej linii); okres kreski fokusu ±1.5 px od 100 %; marker narożnika
+  ±1 px od 100 %; pas trafienia: 2 px poza obrysem trafia, 6 px — nie; scena
+  w spoczynku `will-change: auto`. Wyniki po poprawce (2 przebiegi): siła 208
+  przy 100 / 195 / 597 % we wszystkich stanach, okres 4, marker 8 / 8 / 9,
+  pas 2 px tak / 6 px nie.
+  Fail-before: na `1a9fdb8` FAIL przy 195 % — okres kreski 7.5 (vs 4),
+  marker 17 (vs 9), 6 px poza obrysem trafia; przy 597 % (diagnostycznie,
+  sama reguła `will-change` przywrócona) siła fokusu 166 < 166.4 i
+  `will-change: transform`. W tym środowisku (headless, `--disable-gpu`)
+  Chromium rasteryzuje częściowo na nowo, więc rozmycie jest słabsze niż u
+  reviewera; deterministycznie łapie je asercja `will-change: auto`.
+- **Review** (`a selected class row is panel-selected …`): wybrany wiersz
+  `Class Life` w spoczynku i pod kursorem `panel-selected`, tekst
+  `text/primary`, kontrast ≥ 4.5:1. Na `1a9fdb8`: FAIL (spoczynek
+  `panel-hover`).
+
+Regresja przed bramką: Vitest 1027/1027, e2e 60/60 (fe025 15, fe021-dialog,
+visual-qa, touch 7, parity 26 z niezmienionymi progami).
+
+### FIX2 — bramka (2026-11-12)
+
+`scripts/check.ps1`, porty 5193/8033/8034, `PYTEST_ADDOPTS=--basetemp=D:/tmp/fe025-gate-pytest`,
+na pierwszym planie tury, na kodzie FIX2 (bez zmian po starcie bramki):
+**9/9 PASS, 0 SKIP** — ruff format, ruff check, mypy, pytest 473/473, tsc,
+Vitest 1027/1027 (45 plików), vite build, Playwright 95/95 (fe025 15, fe021-dialog 5,
+fe022-parity 26 i touch 7 z niezmienionymi progami, fe023 12, fe024 3), E2E
+root safety 4/4. Historyczne PNG przywrócone `git checkout`;
+`FE-001/screenshots/run-setup-1440.png` (nie w HEAD, artefakt bramki) usunięty.

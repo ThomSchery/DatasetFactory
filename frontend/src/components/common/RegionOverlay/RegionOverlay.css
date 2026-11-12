@@ -71,6 +71,13 @@
   width: fit-content;
   max-width: 100%;
   transform-origin: top left;
+}
+
+/* FE-025 FIX2: a composited layer is rasterised once, at scale 1, and then
+   stretched by the zoom — a 1 px outline turns into a wide blur. The hint is
+   kept only while a pan gesture is moving the stage; when the gesture ends
+   the stage is re-rasterised at its real scale and every stroke is sharp. */
+.df-region-overlay[data-panning] .df-region-overlay__zoom-stage {
   will-change: transform;
 }
 
@@ -109,7 +116,7 @@
 .df-region-overlay__crosshair-line {
   stroke: var(--color-text-strong-default);
   stroke-width: calc(var(--border-width-default) * var(--df-overlay-inverse-zoom, 1));
-  stroke-dasharray: var(--size-xs) var(--size-xs);
+  stroke-dasharray: calc(var(--size-xs) * var(--df-overlay-inverse-zoom, 1)) calc(var(--size-xs) * var(--df-overlay-inverse-zoom, 1));
   opacity: var(--opacity-hover);
   vector-effect: non-scaling-stroke;
 }
@@ -145,7 +152,7 @@
 .df-region-overlay__shape--draft .df-region-overlay__shape-fill {
   fill: var(--color-fill-brand-impeccable-soft);
   stroke: var(--color-stroke-strong-default);
-  stroke-dasharray: 6 4;
+  stroke-dasharray: calc(6px * var(--df-overlay-inverse-zoom, 1)) calc(4px * var(--df-overlay-inverse-zoom, 1));
   opacity: var(--opacity-hover);
 }
 
@@ -153,7 +160,7 @@
    handling remains entirely on the SVG shapes from FE-002. */
 .df-region-overlay__shape--source-manual .df-region-overlay__shape-fill {
   stroke: var(--color-status-success-default);
-  stroke-dasharray: 6 4;
+  stroke-dasharray: calc(6px * var(--df-overlay-inverse-zoom, 1)) calc(4px * var(--df-overlay-inverse-zoom, 1));
 }
 
 /* A domain validation error must survive both resize and colour-blind reading:
@@ -161,7 +168,7 @@
    the error in text. */
 .df-region-overlay__shape--error .df-region-overlay__shape-fill {
   stroke: var(--color-status-error-default);
-  stroke-dasharray: 6 4;
+  stroke-dasharray: calc(6px * var(--df-overlay-inverse-zoom, 1)) calc(4px * var(--df-overlay-inverse-zoom, 1));
 }
 
 .df-region-overlay__shape:hover .df-region-overlay__shape-fill {
@@ -172,23 +179,28 @@
   fill: var(--color-fill-brand-impeccable-soft);
 }
 
-/* GRID-05: an 8 px band on each side of the edge, in CSS pixels, so a thin
+/* GRID-05: an 8 px band centred on the edge, in screen pixels at every zoom
+   (FIX2: divided by the stage's CSS scale like every stroke here), so a thin
    region is still grabbable with a mouse. Fill stays clickable too, so the
    whole rectangle is a target — the band only widens its edge. */
 .df-region-overlay__shape-hit {
   fill: var(--color-surface-transparent);
   stroke: var(--color-surface-transparent);
-  stroke-width: var(--size-xs);
+  stroke-width: calc(var(--size-xs) * var(--df-overlay-inverse-zoom, 1));
   vector-effect: non-scaling-stroke;
   pointer-events: stroke;
 }
 
-/* The marker stays a constant CSS size on its source-pixel corner: it says
-   where the corner is, at any scale. */
+/* The marker stays a constant screen size on its source-pixel corner: it
+   says where the corner is, at any scale. FIX2: its 8 px stroke and its own
+   1 × 1 source-pixel box are both divided by the stage's CSS zoom, so it does
+   not grow over the pixels it points at. */
 .df-region-overlay__shape-handle-visual {
+  width: calc(1px * var(--df-overlay-inverse-zoom, 1));
+  height: calc(1px * var(--df-overlay-inverse-zoom, 1));
   fill: var(--color-text-strong-default);
   stroke: var(--color-text-strong-default);
-  stroke-width: var(--size-xs);
+  stroke-width: calc(var(--size-xs) * var(--df-overlay-inverse-zoom, 1));
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
@@ -228,7 +240,7 @@
    different line, so it never reads as the selected (handled) shape. */
 .df-region-overlay__shape:focus-visible .df-region-overlay__shape-fill {
   stroke: var(--color-fill-brand-impeccable);
-  stroke-dasharray: 2 2;
+  stroke-dasharray: calc(2px * var(--df-overlay-inverse-zoom, 1)) calc(2px * var(--df-overlay-inverse-zoom, 1));
 }
 
 /* COLOR-09: the draft differs from a saved region by line *shape*, not only by
@@ -237,7 +249,7 @@
   fill: var(--color-fill-brand-impeccable-soft);
   stroke: var(--color-stroke-strong-default);
   stroke-width: calc(var(--border-width-default) * var(--df-overlay-inverse-zoom, 1));
-  stroke-dasharray: 6 4;
+  stroke-dasharray: calc(6px * var(--df-overlay-inverse-zoom, 1)) calc(4px * var(--df-overlay-inverse-zoom, 1));
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
