@@ -48,3 +48,9 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 1. **P3-1** `save_definition` mógł dać klasie regionu ordinal klasy usuniętej w tym samym zapisie (`_ensure_region_categories` czytał maksimum po usunięciu). `_save_categories` zwraca teraz następny wolny ordinal liczony sprzed usunięcia, a `_ensure_region_categories` bierze `max(floor, max + 1)`. Test: `test_a_region_class_never_takes_the_ordinal_of_a_class_dropped_in_the_same_save`.
 2. **P3-2** Remis `created_at` (regiony z jednego flusha, jak na prawdziwym profilu) rozstrzygał losowy UUID. Migracja i repozytorium sortują teraz po `created_at, rowid`, czyli w kolejności wstawienia. Na prawdziwej bazie: `score_left`, `score_right`, `kill`. Test: `test_region_class_migration_keeps_definition_order_when_timestamps_tie`.
 3. **P3-3** Front porównywał nazwy przez `toLowerCase()`, backend przez `casefold()` (np. `Straße` / `STRASSE`). Wspólny `foldName` (`trim().toUpperCase().toLowerCase()`) w `profileDraft.ts`, używany też przez `ClassGroupsPanel`. Test: „folds names the way the backend does”.
+
+## Weryfikacja FIX1
+
+- `3b7a8d3`: `scripts/check.ps1` 9/9 PASS (pytest, Vitest 1031, build, E2E 95, root safety).
+- Re-review FIX1: **GOTOWE DO MERGE**, wszystkie P3 zamknięte. Uwaga: `foldName` jest bliski `casefold()`, ale nie identyczny (`ı`/`i`, `ẞ`/`ss`) — dopisane w docstringu; skutek tylko kosmetyczny, backend i tak trzyma regułę.
+- Dry run 0009 na świeżej kopii prawdziwej bazy po FIX1: `score_left` 40, `score_right` 41, `kill` 42 (kolejność definicji), wersja profilu 1 → 2, anotacje bez zmian (256).

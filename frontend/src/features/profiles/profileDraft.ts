@@ -168,6 +168,11 @@ export function isDirty(draft: ProfileDraft, baseline: ProfileDraft): boolean {
  * is what makes `Straße` and `STRASSE`, or `ﬁ` and `FI`, the same name here as
  * they are on the server. A plain `toLowerCase()` keeps them apart, and then
  * the screen disagrees with the save about which class belongs to a region.
+ *
+ * It is close to `casefold()`, not identical: dotless `ı` matches `i` here but
+ * not on the server, and capital `ẞ` matches `ss` there but not here. For those
+ * pairs only the screen's hint differs; the backend still keeps or adds the
+ * region's class, so nothing is lost.
  */
 export function foldName(name: string): string {
   return name.trim().toUpperCase().toLowerCase();
