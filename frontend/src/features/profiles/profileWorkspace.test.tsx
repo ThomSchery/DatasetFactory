@@ -5,7 +5,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 import type { GameProfile } from "../../api";
-import { createRequestFrom, draftFromProfile, isDirty, saveRequestFrom } from "./profileDraft";
+import {
+  createRequestFrom,
+  draftFromProfile,
+  isDirty,
+  saveRequestFrom,
+  withAcceptedSketch,
+  withRenamedCategory,
+  type ProfileDraft,
+} from "./profileDraft";
 
 /* The workspace's first render waits on several queries. Under the full parallel
  * suite that can pass Testing Library's 1 s default (FE-022 FIX1/FIX2 gate runs),
@@ -434,6 +442,85 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     await user.type(field, "8");
     await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
     expect(screen.getByRole("alert")).toHaveTextContent("First change the OCR character range of these regions: “Pasek zdrowia”");
+  });
+
+  it("FE-026: renaming a region's class renames the region; orphaned unsaved classes stay out", () => {
+    const profile = alpha();
+    profile.regions.push({
+      id: "region-kill",
+      name: "kill",
+      x: 200,
+      y: 20,
+      width: 50,
+      height: 20,
+      allowed_chars: "7",
+      page_segmentation_mode: 7,
+    });
+    profile.categories.push({ id: "category-kill", name: "kill", kind: "game" });
+    const draft = draftFromProfile(profile);
+    const keyOf = (from: ProfileDraft, name: string): string => {
+      const found = from.categories.find((category) => category.name === name);
+      if (found === undefined) throw new Error(`no class ${name}`);
+      return found.key;
+    };
+
+    const renamed = withRenamedCategory(draft, keyOf(draft, "kill"), "frag");
+    expect(renamed.regions.map((region) => region.name)).toEqual(["Pasek zdrowia", "frag"]);
+    expect(saveRequestFrom(renamed).categories).toContainEqual({ id: "category-kill", kind: "game", name: "frag" });
+    expect(saveRequestFrom(renamed).regions).toContainEqual(expect.objectContaining({ id: "region-kill", name: "frag" }));
+
+    // A class no region carries renames alone.
+    expect(withRenamedCategory(draft, keyOf(draft, "health"), "armour").regions).toEqual(draft.regions);
+    // Another region already holds the new name: only the class moves.
+    expect(withRenamedCategory(draft, keyOf(draft, "kill"), "pasek ZDROWIA").regions).toEqual(draft.regions);
+
+    // A box accepted as "ammo" and renamed before saving leaves no "ammo" class behind.
+    const sketched = withAcceptedSketch(draft, { x: 0, y: 0, width: 5, height: 5 }, "ammo");
+    const retitled: ProfileDraft = {
+      ...sketched,
+      regions: sketched.regions.map((region) => (region.name === "ammo" ? { ...region, name: "ammo box" } : region)),
+    };
+    expect(saveRequestFrom(retitled).categories.map((category) => category.name)).not.toContain("ammo");
+    expect(createRequestFrom(retitled, "Kopia").categories.map((category) => category.name)).not.toContain("ammo");
+    // Stored classes are always sent, region or not.
+    expect(saveRequestFrom(retitled).categories.map((category) => category.name)).toContain("health");
+    expect(saveRequestFrom(sketched).categories.map((category) => category.name)).toContain("ammo");
+  });
+
+  it("FE-026: a region's class cannot be removed while the region exists", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.categories.push({ id: "category-bar", name: "Pasek zdrowia", kind: "game" });
+    stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+
+    const locked = await screen.findByRole("button", {
+      name: "Class of region Pasek zdrowia: remove the region to remove the class",
+    });
+    expect(locked).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove class health from the profile" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Delete region Pasek zdrowia" }));
+    expect(screen.getByRole("button", { name: "Remove class Pasek zdrowia from the profile" })).toBeEnabled();
+  });
+
+  it("FE-026: renaming a region's class in Custom renames the region in the same save", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.categories.push({ id: "category-bar", name: "Pasek zdrowia", kind: "game" });
+    const spy = stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+
+    await user.click(await screen.findByRole("button", { name: "Rename class Pasek zdrowia" }));
+    const field = screen.getByLabelText("New name of class Pasek zdrowia");
+    await user.clear(field);
+    await user.type(field, "Zdrowie{Enter}");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => expect(savedBody(spy)).toMatchObject({
+      categories: expect.arrayContaining([{ id: "category-bar", kind: "game", name: "Zdrowie" }]),
+      regions: [expect.objectContaining({ id: "region-hp", name: "Zdrowie" })],
+    }));
   });
 
   it("names a drawn box, accepts it, and files the name under Custom", async () => {

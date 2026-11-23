@@ -738,7 +738,8 @@ def test_dropping_a_class_that_annotations_use_is_a_conflict_not_a_deletion(
     assert copied.status_code == 201, copied.text
     body = copied.json()
     assert body["id"] != profile["id"]
-    assert [category["name"] for category in body["categories"]] == ["1", "health"]
+    # The draft carries the region classes `HUD` and `timer` (FE-026) as well.
+    assert [category["name"] for category in body["categories"]] == ["1", "health", "HUD", "timer"]
     assert body["regions"][0]["allowed_chars"] == "1"
     # A copy never inherits another profile's durable asset row.
     assert body["reference_asset_id"] != profile["reference_asset_id"]
@@ -766,7 +767,14 @@ def test_dropping_an_unused_class_and_appending_a_custom_one_keeps_ordinals(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert [category["name"] for category in body["categories"]] == ["0", "1", "shield"]
+    # `HUD` and `timer` are the regions' own classes (FE-026).
+    assert [category["name"] for category in body["categories"]] == [
+        "0",
+        "1",
+        "HUD",
+        "timer",
+        "shield",
+    ]
     assert body["categories"][0]["id"] == kept["id"]
 
     with composition.database.session() as session:
@@ -777,7 +785,13 @@ def test_dropping_an_unused_class_and_appending_a_custom_one_keeps_ordinals(
         ).all()
     # The dropped class frees no ordinal: an export identifier derived from it
     # must not start meaning a different class.
-    assert [tuple(row) for row in ordinals] == [("0", 0), ("1", 1), ("shield", 3)]
+    assert [tuple(row) for row in ordinals] == [
+        ("0", 0),
+        ("1", 1),
+        ("HUD", 3),
+        ("timer", 4),
+        ("shield", 5),
+    ]
 
 
 def test_saving_an_unchanged_draft_is_accepted_and_bumps_the_version_once(

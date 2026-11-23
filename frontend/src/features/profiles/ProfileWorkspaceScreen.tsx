@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker, useNavigate } from "react-router";
 
 import {
-  CHARACTER_CLASS_ALPHABET,
   categoriesInUseFromError,
   createProfile,
   createReferencePreview,
@@ -39,6 +38,7 @@ import {
   nextRegionName,
   saveRequestFrom,
   withAcceptedSketch,
+  withRenamedCategory,
   characterAlphabetOf,
   type ProfileDraft,
 } from "./profileDraft";
@@ -656,17 +656,13 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             }));
           }}
           onRenameCategory={(key, name) => {
-            setDraft((current) => ({
-              ...current,
-              categories: current.categories.map((category) =>
-                category.key === key ? { ...category, name, kind: CHARACTER_CLASS_ALPHABET.includes(name) ? "character" : "game" } : category,
-              ),
-            }));
+            setDraft((current) => withRenamedCategory(current, key, name));
           }}
           onToggleCustom={() => {
             setCustomOpen((open) => !open);
           }}
           region={selectedRegion}
+          regions={draft.regions}
         />
       </div>
 

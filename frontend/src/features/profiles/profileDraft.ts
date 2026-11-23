@@ -219,6 +219,65 @@ export function withAcceptedSketch(
   return { ...draft, categories, regions: [...draft.regions, region] };
 }
 
+/**
+ * FE-026: every region is also a class, so the class carrying a region's name
+ * is that region's class. Names fold the way the backend folds them.
+ */
+export function isRegionClass(draft: ProfileDraft, category: DraftCategory): boolean {
+  return hasRegionNamed(draft, category.name);
+}
+
+/**
+ * Renaming a class from `Custom`. A region's class and the region are one
+ * thing to the operator, so renaming the class renames its region as well;
+ * the backend then keeps the class row, and every box drawn under it.
+ *
+ * The region stays put when another region already holds the new name: two
+ * regions may not share one, and the class rename alone is still a valid
+ * request (the backend gives the region its class back).
+ */
+export function withRenamedCategory(
+  draft: ProfileDraft,
+  key: string,
+  name: string,
+): ProfileDraft {
+  const category = draft.categories.find((item) => item.key === key);
+  if (category === undefined) {
+    return draft;
+  }
+  const kind: CategoryKind = CHARACTER_CLASS_ALPHABET.includes(name) ? "character" : "game";
+  const categories = draft.categories.map((item) =>
+    item.key === key ? { ...item, name, kind } : item,
+  );
+  const normalized = category.name.trim().toLowerCase();
+  const region =
+    category.kind === "game"
+      ? draft.regions.find((item) => item.name.trim().toLowerCase() === normalized)
+      : undefined;
+  if (region === undefined || hasRegionNamed(draft, name, region.key)) {
+    return { ...draft, categories };
+  }
+  return {
+    ...draft,
+    categories,
+    regions: draft.regions.map((item) => (item.key === region.key ? { ...item, name } : item)),
+  };
+}
+
+/**
+ * The classes a save sends.
+ *
+ * A `Custom` class that was never saved (`id === null`) came from a box drawn
+ * in this session. When no region carries its name any more — the region was
+ * renamed or removed before saving — it would land in the profile as a class
+ * nobody named, so it is left out. Every stored class is sent as it is.
+ */
+function categoriesToSend(draft: ProfileDraft): DraftCategory[] {
+  return draft.categories.filter(
+    (category) => category.id !== null || category.kind !== "game" || isRegionClass(draft, category),
+  );
+}
+
 export function saveRequestFrom(draft: ProfileDraft): SaveProfileDefinitionRequest {
   if (draft.version === null) {
     throw new Error("A profile that was never saved has no version to send");
@@ -235,7 +294,7 @@ export function saveRequestFrom(draft: ProfileDraft): SaveProfileDefinitionReque
       x: region.x,
       y: region.y,
     })),
-    categories: draft.categories.map((category) => ({
+    categories: categoriesToSend(draft).map((category) => ({
       id: category.id,
       kind: category.kind,
       name: category.name.trim(),
@@ -267,7 +326,7 @@ export function createRequestFrom(draft: ProfileDraft, name: string): CreateProf
       x: region.x,
       y: region.y,
     })),
-    categories: draft.categories.map((category) => ({
+    categories: categoriesToSend(draft).map((category) => ({
       kind: category.kind,
       name: category.name.trim(),
     })),

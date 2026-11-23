@@ -368,7 +368,8 @@ def test_profile_collection_keeps_explicit_selection_when_new_profiles_are_creat
     ]
     assert [profile["active"] for profile in profiles_before.json()] == [False, True]
     assert profiles_before.json()[0]["region_count"] == 1
-    assert profiles_before.json()[0]["category_count"] == 2
+    # `0`, `health`, and the class the `HUD` region brings with it (FE-026).
+    assert profiles_before.json()[0]["category_count"] == 3
     assert activated.status_code == 200
     assert activated.json() == second.json()
     assert selected.json() == second.json()
@@ -594,7 +595,8 @@ def test_category_order_round_trips_deterministically(
     payload = _payload(source)
     categories = [{"name": character, "kind": "character"} for character in "9876543210"]
     payload["categories"] = categories
-    expected = [item["name"] for item in categories]
+    # The `HUD` region's own class follows the submitted order (FE-026).
+    expected = [item["name"] for item in categories] + ["HUD"]
     app = create_app(composition.settings, composition=composition)
 
     with TestClient(app) as client:
@@ -620,6 +622,9 @@ def test_added_category_gets_next_free_ordinal_after_deletion(
     source = tmp_path / "reference.png"
     _write_png(source)
     payload = _payload(source)
+    # The region names a class the payload already has, so no region class is
+    # appended (FE-026) and the ordinals under test stay 0, 1 and 2.
+    payload["regions"] = [{"name": "armour", "x": 0, "y": 0, "width": 32, "height": 24}]
     payload["categories"] = [
         {"name": "0", "kind": "character"},
         {"name": "health", "kind": "game"},
@@ -882,7 +887,7 @@ def test_category_rename_noop_keeps_version_and_conflict_matches_creation(
 
     with TestClient(app) as client:
         created = client.post("/api/v1/profiles", json=_payload(source)).json()
-        zero, health = created["categories"]
+        zero, health, _hud = created["categories"]
         noop = client.patch(
             f"/api/v1/profiles/{created['id']}/categories/{zero['id']}",
             json={"name": "  0  ", "kind": "character", "expected_version": created["version"]},
@@ -1001,4 +1006,5 @@ def test_parallel_category_requests_receive_distinct_ordinals(
                 .order_by(Category.ordinal)
             )
         )
-    assert [category.ordinal for category in added] == [2, 3]
+    # Ordinal 2 already belongs to the `HUD` region's class (FE-026).
+    assert [category.ordinal for category in added] == [3, 4]

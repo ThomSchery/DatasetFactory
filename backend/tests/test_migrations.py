@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import pytest
+import sqlalchemy as sa
 from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
@@ -905,7 +906,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0008"
+            "0009"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -1016,7 +1017,7 @@ def test_documented_cleanup_sql_actually_unblocks_the_migration(settings: Settin
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0008"
+            "0009"
         )
     engine.dispose()
 
@@ -1115,7 +1116,7 @@ def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Set
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0008"
+            "0009"
         )
     engine.dispose()
 
@@ -1259,3 +1260,154 @@ def test_region_geometry_downgrade_refuses_while_a_region_is_retired(settings: S
         )
     assert "retired_at" in region_columns
     engine.dispose()
+
+
+def _insert_profile_at_0008(
+    connection: sa.Connection,
+    *,
+    profile_id: str,
+    regions: tuple[tuple[str, str, str | None], ...],
+    categories: tuple[tuple[str, str, int], ...],
+) -> None:
+    now = "2026-08-28 12:07:48.601320"
+    connection.execute(
+        text(
+            "INSERT INTO reference_assets "
+            "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+            "VALUES (:id,:relpath,'image/png',1,'ready',:now,:now)"
+        ),
+        {"id": f"a-{profile_id}", "relpath": f"assets/references/{profile_id}.png", "now": now},
+    )
+    connection.execute(
+        text(
+            "INSERT INTO game_profiles "
+            "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+            "source_height,version,created_at,updated_at) "
+            "VALUES (:id,'p',:id,:id,:asset,1920,1080,1,:now,:now)"
+        ),
+        {"id": profile_id, "asset": f"a-{profile_id}", "now": now},
+    )
+    for index, (region_id, name, retired_at) in enumerate(regions):
+        connection.execute(
+            text(
+                "INSERT INTO hud_regions "
+                "(id,profile_id,name,x,y,width,height,ocr_allowed_chars,"
+                "ocr_page_segmentation_mode,created_at,updated_at,retired_at) "
+                "VALUES (:id,:profile,:name,10,20,100,40,'0',7,:created,:created,:retired)"
+            ),
+            {
+                "id": region_id,
+                "profile": profile_id,
+                "name": name,
+                # Distinct creation times fix the order the backfill appends in.
+                "created": f"2026-08-28 12:07:{10 + index:02d}.000000",
+                "retired": retired_at,
+            },
+        )
+    for name, kind, ordinal in categories:
+        connection.execute(
+            text(
+                "INSERT INTO categories (id,profile_id,name,kind,ordinal,created_at,updated_at) "
+                "VALUES (:id,:profile,:name,:kind,:ordinal,:now,:now)"
+            ),
+            {
+                "id": f"c-{profile_id}-{ordinal}",
+                "profile": profile_id,
+                "name": name,
+                "kind": kind,
+                "ordinal": ordinal,
+                "now": now,
+            },
+        )
+
+
+def test_region_class_migration_gives_old_regions_their_class(settings: Settings) -> None:
+    """0009 (FE-026): a region drawn before the rule gets a class of its name.
+
+    The real profile this was written for had regions `kill`, `score_left` and
+    `score_right` with no class, so they could not be drawn by hand in review.
+    """
+    config = alembic_config(settings)
+    command.upgrade(config, "0008")
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id,name,workspace_path,active_profile_id,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',NULL,'2026-08-28','2026-08-28')"
+            )
+        )
+        _insert_profile_at_0008(
+            connection,
+            profile_id="g",
+            regions=(
+                ("r-hp", "health & armour", None),
+                ("r-kill", "kill", None),
+                ("r-old", "gone", "2026-11-03 09:00:00.000000"),
+                ("r-timer", "TIMER", None),
+                ("r-one", "1", None),
+                ("r-left", "score_left", None),
+            ),
+            # The ordinal gap is a class dropped earlier; it stays unused.
+            categories=(
+                ("1", "character", 0),
+                ("0", "character", 1),
+                ("health & armour", "game", 2),
+                ("timer", "game", 4),
+            ),
+        )
+        _insert_profile_at_0008(
+            connection,
+            profile_id="h",
+            regions=(("r-h-score", "score", None),),
+            categories=(("0", "character", 0), ("Score", "game", 1)),
+        )
+    engine.dispose()
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        classes = [
+            tuple(row)
+            for row in connection.execute(
+                text(
+                    "SELECT name,kind,ordinal FROM categories WHERE profile_id='g' ORDER BY ordinal"
+                )
+            )
+        ]
+        versions = {
+            row.id: row.version
+            for row in connection.execute(text("SELECT id,version FROM game_profiles"))
+        }
+        untouched = connection.execute(
+            text("SELECT count(*) FROM categories WHERE profile_id='h'")
+        ).scalar_one()
+        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    engine.dispose()
+
+    # Only the two regions without a class gain one, in region order, after the
+    # highest ordinal. `TIMER` and `1` already are classes once names fold, and
+    # a retired region is not offered to anyone.
+    assert classes == [
+        ("1", "character", 0),
+        ("0", "character", 1),
+        ("health & armour", "game", 2),
+        ("timer", "game", 4),
+        ("kill", "game", 5),
+        ("score_left", "game", 6),
+    ]
+    assert versions == {"g": 2, "h": 1}
+    assert untouched == 2
+    assert revision == "0009"
+
+    # The classes are data now; going back keeps them and changes no schema.
+    command.downgrade(config, "0008")
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        kept = connection.execute(
+            text("SELECT count(*) FROM categories WHERE profile_id='g'")
+        ).scalar_one()
+    engine.dispose()
+    assert kept == 6

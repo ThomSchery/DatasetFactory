@@ -17,6 +17,11 @@ export interface ClassGroupsPanelProps {
   categories: readonly DraftCategory[];
   /** The region whose character set the checkboxes act on; `null` for none. */
   region: DraftRegion | null;
+  /**
+   * Every region of the draft. FE-026: a class carrying a region's name is
+   * that region's class, so it cannot be removed while the region exists.
+   */
+  regions: readonly DraftRegion[];
   onAllowedCharsChange: (allowedChars: string) => void;
   onPageSegmentationModeChange: (mode: number) => void;
   onRemoveCategory: (key: string) => void;
@@ -38,7 +43,9 @@ const GROUPS: readonly { id: string; label: string; test: (name: string) => bool
  *
  *  - `Custom` holds the classes the operator named on a box. They are verified
  *    by hand, never read by OCR, so they carry rename and delete, not a
- *    checkbox.
+ *    checkbox. Every region is one of them (FE-026): its class is offered in
+ *    review, renaming it renames the region, and it is only removed together
+ *    with the region.
  *  - `Numbers`, `Letters` and `Symbols` are the OCR alphabet, and their
  *    checkboxes are the selected region's `allowed_chars`.
  *  - The rest of a region's OCR settings — the text layout (PSM) and the names
@@ -47,6 +54,7 @@ const GROUPS: readonly { id: string; label: string; test: (name: string) => bool
 export function ClassGroupsPanel({
   categories,
   region,
+  regions,
   onAllowedCharsChange,
   onPageSegmentationModeChange,
   onRemoveCategory,
@@ -59,6 +67,7 @@ export function ClassGroupsPanel({
   const [editingName, setEditingName] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const custom = categories.filter((category) => category.kind === "game");
+  const regionNames = new Set(regions.map((item) => item.name.trim().toLowerCase()));
   const characters = categories.filter((category) => category.kind === "character");
   const selected =
     region === null
@@ -152,15 +161,26 @@ export function ClassGroupsPanel({
             </Button>
           )}
           {category.kind === "game" && !editing ? (
-            <Button
-              aria-label={`Remove class ${category.name} from the profile`}
-              disabled={disabled}
-              onClick={() => onRemoveCategory(category.key)}
-              title={`Remove class ${category.name}`}
-              variant="muted"
-            >
-              <Icon name="trash" />
-            </Button>
+            regionNames.has(category.name.trim().toLowerCase()) ? (
+              <Button
+                aria-label={`Class of region ${category.name}: remove the region to remove the class`}
+                disabled
+                title={`Class of region ${category.name}. Remove the region to remove the class.`}
+                variant="muted"
+              >
+                <Icon name="trash" />
+              </Button>
+            ) : (
+              <Button
+                aria-label={`Remove class ${category.name} from the profile`}
+                disabled={disabled}
+                onClick={() => onRemoveCategory(category.key)}
+                title={`Remove class ${category.name}`}
+                variant="muted"
+              >
+                <Icon name="trash" />
+              </Button>
+            )
           ) : null}
         </div>
         {editing && movesGroup ? (
