@@ -1268,6 +1268,7 @@ def _insert_profile_at_0008(
     profile_id: str,
     regions: tuple[tuple[str, str, str | None], ...],
     categories: tuple[tuple[str, str, int], ...],
+    shared_timestamp: bool = False,
 ) -> None:
     now = "2026-08-28 12:07:48.601320"
     connection.execute(
@@ -1299,8 +1300,13 @@ def _insert_profile_at_0008(
                 "id": region_id,
                 "profile": profile_id,
                 "name": name,
-                # Distinct creation times fix the order the backfill appends in.
-                "created": f"2026-08-28 12:07:{10 + index:02d}.000000",
+                # Distinct creation times fix the order the backfill appends in,
+                # unless the test wants the one-flush case of a real profile.
+                "created": (
+                    "2026-08-28 12:07:48.610721"
+                    if shared_timestamp
+                    else f"2026-08-28 12:07:{10 + index:02d}.000000"
+                ),
                 "retired": retired_at,
             },
         )
@@ -1411,3 +1417,51 @@ def test_region_class_migration_gives_old_regions_their_class(settings: Settings
         ).scalar_one()
     engine.dispose()
     assert kept == 6
+
+
+def test_region_class_migration_keeps_definition_order_when_timestamps_tie(
+    settings: Settings,
+) -> None:
+    """Cold review P3-2: one flush gives every region the same `created_at`.
+
+    The real profile's regions share one timestamp, so the order the backfill
+    appends their classes in — their positions in every later export — must
+    come from insertion order, not from the random UUIDs breaking the tie.
+    """
+    config = alembic_config(settings)
+    command.upgrade(config, "0008")
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id,name,workspace_path,active_profile_id,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',NULL,'2026-08-28','2026-08-28')"
+            )
+        )
+        # Inserted in this order; the ids sort the other way round.
+        _insert_profile_at_0008(
+            connection,
+            profile_id="g",
+            regions=(
+                ("r-z", "score_left", None),
+                ("r-y", "score_right", None),
+                ("r-x", "kill", None),
+            ),
+            categories=(("0", "character", 0),),
+            shared_timestamp=True,
+        )
+    engine.dispose()
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        classes = [
+            tuple(row)
+            for row in connection.execute(
+                text("SELECT name,ordinal FROM categories WHERE profile_id='g' ORDER BY ordinal")
+            )
+        ]
+    engine.dispose()
+    assert classes == [("0", 0), ("score_left", 1), ("score_right", 2), ("kill", 3)]

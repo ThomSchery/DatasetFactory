@@ -53,7 +53,10 @@ def upgrade() -> None:
             sa.text(
                 "SELECT name FROM hud_regions "
                 "WHERE profile_id=:profile_id AND retired_at IS NULL "
-                "ORDER BY created_at,id"
+                # Regions of one profile were inserted in one flush and share a
+                # timestamp; `rowid` keeps the order they were defined in, while
+                # `id` would order them by a random UUID.
+                "ORDER BY created_at,rowid"
             ),
             {"profile_id": profile_id},
         ).scalars():

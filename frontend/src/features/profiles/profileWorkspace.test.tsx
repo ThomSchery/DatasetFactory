@@ -8,6 +8,7 @@ import type { GameProfile } from "../../api";
 import {
   createRequestFrom,
   draftFromProfile,
+  foldName,
   isDirty,
   saveRequestFrom,
   withAcceptedSketch,
@@ -485,6 +486,19 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     // Stored classes are always sent, region or not.
     expect(saveRequestFrom(retitled).categories.map((category) => category.name)).toContain("health");
     expect(saveRequestFrom(sketched).categories.map((category) => category.name)).toContain("ammo");
+  });
+
+  it("FE-026: folds names the way the backend does (cold review P3-3)", () => {
+    expect(foldName(" Straße ")).toBe(foldName("STRASSE"));
+    expect(foldName("ﬁnal")).toBe(foldName("FINAL"));
+    expect(foldName("Kill")).toBe("kill");
+    const profile = alpha();
+    profile.regions[0].name = "Straße";
+    profile.categories.push({ id: "category-street", name: "STRASSE", kind: "game" });
+    const draft = draftFromProfile(profile);
+    const street = draft.categories.find((category) => category.name === "STRASSE");
+    if (street === undefined) throw new Error("no class STRASSE");
+    expect(withRenamedCategory(draft, street.key, "Ulica").regions[0].name).toBe("Ulica");
   });
 
   it("FE-026: a region's class cannot be removed while the region exists", async () => {

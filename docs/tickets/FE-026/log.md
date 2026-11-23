@@ -36,3 +36,15 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 - [x] Cienie: brak.
 - [x] Interakcje: disabled = `--opacity-disabled` na całym komponencie (OPACITY-\*), zgodnie z definicją `Button`.
 - [x] Komponenty: `Button`, `Icon` z `common/`; nowych nie ma.
+
+## Bramka i cold review (2026-11-23)
+
+- `ab5deb6`: `scripts/check.ps1` 9/9 PASS (pytest 483, Vitest, build, E2E 373 s, root safety), porty E2E 5197 / 8038 / 8039.
+- Migracja 0009 na kopii prawdziwej bazy (backup API SQLite do `D:\tmp\fe026-dbcopy`): profil „Quake Champions” dostał `kill`, `score_left`, `score_right` jako `game`, wersja 1 → 2, liczba anotacji bez zmian.
+- Cold review (agent claude/opus high; codex wyczerpał limit): **GOTOWE DO MERGE**, bez P1/P2, trzy P3.
+
+## FIX1 — ustalenia P3 z review
+
+1. **P3-1** `save_definition` mógł dać klasie regionu ordinal klasy usuniętej w tym samym zapisie (`_ensure_region_categories` czytał maksimum po usunięciu). `_save_categories` zwraca teraz następny wolny ordinal liczony sprzed usunięcia, a `_ensure_region_categories` bierze `max(floor, max + 1)`. Test: `test_a_region_class_never_takes_the_ordinal_of_a_class_dropped_in_the_same_save`.
+2. **P3-2** Remis `created_at` (regiony z jednego flusha, jak na prawdziwym profilu) rozstrzygał losowy UUID. Migracja i repozytorium sortują teraz po `created_at, rowid`, czyli w kolejności wstawienia. Na prawdziwej bazie: `score_left`, `score_right`, `kill`. Test: `test_region_class_migration_keeps_definition_order_when_timestamps_tie`.
+3. **P3-3** Front porównywał nazwy przez `toLowerCase()`, backend przez `casefold()` (np. `Straße` / `STRASSE`). Wspólny `foldName` (`trim().toUpperCase().toLowerCase()`) w `profileDraft.ts`, używany też przez `ClassGroupsPanel`. Test: „folds names the way the backend does”.

@@ -161,9 +161,21 @@ export function isDirty(draft: ProfileDraft, baseline: ProfileDraft): boolean {
   return comparable(draft) !== comparable(baseline);
 }
 
+/**
+ * The name folding the backend's uniqueness rules use (`strip().casefold()`).
+ *
+ * Upper- then lower-casing applies the full case mappings JavaScript has, which
+ * is what makes `Straße` and `STRASSE`, or `ﬁ` and `FI`, the same name here as
+ * they are on the server. A plain `toLowerCase()` keeps them apart, and then
+ * the screen disagrees with the save about which class belongs to a region.
+ */
+export function foldName(name: string): string {
+  return name.trim().toUpperCase().toLowerCase();
+}
+
 export function hasCategoryNamed(draft: ProfileDraft, name: string): boolean {
-  const normalized = name.trim().toLowerCase();
-  return draft.categories.some((category) => category.name.trim().toLowerCase() === normalized);
+  const normalized = foldName(name);
+  return draft.categories.some((category) => foldName(category.name) === normalized);
 }
 
 export function hasRegionNamed(
@@ -171,9 +183,9 @@ export function hasRegionNamed(
   name: string,
   exceptKey?: string,
 ): boolean {
-  const normalized = name.trim().toLowerCase();
+  const normalized = foldName(name);
   return draft.regions.some(
-    (region) => region.key !== exceptKey && region.name.trim().toLowerCase() === normalized,
+    (region) => region.key !== exceptKey && foldName(region.name) === normalized,
   );
 }
 
@@ -249,10 +261,10 @@ export function withRenamedCategory(
   const categories = draft.categories.map((item) =>
     item.key === key ? { ...item, name, kind } : item,
   );
-  const normalized = category.name.trim().toLowerCase();
+  const normalized = foldName(category.name);
   const region =
     category.kind === "game"
-      ? draft.regions.find((item) => item.name.trim().toLowerCase() === normalized)
+      ? draft.regions.find((item) => foldName(item.name) === normalized)
       : undefined;
   if (region === undefined || hasRegionNamed(draft, name, region.key)) {
     return { ...draft, categories };

@@ -7,7 +7,7 @@ import { Icon } from "../../components/common/Icon";
 import { Panel } from "../../components/common/Panel";
 import { TextField } from "../../components/common/TextField";
 import { InlineError } from "../../components/common/UiStates";
-import type { DraftCategory, DraftRegion } from "./profileDraft";
+import { foldName, type DraftCategory, type DraftRegion } from "./profileDraft";
 import { CHARACTER_CLASS_ALPHABET, categoryGroupIdOf, categoryGroupLabelOf } from "../../api";
 import { OCR_PAGE_SEGMENTATION_OPTIONS } from "./schemas";
 import { DEFAULT_REGION_PAGE_SEGMENTATION_MODE } from "./schemas";
@@ -67,7 +67,7 @@ export function ClassGroupsPanel({
   const [editingName, setEditingName] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const custom = categories.filter((category) => category.kind === "game");
-  const regionNames = new Set(regions.map((item) => item.name.trim().toLowerCase()));
+  const regionNames = new Set(regions.map((item) => foldName(item.name)));
   const characters = categories.filter((category) => category.kind === "character");
   const selected =
     region === null
@@ -161,7 +161,7 @@ export function ClassGroupsPanel({
             </Button>
           )}
           {category.kind === "game" && !editing ? (
-            regionNames.has(category.name.trim().toLowerCase()) ? (
+            regionNames.has(foldName(category.name)) ? (
               <Button
                 aria-label={`Class of region ${category.name}: remove the region to remove the class`}
                 disabled

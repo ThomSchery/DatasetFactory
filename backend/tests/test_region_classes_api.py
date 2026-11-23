@@ -248,3 +248,39 @@ def test_renaming_a_region_class_gives_the_region_its_class_back(
     assert body["version"] == profile["version"] + 1
     assert _named(body["categories"], "overlay")["id"] == hud_class["id"]
     assert _named(body["categories"], "HUD")["kind"] == "game"
+
+
+def test_a_region_class_never_takes_the_ordinal_of_a_class_dropped_in_the_same_save(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    """Cold review P3-1: the ordinal floor is read before the save removes anything."""
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(_reference(tmp_path))).json()
+        draft = _definition(profile)
+        # `timer` holds the highest ordinal (4); it goes, region and class.
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "timer"]
+        draft["categories"] = [
+            category for category in draft["categories"] if category["name"] != "timer"
+        ]
+        draft["regions"].append(
+            {
+                "id": None,
+                "name": "frag",
+                "x": 0,
+                "y": 12,
+                "width": 8,
+                "height": 8,
+                "allowed_chars": "0",
+                "page_segmentation_mode": 7,
+            }
+        )
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    assert _ordinals(composition, profile["id"]) == [
+        ("0", 0),
+        ("1", 1),
+        ("health", 2),
+        ("HUD", 3),
+        ("frag", 5),
+    ]

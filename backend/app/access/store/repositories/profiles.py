@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -616,13 +616,16 @@ class ProfileRepository:
                     raise ProfileRegionBlockedError
 
                 region_names = frozenset(_folded(region.name) for region in draft.regions)
-                self._save_categories(
+                next_ordinal = self._save_categories(
                     session, profile_id, draft.categories, region_names=region_names
                 )
                 renamed = self._save_regions(session, profile_id, draft.regions)
                 self._follow_region_renames(session, profile_id, renamed)
                 self._ensure_region_categories(
-                    session, profile_id, order=tuple(region.name for region in draft.regions)
+                    session,
+                    profile_id,
+                    order=tuple(region.name for region in draft.regions),
+                    floor=next_ordinal,
                 )
                 profile.version += 1
                 session.flush()
@@ -727,14 +730,18 @@ class ProfileRepository:
         drafts: tuple[SavedCategoryDraft, ...],
         *,
         region_names: frozenset[str] = frozenset(),
-    ) -> None:
-        """Apply the class half of a save.
+    ) -> int:
+        """Apply the class half of a save; answer the next free ordinal.
 
         `region_names` are the folded names of the regions the same save keeps.
         A class carrying one of them is the region's class (FE-026) and is not
         removed even when the draft leaves it out: the region would need it back
         a moment later, under a new identifier and a new ordinal, which is
         exactly what an export must never see.
+
+        The ordinal answered is counted from the maximum read *before* any
+        removal, so a region class appended later in the same save cannot take
+        the ordinal of a class this save dropped.
         """
         existing = {
             category.id: category
@@ -806,6 +813,7 @@ class ProfileRepository:
             )
             ordinal += 1
         session.flush()
+        return ordinal
 
     @classmethod
     def _follow_region_renames(
@@ -866,7 +874,8 @@ class ProfileRepository:
         profile_id: str,
         *,
         order: tuple[str, ...] = (),
-    ) -> int:
+        floor: int = 0,
+    ) -> None:
         """Give every active region a class of its own name (FE-026).
 
         A HUD region names something the operator wants in the dataset: OCR
@@ -879,11 +888,12 @@ class ProfileRepository:
         identifier an earlier export derived changes meaning.
 
         `order` is the region order of the request being written. Regions
-        inserted in one flush can share a timestamp, and the id breaking that
-        tie is random, so without it two classes added together would take
-        their ordinals in an order nobody asked for.
+        inserted in one flush can share a timestamp, so stored regions break
+        that tie by `rowid` (insertion order), never by the random id.
 
-        Returns how many classes were added.
+        `floor` is the lowest ordinal a new class may take. A whole-definition
+        save passes the next ordinal counted before it removed any class, so a
+        dropped class's ordinal is never handed to a different class.
         """
         taken = {
             _folded(name)
@@ -895,7 +905,7 @@ class ProfileRepository:
             session.scalars(
                 select(HudRegion.name)
                 .where(HudRegion.profile_id == profile_id, HudRegion.retired_at.is_(None))
-                .order_by(HudRegion.created_at, HudRegion.id)
+                .order_by(HudRegion.created_at, literal_column("hud_regions.rowid"))
             )
         )
         active = {_folded(name) for name in stored}
@@ -907,11 +917,11 @@ class ProfileRepository:
             taken.add(key)
             missing.append(name.strip())
         if not missing:
-            return 0
+            return
         current_max = session.scalar(
             select(func.max(Category.ordinal)).where(Category.profile_id == profile_id)
         )
-        ordinal = (current_max if current_max is not None else -1) + 1
+        ordinal = max(floor, (current_max if current_max is not None else -1) + 1)
         for name in missing:
             session.add(
                 Category(
@@ -924,7 +934,6 @@ class ProfileRepository:
             )
             ordinal += 1
         session.flush()
-        return len(missing)
 
     @staticmethod
     def _staging_name(row_id: str) -> str:
