@@ -24,9 +24,10 @@
 }
 
 .df-status-badge--brand {
-  border-color: var(--color-fill-brand-impeccable);
-  background: var(--color-fill-brand-impeccable-soft);
-  color: var(--color-fill-brand-impeccable);
+  /* Noninteractive emphasis: stronger than neutral, without a focus frame. */
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-neutral-raised);
+  color: var(--color-text-primary);
 }
 
 .df-status-badge--success {

@@ -215,6 +215,7 @@ export function GroupedOptionList({
   const open = inline || openState;
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [requestedActiveId, setRequestedActiveId] = useState<string | null>(null);
+  const [focusWithin, setFocusWithin] = useState(false);
   // Groups open by default: the panel is autofocused and used under time
   // pressure, so nothing starts hidden. The state is per mount, which is why
   // every box opens its picker the same way.
@@ -291,6 +292,12 @@ export function GroupedOptionList({
   // user last touched, and the list still has to have exactly one tab stop.
   const activeId =
     rows.find((row) => row.id === requestedActiveId)?.id ?? defaultRow?.id ?? null;
+  // Keep the remembered row across an action outside an onConfirm picker,
+  // but expose it visually and to assistive technology only inside the list.
+  const keyboardActiveId =
+    combobox && open && focusWithin && rows.some((row) => row.kind === "option" && row.id === requestedActiveId)
+      ? requestedActiveId
+      : null;
 
   useEffect(() => {
     if (!open || pendingFocusId === null) {
@@ -569,8 +576,11 @@ export function GroupedOptionList({
       data-open={open || undefined}
       data-outside-click-exempt={exemptFromOutsideClick || undefined}
       data-shortcut-scope="list"
+      onFocus={() => setFocusWithin(true)}
       onBlur={(event) => {
-        if (combobox && onConfirm === undefined && !event.currentTarget.contains(event.relatedTarget)) {
+        if (event.currentTarget.contains(event.relatedTarget)) return;
+        setFocusWithin(false);
+        if (combobox && onConfirm === undefined) {
           setOpen(false);
           setEditing(false);
           setRequestedActiveId(null);
@@ -611,7 +621,7 @@ export function GroupedOptionList({
           <TextField
             role={combobox ? "combobox" : undefined}
             aria-autocomplete={combobox ? "list" : undefined}
-            aria-activedescendant={combobox && open && requestedActiveId !== null && rows.some((row) => row.kind === "option" && row.id === requestedActiveId) ? `${listId}-option-${requestedActiveId}` : undefined}
+            aria-activedescendant={keyboardActiveId !== null ? `${listId}-option-${keyboardActiveId}` : undefined}
             aria-controls={listId}
             aria-expanded={open}
             autoComplete="off"
@@ -748,7 +758,7 @@ export function GroupedOptionList({
               {options.map((option) => (
                 <OptionRowElement
                   active={!combobox && activeId === option.id}
-                  keyboardActive={combobox && requestedActiveId === option.id}
+                  keyboardActive={keyboardActiveId === option.id}
                   domId={`${listId}-option-${option.id}`}
                   checked={selected.has(option.id) ? "true" : "false"}
                   detail={option.detail}

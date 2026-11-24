@@ -269,6 +269,53 @@ describe("GroupedOptionList in multiple mode", () => {
 });
 
 describe("GroupedOptionList in single mode", () => {
+  it.each(["outline", "active descendant"] as const)("FE-028: hides the %s outside the list and restores the remembered row", async (indicator) => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onConfirm = vi.fn();
+    const { container } = render(
+      <>
+        <Harness initial={["score"]} mode="single" onChange={onChange} onConfirm={onConfirm} />
+        <button>Outside</button>
+      </>,
+    );
+    const filter = screen.getByRole("combobox");
+    await user.click(filter);
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    const row = screen.getByRole("option", { name: "Timer" });
+    expect(row).toHaveAttribute("data-keyboard-active", "true");
+    expect(filter).toHaveAttribute("aria-activedescendant", row.id);
+
+    // Tab crosses the internal chevron and the disclosure controls first.
+    for (let step = 0; step < 10 && document.activeElement !== screen.getByRole("button", { name: "Outside" }); step += 1) {
+      await user.tab();
+    }
+    expect(screen.getByRole("button", { name: "Outside" })).toHaveFocus();
+    if (indicator === "outline") {
+      expect(container.querySelectorAll("[data-keyboard-active]")).toHaveLength(0);
+    } else {
+      expect(filter).not.toHaveAttribute("aria-activedescendant");
+    }
+    expect(screen.getByRole("option", { name: "Score" })).toHaveAttribute("aria-selected", "true");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+
+    await user.tab({ shift: true });
+    expect(row).toHaveAttribute("data-keyboard-active", "true");
+    expect(filter).toHaveAttribute("aria-activedescendant", row.id);
+    await user.click(filter);
+    expect(row).toHaveAttribute("data-keyboard-active", "true");
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith(["timer"]);
+    expect(onConfirm).toHaveBeenLastCalledWith(["timer"]);
+    await user.keyboard("{ArrowDown}");
+    expect(filter).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: "0" }).id);
+
+    fireEvent.blur(filter, { relatedTarget: null });
+    expect(container.querySelectorAll("[data-keyboard-active]")).toHaveLength(0);
+    expect(filter).not.toHaveAttribute("aria-activedescendant");
+  });
+
   it("FE-022 FIX1: exposes the selected value and navigates with an active descendant without committing on Escape", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
