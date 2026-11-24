@@ -123,13 +123,15 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
     for (const character of ["7", "8", "A", "-"]) {
       await expect(page.getByRole("checkbox", { name: character, exact: true })).toHaveAttribute("aria-checked", "true");
     }
-    await page.getByRole("button", { name: "Expand group OCR settings" }).click();
+    // FE-029: OCR settings is the panel itself, always open.
     await expect(page.getByLabel("Text layout (PSM)")).toHaveAttribute("placeholder", /^7 —/);
     await shoot(page, `profile-add-region-${suffix}`);
 
     const profileClasses = page.getByRole("group", { name: "Numbers" });
     await profileClasses.scrollIntoViewIfNeeded();
-    for (const label of ["Custom", "Numbers", "Letters", "Symbols"]) {
+    // FE-029: the profile has no Custom group; the three character groups stay.
+    await expect(page.getByRole("group", { name: "Custom" })).toHaveCount(0);
+    for (const label of ["Numbers", "Letters", "Symbols"]) {
       await expect(page.getByRole("group", { name: label })).toBeVisible();
     }
     await shoot(page, `profile-groups-expanded-${suffix}`);

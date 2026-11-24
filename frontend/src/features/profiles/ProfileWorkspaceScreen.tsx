@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker, useNavigate } from "react-router";
 
 import {
-  categoriesInUseFromError,
   createProfile,
   createReferencePreview,
   describeApiError,
@@ -27,7 +26,7 @@ import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { useLocalFilePicker } from "../files";
 import { AnnotationsPanel } from "./AnnotationsPanel";
-import { ClassGroupsPanel } from "./ClassGroupsPanel";
+import { OcrSettingsPanel } from "./OcrSettingsPanel";
 import { ProfileSearchField } from "./ProfileSearchField";
 import {
   createRequestFrom,
@@ -38,7 +37,6 @@ import {
   nextRegionName,
   saveRequestFrom,
   withAcceptedSketch,
-  withRenamedCategory,
   characterAlphabetOf,
   type ProfileDraft,
 } from "./profileDraft";
@@ -92,7 +90,6 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState("");
   const [saveAsError, setSaveAsError] = useState<string | undefined>(undefined);
-  const [customOpen, setCustomOpen] = useState(true);
   const sketchInputRef = useRef<HTMLInputElement | null>(null);
 
   const profiles = useQuery({
@@ -313,18 +310,10 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   ];
 
   const saveFailure = save.isError ? describeApiError(save.error) : null;
-  const inUse = categoriesInUseFromError(save.error);
   const regionConflict = regionNameConflictFromError(save.error);
   const saveAsFailure = saveAs.isError ? describeApiError(saveAs.error) : null;
   const previewFailure = preview.isError ? describeApiError(preview.error) : null;
   const canSave = draft.profileId !== null && draft.version !== null && dirty;
-  const renamedOcrBlockers = draft.regions.filter((region) =>
-    baseline.categories.some((original) => {
-      if (original.kind !== "character" || region.allowed_chars === null || !region.allowed_chars.includes(original.name)) return false;
-      const updated = draft.categories.find((category) => category.key === original.key);
-      return updated === undefined || updated.name !== original.name || updated.kind !== original.kind;
-    }),
-  );
 
   function submitSaveAs() {
     if (busy) return;
@@ -539,13 +528,6 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           }}
           onAccept={acceptSketch}
           onReject={rejectSketch}
-          onRemove={(key) => {
-            setDraft((current) => ({
-              ...current,
-              regions: current.regions.filter((region) => region.key !== key),
-            }));
-            setSelectedRegionKey((current) => (current === key ? null : current));
-          }}
           onRename={(key, name) => {
             setDraft((current) => ({
               ...current,
@@ -602,20 +584,12 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           </p>
         ) : null}
 
-        {renamedOcrBlockers.length > 0 ? (
-          <InlineError message={`First change the OCR character range of these regions: ${renamedOcrBlockers.map((region) => `“${region.name}”`).join(", ")}.`} />
-        ) : null}
         {regionConflict === null ? null : (
           <InlineError
             message={`Region “${regionConflict.name}” already exists in this profile. Rename it and save again.`}
           />
         )}
-        {inUse.length === 0 ? null : (
-          <InlineError
-            message={`Saved annotations use these classes, so they cannot be removed: ${inUse.map((category) => category.name).join(", ")}. Restore them or save the definition as a new profile with Save as.`}
-          />
-        )}
-        {saveFailure === null || inUse.length > 0 || regionConflict !== null ? null : (
+        {saveFailure === null || regionConflict !== null ? null : (
           <InlineError
             message={
               isVersionConflict(save.error)
@@ -625,9 +599,13 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           />
         )}
 
-        <ClassGroupsPanel
+        {/*
+          FE-029: what OCR reads, and nothing else. Classes are added by naming
+          a drawn box and removed with their region on the screenshot, so the
+          panel no longer lists, renames or deletes them.
+        */}
+        <OcrSettingsPanel
           categories={draft.categories}
-          customOpen={customOpen}
           disabled={editingDisabled}
           onAllowedCharsChange={(allowedChars) => {
             setDraft((current) => ({
@@ -649,18 +627,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
               ),
             }));
           }}
-          onRemoveCategory={(key) => {
-            setDraft((current) => ({
-              ...current,
-              categories: current.categories.filter((category) => category.key !== key),
-            }));
-          }}
-          onRenameCategory={(key, name) => {
-            setDraft((current) => withRenamedCategory(current, key, name));
-          }}
-          onToggleCustom={() => {
-            setCustomOpen((open) => !open);
-          }}
+          onSelectRegion={setSelectedRegionKey}
           region={selectedRegion}
           regions={draft.regions}
         />

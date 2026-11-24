@@ -121,24 +121,23 @@ test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach",
     await page.goto("/profiles");
     await freezeMotion(page);
 
-    await page.getByRole("button", { name: "Expand group OCR settings" }).click();
-    await page.getByRole("button", { name: "Rename class 7" }).click();
-    const renameInput = page.getByRole("textbox", { name: "New name of class 7" });
-    await renameInput.fill("osiem");
-
-    // FE-022 moved the durability note into the Save as dialog; the group
-    // change is a one-line status under the rename field.
-    const kindWarning = page.getByText(/Moves the class from/);
-    const profileBody = page.getByRole("region", { name: "Classes" }).locator(".df-panel__body");
-    await kindWarning.scrollIntoViewIfNeeded();
-    await expect(kindWarning).toBeInViewport();
-    await expect(kindWarning).toContainText("Numbers");
-    await expect(kindWarning).toContainText("Custom");
-    await expectInsideViewport(kindWarning, viewport, `kind warning at ${suffix}`);
-    await expectInsideContainer(kindWarning, profileBody, `kind warning at ${suffix}`);
+    // FE-029 removed renaming classes; the profile half of this shot is now
+    // the OCR settings of a selected region, which must fit its panel and
+    // the viewport the same way the rename row had to.
+    await page.getByRole("button", { name: "Select region Pasek zdrowia" }).click();
+    const ocrPanel = page.getByRole("region", { name: "OCR settings" });
+    const ocrBody = ocrPanel.locator(".df-panel__body");
+    const characters = ocrPanel.getByRole("group", {
+      name: "Characters OCR reads in region Pasek zdrowia",
+    });
+    await characters.scrollIntoViewIfNeeded();
+    await expect(characters).toBeInViewport();
+    await expectInsideViewport(characters, viewport, `OCR characters at ${suffix}`);
+    await expectInsideContainer(characters, ocrBody, `OCR characters at ${suffix}`);
+    await expect(page.getByRole("button", { name: /^Rename class / })).toHaveCount(0);
 
     await writeFile(
-      path.join(screenshotDirectory, `profile-rename-${suffix}.png`),
+      path.join(screenshotDirectory, `profile-ocr-settings-${suffix}.png`),
       deterministicPng(
         await page.screenshot({ animations: "disabled", caret: "hide", fullPage: false }),
       ),

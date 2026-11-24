@@ -26,9 +26,10 @@
   font-size: var(--font-size-xs);
 }
 
+/* FE-029: the row is one select button; regions are deleted on the picture. */
 .df-annotations__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   min-height: var(--list-row-height);
 }
@@ -88,12 +89,6 @@
   flex: none;
   padding-inline-start: var(--element-gap-lg);
   font-variant-numeric: tabular-nums;
-}
-
-.df-annotations__row-delete.df-button {
-  min-width: var(--list-row-height);
-  min-height: var(--list-row-height);
-  padding: var(--size-none);
 }
 
 .df-annotations__actions {

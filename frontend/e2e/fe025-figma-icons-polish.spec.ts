@@ -196,7 +196,14 @@ async function rest(page: Page): Promise<void> {
 // --- 1. icons ---------------------------------------------------------------
 
 test.describe("FE-025 icons are the Figma vectors at every place of the map", () => {
-  const checks: { route: string; place: string; scope: (page: Page) => Locator; figma: string }[] = [
+  const checks: {
+    route: string;
+    place: string;
+    scope: (page: Page) => Locator;
+    figma: string;
+    /** A step that makes the place exist first (FE-029: groups need a region). */
+    prepare?: (page: Page) => Promise<void>;
+  }[] = [
     { route: "/profiles", place: "bar ☰", scope: (p) => p.locator(".df-shell__toggle"), figma: "Frame 1" },
     { route: "/profiles", place: "bar ⋮", scope: (p) => p.locator(".df-shell__more").getByRole("button", { name: "More" }), figma: "more-horizontal" },
     { route: "/profiles", place: "side panel Upload", scope: (p) => p.locator('.df-side-nav a[href="/materials"]'), figma: "Upload" },
@@ -211,9 +218,27 @@ test.describe("FE-025 icons are the Figma vectors at every place of the map", ()
     { route: "/profiles", place: "Save profile", scope: (p) => p.getByRole("button", { name: "Save profile" }), figma: "save-line" },
     { route: "/profiles", place: "Save as", scope: (p) => p.getByRole("button", { name: "Save as" }), figma: "add-fill" },
     { route: "/profiles", place: "Run on Profile", scope: (p) => p.locator(".df-profile-workspace__run"), figma: "Arrow - Right Square" },
-    { route: "/profiles", place: "class group checkbox", scope: (p) => p.getByRole("checkbox", { name: "Numbers" }), figma: "Checkbox - Empty" },
-    { route: "/profiles", place: "class group chevron (collapsed)", scope: (p) => p.getByRole("button", { name: "Expand group Numbers" }), figma: "Arrow - Right 2" },
-    { route: "/profiles", place: "class group chevron (open)", scope: (p) => p.getByRole("button", { name: "Collapse group Custom" }), figma: "Arrow - Down 2" },
+    // FE-029: the character groups live in OCR settings and appear with a
+    // selected region. Region A reads "12", so Letters is the empty group.
+    {
+      route: "/profiles",
+      place: "class group checkbox",
+      scope: (p) => p.getByRole("checkbox", { name: "Letters" }),
+      figma: "Checkbox - Empty",
+      prepare: async (p) => {
+        await p.getByRole("button", { name: "Select region Region A" }).click();
+      },
+    },
+    { route: "/profiles", place: "class group chevron (collapsed)", scope: (p) => p.getByRole("button", { name: "Expand group Letters" }), figma: "Arrow - Right 2" },
+    {
+      route: "/profiles",
+      place: "class group chevron (open)",
+      scope: (p) => p.getByRole("button", { name: "Collapse group Numbers" }),
+      figma: "Arrow - Down 2",
+      prepare: async (p) => {
+        await p.getByRole("button", { name: "Expand group Numbers" }).click();
+      },
+    },
     { route: "/run", place: "Source file label", scope: (p) => p.locator(".df-run-setup__label").filter({ hasText: "Source file" }), figma: "film-line" },
     { route: "/run", place: "Profile label", scope: (p) => p.locator(".df-run-setup__label").filter({ hasText: "Profile" }), figma: "Profile" },
     { route: "/run", place: "Sample rate label", scope: (p) => p.locator(".df-field__label").filter({ hasText: "Sample rate" }), figma: "Setting" },
@@ -231,6 +256,7 @@ test.describe("FE-025 icons are the Figma vectors at every place of the map", ()
       await open(page, route);
       const failures: string[] = [];
       for (const check of checks.filter((candidate) => candidate.route === route)) {
+        await check.prepare?.(page);
         const scope = check.scope(page);
         await scope.first().waitFor({ state: "attached" });
         const drawn = await drawnGeometry(scope.first());
@@ -390,42 +416,7 @@ test.describe("FE-025 every state is the preset token of the same name", () => {
   });
 });
 
-// --- 3. rename in the row --------------------------------------------------------
-
-for (const width of [1200, 360]) {
-  test(`FE-025 renaming a class fits the row at ${String(width)} px`, async ({ page }) => {
-    await openProfile(page, width);
-    await page.getByRole("button", { name: "Rename class Life" }).click();
-    const field = page.getByRole("textbox", { name: "New name of class Life" });
-    await expect(field).toBeFocused();
-    const geometry = await page.locator(".df-class-groups__row--editing").evaluate((row) => {
-      const box = row.getBoundingClientRect();
-      const input = row.querySelector("input")?.getBoundingClientRect();
-      const actions = row.querySelector(".df-class-groups__actions")?.getBoundingClientRect();
-      return {
-        actionsRight: actions?.right ?? 0,
-        inputHeight: input?.height ?? 0,
-        inputWidth: input?.width ?? 0,
-        overflow: row.scrollWidth - row.clientWidth,
-        rowLeft: box.left,
-        rowRight: box.right,
-        rowWidth: box.width,
-        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      };
-    });
-    if (width === 1200) {
-      expect(Math.round((await page.locator(".df-profile-workspace__controls").boundingBox())?.width ?? 0)).toBe(247);
-    }
-    expect(geometry.overflow).toBeLessThanOrEqual(0);
-    expect(geometry.pageOverflow).toBeLessThanOrEqual(0);
-    expect(geometry.actionsRight).toBeLessThanOrEqual(geometry.rowRight + 0.5);
-    // The field takes the row: everything but the two 34 px icon actions.
-    expect(geometry.inputWidth).toBeGreaterThanOrEqual(geometry.rowWidth - 2 * 34 - 4 - 6 - 1);
-    expect(Math.round(geometry.inputHeight)).toBe(34);
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "Rename class Life" })).toBeVisible();
-  });
-}
+// --- 3. rename in the row: removed by FE-029 (classes are no longer renamed) ---
 
 // --- 4. canvas -----------------------------------------------------------------
 

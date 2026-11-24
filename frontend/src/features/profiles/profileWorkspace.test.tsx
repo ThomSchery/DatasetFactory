@@ -12,7 +12,6 @@ import {
   isDirty,
   saveRequestFrom,
   withAcceptedSketch,
-  withRenamedCategory,
   type ProfileDraft,
 } from "./profileDraft";
 
@@ -249,7 +248,6 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
     await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
-    await user.click(screen.getByRole("button", { name: "Expand group OCR settings" }));
     await user.click(screen.getByRole("combobox", { name: "Text layout (PSM)" }));
     await user.click(screen.getByRole("option", { name: /^6 —/ }));
     expect(screen.getByRole("combobox", { name: "Text layout (PSM)" })).toHaveValue("6 — One uniform block of text");
@@ -289,15 +287,20 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull();
   });
 
-  it("opens the active profile with its regions, classes and screenshot", async () => {
+  it("opens the active profile with its regions, what OCR reads in them and screenshot", async () => {
     stubProfiles();
     renderApp(["/profiles"]);
 
     await expectOpenProfile("Alpha");
     const annotations = screen.getByRole("region", { name: "Annotations" });
     expect(within(annotations).getByText("Pasek zdrowia")).toBeInTheDocument();
-    const classes = screen.getByRole("region", { name: "Classes" });
-    expect(within(classes).getByText("health")).toBeInTheDocument();
+    // FE-029: with nothing selected, OCR settings summarises every region.
+    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    expect(
+      within(ocr).getByRole("button", {
+        name: "Pasek zdrowia: 1 of 1 characters, 7 — One text line. Select the region",
+      }),
+    ).toBeInTheDocument();
     expect(await screen.findByAltText(/Reference screenshot of profile Alpha/)).toBeInTheDocument();
   });
 
@@ -359,122 +362,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     });
   });
 
-  it("renames a custom class without changing its durable identifier", async () => {
-    const user = userEvent.setup();
-    const spy = stubProfiles();
-    renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Rename class health" }));
-    const field = screen.getByLabelText("New name of class health");
-    await user.clear(field);
-    await user.type(field, "armour");
-    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
-    await user.click(screen.getByRole("button", { name: "Save profile" }));
-    await waitFor(() => expect(savedBody(spy)).toMatchObject({
-      categories: expect.arrayContaining([{ id: "category-hud", kind: "game", name: "armour" }]),
-    }));
-  });
-
-  it("FE-025: renames in the row with icon actions; Enter saves, Escape cancels", async () => {
-    const user = userEvent.setup();
-    stubProfiles();
-    renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Rename class health" }));
-    const confirm = screen.getByRole("button", { name: "Save the new name of class health" });
-    const cancel = screen.getByRole("button", { name: "Cancel renaming class health" });
-    // Icon buttons: the Figma-sized glyph, no text label to overflow the row.
-    expect(confirm.textContent).toBe("");
-    expect(cancel.textContent).toBe("");
-    expect(confirm.querySelector("svg[data-icon]")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
-    const field = screen.getByLabelText("New name of class health");
-    await user.clear(field);
-    await user.type(field, "armour{Escape}");
-    expect(screen.getByRole("button", { name: "Rename class health" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Rename class health" }));
-    const again = screen.getByLabelText("New name of class health");
-    await user.clear(again);
-    await user.type(again, "armour{Enter}");
-    expect(screen.getByRole("button", { name: "Rename class armour" })).toBeVisible();
-  });
-
-  it("keeps a renamed class when the server rejects a duplicate name", async () => {
-    const user = userEvent.setup();
-    stubProfiles({ save: { status: 409, body: errorEnvelope("category_name_exists") } });
-    renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Rename class health" }));
-    const field = screen.getByLabelText("New name of class health");
-    await user.clear(field);
-    await user.type(field, "armour");
-    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
-    await user.click(screen.getByRole("button", { name: "Save profile" }));
-    expect(await screen.findByRole("alert")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Rename class armour" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled();
-  });
-
-  it("allows renaming an OCR class and warns when it changes group", async () => {
-    const user = userEvent.setup();
-    const profile = alpha();
-    profile.regions[0].allowed_chars = null;
-    profile.regions[0].page_segmentation_mode = null;
-    const spy = stubProfiles({ profiles: [profile] });
-    renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Expand group OCR settings" }));
-    await user.click(screen.getByRole("button", { name: "Rename class 7" }));
-    const field = screen.getByLabelText("New name of class 7");
-    await user.clear(field);
-    await user.type(field, "score");
-    expect(screen.getByText(/Moves the class from/)).toHaveTextContent("Moves the class from Numbers to Custom.");
-    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
-    await user.click(screen.getByRole("button", { name: "Save profile" }));
-    await waitFor(() => expect(savedBody(spy)).toMatchObject({
-      categories: expect.arrayContaining([{ id: "category-7", kind: "game", name: "score" }]),
-    }));
-  });
-
-  it("names regions whose explicit OCR whitelist still uses a renamed class", async () => {
-    const user = userEvent.setup();
-    stubProfiles();
-    renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Expand group OCR settings" }));
-    await user.click(screen.getByRole("button", { name: "Rename class 7" }));
-    const field = screen.getByLabelText("New name of class 7");
-    await user.clear(field);
-    await user.type(field, "8");
-    await user.click(screen.getByRole("button", { name: /^Save the new name of class / }));
-    expect(screen.getByRole("alert")).toHaveTextContent("First change the OCR character range of these regions: “Pasek zdrowia”");
-  });
-
-  it("FE-026: renaming a region's class renames the region; orphaned unsaved classes stay out", () => {
-    const profile = alpha();
-    profile.regions.push({
-      id: "region-kill",
-      name: "kill",
-      x: 200,
-      y: 20,
-      width: 50,
-      height: 20,
-      allowed_chars: "7",
-      page_segmentation_mode: 7,
-    });
-    profile.categories.push({ id: "category-kill", name: "kill", kind: "game" });
-    const draft = draftFromProfile(profile);
-    const keyOf = (from: ProfileDraft, name: string): string => {
-      const found = from.categories.find((category) => category.name === name);
-      if (found === undefined) throw new Error(`no class ${name}`);
-      return found.key;
-    };
-
-    const renamed = withRenamedCategory(draft, keyOf(draft, "kill"), "frag");
-    expect(renamed.regions.map((region) => region.name)).toEqual(["Pasek zdrowia", "frag"]);
-    expect(saveRequestFrom(renamed).categories).toContainEqual({ id: "category-kill", kind: "game", name: "frag" });
-    expect(saveRequestFrom(renamed).regions).toContainEqual(expect.objectContaining({ id: "region-kill", name: "frag" }));
-
-    // A class no region carries renames alone.
-    expect(withRenamedCategory(draft, keyOf(draft, "health"), "armour").regions).toEqual(draft.regions);
-    // Another region already holds the new name: only the class moves.
-    expect(withRenamedCategory(draft, keyOf(draft, "kill"), "pasek ZDROWIA").regions).toEqual(draft.regions);
-
+  it("FE-026: a box renamed before saving leaves no orphaned unsaved class", () => {
+    const draft = draftFromProfile(alpha());
     // A box accepted as "ammo" and renamed before saving leaves no "ammo" class behind.
     const sketched = withAcceptedSketch(draft, { x: 0, y: 0, width: 5, height: 5 }, "ammo");
     const retitled: ProfileDraft = {
@@ -492,54 +381,61 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(foldName(" Straße ")).toBe(foldName("STRASSE"));
     expect(foldName("ﬁnal")).toBe(foldName("FINAL"));
     expect(foldName("Kill")).toBe("kill");
-    const profile = alpha();
-    profile.regions[0].name = "Straße";
-    profile.categories.push({ id: "category-street", name: "STRASSE", kind: "game" });
-    const draft = draftFromProfile(profile);
-    const street = draft.categories.find((category) => category.name === "STRASSE");
-    if (street === undefined) throw new Error("no class STRASSE");
-    expect(withRenamedCategory(draft, street.key, "Ulica").regions[0].name).toBe("Ulica");
   });
 
-  it("FE-026: a region's class cannot be removed while the region exists", async () => {
-    const user = userEvent.setup();
-    const profile = alpha();
-    profile.categories.push({ id: "category-bar", name: "Pasek zdrowia", kind: "game" });
-    stubProfiles({ profiles: [profile] });
+  it("FE-029: the profile column has no Custom list, rename or delete icons", async () => {
+    stubProfiles();
     renderApp(["/profiles"]);
 
-    const locked = await screen.findByRole("button", {
-      name: "Class of region Pasek zdrowia: remove the region to remove the class",
-    });
-    expect(locked).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Remove class health from the profile" })).toBeEnabled();
-
-    await user.click(screen.getByRole("button", { name: "Delete region Pasek zdrowia" }));
-    expect(screen.getByRole("button", { name: "Remove class Pasek zdrowia from the profile" })).toBeEnabled();
+    await expectOpenProfile("Alpha");
+    expect(screen.queryByRole("region", { name: "Classes" })).toBeNull();
+    expect(screen.queryByText("Custom")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Rename class / })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Remove class / })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Delete region / })).toBeNull();
+    expect(screen.queryByText("Character class names")).toBeNull();
   });
 
-  it("FE-026: renaming a region's class in Custom renames the region in the same save", async () => {
+  it("FE-029: shows and edits what OCR reads in the selected region", async () => {
     const user = userEvent.setup();
     const profile = alpha();
-    profile.categories.push({ id: "category-bar", name: "Pasek zdrowia", kind: "game" });
+    profile.categories = [
+      { id: "category-7", name: "7", kind: "character" },
+      { id: "category-8", name: "8", kind: "character" },
+      { id: "category-a", name: "A", kind: "character" },
+      { id: "category-hud", name: "health", kind: "game" },
+    ];
+    profile.regions[0].allowed_chars = "78";
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
 
-    await user.click(await screen.findByRole("button", { name: "Rename class Pasek zdrowia" }));
-    const field = screen.getByLabelText("New name of class Pasek zdrowia");
-    await user.clear(field);
-    await user.type(field, "Zdrowie{Enter}");
+    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    await user.click(
+      await within(ocr).findByRole("button", {
+        name: "Pasek zdrowia: 2 of 3 characters, 7 — One text line. Select the region",
+      }),
+    );
+    // A summary row selects the region, and the panel now edits it.
+    expect(screen.getByRole("button", { name: "Select region Pasek zdrowia" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(ocr).getByText("Text layout")).toBeInTheDocument();
+    const characters = within(ocr).getByRole("group", {
+      name: "Characters OCR reads in region Pasek zdrowia",
+    });
+    // The alphabet is grouped, not one long list: Letters is its own group.
+    await user.click(within(characters).getByRole("button", { name: /Expand group Letters/ }));
+    await user.click(within(characters).getByRole("checkbox", { name: "A" }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
-
-    await waitFor(() => expect(savedBody(spy)).toMatchObject({
-      categories: expect.arrayContaining([{ id: "category-bar", kind: "game", name: "Zdrowie" }]),
-      regions: [expect.objectContaining({ id: "region-hp", name: "Zdrowie" })],
-    }));
+    await waitFor(() =>
+      expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "78A" }] }),
+    );
   });
 
-  it("names a drawn box, accepts it, and files the name under Custom", async () => {
+  it("names a drawn box, accepts it, and the name becomes a class of the profile", async () => {
     const user = userEvent.setup();
-    stubProfiles();
+    const spy = stubProfiles();
     renderApp(["/profiles"]);
 
     const surface = await loadScreenshot();
@@ -555,10 +451,14 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
 
     const annotations = screen.getByRole("region", { name: "Annotations" });
     expect(within(annotations).getByText("Amunicja")).toBeInTheDocument();
-    const classes = screen.getByRole("region", { name: "Classes" });
-    expect(within(classes).getByText("Amunicja")).toBeInTheDocument();
-    expect(within(classes).getByLabelText("OCR text layout")).toBeEnabled();
     expect(screen.queryByLabelText("Name of the drawn region")).toBeNull();
+    // FE-029: there is no class list to show it in; the save carries the class.
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() =>
+      expect(savedBody(spy)).toMatchObject({
+        categories: expect.arrayContaining([{ id: null, kind: "game", name: "Amunicja" }]),
+      }),
+    );
   });
 
   it("rejects a drawn box without touching the profile", async () => {
@@ -750,29 +650,6 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled();
   });
 
-  it("names the classes a save cannot drop and points at Save as", async () => {
-    const user = userEvent.setup();
-    stubProfiles({
-      save: {
-        status: 409,
-        body: errorEnvelope("category_in_use", "Operacja odrzucona.", {
-          categories: [{ id: "category-hud", name: "health" }],
-        }),
-      },
-    });
-    renderApp(["/profiles"]);
-
-    const classes = await screen.findByRole("region", { name: "Classes" });
-    await user.click(await within(classes).findByRole("button", { name: "Remove class health from the profile" }));
-    await user.click(screen.getByRole("button", { name: "Save profile" }));
-
-    const notice = await screen.findByText(/Saved annotations use these classes/);
-    expect(notice).toHaveTextContent("health");
-    expect(notice).toHaveTextContent("Save as");
-    // The draft survives the refusal, so Save as has something to save.
-    expect(within(classes).queryByText("health")).toBeNull();
-  });
-
   it("copies the draft into a new profile without inheriting its identifiers", async () => {
     const user = userEvent.setup();
     const spy = stubProfiles({
@@ -820,13 +697,13 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     ).toBe(false);
   });
 
-  it("starts a blank draft with the base character groups and an empty Custom", async () => {
+  it("starts a blank draft whose OCR settings wait for a first region", async () => {
     stubProfiles();
     renderApp(["/profiles/new"]);
 
     expect(await screen.findByRole("button", { name: "Add screenshot (JPG/PNG)" })).toBeInTheDocument();
-    const classes = screen.getByRole("region", { name: "Classes" });
-    expect(within(classes).getByText("Name a drawn box to add a class here.")).toBeInTheDocument();
+    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    expect(within(ocr).getByText(/No regions yet/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
   });
 

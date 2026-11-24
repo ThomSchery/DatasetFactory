@@ -245,43 +245,6 @@ export function isRegionClass(draft: ProfileDraft, category: DraftCategory): boo
 }
 
 /**
- * Renaming a class from `Custom`. A region's class and the region are one
- * thing to the operator, so renaming the class renames its region as well;
- * the backend then keeps the class row, and every box drawn under it.
- *
- * The region stays put when another region already holds the new name: two
- * regions may not share one, and the class rename alone is still a valid
- * request (the backend gives the region its class back).
- */
-export function withRenamedCategory(
-  draft: ProfileDraft,
-  key: string,
-  name: string,
-): ProfileDraft {
-  const category = draft.categories.find((item) => item.key === key);
-  if (category === undefined) {
-    return draft;
-  }
-  const kind: CategoryKind = CHARACTER_CLASS_ALPHABET.includes(name) ? "character" : "game";
-  const categories = draft.categories.map((item) =>
-    item.key === key ? { ...item, name, kind } : item,
-  );
-  const normalized = foldName(category.name);
-  const region =
-    category.kind === "game"
-      ? draft.regions.find((item) => foldName(item.name) === normalized)
-      : undefined;
-  if (region === undefined || hasRegionNamed(draft, name, region.key)) {
-    return { ...draft, categories };
-  }
-  return {
-    ...draft,
-    categories,
-    regions: draft.regions.map((item) => (item.key === region.key ? { ...item, name } : item)),
-  };
-}
-
-/**
  * The classes a save sends.
  *
  * A `Custom` class that was never saved (`id === null`) came from a box drawn

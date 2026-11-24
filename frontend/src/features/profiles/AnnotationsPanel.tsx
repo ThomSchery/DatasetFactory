@@ -1,7 +1,6 @@
 import { useId } from "react";
 
 import { Button } from "../../components/common/Button";
-import { Icon } from "../../components/common/Icon";
 import { Panel } from "../../components/common/Panel";
 import { TextField } from "../../components/common/TextField";
 import { InlineError } from "../../components/common/UiStates";
@@ -20,7 +19,6 @@ export interface AnnotationsPanelProps {
   categories: readonly DraftCategory[];
   selectedKey: string | null;
   onSelect: (key: string) => void;
-  onRemove: (key: string) => void;
   onRename: (key: string, name: string) => void;
   /** The box just drawn, waiting to be named; `null` when there is none. */
   sketch: AnnotationSketch | null;
@@ -47,13 +45,14 @@ export interface AnnotationsPanelProps {
  *
  * The rows are the profile's real regions, never sample values. The count is
  * the size of the region's OCR character set, the only number a region has.
+ * FE-029: a row has no delete icon — a region is removed on the screenshot,
+ * from its context menu or with Delete, where the operator sees what goes.
  */
 export function AnnotationsPanel({
   regions,
   categories,
   selectedKey,
   onSelect,
-  onRemove,
   onRename,
   sketch,
   sketchName,
@@ -133,18 +132,6 @@ export function AnnotationsPanel({
                 <span className="df-annotations__row-detail">
                   ({region.allowed_chars === null ? "all" : region.allowed_chars.length})
                 </span>
-              </Button>
-              <Button
-                aria-label={`Delete region ${region.name}`}
-                className="df-annotations__row-delete"
-                disabled={disabled}
-                onClick={() => {
-                  onRemove(region.key);
-                }}
-                title={`Delete region ${region.name}`}
-                variant="muted"
-              >
-                <Icon name="trash" />
               </Button>
             </li>
           ))

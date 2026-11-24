@@ -97,6 +97,14 @@ interface ScreenSpec {
   ready: string;
   route: string;
   root: string;
+  /**
+   * Figma labels the app deliberately no longer draws, each with the decision
+   * that removed it. Only these are excused; every other Figma label must
+   * still be on screen.
+   */
+  absentLabels?: { label: string; reason: string }[];
+  /** A step that brings the screen into the state the Figma frame draws. */
+  prepare?: (page: Page) => Promise<void>;
 }
 
 const SCREENS: Record<Screen, ScreenSpec> = {
@@ -117,11 +125,24 @@ const SCREENS: Record<Screen, ScreenSpec> = {
     },
     keys: [
       { label: "Save profile", layer: "game-x", pick: "first", selector: ".df-profile-workspace__save" },
-      { label: "Class groups", layer: "class-list", pick: "first", selector: ".df-class-groups" },
+      // FE-029: the class groups became the OCR settings panel, in the same
+      // place under Save profile.
+      { label: "OCR settings", layer: "class-list", pick: "first", selector: ".df-ocr-settings" },
     ],
     ready: ".df-region-overlay__surface",
     root: ".df-profile-workspace",
     route: "/profiles",
+    absentLabels: [
+      {
+        label: "Custom",
+        reason: "FE-029 (user, 2026-11-24): classes come from naming a box, no Custom list",
+      },
+    ],
+    // The Figma frame draws the character groups open, which since FE-029
+    // means a region is selected (its OCR settings).
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Select region Region A" }).click();
+    },
   },
   run: {
     column: { layer: "cross-view", selector: ".df-run-setup__column" },
@@ -433,6 +454,7 @@ async function openScreen(
   await installApi(page);
   await page.goto(SCREENS[screen].route);
   await page.locator(SCREENS[screen].ready).first().waitFor({ state: "visible" });
+  await SCREENS[screen].prepare?.(page);
   if (options.collapseStrip === true) {
     // FE-023: ☰ collapses the strip; the side bar has no |← control any more.
     const toggle = page.getByRole("button", { name: "Sections", exact: true });
@@ -546,13 +568,20 @@ function checkFrame(
   });
 
   // Labels.
+  const absent = new Map((spec.absentLabels ?? []).map((item) => [item.label, item.reason]));
   const missing = frame.rows
     .filter((row) => row[0] === "t")
     .map((row) => String(row[6]))
     .filter((text) => !isDataText(text))
     .map(labelPart)
+    .filter((text) => !absent.has(text))
     .filter((text) => !measured.texts.some((seen) => seen === text || seen.startsWith(`${text} `) || seen.startsWith(`${text}(`)));
-  checks.labels = missing.length === 0 ? "ok" : `missing ${missing.join(", ")}`;
+  const excused = [...absent.keys()].filter((label) =>
+    frame.rows.some((row) => row[0] === "t" && labelPart(String(row[6])) === label),
+  );
+  checks.labels =
+    (missing.length === 0 ? "ok" : `missing ${missing.join(", ")}`) +
+    (excused.length === 0 ? "" : ` (absent by decision: ${excused.join(", ")})`);
   if (missing.length > 0) failures.push(`labels missing: ${missing.join(", ")}`);
 
   // Content bottom.

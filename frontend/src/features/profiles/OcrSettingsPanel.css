@@ -1,0 +1,165 @@
+/*
+ * FE-029: the OCR settings panel. The character groups keep the Figma
+ * `class-list` rows FE-022 / FE-025 defined for the class groups: every row —
+ * group header and item alike — is its own 40 px block, radius 4, on
+ * `surface/page`, checkbox on the left, 12 / 300 label, chevron on the right;
+ * a checked item is `surface/panel-selected` with the `border/focus` outline.
+ */
+.df-ocr-settings .df-panel__body {
+  display: grid;
+  gap: var(--element-gap-md);
+}
+
+.df-ocr-settings__region {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-ocr-settings__note,
+.df-ocr-settings__subtitle {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}
+
+.df-ocr-settings__subtitle {
+  margin-block-start: var(--element-padding-y-md);
+}
+
+/* --- characters OCR reads: the collapsible groups ------------------------- */
+
+.df-ocr-settings .df-grouped-options--inline .df-collapsible-group__header {
+  min-height: var(--class-row-height);
+  padding-inline: var(--size-none) var(--element-padding-y-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-primary-default);
+}
+
+/* Hover is the whole row, never a grey square behind the checkbox. */
+.df-ocr-settings .df-collapsible-group__header:hover:not(:has([aria-disabled="true"])) {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-ocr-settings .df-collapsible-group__title {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+  letter-spacing: var(--letter-spacing-normal);
+  text-transform: none;
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__list,
+.df-ocr-settings .df-grouped-options--inline .df-collapsible-group,
+.df-ocr-settings .df-grouped-options--inline .df-collapsible-group__content {
+  gap: var(--element-gap-lg);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-collapsible-group__content {
+  padding: var(--size-none);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row {
+  gap: var(--element-gap-lg);
+  min-height: var(--class-row-height);
+  margin-inline-start: var(--size-none);
+  padding-block: var(--size-none);
+  padding-inline: var(--element-padding-x-lg);
+  border: var(--border-width-default) solid var(--color-surface-transparent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-transparent);
+  color: var(--color-text-strong-default);
+  font-weight: var(--font-weight-light);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--group {
+  color: var(--color-text-weak-default);
+}
+
+/* The header row paints its own hover above; its checkbox row stays clear. */
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--group:hover,
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--group:active {
+  background: var(--color-surface-transparent);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option {
+  background: var(--color-background-primary-default);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option:hover:not([aria-disabled="true"]) {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option:active:not([aria-disabled="true"]) {
+  background: var(--color-surface-neutral-pressed);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option[aria-checked="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-surface-neutral-selected);
+}
+
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row[aria-disabled="true"] {
+  opacity: var(--opacity-hover);
+}
+
+/* --- nothing selected: one row per region -------------------------------- */
+
+.df-ocr-settings__summary {
+  display: grid;
+  gap: var(--element-padding-y-md);
+  margin: var(--size-none);
+  padding: var(--size-none);
+  list-style: none;
+}
+
+.df-ocr-settings__summary-row.df-button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: var(--class-row-height);
+  padding-block: var(--element-padding-y-md);
+  padding-inline: var(--element-padding-x-lg);
+  border-color: var(--color-surface-transparent);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-primary-default);
+  text-align: start;
+}
+
+.df-ocr-settings__summary-row.df-button:hover:not(:disabled) {
+  background: var(--color-surface-neutral-raised);
+}
+
+.df-ocr-settings__summary-row .df-button__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(var(--size-xs) / 2) var(--element-gap-md);
+  width: 100%;
+  min-width: 0;
+}
+
+.df-ocr-settings__summary-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-strong-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-ocr-settings__summary-detail,
+.df-ocr-settings__summary-layout {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-light);
+}
+
+.df-ocr-settings__summary-layout {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
