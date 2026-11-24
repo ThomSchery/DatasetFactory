@@ -168,7 +168,8 @@ test("FE-019 pokazuje dwa stany pickerów, trzy panele i wspólny trójkąt prof
     await page.goto("/profiles");
     await freezeMotion(page);
     await page.getByRole("button", { name: "Select region Pasek zdrowia" }).click();
-    const profileGroups = page.getByRole("region", { name: "Classes" });
+    // FE-029: the character groups live in the OCR settings panel.
+    const profileGroups = page.getByRole("region", { name: "OCR settings" });
     await expect(profileGroups).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "Expand group Numbers" }).click();
     await page.getByRole("button", { name: "Collapse group Numbers" }).click();

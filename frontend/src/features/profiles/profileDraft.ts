@@ -194,6 +194,25 @@ export function hasRegionNamed(
   );
 }
 
+/**
+ * How many of the profile's characters OCR reads in a region (FE-029), or
+ * `null` when the region inherits all of them. Repeats and characters the
+ * profile does not define are not counted, so the number never exceeds the
+ * alphabet — both panels that show it read it from here.
+ */
+export function regionCharacterCount(
+  region: Pick<DraftRegion, "allowed_chars">,
+  categories: readonly DraftCategory[],
+): number | null {
+  if (region.allowed_chars === null) {
+    return null;
+  }
+  const alphabet = new Set(
+    categories.filter((category) => category.kind === "character").map((category) => category.name),
+  );
+  return [...new Set(region.allowed_chars)].filter((char) => alphabet.has(char)).length;
+}
+
 /** Every character class of the draft, in profile order, as one string. */
 export function characterAlphabetOf(draft: ProfileDraft): string {
   return draft.categories

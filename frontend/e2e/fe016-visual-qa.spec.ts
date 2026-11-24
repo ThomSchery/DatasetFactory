@@ -103,7 +103,7 @@ async function expectInsideContainer(
   );
 }
 
-test("FE-016 pokazuje zmianę grupy i konfigurację Roboflow w obu viewportach", async ({
+test("FE-016 pokazuje OCR settings regionu i konfigurację Roboflow w obu viewportach", async ({
   page,
 }) => {
   test.setTimeout(60_000);

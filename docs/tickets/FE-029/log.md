@@ -33,3 +33,17 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 - [x] Cienie: brak.
 - [x] Interakcje: hover / active jak dotychczasowe wiersze (`surface-neutral-raised` / `pressed`), disabled `--opacity-hover` (OPACITY-\*).
 - [x] Komponenty: `Panel`, `GroupedOptionList`, `Button`, `InlineError` z `common/`; nowych nie ma.
+
+## Bramka 1 i cold review (2026-11-24)
+
+- `check.ps1` na `1434985` (bez równoległych procesów): backend format / lint / typy / testy (613 s), frontend typy / testy (1028) / build — PASS; E2E 94/95 — `fe019-visual-qa.spec.ts:102` szukał regionu „Classes”.
+- Cold review (claude opus high; codex wyczerpał limit): WYMAGA POPRAWEK — P1 ten sam FE-019; P2 komentarz mówił, że klasa znika z regionem, a zapisana zostaje (decyzja dla użytkownika, na razie wariant „zostaje”); P3 brak testów: zmiana znaków w regionie null/null, podsumowanie null/null, usunięcie regionu na obrazie; P4 liczniki niespójne między panelami i liczące znaki spoza profilu („40 of 38”); P5 notka o dziedziczeniu tylko przy `allowed_chars === null`; P6 long-press na iOS (pytanie, nie blokuje — aplikacja lokalna na Windows).
+
+## FIX1
+
+1. P1: `fe019-visual-qa` szuka regionu „OCR settings”.
+2. P2: komentarz w `ProfileWorkspaceScreen` i docstring `OcrSettingsPanel` mówią prawdę — zapisana klasa zostaje po usunięciu regionu; w tickecie dopisane jako decyzja do podjęcia przez użytkownika.
+3. P3: trzy testy w `profileWorkspace.test.tsx` — region null/null po zmianie znaku zapisuje parę `{allowed_chars: "7", page_segmentation_mode: 7}`, podsumowanie „all 2 characters, Layout inherited”, usunięcie regionu klawiszem Delete na obrazie czyści listę i panel, a zapis niesie zapisaną klasę.
+4. P4: `regionCharacterCount` w `profileDraft.ts` (bez powtórzeń, tylko znaki profilu), używany przez Annotations i OCR settings; test „779X” → 1.
+5. P5: notka o dziedziczeniu przy `allowed_chars === null || page_segmentation_mode === null`.
+6. Kosmetyka: tytuł testu FE-016.

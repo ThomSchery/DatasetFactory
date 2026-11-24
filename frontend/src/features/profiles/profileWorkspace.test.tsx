@@ -433,6 +433,82 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     );
   });
 
+  it("FE-029: an inherited region gets an explicit pair when a character changes", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.categories = [
+      { id: "category-7", name: "7", kind: "character" },
+      { id: "category-8", name: "8", kind: "character" },
+      { id: "category-hud", name: "health", kind: "game" },
+    ];
+    profile.regions[0].allowed_chars = null;
+    profile.regions[0].page_segmentation_mode = null;
+    const spy = stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+
+    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    // The summary says an inheriting region reads everything, layout inherited.
+    expect(
+      await within(ocr).findByRole("button", {
+        name: "Pasek zdrowia: all 2 characters, Layout inherited. Select the region",
+      }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Select region Pasek zdrowia" }));
+    expect(within(ocr).getByText(/inherits the OCR settings/)).toBeInTheDocument();
+    const characters = within(ocr).getByRole("group", {
+      name: "Characters OCR reads in region Pasek zdrowia",
+    });
+    await user.click(within(characters).getByRole("button", { name: /Expand group Numbers/ }));
+    await user.click(within(characters).getByRole("checkbox", { name: "8" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    // A region never half-configures: the layout becomes explicit with it.
+    await waitFor(() =>
+      expect(savedBody(spy)).toMatchObject({
+        regions: [{ allowed_chars: "7", page_segmentation_mode: 7 }],
+      }),
+    );
+  });
+
+  it("FE-029: counts only the profile's own characters, once each, in both panels", async () => {
+    const profile = alpha();
+    // "7" twice and "9" / "X", which the profile does not define.
+    profile.regions[0].allowed_chars = "779X";
+    stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+
+    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    expect(
+      await within(ocr).findByRole("button", { name: /^Pasek zdrowia: 1 of 1 characters/ }),
+    ).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Annotations" })).getByText("(1)")).toBeInTheDocument();
+  });
+
+  it("FE-029: deleting a region on the screenshot clears it everywhere; a saved class stays", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.categories.push({ id: "category-bar", name: "Pasek zdrowia", kind: "game" });
+    const spy = stubProfiles({ profiles: [profile] });
+    renderApp(["/profiles"]);
+
+    const surface = await loadScreenshot();
+    await user.click(screen.getByRole("button", { name: "Select region Pasek zdrowia" }));
+    // The only way to delete a region now: on the picture (Delete or its menu).
+    fireEvent.keyDown(within(surface).getByRole("option", { name: /^Pasek zdrowia:/ }), {
+      key: "Delete",
+    });
+
+    expect(within(screen.getByRole("region", { name: "Annotations" })).queryByText("Pasek zdrowia")).toBeNull();
+    expect(within(screen.getByRole("region", { name: "OCR settings" })).getByText(/No regions yet/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    // Boxes in Review may use the class, so the save keeps it (no category_in_use).
+    await waitFor(() =>
+      expect(savedBody(spy)).toMatchObject({
+        regions: [],
+        categories: expect.arrayContaining([{ id: "category-bar", kind: "game", name: "Pasek zdrowia" }]),
+      }),
+    );
+  });
+
   it("names a drawn box, accepts it, and the name becomes a class of the profile", async () => {
     const user = userEvent.setup();
     const spy = stubProfiles();

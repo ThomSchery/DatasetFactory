@@ -2,7 +2,7 @@ import { Button } from "../../components/common/Button";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Panel } from "../../components/common/Panel";
 import { InlineError } from "../../components/common/UiStates";
-import type { DraftCategory, DraftRegion } from "./profileDraft";
+import { regionCharacterCount, type DraftCategory, type DraftRegion } from "./profileDraft";
 import {
   DEFAULT_REGION_PAGE_SEGMENTATION_MODE,
   OCR_PAGE_SEGMENTATION_OPTIONS,
@@ -42,8 +42,10 @@ function layoutLabel(mode: number | null): string {
  *
  * The regions themselves — where OCR reads — are drawn and named in
  * Annotations, and naming a box is also how a class is added, so this panel no
- * longer lists classes, renames them or deletes them. It answers one question
- * per region: which characters, in which text layout.
+ * longer lists classes, renames them or deletes them. A saved class outlives
+ * its region when the region is deleted: boxes in Review may use it, and the
+ * screen cannot tell. It answers one question per region: which characters,
+ * in which text layout.
  *
  *  - With a region selected it edits that region: the text layout (PSM) and
  *    the characters OCR may read, as three collapsible groups whose header
@@ -76,10 +78,11 @@ export function OcrSettingsPanel({
             </p>
             <ul aria-label="OCR settings of every region" className="df-ocr-settings__summary">
               {regions.map((item) => {
+                const count = regionCharacterCount(item, categories);
                 const read =
-                  item.allowed_chars === null
+                  count === null
                     ? `all ${String(characters.length)} characters`
-                    : `${String([...new Set(item.allowed_chars)].length)} of ${String(characters.length)} characters`;
+                    : `${String(count)} of ${String(characters.length)} characters`;
                 return (
                   <li key={item.key}>
                     <Button
@@ -120,7 +123,7 @@ export function OcrSettingsPanel({
       radius="sm"
       title="OCR settings"
     >
-      {region.allowed_chars === null ? (
+      {region.allowed_chars === null || region.page_segmentation_mode === null ? (
         <p className="df-ocr-settings__note">
           The region inherits the OCR settings. Changing a character or the layout saves its own
           settings.

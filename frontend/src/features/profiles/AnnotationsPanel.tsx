@@ -4,7 +4,7 @@ import { Button } from "../../components/common/Button";
 import { Panel } from "../../components/common/Panel";
 import { TextField } from "../../components/common/TextField";
 import { InlineError } from "../../components/common/UiStates";
-import type { DraftCategory, DraftRegion } from "./profileDraft";
+import { regionCharacterCount, type DraftCategory, type DraftRegion } from "./profileDraft";
 import "./AnnotationsPanel.css";
 
 export interface AnnotationSketch {
@@ -130,7 +130,7 @@ export function AnnotationsPanel({
               >
                 <span className="df-annotations__row-name">{region.name}</span>
                 <span className="df-annotations__row-detail">
-                  ({region.allowed_chars === null ? "all" : region.allowed_chars.length})
+                  ({regionCharacterCount(region, categories) ?? "all"})
                 </span>
               </Button>
             </li>
