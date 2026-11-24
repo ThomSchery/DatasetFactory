@@ -154,10 +154,11 @@ export function AnnotationPopover({
     window.addEventListener("resize", updateViewportRoom);
     window.addEventListener("scroll", updateViewportRoom, { passive: true });
 
-    // The panel follows the inspector in the side column. Its available room
-    // therefore changes when that preceding panel changes height; observing
-    // the inspector (never the constrained panel itself) keeps the measurement
-    // current without creating a resize feedback loop.
+    // Whatever precedes the panel decides where it starts, so its available
+    // room changes when that element changes height; observing it (never the
+    // constrained panel itself) keeps the measurement current without a
+    // resize feedback loop. Since FE-027 that is the Box panel's own heading,
+    // and window resize and scroll do the rest.
     const layoutAnchor = popover.previousElementSibling;
     const observer =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateViewportRoom);
@@ -344,9 +345,19 @@ export function AnnotationPopover({
       </header>
       )}
 
+      {annotation === undefined ? (
+        /*
+         * FE-027: the Box panel stays on screen with nothing selected, and says
+         * what fills it. An inert class field said nothing — it only looked
+         * like a control that was broken.
+         */
+        <p className="df-annotation-popover__empty">
+          Draw a box on the picture, or pick an annotation below to change its class.
+        </p>
+      ) : (
       <GroupedOptionList
-        autoFocus={annotation !== undefined}
-        disabled={disabled || annotation === undefined}
+        autoFocus
+        disabled={disabled}
         emptyMessage={
           draft
             ? "The profile has no such class. Create and assign it, or discard the box."
@@ -356,7 +367,7 @@ export function AnnotationPopover({
         filterMaxCodePoints={200}
         filterValue={categoryQuery}
         filterAction={
-          annotation !== undefined && canCreateCategory ? (
+          canCreateCategory ? (
             <Button
               aria-label={`Create and assign class “${proposedCategory.name}”`}
               className="df-annotation-popover__create-class"
@@ -377,7 +388,7 @@ export function AnnotationPopover({
           ) : null
         }
         groups={classGroups}
-        key={annotation?.id ?? "empty"}
+        key={annotation.id}
         label="Profile classes"
         mode="single"
         onChange={(selection) => {
@@ -405,6 +416,7 @@ export function AnnotationPopover({
         }}
         selectedIds={form.categoryId === "" ? [] : [form.categoryId]}
       />
+      )}
 
       {categoryError === null ? null : <InlineError message={categoryError} />}
 

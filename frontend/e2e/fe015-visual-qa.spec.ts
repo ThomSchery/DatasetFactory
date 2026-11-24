@@ -68,10 +68,10 @@ test("FE-015 pokazuje stały panel, zoom, scrollbar i menu bboxa w obu viewporta
 
     await expect(panel).toBeVisible();
     await expect(page.getByRole("region", { name: "Dane klatki" })).toHaveCount(0);
-    // FE-022: with nothing selected the class field rests closed and inert.
+    // FE-027: with nothing selected the Box panel says what fills it.
     await expect(panel.getByRole("option")).toHaveCount(0);
-    await expect(panel.getByRole("combobox", { name: "Class" })).toHaveValue("");
-    await expect(panel.getByRole("combobox", { name: "Class" })).toBeDisabled();
+    await expect(panel.getByRole("combobox")).toHaveCount(0);
+    await expect(panel).toContainText("Draw a box on the picture");
     await expect(panel.getByRole("button", { name: "Delete" })).toHaveCount(0);
     await expect(page.getByLabel("Canvas zoom")).toHaveText("100%");
     await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();

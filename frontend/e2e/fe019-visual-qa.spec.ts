@@ -118,19 +118,24 @@ test("FE-019 pokazuje dwa stany pickerów, trzy panele i wspólny trójkąt prof
 
     await page.getByRole("button", { name: "Class 7, 1 annotations" }).click();
     const sideColumn = page.getByRole("complementary", { name: "Current frame panels" });
+    const boxPanel = page.getByRole("region", { name: "Box" });
     const inspector = page.getByRole("region", { name: "Annotations" });
     const annotation = page.getByRole("dialog", { name: "Edit annotation 7" });
     const copy = page.getByRole("region", { name: "Repeat Previous" });
     await expect(annotation).toBeVisible({ timeout: 30_000 });
     await expect(copy).toBeVisible();
 
-    // FE-022: the class field and its actions sit inside Annotations, and
-    // Repeat Previous follows it.
+    // FE-027: the class field and its actions sit in their own Box panel,
+    // above Annotations; Repeat Previous follows Annotations.
+    const boxPanelBox = await bounds(boxPanel, `box panel at ${suffix}`);
     const inspectorBox = await bounds(inspector, `inspector at ${suffix}`);
     const annotationBox = await bounds(annotation, `annotation at ${suffix}`);
     const copyBox = await bounds(copy, `copy at ${suffix}`);
-    expect(annotationBox.y, `class field is not inside Annotations at ${suffix}`).toBeGreaterThan(inspectorBox.y);
-    expect(annotationBox.y + annotationBox.height).toBeLessThanOrEqual(inspectorBox.y + inspectorBox.height + 0.5);
+    expect(annotationBox.y, `class field is not inside Box at ${suffix}`).toBeGreaterThan(boxPanelBox.y);
+    expect(annotationBox.y + annotationBox.height).toBeLessThanOrEqual(boxPanelBox.y + boxPanelBox.height + 0.5);
+    expect(inspectorBox.y, `Annotations is not after Box at ${suffix}`).toBeGreaterThan(
+      boxPanelBox.y + boxPanelBox.height,
+    );
     expect(copyBox.y, `copy is not after Annotations at ${suffix}`).toBeGreaterThan(
       inspectorBox.y + inspectorBox.height,
     );

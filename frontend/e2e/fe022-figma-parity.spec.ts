@@ -76,7 +76,18 @@ interface KeyControl {
   layer: string;
   pick: "first" | "last";
   selector: string;
+  /**
+   * A deliberate departure from the Figma column: an element the app puts
+   * above this control that the Figma frame does not have. The control may sit
+   * lower by that element's measured height plus the column gap, and by no
+   * more — so the exception follows the element instead of loosening the
+   * threshold for everything.
+   */
+  shiftedBy?: { reason: string; selector: string };
 }
+
+/** The side column's row gap (`--element-gap-lg`), with a pixel to spare. */
+const COLUMN_GAP_ALLOWANCE = 16;
 
 interface ScreenSpec {
   column: { layer: string; selector: string } | null;
@@ -129,7 +140,19 @@ const SCREENS: Record<Screen, ScreenSpec> = {
     },
     keys: [
       { label: "Filters", layer: "frame-navi-filter", pick: "first", selector: ".df-review-frame-filters" },
-      { label: "Repeat Previous", layer: "Frame 54", pick: "first", selector: ".df-review-copy" },
+      {
+        label: "Repeat Previous",
+        layer: "Frame 54",
+        pick: "first",
+        selector: ".df-review-copy",
+        shiftedBy: {
+          // FE-027, the user's choice of 2026-11-24 (option A): the box being
+          // edited gets its own panel above Annotations. Figma `Frame 53` has
+          // no such panel.
+          reason: "FE-027 Box panel",
+          selector: ".df-review-box",
+        },
+      },
     ],
     ready: ".df-region-overlay__surface",
     root: ".df-review-workspace",
@@ -284,6 +307,8 @@ interface Measured {
   contentBottom: number;
   image: DOMRectLike | null;
   keys: (DOMRectLike | null)[];
+  /** For each key, the element its `shiftedBy` names, when it has one. */
+  keyShifts: (DOMRectLike | null)[];
   notices: number;
   origin: number;
   radiusViolations: string[];
@@ -302,7 +327,7 @@ interface DOMRectLike {
 
 async function measure(page: Page, spec: ScreenSpec): Promise<Measured> {
   return page.evaluate(
-    ({ columnSelector, imageSelector, keySelectors, rootSelector }) => {
+    ({ columnSelector, imageSelector, keySelectors, keyShiftSelectors, rootSelector }) => {
       const visible = (element: Element) => {
         const box = element.getBoundingClientRect();
         const style = getComputedStyle(element);
@@ -372,6 +397,7 @@ async function measure(page: Page, spec: ScreenSpec): Promise<Measured> {
         contentBottom,
         image: rect(imageSelector),
         keys: keySelectors.map((selector) => rect(selector)),
+        keyShifts: keyShiftSelectors.map((selector) => rect(selector)),
         notices: document.querySelectorAll("main .df-notice").length,
         origin,
         radiusViolations,
@@ -384,6 +410,7 @@ async function measure(page: Page, spec: ScreenSpec): Promise<Measured> {
       columnSelector: spec.column?.selector ?? null,
       imageSelector: spec.image.selector,
       keySelectors: spec.keys.map((key) => key.selector),
+      keyShiftSelectors: spec.keys.map((key) => key.shiftedBy?.selector ?? null),
       rootSelector: spec.root,
     },
   );
@@ -503,8 +530,18 @@ function checkFrame(
       failures.push(`${key.label} missing`);
       return;
     }
-    checks[key.label] = `y ${actual.top.toFixed(0)}/${String(figma[2])}`;
-    if (actual.top > figma[2] + 32) failures.push(`${key.label} y ${actual.top.toFixed(0)} > ${String(figma[2])}+32`);
+    const shift = key.shiftedBy === undefined ? null : measured.keyShifts[index];
+    if (key.shiftedBy !== undefined && (shift === null || shift === undefined)) {
+      failures.push(`${key.label}: ${key.shiftedBy.reason} missing`);
+      return;
+    }
+    const allowance = 32 + (shift === null || shift === undefined ? 0 : shift.height + COLUMN_GAP_ALLOWANCE);
+    checks[key.label] =
+      `y ${actual.top.toFixed(0)}/${String(figma[2])}` +
+      (key.shiftedBy === undefined ? "" : ` (+${allowance.toFixed(0)} ${key.shiftedBy.reason})`);
+    if (actual.top > figma[2] + allowance) {
+      failures.push(`${key.label} y ${actual.top.toFixed(0)} > ${String(figma[2])}+${allowance.toFixed(0)}`);
+    }
     if (figma[2] < 900 && actual.top >= 900) failures.push(`${key.label} below the fold`);
   });
 

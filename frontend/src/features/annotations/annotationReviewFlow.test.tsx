@@ -273,22 +273,53 @@ describe("annotation review query states", () => {
 
     await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
     const panel = screen.getByRole("region", { name: "Annotation — nothing selected" });
-    // FE-022: the class field rests closed (35 px) and inert until a box is
-    // selected; nothing in it can reach the API.
-    const field = within(panel).getByRole("combobox", { name: "Class" });
-    expect(field).toHaveValue("");
-    expect(field).toBeDisabled();
+    // FE-027: with nothing selected the Box panel says what fills it; there is
+    // no class field to reach the API at all.
+    expect(panel).toHaveTextContent(
+      "Draw a box on the picture, or pick an annotation below to change its class.",
+    );
+    expect(within(panel).queryByRole("combobox")).toBeNull();
     expect(within(panel).queryAllByRole("option")).toHaveLength(0);
     expect(within(panel).queryByRole("button", { name: "Delete" })).toBeNull();
     expect(
       within(panel).queryByRole("button", { name: "Change class: assign another class to this box" }),
     ).toBeNull();
 
-    await user.click(field);
+    await user.click(panel);
     await user.keyboard("{Enter}");
     expect(
       fetchSpy.mock.calls.filter(([, init]) => init?.method === "PATCH" || init?.method === "DELETE"),
     ).toHaveLength(0);
+  });
+
+  it("FE-027: edits a box in its own Box panel, above the frame's Annotations", async () => {
+    const user = userEvent.setup();
+    reviewApi();
+    renderApp(["/annotations/run-1"]);
+
+    await screen.findByRole("listbox", { name: "Annotation boxes on the frame" });
+    const column = screen.getByRole("complementary", { name: "Current frame panels" });
+    const panels = within(column)
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(panels).toEqual(["Box", "Annotations", "Repeat Previous"]);
+
+    const box = within(column).getByRole("region", { name: "Box" });
+    const annotations = within(column).getByRole("region", { name: "Annotations" });
+    expect(within(box).getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
+    // The frame decision stays with the frame's class list, never with a box.
+    expect(within(annotations).getByRole("button", { name: "Class 7, 1 annotations" })).toBeVisible();
+    expect(within(box).queryByRole("button", { name: /^Accept/ })).toBeNull();
+
+    await user.click(within(annotations).getByRole("button", { name: "Class 7, 1 annotations" }));
+    const editor = within(box).getByRole("dialog", { name: "Edit annotation 7" });
+    expect(within(editor).getByRole("combobox", { name: "Class" })).toBeVisible();
+    expect(within(annotations).queryByRole("combobox", { name: "Class" })).toBeNull();
+    expect(
+      within(annotations).queryByRole("button", {
+        name: "Change class: assign another class to this box",
+      }),
+    ).toBeNull();
   });
 
   it("keeps an empty Enter in the autofocused class filter completely inert", async () => {
@@ -446,12 +477,17 @@ describe("annotation review query states", () => {
     expect(dialog).toBeVisible();
     const preview = screen.getByRole("region", { name: "Frame 17 preview" });
     const sideColumn = screen.getByRole("complementary", { name: "Current frame panels" });
+    const boxPanel = screen.getByRole("region", { name: "Box" });
     const inspector = screen.getByRole("region", { name: "Annotations" });
     const copyPanel = screen.getByRole("region", { name: "Repeat Previous" });
     const overlayRoot = overlay.closest(".df-region-overlay");
     expect(overlayRoot).not.toBeNull();
-    // FE-022: the class field and its actions live inside Annotations.
-    expect(inspector).toContainElement(dialog);
+    // FE-027: the class field and its actions live in their own Box panel,
+    // directly above Annotations.
+    expect(boxPanel).toContainElement(dialog);
+    expect(inspector).not.toContainElement(dialog);
+    expect(boxPanel.parentElement).toBe(sideColumn);
+    expect(boxPanel.nextElementSibling).toBe(inspector);
     expect(inspector.parentElement).toBe(sideColumn);
     expect(inspector.nextElementSibling).toBe(copyPanel);
     expect(copyPanel.parentElement).toBe(sideColumn);
@@ -791,7 +827,8 @@ describe("annotation review query states", () => {
     await waitFor(() => {
       expect(mutations).toHaveLength(3);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
+      // FE-027: the Box panel is back to its empty state, not an inert field.
+      expect(screen.getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
     });
 
     fireEvent.pointerDown(overlay, { clientX: 500, clientY: 200, pointerId: 2 });
@@ -860,7 +897,8 @@ describe("annotation review query states", () => {
 
     fireEvent.pointerDown(document.body);
     await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
+      // FE-027: the Box panel is back to its empty state, not an inert field.
+      expect(screen.getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
     });
     await drawDraft();
 
@@ -955,7 +993,8 @@ describe("annotation review query states", () => {
             (item.body as { category_id?: string }).category_id === "category-8",
         ),
       ).toBe(true);
-      expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
+      // FE-027: the Box panel is back to its empty state, not an inert field.
+      expect(screen.getByRole("region", { name: "Annotation — nothing selected" })).toBeVisible();
     });
 
     await drawDraft();
@@ -1832,7 +1871,7 @@ describe("annotation review query states", () => {
     expect(column).not.toBeInTheDocument();
     expect(nextColumn).not.toBe(column);
     const empty = within(nextColumn).getByRole("region", { name: "Annotation — nothing selected" });
-    expect(within(empty).getByRole("combobox", { name: "Class" })).toHaveValue("");
+    expect(within(empty).queryByRole("combobox")).toBeNull();
     expect(within(empty).queryByRole("alert")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Class 7, 1 annotations" }));

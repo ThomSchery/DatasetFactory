@@ -166,6 +166,8 @@
   min-width: 0;
 }
 
+/* FE-027: Box (the selected or new box) sits above Annotations (the frame). */
+.df-review-box,
 .df-review-workspace__inspector,
 .df-review-copy {
   min-width: 0;
@@ -332,6 +334,14 @@ p.df-review-classes {
 
 .df-annotation-popover__actions {
   justify-content: flex-end;
+}
+
+/* FE-027: the Box panel with nothing selected — a hint, set like the notes. */
+.df-annotation-popover__empty {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
 }
 
 .df-annotation-popover .df-ui-state--inline-error {

@@ -1246,7 +1246,15 @@ function LoadedFrameEditor({
         aria-label="Current frame panels"
         className="df-review-workspace__side-column"
       >
-        <Panel className="df-review-workspace__inspector" title="Annotations">
+        {/*
+          FE-027: the box being drawn or edited has a panel of its own, above
+          the frame's class list and its Reject / Accept. Its actions are about
+          one box; the panel below decides the whole frame, and the two no
+          longer share a surface. The panel stays on screen with nothing
+          selected, so drawing a box never moves the panels under it into
+          being.
+        */}
+        <Panel className="df-review-box" title="Box">
         <AnnotationPopover
           annotation={popoverAnnotation}
           autoAssignedCategoryName={
@@ -1337,6 +1345,9 @@ function LoadedFrameEditor({
             removeAnnotation(popoverAnnotation.id);
           }}
         />
+        </Panel>
+
+        <Panel className="df-review-workspace__inspector" title="Annotations">
           <ClassList
             annotations={activeAnnotations}
             categories={profile.categories}
