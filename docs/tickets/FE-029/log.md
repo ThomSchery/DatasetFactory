@@ -47,3 +47,8 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 4. P4: `regionCharacterCount` w `profileDraft.ts` (bez powtórzeń, tylko znaki profilu), używany przez Annotations i OCR settings; test „779X” → 1.
 5. P5: notka o dziedziczeniu przy `allowed_chars === null || page_segmentation_mode === null`.
 6. Kosmetyka: tytuł testu FE-016.
+
+## Bramka 2 i re-review (2026-11-24)
+
+- `check.ps1` na `6d1c7dd`, jeden przebieg, bez równoległych procesów: **9/9 PASS** — backend testy 632 s, Vitest 1031/1031, build, E2E 95/95, root safety.
+- Re-review FIX1 (claude opus): **GOTOWE DO MERGE**, bez nowych ustaleń. Otwarte (nieblokujące): test geometrii podsumowania przy 360 px; decyzja użytkownika o automatycznym usuwaniu nieużywanej klasy usuniętego regionu.
