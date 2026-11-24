@@ -33,3 +33,12 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 - [x] Cienie: brak.
 - [x] Interakcje: stany przycisków i listy bez zmian (komponenty wspólne).
 - [x] Komponenty: `Panel`, `GroupedOptionList`, `Button`, `StatusBadge`, `InlineError` z `common/`; nowych nie ma.
+
+## Bramka i review (2026-11-24)
+
+- Vitest: Review 162/162 po zmianach; pełny Vitest w bramce 1032/1032.
+- `check.ps1`, przebieg 1 (`58efc23`): backend testy 320 błędów setupu `PermissionError [WinError 32]` na `app.jsonl` w basetemp pytest — w tym samym czasie chodził mój równoległy, celowany przebieg E2E. FE-027 nie zmienia backendu.
+- `check.ps1`, przebieg 2 (`e08c4ad`, bez równoległych procesów): backend format / lint / typy / testy, frontend typy / testy / build — PASS; E2E 94/95 — `fe025-figma-icons-polish.spec.ts:740` (obrysy regionów przy 195 % i 596 %) przekroczył limit 30 s przy obciążonej maszynie (backend testy 1068 s zamiast ~630 s).
+- Ten spec osobno: 15/15 PASS. Pełne E2E ponownie (`npm run e2e`, porty 5197 / 8038 / 8039, środowisko jak w `check.ps1`): **95/95 PASS**; `npm run test:e2e-root`: 4/4 PASS. Łącznie wszystkie 9 bramek zielone na `e08c4ad`, ostatnie dwie w osobnym przebiegu.
+- Celowane E2E przed bramką: zgodność z Figmą (z wyjątkiem `shiftedBy` dla Box), FE-015, FE-017, FE-019 — zielone; zrzuty `FE-019/annotation-expanded-1440x1000`, `FE-015/editor-no-selection-1440x1000` obejrzane.
+- Cold review (codex gpt-6.1-sol high): **GOTOWE DO MERGE**, bez P1–P3. Uwaga porządkowa o komentarzu do `previousElementSibling` (w `Panel` edytor jest pierwszym dzieckiem `.df-panel__body`, obserwator nic nie obserwuje — tak samo przed FE-027) — komentarz poprawiony w `e08c4ad`.
