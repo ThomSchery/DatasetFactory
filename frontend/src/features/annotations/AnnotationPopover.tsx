@@ -157,8 +157,11 @@ export function AnnotationPopover({
     // Whatever precedes the panel decides where it starts, so its available
     // room changes when that element changes height; observing it (never the
     // constrained panel itself) keeps the measurement current without a
-    // resize feedback loop. Since FE-027 that is the Box panel's own heading,
-    // and window resize and scroll do the rest.
+    // resize feedback loop. Inside a `Panel` (the Box panel since FE-027, the
+    // Annotations panel before it) the editor is the first child of the
+    // panel body, so there is nothing to observe and mount, resize and scroll
+    // keep the measurement current; the observer only matters for a caller
+    // that renders the editor after other content.
     const layoutAnchor = popover.previousElementSibling;
     const observer =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateViewportRoom);
