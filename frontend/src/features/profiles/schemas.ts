@@ -31,16 +31,31 @@ export const CHARACTER_CLASS_ALPHABET: readonly string[] = [
 
 const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 
+/**
+ * Tesseract page segmentation modes OCR may use.
+ *
+ * `label` explains the mode and is what the open list shows (rows wrap).
+ * `short` fits the closed field and the region summary in the 247 px profile
+ * column, where a long label used to be cut off mid-word (FE-030).
+ */
 export const OCR_PAGE_SEGMENTATION_OPTIONS = [
-  { value: "3", label: "3 — Automatic page layout" },
-  { value: "4", label: "4 — A column of text of variable sizes" },
-  { value: "6", label: "6 — One uniform block of text" },
-  { value: "7", label: "7 — One text line" },
-  { value: "8", label: "8 — One word" },
-  { value: "10", label: "10 — One character" },
-  { value: "11", label: "11 — Sparse text lines or fragments (verified for HUD)" },
-  { value: "12", label: "12 — Sparse text with orientation detection" },
-  { value: "13", label: "13 — Raw single line" },
+  { value: "3", label: "3 — Automatic page layout", short: "3 — Automatic layout" },
+  { value: "4", label: "4 — A column of text of variable sizes", short: "4 — Column of text" },
+  { value: "6", label: "6 — One uniform block of text", short: "6 — Uniform block" },
+  { value: "7", label: "7 — One text line", short: "7 — One text line" },
+  { value: "8", label: "8 — One word", short: "8 — One word" },
+  { value: "10", label: "10 — One character", short: "10 — One character" },
+  {
+    value: "11",
+    label: "11 — Sparse text lines or fragments (verified for HUD)",
+    short: "11 — Sparse text (HUD)",
+  },
+  {
+    value: "12",
+    label: "12 — Sparse text with orientation detection",
+    short: "12 — Sparse + orientation",
+  },
+  { value: "13", label: "13 — Raw single line", short: "13 — Raw single line" },
 ] as const;
 
 export const DEFAULT_REGION_PAGE_SEGMENTATION_MODE = 7;

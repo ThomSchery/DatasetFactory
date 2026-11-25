@@ -135,6 +135,28 @@ test("FE-016 pokazuje OCR settings regionu i konfigurację Roboflow w obu viewpo
     await expectInsideViewport(characters, viewport, `OCR characters at ${suffix}`);
     await expectInsideContainer(characters, ocrBody, `OCR characters at ${suffix}`);
     await expect(page.getByRole("button", { name: /^Rename class / })).toHaveCount(0);
+    // FE-030: the name field keeps its suggestions, but no browser-drawn
+    // arrow. Chromium does not report a computed style for that pseudo
+    // element, so the field is compared with itself without the datalist:
+    // the two pictures are identical only when the arrow is not drawn.
+    const nameField = page.getByLabel("Region name", { exact: true });
+    await nameField.focus();
+    await nameField.hover();
+    const withSuggestions = await nameField.screenshot({ animations: "disabled", caret: "hide" });
+    const list = await nameField.evaluate((element) => {
+      const value = element.getAttribute("list");
+      element.removeAttribute("list");
+      return value;
+    });
+    const withoutSuggestions = await nameField.screenshot({ animations: "disabled", caret: "hide" });
+    await nameField.evaluate((element, value) => {
+      if (value !== null) element.setAttribute("list", value);
+    }, list);
+    expect(list, `name field lost its suggestions at ${suffix}`).not.toBeNull();
+    expect(
+      withSuggestions.equals(withoutSuggestions),
+      `datalist arrow drawn in the region name field at ${suffix}`,
+    ).toBe(true);
 
     await writeFile(
       path.join(screenshotDirectory, `profile-ocr-settings-${suffix}.png`),

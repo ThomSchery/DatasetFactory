@@ -250,7 +250,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
     await user.click(screen.getByRole("combobox", { name: "Text layout (PSM)" }));
     await user.click(screen.getByRole("option", { name: /^6 —/ }));
-    expect(screen.getByRole("combobox", { name: "Text layout (PSM)" })).toHaveValue("6 — One uniform block of text");
+    // FE-030: the closed field shows the short name, which fits the column.
+    expect(screen.getByRole("combobox", { name: "Text layout (PSM)" })).toHaveValue("6 — Uniform block");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", page_segmentation_mode: 6 }] }));
   });
@@ -483,7 +484,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(within(screen.getByRole("region", { name: "Annotations" })).getByText("(1)")).toBeInTheDocument();
   });
 
-  it("FE-029: deleting a region on the screenshot clears it everywhere; a saved class stays", async () => {
+  it("FE-029: deleting a region on the screenshot clears it everywhere; the save decides about its class", async () => {
     const user = userEvent.setup();
     const profile = alpha();
     profile.categories.push({ id: "category-bar", name: "Pasek zdrowia", kind: "game" });
@@ -500,7 +501,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(within(screen.getByRole("region", { name: "Annotations" })).queryByText("Pasek zdrowia")).toBeNull();
     expect(within(screen.getByRole("region", { name: "OCR settings" })).getByText(/No regions yet/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save profile" }));
-    // Boxes in Review may use the class, so the save keeps it (no category_in_use).
+    // The draft keeps sending the stored class; the backend deletes it unless a
+    // box in Review uses it (FE-030), so there is never a category_in_use here.
     await waitFor(() =>
       expect(savedBody(spy)).toMatchObject({
         regions: [],

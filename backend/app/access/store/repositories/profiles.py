@@ -600,6 +600,9 @@ class ProfileRepository:
         name, a renamed region takes its class along, and a region without a
         class gets one appended — in that order, so the class that already holds
         annotations is the one that follows the region.
+
+        FE-030: a region the save removes takes its class with it when no box
+        uses that class and no region of the same save carries its name.
         """
         try:
             with self._database.session() as session:
@@ -619,8 +622,9 @@ class ProfileRepository:
                 next_ordinal = self._save_categories(
                     session, profile_id, draft.categories, region_names=region_names
                 )
-                renamed = self._save_regions(session, profile_id, draft.regions)
+                renamed, retired = self._save_regions(session, profile_id, draft.regions)
                 self._follow_region_renames(session, profile_id, renamed)
+                self._drop_unused_classes_of(session, profile_id, retired)
                 self._ensure_region_categories(
                     session,
                     profile_id,
@@ -655,8 +659,12 @@ class ProfileRepository:
         session: Session,
         profile_id: str,
         drafts: tuple[SavedRegionDraft, ...],
-    ) -> tuple[tuple[str, str], ...]:
-        """Apply the region half of a save; answer the renames as `(old, new)`."""
+    ) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+        """Apply the region half of a save.
+
+        Answers the renames as `(old, new)` and the names of the regions this
+        save retired, in that order.
+        """
         existing = {
             region.id: region
             for region in session.scalars(
@@ -677,9 +685,11 @@ class ProfileRepository:
             kept[item.id] = item
 
         retired_at = utc_now()
+        retired_names: list[str] = []
         for region_id, region in existing.items():
             if region_id not in kept:
                 region.retired_at = retired_at
+                retired_names.append(region.name)
         # Retirement frees the names first, so a replacement region may reuse
         # one in the very same save.
         session.flush()
@@ -720,7 +730,51 @@ class ProfileRepository:
                 )
             )
         session.flush()
-        return old_names
+        return old_names, tuple(retired_names)
+
+    @staticmethod
+    def _drop_unused_classes_of(
+        session: Session,
+        profile_id: str,
+        retired: tuple[str, ...],
+    ) -> None:
+        """Delete the class of a removed region when nothing still needs it (FE-030).
+
+        The user's rule: removing a region removes its class, unless a box in
+        Review uses it. "Uses" is any annotation row, deleted ones included —
+        `annotations.category_id` is RESTRICT, so a row the reviewer discarded
+        still anchors the class and deleting it would fail or take history with
+        it. A class also stays when a region of this very save carries the same
+        name (a box redrawn under its old name), and an OCR character class is
+        never touched: it belongs to the alphabet, not to a region.
+
+        Runs after the renames have moved their classes, so a renamed region's
+        class is never mistaken for an orphan.
+        """
+        if not retired:
+            return
+        retired_keys = {_folded(name) for name in retired}
+        active = {
+            _folded(name)
+            for name in session.scalars(
+                select(HudRegion.name).where(
+                    HudRegion.profile_id == profile_id,
+                    HudRegion.retired_at.is_(None),
+                )
+            )
+        }
+        for category in session.scalars(
+            select(Category).where(Category.profile_id == profile_id, Category.kind == "game")
+        ):
+            key = _folded(category.name)
+            if key not in retired_keys or key in active:
+                continue
+            used = session.scalar(
+                select(Annotation.id).where(Annotation.category_id == category.id).limit(1)
+            )
+            if used is None:
+                session.delete(category)
+        session.flush()
 
     @classmethod
     def _save_categories(

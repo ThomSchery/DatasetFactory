@@ -35,6 +35,12 @@ export interface GroupedOption {
   detail?: string;
   id: string;
   label: string;
+  /**
+   * FE-030: what a closed single-choice field shows once this option is
+   * chosen, when `label` is an explanation too long for the field. The list
+   * and the filter keep using `label`.
+   */
+  selectedLabel?: string;
 }
 
 export interface GroupedOptionGroup {
@@ -650,7 +656,11 @@ export function GroupedOptionList({
             onKeyDown={handleFilterKeyDown}
             placeholder={placeholder ?? filterLabel}
             ref={filterRef}
-            value={combobox && !editing ? selectedOptions[0]?.label ?? "" : query}
+            value={
+              combobox && !editing
+                ? (selectedOptions[0]?.selectedLabel ?? selectedOptions[0]?.label ?? "")
+                : query
+            }
           />
         </div>
         <div className="df-grouped-options__control-actions">

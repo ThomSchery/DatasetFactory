@@ -603,8 +603,8 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
           FE-029: what OCR reads, and nothing else. Classes are added by naming
           a drawn box, so the panel no longer lists, renames or deletes them.
           Deleting a region on the screenshot drops an unsaved class with it
-          (`categoriesToSend`); a saved one stays, because boxes in Review may
-          already use it.
+          (`categoriesToSend`); a saved one is deleted by the save unless a box
+          in Review uses it (FE-030 — only the backend knows the annotations).
         */}
         <OcrSettingsPanel
           categories={draft.categories}

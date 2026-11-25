@@ -284,3 +284,72 @@ def test_a_region_class_never_takes_the_ordinal_of_a_class_dropped_in_the_same_s
         ("HUD", 3),
         ("frag", 5),
     ]
+
+
+# --- FE-030: removing a region removes its class unless a box uses it --------
+
+
+def test_removing_a_region_removes_its_unused_class(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    """The draft still sends the stored class; the save drops it anyway."""
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(_reference(tmp_path))).json()
+        draft = _definition(profile)
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "timer"]
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    assert [name for name, _ in _classes(response.json())] == ["0", "1", "health", "HUD"]
+
+
+def test_removing_a_region_keeps_a_class_that_boxes_use(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(_reference(tmp_path))).json()
+        timer_class = _named(profile["categories"], "timer")
+        ids = _seed_run(composition, profile=profile, tmp_path=tmp_path)
+        annotation_id = _annotate(composition, frame_id=ids["frame"], category_id=timer_class["id"])
+        draft = _definition(profile)
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "timer"]
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    assert _named(response.json()["categories"], "timer") == timer_class
+    with composition.database.session() as session:
+        annotation = session.get(Annotation, annotation_id)
+        assert annotation is not None
+        assert annotation.category_id == timer_class["id"]
+
+
+def test_a_box_redrawn_under_the_removed_name_keeps_the_class(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(_reference(tmp_path))).json()
+        timer_class = _named(profile["categories"], "timer")
+        draft = _definition(profile)
+        old = _named(draft["regions"], "timer")
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "timer"]
+        draft["regions"].append(old | {"id": None, "x": 0, "y": 12})
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    # Same class row and ordinal: the redrawn region simply carries it on.
+    assert _named(response.json()["categories"], "timer") == timer_class
+
+
+def test_removing_a_region_never_touches_an_ocr_character_class(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    payload = _create_payload(_reference(tmp_path))
+    payload["regions"][1]["name"] = "1"
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=payload).json()
+        draft = _definition(profile)
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "1"]
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    assert ("1", "character") in _classes(response.json())

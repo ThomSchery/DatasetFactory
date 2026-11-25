@@ -32,7 +32,7 @@ function layoutLabel(mode: number | null): string {
     return "Layout inherited";
   }
   return (
-    OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(mode))?.label ??
+    OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(mode))?.short ??
     `Layout ${String(mode)}`
   );
 }
@@ -42,10 +42,10 @@ function layoutLabel(mode: number | null): string {
  *
  * The regions themselves — where OCR reads — are drawn and named in
  * Annotations, and naming a box is also how a class is added, so this panel no
- * longer lists classes, renames them or deletes them. A saved class outlives
- * its region when the region is deleted: boxes in Review may use it, and the
- * screen cannot tell. It answers one question per region: which characters,
- * in which text layout.
+ * longer lists classes, renames them or deletes them. Deleting a region
+ * deletes its class on save unless a box in Review uses it (FE-030, decided by
+ * the backend, which knows the annotations). It answers one question per
+ * region: which characters, in which text layout.
  *
  *  - With a region selected it edits that region: the text layout (PSM) and
  *    the characters OCR may read, as three collapsible groups whose header
@@ -142,6 +142,7 @@ export function OcrSettingsPanel({
             options: OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => ({
               id: option.value,
               label: option.label,
+              selectedLabel: option.short,
             })),
           },
         ]}
@@ -154,7 +155,7 @@ export function OcrSettingsPanel({
           }
         }}
         placeholder={
-          OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(psm))?.label ??
+          OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(psm))?.short ??
           "Text layout (PSM)"
         }
         selectedIds={[String(psm)]}

@@ -26,6 +26,14 @@
   font-size: var(--font-size-xs);
 }
 
+/* FE-030: the name field offers existing class names as suggestions
+   (`datalist`), and Chromium draws its own arrow for that — browser chrome no
+   design token reaches. Suggestions stay; the stray arrow goes. */
+.df-annotations input[list]::-webkit-calendar-picker-indicator {
+  /* The user-agent rule for this indicator outranks a plain declaration. */
+  display: none !important;
+}
+
 /* FE-029: the row is one select button; regions are deleted on the picture. */
 .df-annotations__row {
   display: grid;
