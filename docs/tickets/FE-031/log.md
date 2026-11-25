@@ -41,3 +41,8 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
   2. P2 — sprzątanie przy starcie pomijało staging `.<export_id>-*` usuniętego eksportu. Teraz rozpoznaje dokładny format `mkdtemp(prefix=".<uuid>-")` i usuwa staging, którego eksport nie ma wiersza; staging istniejącego eksportu i inne nazwy z kropką zostają. `remove()` używa tego samego parsera.
   3. P2 — lista runów nie odświeżała się, więc `Delete` przy runie `running` zostawał wyłączony po jego zatrzymaniu. Lista odpytuje co `RUN_POLL_INTERVAL_MS` tylko, gdy zawiera run w przetwarzaniu (`runListPollInterval`, `isProcessingRunStatus` w `runStatus.ts` — status poza komponentem). Test Vitest przejścia `running` → `review_ready` — pada bez odpytywania.
   - Uwaga z review: test kaskady seeduje teraz też `RegionSample` i `OcrObservation` (i sprawdza, że `HudRegion` profilu zostaje).
+
+## Bramka 2 i re-review (2026-11-25)
+
+- `check.ps1` na `f5be6a3`, jeden przebieg, bez równoległych procesów: **9/9 PASS** — pytest 508 (624 s), Vitest 1040, build, E2E 96/96 (w tym `fe031-delete-run`), root safety. Zrzuty innych ticketów odtworzone przez E2E przywrócone z gita.
+- Re-review FIX1 (ten sam recenzent): **GOTOWE DO MERGE**, bez uwag P1–P3.
