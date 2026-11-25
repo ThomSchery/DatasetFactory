@@ -42,3 +42,8 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
   4. P3-5 — reguły FE-026/FE-030 dopisane do kontraktu `PUT .../definition` w `docs/TECH_PLAN.md` (odpowiedź może mieć mniej klas, niż wysłano).
   5. P3-6 — test: anotacja `deleted` zatrzymuje klasę.
 - Bez zmian (do decyzji użytkownika): P3-3 — eksport COCO numeruje kategorie pozycyjnie (`enumerate` po ordinalu), więc usunięcie klasy przesuwa `category_id` następnych w kolejnym eksporcie; stabilne id = osobny ticket (`ordinal + 1`).
+
+## Bramka i re-review (2026-11-25)
+
+- `check.ps1` na `a35dcb4`, jeden przebieg, bez równoległych procesów: **9/9 PASS** — pytest 491 (640 s), Vitest, build, E2E 95/95, root safety.
+- Re-review FIX1: **GOTOWE DO MERGE**. Uwagi bez blokady: łańcuch rename A→B i B→C w jednym zapisie (ograniczenie FE-026, osobny ticket, jeśli w ogóle); nazwa parametru `retired` obejmuje też stare nazwy z rename (docstring to opisuje).
