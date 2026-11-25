@@ -256,7 +256,12 @@ dwóch regionów mieści się w jednym zapisie mimo częściowego indeksu
 dokładnie jak w `POST .../regions`. Usunięcie klasy, do której odwołują się
 anotacje, zwraca `409 category_in_use` z listą `details.categories`; drogą
 dalej jest `Save as`, nie kasowanie danych weryfikacji. `ordinal` kategorii nie
-jest nigdy odtwarzany ani przesuwany.
+jest nigdy odtwarzany ani przesuwany. FE-026: każdy aktywny region ma klasę
+`game` o swojej nazwie (dopisywaną w tym samym zapisie). FE-030: region usunięty
+w zapisie — oraz stara nazwa regionu przemianowanego, którego klasa nie poszła
+za nim — zabiera swoją klasę `game`, jeśli nie wskazuje jej żaden wiersz
+`annotations` (także `deleted`) i żaden region zapisu nie nosi tej nazwy;
+odpowiedź może więc mieć mniej klas, niż wysłał klient.
 
 `POST /profiles/{profile_id}/categories` waliduje pojedynczą kategorię tym samym
 silnikiem definicji co tworzenie profilu. Nazwy są unikalne po `strip().casefold()`.

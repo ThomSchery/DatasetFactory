@@ -375,6 +375,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(createRequestFrom(retitled, "Kopia").categories.map((category) => category.name)).not.toContain("ammo");
     // Stored classes are always sent, region or not.
     expect(saveRequestFrom(retitled).categories.map((category) => category.name)).toContain("health");
+    // FE-030: a copy has no boxes, so it takes no class that no region carries.
+    expect(createRequestFrom(draft, "Kopia").categories.map((category) => category.name)).toEqual(["7"]);
     expect(saveRequestFrom(sketched).categories.map((category) => category.name)).toContain("ammo");
   });
 

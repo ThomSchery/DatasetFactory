@@ -31,3 +31,14 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 - [x] Cienie: brak.
 - [x] Interakcje: bez zmian.
 - [x] Komponenty: `TextField`, `GroupedOptionList` (opcjonalny `selectedLabel`, domyślnie `label`), `Button`; nowych nie ma.
+
+## Cold review i FIX1 (2026-11-25)
+
+- Bramka na `a891adc` przerwana po backend testy (PASS, 602 s) i frontend typy (PASS) — i tak potrzebny pełny przebieg po FIX1.
+- Cold review (claude opus high): **GOTOWE DO MERGE**, bez P1/P2. FIX1 zamyka:
+  1. P3-1 — stara nazwa przemianowanego regionu, którego klasa nie poszła za nim (adopcja istniejącej klasy), też jest kandydatem do usunięcia; testy: „region renamed onto a removed name leaves no orphan”, zaktualizowany test adopcji FE-026 (stara klasa `HUD` bez regionu i boxów znika).
+  2. P3-2 — `Save as` (`createRequestFrom`) kopiuje klasy `game` tylko z regionem (kopia nie ma boxów).
+  3. P3-4 — filtr `GroupedOptionList` dopasowuje też `selectedLabel`.
+  4. P3-5 — reguły FE-026/FE-030 dopisane do kontraktu `PUT .../definition` w `docs/TECH_PLAN.md` (odpowiedź może mieć mniej klas, niż wysłano).
+  5. P3-6 — test: anotacja `deleted` zatrzymuje klasę.
+- Bez zmian (do decyzji użytkownika): P3-3 — eksport COCO numeruje kategorie pozycyjnie (`enumerate` po ordinalu), więc usunięcie klasy przesuwa `category_id` następnych w kolejnym eksporcie; stabilne id = osobny ticket (`ordinal + 1`).

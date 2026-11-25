@@ -44,7 +44,13 @@ def _ordinals(composition: CompositionRoot, profile_id: str) -> list[tuple[str, 
     return [(row.name, row.ordinal) for row in rows]
 
 
-def _annotate(composition: CompositionRoot, *, frame_id: str, category_id: str) -> str:
+def _annotate(
+    composition: CompositionRoot,
+    *,
+    frame_id: str,
+    category_id: str,
+    status: str = "accepted",
+) -> str:
     """One box drawn by hand under `category_id`, the way review stores it."""
     annotation_id = str(uuid4())
     with composition.database.session() as session:
@@ -60,7 +66,7 @@ def _annotate(composition: CompositionRoot, *, frame_id: str, category_id: str) 
                 confidence=None,
                 source="manual",
                 observation_id=None,
-                status="accepted",
+                status=status,
                 version=1,
             )
         )
@@ -179,9 +185,9 @@ def test_a_region_renamed_onto_an_existing_class_adopts_it(
 
     assert response.status_code == 200, response.text
     names = [name for name, _ in _classes(response.json())]
-    # `health` already was a class, so nothing is renamed onto it and the old
-    # region class stays a plain class the operator may remove.
-    assert names == ["0", "1", "health", "HUD", "timer"]
+    # `health` already was a class, so nothing is renamed onto it. The old
+    # region class has no region and no box any more, so it goes (FE-030).
+    assert names == ["0", "1", "health", "timer"]
 
 
 def test_swapped_region_names_keep_both_classes_where_they_are(
@@ -353,3 +359,42 @@ def test_removing_a_region_never_touches_an_ocr_character_class(
 
     assert response.status_code == 200, response.text
     assert ("1", "character") in _classes(response.json())
+
+
+def test_a_deleted_box_still_keeps_the_class_of_a_removed_region(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    """`annotations.category_id` is RESTRICT, so a discarded box still anchors it."""
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(_reference(tmp_path))).json()
+        timer_class = _named(profile["categories"], "timer")
+        ids = _seed_run(composition, profile=profile, tmp_path=tmp_path)
+        _annotate(
+            composition, frame_id=ids["frame"], category_id=timer_class["id"], status="deleted"
+        )
+        draft = _definition(profile)
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "timer"]
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    assert _named(response.json()["categories"], "timer") == timer_class
+
+
+def test_a_region_renamed_onto_a_removed_name_leaves_no_orphan_class(
+    composition: CompositionRoot, tmp_path: Path
+) -> None:
+    """Cold review P3-1: HUD becomes "timer" while the old timer region goes."""
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        profile = client.post("/api/v1/profiles", json=_create_payload(_reference(tmp_path))).json()
+        timer_class = _named(profile["categories"], "timer")
+        draft = _definition(profile)
+        draft["regions"] = [region for region in draft["regions"] if region["name"] != "timer"]
+        _named(draft["regions"], "HUD")["name"] = "timer"
+        response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
+
+    assert response.status_code == 200, response.text
+    names = [name for name, _ in _classes(response.json())]
+    # The renamed region adopts the existing "timer" class; "HUD" has no region
+    # and no box left, so it does not stay behind as an orphan.
+    assert names == ["0", "1", "health", "timer"]
+    assert _named(response.json()["categories"], "timer") == timer_class

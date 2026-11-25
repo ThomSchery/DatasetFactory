@@ -325,10 +325,14 @@ export function createRequestFrom(draft: ProfileDraft, name: string): CreateProf
       x: region.x,
       y: region.y,
     })),
-    categories: categoriesToSend(draft).map((category) => ({
-      kind: category.kind,
-      name: category.name.trim(),
-    })),
+    // FE-030: a copy has no boxes, so a `game` class no region carries would
+    // be an orphan nothing could ever use or remove there.
+    categories: categoriesToSend(draft)
+      .filter((category) => category.kind !== "game" || isRegionClass(draft, category))
+      .map((category) => ({
+        kind: category.kind,
+        name: category.name.trim(),
+      })),
   };
 }
 

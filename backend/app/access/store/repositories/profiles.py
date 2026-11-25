@@ -602,7 +602,9 @@ class ProfileRepository:
         annotations is the one that follows the region.
 
         FE-030: a region the save removes takes its class with it when no box
-        uses that class and no region of the same save carries its name.
+        uses that class and no region of the same save carries its name. The
+        same goes for the class a renamed region left behind (it adopted an
+        existing class of the new name instead of taking its own along).
         """
         try:
             with self._database.session() as session:
@@ -624,7 +626,9 @@ class ProfileRepository:
                 )
                 renamed, retired = self._save_regions(session, profile_id, draft.regions)
                 self._follow_region_renames(session, profile_id, renamed)
-                self._drop_unused_classes_of(session, profile_id, retired)
+                self._drop_unused_classes_of(
+                    session, profile_id, (*retired, *(old for old, _ in renamed))
+                )
                 self._ensure_region_categories(
                     session,
                     profile_id,
@@ -738,7 +742,7 @@ class ProfileRepository:
         profile_id: str,
         retired: tuple[str, ...],
     ) -> None:
-        """Delete the class of a removed region when nothing still needs it (FE-030).
+        """Delete the class of a gone region name when nothing still needs it (FE-030).
 
         The user's rule: removing a region removes its class, unless a box in
         Review uses it. "Uses" is any annotation row, deleted ones included —
@@ -748,8 +752,10 @@ class ProfileRepository:
         name (a box redrawn under its old name), and an OCR character class is
         never touched: it belongs to the alphabet, not to a region.
 
-        Runs after the renames have moved their classes, so a renamed region's
-        class is never mistaken for an orphan.
+        `retired` holds the names of removed regions and the old names of
+        renamed ones. Runs after the renames have moved their classes: a class
+        that followed its region carries the new name and is not a candidate,
+        while one left behind (the region adopted an existing class) is.
         """
         if not retired:
             return

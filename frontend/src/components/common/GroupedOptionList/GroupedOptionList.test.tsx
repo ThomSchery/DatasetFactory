@@ -269,6 +269,36 @@ describe("GroupedOptionList in multiple mode", () => {
 });
 
 describe("GroupedOptionList in single mode", () => {
+  it("FE-030: a chosen option shows its short name in the closed field, and that name still filters", async () => {
+    const user = userEvent.setup();
+    render(
+      <GroupedOptionList
+        emptyMessage="No layout matches."
+        filterLabel="Layout"
+        groups={[
+          {
+            id: "psm",
+            label: "Modes",
+            options: [
+              { id: "6", label: "6 — One uniform block of text", selectedLabel: "6 — Uniform block" },
+              { id: "7", label: "7 — One text line" },
+            ],
+          },
+        ]}
+        label="Layouts"
+        mode="single"
+        onChange={() => {}}
+        selectedIds={["6"]}
+      />,
+    );
+    const field = screen.getByRole("combobox", { name: "Layout" });
+    expect(field).toHaveValue("6 — Uniform block");
+    await user.clear(field);
+    await user.type(field, "6 — Uniform bl");
+    expect(screen.getByRole("option", { name: "6 — One uniform block of text" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "7 — One text line" })).toBeNull();
+  });
+
   it.each(["outline", "active descendant"] as const)("FE-028: hides the %s outside the list and restores the remembered row", async (indicator) => {
     const user = userEvent.setup();
     const onChange = vi.fn();

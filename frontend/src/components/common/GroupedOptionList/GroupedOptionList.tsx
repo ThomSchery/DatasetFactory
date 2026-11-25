@@ -157,7 +157,14 @@ function visibleGroups(
       const options =
         !filtering || normalize(group.label).includes(needle)
           ? group.options
-          : group.options.filter((option) => normalize(option.label).includes(needle));
+          : group.options.filter(
+              (option) =>
+                normalize(option.label).includes(needle) ||
+                // FE-030: editing the short name shown in a closed field must
+                // still find the option it names.
+                (option.selectedLabel !== undefined &&
+                  normalize(option.selectedLabel).includes(needle)),
+            );
       /*
        * Filtering wins over collapsing, always. Typing `8` while `Liczby` is
        * collapsed has to show `8` — collapsing is for browsing, and a search
