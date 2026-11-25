@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,10 @@ from backend.app.access.store.models import (
     Export,
     Frame,
     GameProfile,
+    HudRegion,
+    OcrObservation,
     PipelineRun,
+    RegionSample,
     StageCheckpoint,
     VideoAsset,
 )
@@ -42,7 +46,71 @@ def _seed_files(composition: CompositionRoot, seed: CompletionSeed) -> dict[str,
     }
     if seed.export_id is not None:
         files["export"] = _write(composition, f"exports/{seed.export_id}/manifest.json")
+        files["staging"] = _write(composition, f"exports/.{seed.export_id}-k3j2/part.json")
     return files
+
+
+def _add_ocr(composition: CompositionRoot, seed: CompletionSeed) -> tuple[str, str]:
+    region_id, sample_id, observation_id = (str(uuid4()) for _ in range(3))
+    with composition.database.session() as session:
+        frame = session.get(Frame, seed.frame_id)
+        assert frame is not None
+        run = session.get(PipelineRun, frame.run_id)
+        assert run is not None
+        session.add(
+            HudRegion(
+                id=region_id, profile_id=run.profile_id, name="hp", x=0, y=0, width=5, height=5
+            )
+        )
+        session.flush()
+        session.add(
+            RegionSample(
+                id=sample_id,
+                frame_id=seed.frame_id,
+                region_id=region_id,
+                crop_relpath=f"runs/{run.id}/regions/00000000/{region_id}.png",
+                stage_status="ocr_complete",
+            )
+        )
+        session.flush()
+        session.add(
+            OcrObservation(
+                id=observation_id,
+                sample_id=sample_id,
+                char="7",
+                x=0,
+                y=0,
+                width=1,
+                height=1,
+                confidence=0.9,
+                engine="stub",
+                engine_version="1.0",
+                runtime_sha256="1" * 64,
+                model_sha256="2" * 64,
+                config_hash="3" * 64,
+                language="eng",
+                page_segmentation_mode=6,
+                experimental=False,
+                quality_gate="passed",
+                warning="",
+                valid=True,
+            )
+        )
+    return region_id, sample_id
+
+
+def _link_directory(link: Path, target: Path) -> None:
+    """A directory symlink, or a junction where Windows withholds the privilege."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return
+    except OSError:
+        pass
+    try:
+        import _winapi
+    except ImportError:
+        pytest.skip("no directory links on this platform")
+    _winapi.CreateJunction(str(target), str(link))
 
 
 def _add_checkpoint(composition: CompositionRoot, run_id: str) -> None:
@@ -96,6 +164,7 @@ def test_delete_run_removes_every_derived_row_and_file(
 ) -> None:
     seed = _seed_run(composition, tmp_path)
     _add_checkpoint(composition, seed.run_id)
+    region_id, sample_id = _add_ocr(composition, seed)
     files = _seed_files(composition, seed)
     unrelated_export = _write(composition, f"exports/{uuid4()}/manifest.json")
     with composition.database.session() as session:
@@ -120,7 +189,11 @@ def test_delete_run_removes_every_derived_row_and_file(
     assert _count(composition, Annotation, id=seed.annotation_id) == 0
     assert _count(composition, Export, run_id=seed.run_id) == 0
     assert _count(composition, StageCheckpoint, run_id=seed.run_id) == 0
+    assert _count(composition, RegionSample, id=sample_id) == 0
+    assert _count(composition, OcrObservation, sample_id=sample_id) == 0
+    assert _count(composition, HudRegion, id=region_id) == 1
     assert all(not path.exists() for path in files.values())
+    assert not files["staging"].parent.exists()
     assert not composition.workspace.resolve_relpath(f"runs/{seed.run_id}").exists()
     assert not composition.workspace.resolve_relpath(f"exports/{seed.export_id}").exists()
     # The run's inputs and everything outside it stay.
@@ -290,24 +363,45 @@ def test_remove_reports_and_logs_a_file_it_cannot_delete(
 
 def test_sweep_removes_only_unowned_uuid_entries(composition: CompositionRoot) -> None:
     owned_run, orphan_run = str(uuid4()), str(uuid4())
-    owned_export, orphan_export, staging = str(uuid4()), str(uuid4()), str(uuid4())
+    owned_export, orphan_export, orphan_staging = str(uuid4()), str(uuid4()), str(uuid4())
     kept = [
         _write(composition, f"runs/{owned_run}/frames/00000000.jpg"),
         _write(composition, "runs/notes/readme.txt"),
         _write(composition, f"exports/{owned_export}/manifest.json"),
-        _write(composition, f"exports/.{staging}-partial/manifest.json"),
+        _write(composition, f"exports/.{owned_export}-partial/manifest.json"),
+        _write(composition, "exports/.notes-partial/readme.txt"),
+        _write(composition, f"exports/.{orphan_export}/readme.txt"),
     ]
     gone = [
         _write(composition, f"runs/{orphan_run}/frames/00000000.jpg"),
         _write(composition, f"exports/{orphan_export}/manifest.json"),
+        _write(composition, f"exports/.{orphan_staging}-partial/manifest.json"),
     ]
     artifacts = RunArtifacts(composition.workspace, logging.getLogger("test.run_artifacts"))
 
     result = artifacts.sweep_orphans(frozenset({owned_run}), frozenset({owned_export}))
 
-    assert result == RunArtifactSweep(removed_runs=1, removed_exports=1)
+    assert result == RunArtifactSweep(removed_runs=1, removed_exports=2)
     assert all(path.exists() for path in kept)
     assert all(not path.parent.exists() for path in gone)
+
+
+def test_delete_run_removes_a_linked_run_directory_as_a_link(
+    settings: Settings,
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seed = _seed_run(composition, tmp_path, export_status=None)
+    other = _write(composition, f"runs/{uuid4()}/frames/00000000.jpg")
+    link = composition.workspace.resolve_relpath("runs") / seed.run_id
+    _link_directory(link, other.parent.parent)
+
+    with TestClient(create_app(settings, composition=composition)) as client:
+        response = _delete(client, seed.run_id)
+
+    assert response.status_code == 204, response.text
+    assert not (link.is_symlink() or link.is_junction() or link.exists())
+    assert other.exists()
 
 
 def test_startup_sweeps_files_a_deleted_run_left_behind(
@@ -320,6 +414,7 @@ def test_startup_sweeps_files_a_deleted_run_left_behind(
         kept = _write(first, f"runs/{seed.run_id}/frames/00000000.jpg")
         orphan = _write(first, f"runs/{uuid4()}/frames/00000000.jpg")
         orphan_export = _write(first, f"exports/{uuid4()}/manifest.json")
+        orphan_staging = _write(first, f"exports/.{uuid4()}-x7/manifest.json")
     finally:
         first.close()
 
@@ -328,5 +423,6 @@ def test_startup_sweeps_files_a_deleted_run_left_behind(
         assert kept.exists()
         assert not orphan.parent.parent.exists()
         assert not orphan_export.parent.exists()
+        assert not orphan_staging.parent.exists()
     finally:
         restarted.close()

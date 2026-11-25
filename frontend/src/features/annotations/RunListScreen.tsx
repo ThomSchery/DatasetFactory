@@ -7,8 +7,10 @@ import {
   describeApiError,
   describeRunStatus,
   invalidateFor,
+  isProcessingRunStatus,
   listRuns,
   queryKeys,
+  runListPollInterval,
 } from "../../api";
 import type { RunSummary } from "../../api";
 import { annotationsPath } from "../../app/navigation";
@@ -38,7 +40,7 @@ function RunRow({ onDelete, run }: { onDelete: (run: RunSummary) => void; run: R
   const navigate = useNavigate();
   // The backend refuses a processing run (`409 run_in_progress`); the button
   // says so up front for the one status the list can see.
-  const processing = run.status === "running";
+  const processing = isProcessingRunStatus(run.status);
   const status = describeRunStatus(run.status);
   const reviewed = run.review_counts.accepted + run.review_counts.rejected;
 
@@ -112,6 +114,10 @@ export function RunListScreen() {
   const runs = useQuery({
     queryKey: queryKeys.runList(query),
     queryFn: ({ signal }) => listRuns(query, signal),
+    // While a run processes, its Delete stays disabled; polling lets it turn
+    // on when the run stops, without a reload.
+    refetchInterval: (current) =>
+      runListPollInterval(current.state.data?.items.map((item) => item.status)),
   });
   const pageCount = Math.max(1, Math.ceil((runs.data?.total ?? 0) / PAGE_SIZE));
   const removal = useMutation({

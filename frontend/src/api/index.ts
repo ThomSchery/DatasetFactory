@@ -87,9 +87,11 @@ export {
   isCompletedExportStatus,
   isCompletedRunStatus,
   isFailedExportStatus,
+  isProcessingRunStatus,
   isRunningExportStatus,
   isTerminalExportStatus,
   isTerminalRunStatus,
+  runListPollInterval,
   runPollInterval,
 } from "./runStatus";
 export type { RunAction, TerminalRunStatus } from "./runStatus";

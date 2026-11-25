@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +9,8 @@ import {
   runFixture,
   runSummaryFixture,
 } from "../../test/fixtures";
+import { RUN_POLL_INTERVAL_MS } from "../../api";
+import type { RunSummary } from "../../api";
 import { renderApp, stubFetch } from "../../test/harness";
 
 afterEach(() => {
@@ -163,11 +165,33 @@ describe("deleting a run (FE-031)", () => {
     expect(screen.getByText("Quake Champions")).toBeInTheDocument();
   });
 
-  it("does not offer to delete a run that is processing frames", async () => {
-    stubRuns(() => ({ status: 204 }), [runSummaryFixture({ status: "running" })]);
+  it("offers deletion once a processing run stops, without a reload", async () => {
+    let status: RunSummary["status"] = "running";
+    stubFetch((url) => {
+      if (url.includes("/runs?")) {
+        return {
+          status: 200,
+          body: {
+            items: [runSummaryFixture({ status })],
+            page: 1,
+            page_size: 20,
+            total: 1,
+          },
+        };
+      }
+      return { status: 404, body: {} };
+    });
 
     renderApp(["/annotations"]);
 
-    expect(await screen.findByRole("button", { name: "Delete run run-1" })).toBeDisabled();
+    const button = await screen.findByRole("button", { name: "Delete run run-1" });
+    expect(button).toBeDisabled();
+    status = "review_ready";
+    await waitFor(
+      () => {
+        expect(screen.getByRole("button", { name: "Delete run run-1" })).toBeEnabled();
+      },
+      { timeout: RUN_POLL_INTERVAL_MS + 2000 },
+    );
   });
 });

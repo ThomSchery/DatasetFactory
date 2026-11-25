@@ -37,6 +37,23 @@ export function runPollInterval(status: RunStatus | undefined): number | false {
   return isTerminalRunStatus(status) ? false : RUN_POLL_INTERVAL_MS;
 }
 
+/**
+ * FE-031: a run the worker is processing. The backend refuses to delete it
+ * (`409 run_in_progress`), so the run list offers deletion only once it stops.
+ */
+export function isProcessingRunStatus(status: RunStatus): boolean {
+  return status === "running";
+}
+
+/**
+ * Poll interval for the run list: only while one of its runs is processing, so
+ * a run that stops becomes deletable without a reload. Shaped for TanStack
+ * Query's `refetchInterval`.
+ */
+export function runListPollInterval(statuses: readonly RunStatus[] | undefined): number | false {
+  return statuses?.some(isProcessingRunStatus) === true ? RUN_POLL_INTERVAL_MS : false;
+}
+
 /** The four run mutations FE-001-F2 exposes, one per TECH_PLAN §5 endpoint. */
 export type RunAction = "start" | "pause" | "resume" | "cancel";
 

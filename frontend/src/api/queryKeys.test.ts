@@ -7,6 +7,7 @@ import {
   canCompleteExportedRun,
   exportPollInterval,
   isTerminalRunStatus,
+  runListPollInterval,
   runPollInterval,
 } from "./runStatus";
 import type { RunStatus } from "./types";
@@ -98,6 +99,13 @@ describe("run status machine", () => {
 
   it("polls while the status is still unknown", () => {
     expect(runPollInterval(undefined)).toBe(RUN_POLL_INTERVAL_MS);
+  });
+
+  it("polls the run list only while one of its runs is processing (FE-031)", () => {
+    expect(runListPollInterval(["review_ready", "running"])).toBe(RUN_POLL_INTERVAL_MS);
+    expect(runListPollInterval(["queued", "paused", "review_ready", "failed"])).toBe(false);
+    expect(runListPollInterval([])).toBe(false);
+    expect(runListPollInterval(undefined)).toBe(false);
   });
 
   it("stops polling a finished export", () => {

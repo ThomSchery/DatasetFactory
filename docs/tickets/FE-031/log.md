@@ -32,3 +32,12 @@ Przeczytane: `AGENTS.md`, `frontend/src/AGENTS.md`, `.agent/guidelines/new-compo
 - [x] Cienie: tylko istniejący cień `Dialog`.
 - [x] Interakcje: hover/active/focus/disabled/loading z `Button` (COLOR-07, OPACITY-\*).
 - [x] Komponenty: `Button`, `Dialog`, `InlineError` — nowych nie ma.
+
+## Bramka 1 i cold review (2026-11-25)
+
+- Bramka na `9073eae` zatrzymana przy pytest 34% (PASS do tego miejsca) — i tak potrzebny pełny przebieg po FIX1.
+- Cold review (codex gpt-6.1-sol high): **NIE GOTOWE**, trzy P2. FIX1 zamyka wszystkie:
+  1. P2 — `RunArtifacts` brał ścieżkę przez `Workspace.resolve_relpath`, czyli rozwiązywał dowiązanie/junction stojące w miejscu `runs/<run_id>` i `rmtree` kasował jego cel (np. pliki innego runu). Teraz wpis jest adresowany nazwą w rozwiązanym katalogu `runs/` / `exports/`, a link/junction usuwany jako link (`unlink`, a dla katalogu `rmdir`). Test „linked run directory as a link” (dowiązanie albo junction) — pada na starej wersji, przechodzi na nowej.
+  2. P2 — sprzątanie przy starcie pomijało staging `.<export_id>-*` usuniętego eksportu. Teraz rozpoznaje dokładny format `mkdtemp(prefix=".<uuid>-")` i usuwa staging, którego eksport nie ma wiersza; staging istniejącego eksportu i inne nazwy z kropką zostają. `remove()` używa tego samego parsera.
+  3. P2 — lista runów nie odświeżała się, więc `Delete` przy runie `running` zostawał wyłączony po jego zatrzymaniu. Lista odpytuje co `RUN_POLL_INTERVAL_MS` tylko, gdy zawiera run w przetwarzaniu (`runListPollInterval`, `isProcessingRunStatus` w `runStatus.ts` — status poza komponentem). Test Vitest przejścia `running` → `review_ready` — pada bez odpytywania.
+  - Uwaga z review: test kaskady seeduje teraz też `RegionSample` i `OcrObservation` (i sprawdza, że `HudRegion` profilu zostaje).

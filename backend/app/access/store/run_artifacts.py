@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import time
 from collections.abc import Callable, Iterable
@@ -9,6 +10,10 @@ from pathlib import Path
 from uuid import UUID
 
 from backend.app.access.store.workspace import Workspace, WorkspaceError
+
+# `tempfile.mkdtemp(prefix=f".{export_id}-")` names an export's staging directory
+# (`ExportRepository`): a dot, the 36-character export UUID, a dash, a random tail.
+_STAGING_ID = slice(1, 37)
 
 
 @dataclass(frozen=True)
@@ -30,6 +35,18 @@ def _is_uuid(name: str) -> bool:
         return False
 
 
+def _staging_export_id(name: str) -> str | None:
+    """The export id a staging entry belongs to, or nothing for any other name."""
+    if not name.startswith(".") or len(name) < 39 or name[37] != "-":
+        return None
+    export_id = name[_STAGING_ID]
+    return export_id if _is_uuid(export_id) else None
+
+
+def _is_link(path: Path) -> bool:
+    return path.is_symlink() or path.is_junction()
+
+
 class RunArtifacts:
     """Own the files a run leaves in the controlled workspace once its rows are gone.
 
@@ -38,6 +55,10 @@ class RunArtifacts:
     Removal is best effort after the database commit: Windows can hold a frame image
     open for a moment after it was served, so each entry is retried briefly, and what
     still cannot go is reported and swept on the next start.
+
+    Entries are addressed by name inside the resolved `runs/` and `exports/`
+    directories and never resolved themselves: a link or junction standing where a run
+    directory should be is removed as a link, so its target is never touched.
     """
 
     def __init__(
@@ -57,18 +78,18 @@ class RunArtifacts:
 
     def remove(self, run_id: str, export_ids: Iterable[str]) -> RunArtifactRemoval:
         candidates: list[Path] = []
-        if _is_uuid(run_id):
-            candidates.extend(self._controlled(Path("runs") / run_id))
-        exports_path = self._exports_path()
-        for export_id in export_ids:
-            if not _is_uuid(export_id):
-                continue
-            candidates.extend(self._controlled(Path("exports") / export_id))
-            if exports_path is not None:
-                prefix = f".{export_id}-"
-                candidates.extend(
-                    entry for entry in exports_path.iterdir() if entry.name.startswith(prefix)
-                )
+        runs_path = self._directory("runs")
+        if runs_path is not None and _is_uuid(run_id):
+            candidates.append(runs_path / run_id)
+        exports_path = self._directory("exports")
+        owned_exports = {export_id for export_id in export_ids if _is_uuid(export_id)}
+        if exports_path is not None and owned_exports:
+            candidates.extend(exports_path / export_id for export_id in sorted(owned_exports))
+            candidates.extend(
+                entry
+                for entry in exports_path.iterdir()
+                if _staging_export_id(entry.name) in owned_exports
+            )
         removed = 0
         left_behind: list[str] = []
         for candidate in candidates:
@@ -90,47 +111,39 @@ class RunArtifacts:
         run_ids: frozenset[str],
         export_ids: frozenset[str],
     ) -> RunArtifactSweep:
-        """Remove UUID-named run and export entries that no database row owns.
+        """Remove run and export entries that no database row owns.
 
-        Only a deleted run leaves such an entry, because a run row exists before its
-        first file and an export row is never deleted on its own. Anything not named by
-        a UUID is not ours to judge and stays.
+        A run row exists before its first file, and an export row before its staging
+        directory, and neither is deleted except with the run; so at startup, before
+        any worker runs, an entry without a row is what a deleted run left behind.
+        Only `runs/<uuid>`, `exports/<uuid>` and `exports/.<uuid>-*` are judged;
+        anything else is not ours and stays.
         """
-        removed_runs = self._sweep("runs", run_ids)
-        removed_exports = self._sweep("exports", export_ids)
+        removed_runs = 0
+        runs_path = self._directory("runs")
+        if runs_path is not None:
+            for entry in runs_path.iterdir():
+                if _is_uuid(entry.name) and entry.name not in run_ids and self._remove_once(entry):
+                    removed_runs += 1
+        removed_exports = 0
+        exports_path = self._directory("exports")
+        if exports_path is not None:
+            for entry in exports_path.iterdir():
+                owner = entry.name if _is_uuid(entry.name) else _staging_export_id(entry.name)
+                if owner is not None and owner not in export_ids and self._remove_once(entry):
+                    removed_exports += 1
         return RunArtifactSweep(removed_runs=removed_runs, removed_exports=removed_exports)
 
-    def _sweep(self, directory: str, known: frozenset[str]) -> int:
+    def _directory(self, relpath: str) -> Path | None:
         try:
-            root = self._workspace.resolve_relpath(directory)
-        except WorkspaceError:
-            return 0
-        if not root.is_dir():
-            return 0
-        removed = 0
-        for entry in root.iterdir():
-            if not _is_uuid(entry.name) or entry.name in known:
-                continue
-            if self._remove_once(entry):
-                removed += 1
-        return removed
-
-    def _exports_path(self) -> Path | None:
-        try:
-            path = self._workspace.resolve_relpath("exports")
+            path = self._workspace.resolve_relpath(relpath)
         except WorkspaceError:
             return None
         return path if path.is_dir() else None
 
-    def _controlled(self, relpath: Path) -> tuple[Path, ...]:
-        try:
-            return (self._workspace.resolve_relpath(relpath),)
-        except WorkspaceError:
-            return ()
-
     @staticmethod
     def _exists(path: Path) -> bool:
-        return path.is_symlink() or path.exists()
+        return _is_link(path) or path.exists()
 
     def _remove_with_retry(self, path: Path) -> bool:
         for attempt in range(self._attempts):
@@ -143,10 +156,18 @@ class RunArtifacts:
     @staticmethod
     def _remove_once(path: Path) -> bool:
         try:
-            if path.is_symlink() or path.is_file():
+            if _is_link(path):
+                # The link itself, never what it points at. A directory link or
+                # junction on Windows only goes with `rmdir`.
+                try:
+                    path.unlink()
+                except OSError:
+                    os.rmdir(path)
+            elif path.is_file():
                 path.unlink()
             elif path.is_dir():
+                # `rmtree` removes links met inside as links (junctions too on 3.8+).
                 shutil.rmtree(path)
         except OSError:
-            return not (path.is_symlink() or path.exists())
+            return not RunArtifacts._exists(path)
         return True
