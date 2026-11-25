@@ -45,6 +45,7 @@ from backend.app.access.store.repositories.checkpoints import (
 )
 from backend.app.access.store.repositories.frames import FrameRepository
 from backend.app.access.store.repositories.runs import RunRepository
+from backend.app.access.store.run_artifacts import RunArtifacts
 from backend.app.composition import CompositionRoot
 from backend.app.engines.definition import (
     BBox,
@@ -389,7 +390,14 @@ def _install_workflow(
         composition.logger,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
     )
-    workflow = DatasetWorkflow(runs, frames, recovery, worker, ocr)
+    workflow = DatasetWorkflow(
+        runs,
+        frames,
+        recovery,
+        worker,
+        ocr,
+        RunArtifacts(composition.workspace, composition.logger),
+    )
     composition.dataset_workflow = workflow
     return workflow, runs, recovery
 

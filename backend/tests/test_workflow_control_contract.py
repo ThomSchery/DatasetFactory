@@ -35,6 +35,7 @@ from backend.app.access.store.repositories.runs import (
     RunRecord,
     RunRepository,
 )
+from backend.app.access.store.run_artifacts import RunArtifacts
 from backend.app.access.store.workspace import Workspace
 from backend.app.composition import CompositionRoot
 from backend.app.engines.definition import DatasetDefinitionEngine, OcrProvenance
@@ -285,7 +286,14 @@ def _install(
         composition.logger,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
     )
-    workflow = DatasetWorkflow(run_repository, frames, recovery, worker, ocr)
+    workflow = DatasetWorkflow(
+        run_repository,
+        frames,
+        recovery,
+        worker,
+        ocr,
+        RunArtifacts(composition.workspace, composition.logger),
+    )
     composition.dataset_workflow = workflow
     return workflow, run_repository
 
@@ -314,7 +322,14 @@ def _build_workflow(
         composition.logger,
         heartbeat_interval_seconds=0.05,
     )
-    workflow = DatasetWorkflow(runs, frames, effective_recovery, worker, ocr)
+    workflow = DatasetWorkflow(
+        runs,
+        frames,
+        effective_recovery,
+        worker,
+        ocr,
+        RunArtifacts(composition.workspace, composition.logger),
+    )
     workflow._executor.shutdown(wait=True)
     workflow._executor = ParkedExecutor()  # type: ignore[assignment]
     return workflow
@@ -912,7 +927,14 @@ def test_two_concurrent_resumes_fence_reconciliation_before_activation(
         composition.logger,
         heartbeat_interval_seconds=0.05,
     )
-    workflow = DatasetWorkflow(runs, frames, recovery, worker, StubOcrEngine())
+    workflow = DatasetWorkflow(
+        runs,
+        frames,
+        recovery,
+        worker,
+        StubOcrEngine(),
+        RunArtifacts(composition.workspace, composition.logger),
+    )
     workflow._executor.shutdown(wait=True)
     workflow._executor = ParkedExecutor()  # type: ignore[assignment]
     composition.dataset_workflow = workflow

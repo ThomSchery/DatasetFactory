@@ -34,6 +34,7 @@ from backend.app.access.store.repositories.profiles import ProfileRepository
 from backend.app.access.store.repositories.projects import ProjectRepository
 from backend.app.access.store.repositories.runs import RunRepository
 from backend.app.access.store.repository import ProjectStore
+from backend.app.access.store.run_artifacts import RunArtifacts
 from backend.app.access.store.workspace import Workspace
 from backend.app.config import Settings
 from backend.app.engines.coco import CocoExportEngine
@@ -185,6 +186,18 @@ def build_composition(
         TesseractProcessRunner(),
     )
     runs = RunRepository(database)
+    run_artifacts = RunArtifacts(workspace, logger)
+    # Before any worker starts: a run or export entry no row owns can only be what a
+    # deleted run left behind because Windows still held one of its files open.
+    known_run_ids, known_export_ids = runs.known_ids()
+    run_artifact_sweep = run_artifacts.sweep_orphans(known_run_ids, known_export_ids)
+    logger.info(
+        "run_artifact_sweep_completed",
+        extra={
+            "removed_runs": run_artifact_sweep.removed_runs,
+            "removed_exports": run_artifact_sweep.removed_exports,
+        },
+    )
     frames = FrameRepository(database)
     checkpoints = CheckpointRepository(database, workspace)
     review_use_cases = ReviewUseCases(
@@ -215,6 +228,7 @@ def build_composition(
         workflow_recovery,
         workflow_worker,
         active_ocr_engine,
+        run_artifacts,
     )
     recovery_result = dataset_workflow.recover_startup()
     logger.info(

@@ -18,6 +18,8 @@ from backend.app.access.store.repositories.runs import (
     ActiveRunError,
     RegionOcrDraft,
     RunCompletionPreconditionError,
+    RunExportRunningError,
+    RunInProgressError,
     RunNotFoundError,
     RunPage,
     RunProfileChangedError,
@@ -28,6 +30,7 @@ from backend.app.access.store.repositories.runs import (
     RunVersionConflictError,
     RunVideoNotFoundError,
 )
+from backend.app.access.store.run_artifacts import RunArtifacts
 from backend.app.engines.definition import OcrProvenance
 from backend.app.managers.workflow.recovery import RecoveryResult, WorkflowRecovery
 from backend.app.managers.workflow.state_machine import InvalidTransitionError, RunStatus
@@ -86,15 +89,23 @@ class DatasetWorkflow:
         recovery: WorkflowRecovery,
         worker: WorkflowWorker,
         ocr: OcrEngine,
+        artifacts: RunArtifacts,
     ) -> None:
         self._runs = runs
         self._frames = frames
         self._recovery = recovery
         self._worker = worker
         self._ocr = ocr
+        self._artifacts = artifacts
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dataset-workflow")
         self._lock = threading.Lock()
         self._closed = False
+        # Runs whose worker job is executing right now. The database already refuses to
+        # delete a `running` run; this also covers the moment after the worker commits
+        # `paused`/`cancelled`/`failed` and before its job has returned. Its own lock:
+        # `_submit` holds `_lock` while an executor may run the job inline.
+        self._processing: set[str] = set()
+        self._processing_lock = threading.Lock()
 
     def recover_startup(self) -> RecoveryResult:
         return self._recovery.recover_startup()
@@ -248,6 +259,19 @@ class DatasetWorkflow:
         except Exception as exc:
             raise self._translate(exc) from exc
 
+    def delete_run(self, run_id: str, *, expected_version: int) -> None:
+        """Delete an idle run, everything derived from it, and its files."""
+        with self._processing_lock:
+            if run_id in self._processing:
+                raise WorkflowError("run_in_progress")
+        try:
+            export_ids = self._runs.delete(run_id, expected_version=expected_version)
+        except Exception as exc:
+            raise self._translate(exc) from exc
+        # The rows are gone, so the run is deleted even if a file is still held open;
+        # `remove` logs what it left and the startup sweep finishes the job.
+        self._artifacts.remove(run_id, export_ids)
+
     def get_run(self, run_id: str) -> RunRecord:
         try:
             return self._runs.get(run_id)
@@ -301,7 +325,16 @@ class DatasetWorkflow:
             if self._closed:
                 self._runs.fail(run_id, "worker_unavailable")
                 raise WorkflowError("worker_unavailable")
-            self._executor.submit(self._worker.process, run_id)
+            self._executor.submit(self._process, run_id)
+
+    def _process(self, run_id: str) -> None:
+        with self._processing_lock:
+            self._processing.add(run_id)
+        try:
+            self._worker.process(run_id)
+        finally:
+            with self._processing_lock:
+                self._processing.discard(run_id)
 
     def _require_activation_allowed(
         self,
@@ -400,6 +433,10 @@ class DatasetWorkflow:
             return WorkflowError("version_conflict")
         if isinstance(error, ActiveRunError):
             return WorkflowError("active_run")
+        if isinstance(error, RunInProgressError):
+            return WorkflowError("run_in_progress")
+        if isinstance(error, RunExportRunningError):
+            return WorkflowError("export_running")
         if isinstance(error, RunCompletionPreconditionError):
             return WorkflowError("invalid_transition")
         if isinstance(error, InvalidTransitionError):

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -69,6 +69,14 @@ class ActiveRunError(RuntimeError):
 
 class RunCompletionPreconditionError(RuntimeError):
     pass
+
+
+class RunInProgressError(RuntimeError):
+    """The run is processing frames or is being resumed, so it cannot be deleted."""
+
+
+class RunExportRunningError(RuntimeError):
+    """An export of the run is still writing its files, so it cannot be deleted."""
 
 
 class RunSourceError(RuntimeError):
@@ -157,6 +165,7 @@ class RunSummaryRecord:
     annotation_counts: AnnotationCounts
     exported: bool
     created_at: datetime
+    version: int
 
 
 @dataclass(frozen=True)
@@ -341,6 +350,44 @@ class RunRepository:
                 page=page,
                 page_size=page_size,
                 total=total,
+            )
+
+    def delete(self, run_id: str, *, expected_version: int) -> tuple[str, ...]:
+        """Delete one idle run and every row derived from it; return its export ids.
+
+        Frames, region samples, OCR observations, annotations, checkpoints and export
+        records go with it through `ON DELETE CASCADE`. The checks and the delete share
+        one write transaction, so a run cannot be activated, resumed or exported between
+        them. The caller owns the run's files, which only exist once this commits.
+        """
+        with self._database.session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            run = session.get(PipelineRun, run_id)
+            if run is None:
+                raise RunNotFoundError
+            if run.version != expected_version:
+                raise RunVersionConflictError
+            if (
+                run.status == "running"
+                or run.workflow_slot is not None
+                or run.resume_token is not None
+            ):
+                raise RunInProgressError
+            export_rows = session.execute(
+                select(Export.id, Export.status).where(Export.run_id == run_id)
+            ).all()
+            if any(status in {"queued", "running"} for _, status in export_rows):
+                raise RunExportRunningError
+            session.execute(delete(PipelineRun).where(PipelineRun.id == run_id))
+            session.flush()
+            return tuple(str(export_id) for export_id, _ in export_rows)
+
+    def known_ids(self) -> tuple[frozenset[str], frozenset[str]]:
+        """Every run id and every export id the database still holds."""
+        with self._database.session() as session:
+            return (
+                frozenset(session.scalars(select(PipelineRun.id))),
+                frozenset(session.scalars(select(Export.id))),
             )
 
     def active(self) -> RunRecord | None:
@@ -901,4 +948,5 @@ class RunRepository:
             ),
             exported=exported,
             created_at=run.created_at,
+            version=run.version,
         )

@@ -2,7 +2,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
@@ -127,6 +127,7 @@ class RunSummaryResponse(StrictModel):
     annotation_counts: AnnotationCountsResponse
     exported: bool
     created_at: datetime
+    version: int
 
 
 class RunPageResponse(StrictModel):
@@ -205,6 +206,7 @@ def _run_summary_response(record: RunSummaryRecord) -> RunSummaryResponse:
         annotation_counts=AnnotationCountsResponse(**vars(record.annotation_counts)),
         exported=record.exported,
         created_at=record.created_at,
+        version=record.version,
     )
 
 
@@ -222,6 +224,8 @@ def _workflow_error(request: Request, error: WorkflowError) -> JSONResponse:
         status_code = 404
     elif error.code in {
         "active_run",
+        "run_in_progress",
+        "export_running",
         "version_conflict",
         "profile_changed_during_run_creation",
         "invalid_transition",
@@ -337,6 +341,27 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
         workflow: Annotated[DatasetWorkflow, Depends(workflow_provider)],
     ) -> RunResponse | JSONResponse:
         return mutate("complete", run_id, payload, request, workflow)
+
+    @router.delete(
+        "/{run_id}",
+        status_code=204,
+        response_class=Response,
+        response_model=None,
+        responses={404: {"model": ErrorEnvelope}, 409: {"model": ErrorEnvelope}},
+    )
+    def delete_run(
+        run_id: str,
+        request: Request,
+        workflow: Annotated[DatasetWorkflow, Depends(workflow_provider)],
+        expected_version: Annotated[int, Query(ge=1)],
+    ) -> Response | JSONResponse:
+        # Authorization policy: local-public. Only an idle run may go; its frames,
+        # annotations, exports and files go with it.
+        try:
+            workflow.delete_run(run_id, expected_version=expected_version)
+        except WorkflowError as error:
+            return _workflow_error(request, error)
+        return Response(status_code=204)
 
     @router.get("/{run_id}", response_model=RunResponse)
     def get_run(
