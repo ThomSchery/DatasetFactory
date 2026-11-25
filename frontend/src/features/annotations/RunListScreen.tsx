@@ -1,15 +1,29 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 
-import { describeApiError, describeRunStatus, listRuns, queryKeys } from "../../api";
+import {
+  deleteRun,
+  describeApiError,
+  describeRunStatus,
+  invalidateFor,
+  listRuns,
+  queryKeys,
+} from "../../api";
 import type { RunSummary } from "../../api";
 import { annotationsPath } from "../../app/navigation";
 import { Button } from "../../components/common/Button";
 import { DataList } from "../../components/common/DataList";
+import { Dialog } from "../../components/common/Dialog";
 import { Panel } from "../../components/common/Panel";
 import { StatusBadge } from "../../components/common/StatusBadge";
-import { Empty, FatalError, Loading, Progress } from "../../components/common/UiStates";
+import {
+  Empty,
+  FatalError,
+  InlineError,
+  Loading,
+  Progress,
+} from "../../components/common/UiStates";
 import "./RunListScreen.css";
 
 const PAGE_SIZE = 20;
@@ -20,8 +34,11 @@ function formatCreatedAt(value: string): string {
   );
 }
 
-function RunRow({ run }: { run: RunSummary }) {
+function RunRow({ onDelete, run }: { onDelete: (run: RunSummary) => void; run: RunSummary }) {
   const navigate = useNavigate();
+  // The backend refuses a processing run (`409 run_in_progress`); the button
+  // says so up front for the one status the list can see.
+  const processing = run.status === "running";
   const status = describeRunStatus(run.status);
   const reviewed = run.review_counts.accepted + run.review_counts.rejected;
 
@@ -68,6 +85,17 @@ function RunRow({ run }: { run: RunSummary }) {
         <span>Rejected: {String(run.review_counts.rejected)}</span>
       </div>
       <div className="df-run-list__actions">
+        <Button
+          aria-label={`Delete run ${run.id}`}
+          disabled={processing}
+          onClick={() => {
+            onDelete(run);
+          }}
+          title={processing ? "Pause or cancel the run before deleting it." : undefined}
+          variant="secondary"
+        >
+          Delete
+        </Button>
         <Button onClick={() => void navigate(annotationsPath(run.id))}>
           Open review
         </Button>
@@ -77,13 +105,34 @@ function RunRow({ run }: { run: RunSummary }) {
 }
 
 export function RunListScreen() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [pendingDelete, setPendingDelete] = useState<RunSummary | null>(null);
   const query = { page, page_size: PAGE_SIZE };
   const runs = useQuery({
     queryKey: queryKeys.runList(query),
     queryFn: ({ signal }) => listRuns(query, signal),
   });
   const pageCount = Math.max(1, Math.ceil((runs.data?.total ?? 0) / PAGE_SIZE));
+  const removal = useMutation({
+    mutationFn: (run: RunSummary) => deleteRun(run.id, run.version),
+    onSuccess: async (_, run) => {
+      // The last run of a later page leaves that page empty; show the one before.
+      if (page > 1 && runs.data?.items.length === 1) {
+        setPage(page - 1);
+      }
+      setPendingDelete(null);
+      await invalidateFor(queryClient, { type: "run-deleted", runId: run.id });
+    },
+  });
+  const removalError = removal.isError ? describeApiError(removal.error) : null;
+  const openDelete = (run: RunSummary) => {
+    removal.reset();
+    setPendingDelete(run);
+  };
+  const closeDelete = () => {
+    if (!removal.isPending) setPendingDelete(null);
+  };
 
   return (
     <div className="df-run-list">
@@ -108,7 +157,7 @@ export function RunListScreen() {
         {runs.isSuccess && runs.data.items.length > 0 ? (
           <ul className="df-run-list__items">
             {runs.data.items.map((run) => (
-              <RunRow key={run.id} run={run} />
+              <RunRow key={run.id} onDelete={openDelete} run={run} />
             ))}
           </ul>
         ) : null}
@@ -134,6 +183,38 @@ export function RunListScreen() {
           </nav>
         ) : null}
       </Panel>
+
+      <Dialog
+        actions={
+          <>
+            <Button disabled={removal.isPending} onClick={closeDelete} variant="secondary">
+              Cancel
+            </Button>
+            <Button
+              disabled={pendingDelete === null || removal.isPending}
+              loading={removal.isPending}
+              loadingLabel="Deleting the run…"
+              onClick={() => {
+                if (pendingDelete !== null) removal.mutate(pendingDelete);
+              }}
+            >
+              Delete run
+            </Button>
+          </>
+        }
+        description={
+          pendingDelete === null
+            ? undefined
+            : `Run ${pendingDelete.id} of ${pendingDelete.profile_name} is removed for good, with its ${String(pendingDelete.review_counts.total)} frames, their annotations and its exports. The video and the profile stay.`
+        }
+        onClose={closeDelete}
+        open={pendingDelete !== null}
+        title="Delete run"
+      >
+        {removalError === null ? null : (
+          <InlineError message={`${removalError.message} ${removalError.action}`} />
+        )}
+      </Dialog>
     </div>
   );
 }

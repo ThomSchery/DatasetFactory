@@ -1,8 +1,9 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  errorEnvelope,
   framePageFixture,
   profileFixture,
   runFixture,
@@ -84,4 +85,89 @@ it("opens the existing annotation deep-link for the selected run", async () => {
   expect(
     await screen.findByRole("group", { name: "Frame status filter" }),
   ).toBeInTheDocument();
+});
+
+describe("deleting a run (FE-031)", () => {
+  function stubRuns(
+    onDelete: (url: string) => { status: number; body?: unknown },
+    items = [runSummaryFixture()],
+  ) {
+    let listed = items;
+    return stubFetch((url, init) => {
+      if (init?.method === "DELETE") {
+        const response = onDelete(url);
+        if (response.status === 204) {
+          listed = listed.filter((run) => !url.includes(`/runs/${run.id}?`));
+        }
+        return response;
+      }
+      if (url.includes("/runs?")) {
+        return {
+          status: 200,
+          body: { items: listed, page: 1, page_size: 20, total: listed.length },
+        };
+      }
+      return { status: 404, body: {} };
+    });
+  }
+
+  it("asks first, sends the run's version and drops the run from the list", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = stubRuns(() => ({ status: 204 }));
+
+    renderApp(["/annotations"]);
+    await user.click(await screen.findByRole("button", { name: "Delete run run-1" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Delete run" });
+    expect(dialog).toHaveAccessibleDescription(
+      "Run run-1 of Quake Champions is removed for good, with its 25 frames, their annotations and its exports. The video and the profile stay.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Delete run" }));
+
+    expect(await screen.findByText("No runs yet")).toBeInTheDocument();
+    const deletes = fetchSpy.mock.calls.filter(([, init]) => init?.method === "DELETE");
+    expect(deletes).toHaveLength(1);
+    expect(String(deletes[0]?.[0])).toContain("/runs/run-1?expected_version=3");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("sends nothing when the dialog is cancelled", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = stubRuns(() => ({ status: 204 }));
+
+    renderApp(["/annotations"]);
+    await user.click(await screen.findByRole("button", { name: "Delete run run-1" }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Delete run" })).getByRole("button", {
+        name: "Cancel",
+      }),
+    );
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+    expect(screen.getByText("Quake Champions")).toBeInTheDocument();
+  });
+
+  it("keeps a refused delete in the dialog with the reason", async () => {
+    const user = userEvent.setup();
+    stubRuns(() => ({ status: 409, body: errorEnvelope("export_running") }));
+
+    renderApp(["/annotations"]);
+    await user.click(await screen.findByRole("button", { name: "Delete run run-1" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete run" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete run" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "An export of this run is already running. Wait for it to finish, then try again.",
+    );
+    expect(screen.getByText("Quake Champions")).toBeInTheDocument();
+  });
+
+  it("does not offer to delete a run that is processing frames", async () => {
+    stubRuns(() => ({ status: 204 }), [runSummaryFixture({ status: "running" })]);
+
+    renderApp(["/annotations"]);
+
+    expect(await screen.findByRole("button", { name: "Delete run run-1" })).toBeDisabled();
+  });
 });

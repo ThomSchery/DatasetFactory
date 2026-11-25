@@ -299,6 +299,8 @@ export interface RunSummary {
   };
   exported: boolean;
   created_at: string;
+  /** Optimistic lock for `DELETE /runs/{id}` (FE-031). */
+  version: number;
 }
 
 export interface ListRunsQuery {

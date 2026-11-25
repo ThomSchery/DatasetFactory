@@ -65,6 +65,10 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
     message: "Another run is already active.",
     action: "Pause or finish the current run before starting another one.",
   },
+  run_in_progress: {
+    message: "The run is still processing frames.",
+    action: "Pause or cancel the run, wait until it stops, then delete it.",
+  },
   invalid_transition: {
     message: "This operation is not allowed in the run's current status.",
     action: "Refresh the run status and choose an operation available in that state.",
@@ -300,7 +304,7 @@ const ERROR_COPY: Readonly<Record<string, ErrorCopy>> = {
   // --- exports ---
   export_running: {
     message: "An export of this run is already running.",
-    action: "Wait for it to finish before starting another one.",
+    action: "Wait for it to finish, then try again.",
   },
   no_accepted_frames: {
     message: "The run has no accepted frame to export.",

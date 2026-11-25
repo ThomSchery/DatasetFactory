@@ -57,6 +57,14 @@ describe("invalidation mapping", () => {
     expect(invalidationKeys({ type: "run-created" })).toEqual([["runs"], ["dashboard"]]);
   });
 
+  it("refreshes the list, the dashboard and the exports when a run is deleted", () => {
+    expect(invalidationKeys({ type: "run-deleted", runId: "r1" })).toEqual([
+      ["runs"],
+      ["dashboard"],
+      ["exports"],
+    ]);
+  });
+
   it("invalidates only the frame when the run is unknown", () => {
     expect(invalidationKeys({ type: "annotation-changed", frameId: "f1" })).toEqual([
       ["frames", "f1"],

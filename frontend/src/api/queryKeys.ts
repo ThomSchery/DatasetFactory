@@ -58,6 +58,7 @@ export type MutationEvent =
   | { type: "material-imported" }
   | { type: "run-created" }
   | { type: "run-transitioned"; runId: string }
+  | { type: "run-deleted"; runId: string }
   | { type: "annotation-changed"; frameId: string; runId?: string }
   | { type: "frame-reviewed"; frameId: string; runId?: string }
   | { type: "export-started" }
@@ -88,6 +89,11 @@ function keysFor(event: MutationEvent): readonly (readonly unknown[])[] {
     case "run-transitioned":
       // A transition moves the run's own version and can change its frames.
       return [queryKeys.run(event.runId), queryKeys.dashboard()];
+    case "run-deleted":
+      // The run leaves the list, may have been the dashboard's unfinished run,
+      // and takes its exports with it. `runs()` is also the prefix of its detail
+      // and frame keys.
+      return [queryKeys.runs(), queryKeys.dashboard(), queryKeys.exports()];
     case "annotation-changed":
       // Annotating bumps the frame aggregate and the run's `review_revision`,
       // which the frame list reads back through its summaries.

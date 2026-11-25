@@ -264,6 +264,17 @@ export function completeRun(runId: string, body: VersionedMutationRequest): Prom
   });
 }
 
+/**
+ * `DELETE /runs/{id}` → `204` (FE-031). Removes an idle run with its frames,
+ * annotations, exports and files; `expected_version` travels as a query param.
+ */
+export async function deleteRun(runId: string, expectedVersion: number): Promise<void> {
+  await apiRequest<undefined>(`/runs/${encodeURIComponent(runId)}`, {
+    method: "DELETE",
+    query: { expected_version: expectedVersion },
+  });
+}
+
 /** `GET /runs/{id}` */
 export function getRun(runId: string, signal?: AbortSignal): Promise<PipelineRun> {
   return apiRequest<PipelineRun>(`/runs/${encodeURIComponent(runId)}`, { signal });

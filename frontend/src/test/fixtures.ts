@@ -114,6 +114,7 @@ export function runSummaryFixture(overrides: Partial<RunSummary> = {}): RunSumma
     annotation_counts: { proposed: 120, accepted: 0, deleted: 0 },
     exported: false,
     created_at: "2026-09-01T10:00:00+00:00",
+    version: 3,
     ...overrides,
   };
 }

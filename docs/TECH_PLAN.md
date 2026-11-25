@@ -121,12 +121,13 @@ Wszystkie DTO Pydantic mają `extra='forbid'`. Błąd ma postać:
 | `POST /materials` | `{local_path}` | `201 VideoAsset` | `400 unsupported/too_large/too_long/disk_space`, `404`, `503 ffprobe_unavailable`, `504 ffprobe_timeout` |
 | `GET /materials` | `page,page_size<=100` | paged list | `400` |
 | `POST /runs` | `{profile_id,video_id,interval_ms=1000}` | `201 PipelineRun(queued)` | `400 resolution/interval`, `404` |
-| `GET /runs` | `page,page_size<=100` | paged global list with profile, review/annotation counts, export flag | `400` |
+| `GET /runs` | `page,page_size<=100` | paged global list with profile, review/annotation counts, export flag, `version` | `400` |
 | `POST /runs/{id}/start` | `{expected_version}` | `202 running` | `409 active_run/version/invalid_transition/source_missing/source_changed` |
 | `POST /runs/{id}/pause` | `{expected_version}` | `202` | `409 invalid_transition` |
 | `POST /runs/{id}/resume` | `{expected_version}` | `202` | `409 active_run/invalid_transition/version/source_missing/source_changed` |
 | `POST /runs/{id}/cancel` | `{expected_version}` | `202` | `409 invalid_transition` |
 | `POST /runs/{id}/complete` | `{expected_version}` | `202 completed` | `404`; `409 invalid_transition/version` |
+| `DELETE /runs/{id}` | `expected_version` query | `204` | `400`, `404 run_not_found`, `409 run_in_progress/export_running/version_conflict` |
 | `GET /runs/{id}` | — | status, progress, error, version | `404` |
 | `GET /runs/{id}/frames` | `review_status,page,page_size<=100` | paged summaries | `404/400` |
 | `GET /frames/{id}/image` | — | image stream z kontrolowanego relpath | `404`; nigdy arbitrary path |
@@ -195,6 +196,17 @@ oraz zapis `completed` odbywają się w jednej transakcji. Operacja zwiększa ty
 `pipeline_runs.version`: nie zmienia klatek, anotacji, eksportów ani
 `review_revision`. Istniejąca definicja `NONTERMINAL_RUN_STATUSES` sprawia, że
 zamknięty run znika z dashboardu bez osobnej ścieżki specjalnej.
+
+`DELETE /runs/{id}` (FE-031) usuwa run, który nie przetwarza klatek: status
+`running`, zajęty `workflow_slot` albo rezerwacja wznowienia (`resume_token`) to
+`409 run_in_progress`, eksport runu w `queued`/`running` to `409 export_running`.
+Sprawdzenia, `expected_version` i `DELETE pipeline_runs` dzieją się w jednej
+transakcji `BEGIN IMMEDIATE`; klatki, próbki regionów, obserwacje OCR, anotacje,
+checkpointy i rekordy eksportów schodzą kaskadą FK. Po commicie znikają pliki
+`runs/<run_id>/` oraz `exports/<export_id>` (i staging `.<export_id>-*`) każdego
+eksportu runu; czego Windows nie oddał od razu, sprząta start aplikacji (wpisy o
+nazwie-UUID w `runs/` i `exports/` bez wiersza w bazie). Materiał wideo i profil
+zostają, a usunięcie niedokończonego runu zwalnia dashboard i edycję profilu.
 
 `GET /exports/latest?run_id=` jest minimalnym, read-only mechanizmem odzyskania
 stanu ekranu eksportu i nie jest historią eksportów. Statyczna trasa jest
