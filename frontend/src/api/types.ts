@@ -52,6 +52,8 @@ export interface DependencyStatus {
 /** The OCR dependency, named after whichever engine is installed. */
 export interface OcrDependencyStatus extends DependencyStatus {
   engine: string;
+  /** False when the engine finds the text itself and a region's text layout is moot. */
+  uses_text_layout: boolean;
 }
 
 export interface Health {

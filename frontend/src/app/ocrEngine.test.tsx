@@ -54,7 +54,7 @@ describe("OCR engine disclosure", () => {
   it("presents persisted Polish warnings and dependency diagnostics in English from provenance/codes", async () => {
     const user = userEvent.setup();
     const dashboard = dashboardFixture({ run: runFixture({ experimental: true, quality_gate: "failed", warning: "Eksperymentalny Tesseract nie przeszedł bramki jakości." }) });
-    dashboard.system.ocr = { engine: "Tesseract", available: false, critical: false, detail: "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna.", code: "checksum_mismatch" };
+    dashboard.system.ocr = { engine: "Tesseract", uses_text_layout: true, available: false, critical: false, detail: "Stan zdegradowany: suma SHA-256 runtime lub modelu jest niezgodna.", code: "checksum_mismatch" };
     stubFetch(() => ({ status: 200, body: dashboard }));
     renderApp(["/materials"]);
     const dialog = await openOcrEngine(user);

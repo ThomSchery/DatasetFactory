@@ -2,7 +2,7 @@ import { configure, fireEvent, getConfig, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
+import { dashboardFixture, errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 import type { GameProfile } from "../../api";
 import {
@@ -106,14 +106,21 @@ interface StubOptions {
   holdCreate?: Promise<void>;
   holdPreview?: Promise<void>;
   profiles?: GameProfile[];
+  /** What the status says about the OCR engine; Tesseract reads the layout, others do not. */
+  ocrUsesTextLayout?: boolean;
 }
 
-function stubProfiles({ create, holdCreate, holdDetail, holdPreview, holdSave, preview, profiles, save }: StubOptions = {}) {
+function stubProfiles({ create, holdCreate, holdDetail, holdPreview, holdSave, ocrUsesTextLayout = true, preview, profiles, save }: StubOptions = {}) {
   const known = profiles ?? [alpha(), beta()];
   const spy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     const answer = async (): Promise<StubbedResponse> => {
+      if (url.endsWith("/api/v1/dashboard")) {
+        const dashboard = dashboardFixture();
+        dashboard.system.ocr.uses_text_layout = ocrUsesTextLayout;
+        return { status: 200, body: dashboard };
+      }
       if (url.includes("/profiles/reference-preview") && method === "POST") {
         await holdPreview;
         return (
@@ -434,6 +441,62 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     await waitFor(() =>
       expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "78A" }] }),
     );
+  });
+
+  // TK-017: an engine that finds the text itself has no use for the layout.
+  it("TK-017: offers no text layout while the engine finds the text itself", async () => {
+    const user = userEvent.setup();
+    const profile = alpha();
+    profile.regions[0].allowed_chars = null;
+    profile.regions[0].text_layout = null;
+    stubProfiles({ ocrUsesTextLayout: false, profiles: [profile] });
+    renderApp(["/profiles"]);
+
+    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    // The summary names the characters only; there is no layout to name.
+    expect(
+      await within(ocr).findByRole("button", {
+        name: "Pasek zdrowia: all 1 characters. Select the region",
+      }),
+    ).toBeInTheDocument();
+    expect(within(ocr).queryByText("Layout inherited")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Select region Pasek zdrowia" }));
+    expect(within(ocr).queryByRole("combobox", { name: "Choose text layout" })).toBeNull();
+    expect(within(ocr).queryByText("Text layout")).toBeNull();
+    expect(within(ocr).getByText(/Changing a character saves its own settings\./)).toBeInTheDocument();
+    expect(
+      within(ocr).getByRole("group", { name: "Characters OCR reads in region Pasek zdrowia" }),
+    ).toBeInTheDocument();
+  });
+
+  it("TK-017: keeps the layout a region already has when the engine does not read it", async () => {
+    const user = userEvent.setup();
+    const spy = stubProfiles({ ocrUsesTextLayout: false });
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    const characters = within(ocr).getByRole("group", {
+      name: "Characters OCR reads in region Pasek zdrowia",
+    });
+    await user.click(within(characters).getByRole("button", { name: /Expand group Numbers/ }));
+    await user.click(within(characters).getByRole("checkbox", { name: "7" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    // Hidden is not erased: the saved region still carries its layout for the engine that uses it.
+    await waitFor(() =>
+      expect(savedBody(spy)).toMatchObject({
+        regions: [{ allowed_chars: "", text_layout: "line" }],
+      }),
+    );
+  });
+
+  it("TK-017: offers the text layout while the engine reads it", async () => {
+    const user = userEvent.setup();
+    stubProfiles({ ocrUsesTextLayout: true });
+    renderApp(["/profiles"]);
+    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+
+    expect(screen.getByRole("combobox", { name: "Choose text layout" })).toBeInTheDocument();
   });
 
   it("FE-029: an inherited region gets an explicit pair when a character changes", async () => {

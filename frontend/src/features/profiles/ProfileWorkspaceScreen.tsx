@@ -24,6 +24,7 @@ import { Icon } from "../../components/common/Icon";
 import { RegionOverlay, type OverlayShape, type SourceRect, type SourceSize } from "../../components/common/RegionOverlay";
 import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
+import { useDashboard } from "../dashboard/dashboardQuery";
 import { useLocalFilePicker } from "../files";
 import { AnnotationsPanel } from "./AnnotationsPanel";
 import { OcrSettingsPanel } from "./OcrSettingsPanel";
@@ -72,6 +73,9 @@ export interface ProfileWorkspaceScreenProps {
 export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspaceScreenProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  // The status the app already polls says which engine reads: some need the text layout, some do not.
+  const dashboard = useDashboard();
+  const showTextLayout = dashboard.data?.system.ocr.uses_text_layout ?? true;
 
   const [draft, setDraft] = useState<ProfileDraft>(emptyDraft);
   const [baseline, setBaseline] = useState<ProfileDraft>(draft);
@@ -619,6 +623,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
               ),
             }));
           }}
+          showTextLayout={showTextLayout}
           onTextLayoutChange={(layout) => {
             setDraft((current) => ({
               ...current,

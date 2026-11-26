@@ -14,6 +14,11 @@ export interface OcrSettingsPanelProps {
   regions: readonly DraftRegion[];
   onAllowedCharsChange: (allowedChars: string) => void;
   onTextLayoutChange: (layout: string) => void;
+  /**
+   * Whether the active OCR engine reads the text layout. An engine that finds the text
+   * itself has no use for it, so the choice is not offered (TK-017).
+   */
+  showTextLayout?: boolean;
   onSelectRegion: (key: string) => void;
   disabled?: boolean;
 }
@@ -53,6 +58,7 @@ export function OcrSettingsPanel({
   regions,
   onAllowedCharsChange,
   onTextLayoutChange,
+  showTextLayout = true,
   onSelectRegion,
   disabled = false,
 }: OcrSettingsPanelProps) {
@@ -80,7 +86,7 @@ export function OcrSettingsPanel({
                 return (
                   <li key={item.key}>
                     <Button
-                      aria-label={`${item.name}: ${read}, ${layoutLabel(item.text_layout)}. Select the region`}
+                      aria-label={`${item.name}: ${read}${showTextLayout ? `, ${layoutLabel(item.text_layout)}` : ""}. Select the region`}
                       className="df-ocr-settings__summary-row"
                       disabled={disabled}
                       onClick={() => {
@@ -90,9 +96,11 @@ export function OcrSettingsPanel({
                     >
                       <span className="df-ocr-settings__summary-name">{item.name}</span>
                       <span className="df-ocr-settings__summary-detail">{read}</span>
-                      <span className="df-ocr-settings__summary-layout">
-                        {layoutLabel(item.text_layout)}
-                      </span>
+                      {showTextLayout ? (
+                        <span className="df-ocr-settings__summary-layout">
+                          {layoutLabel(item.text_layout)}
+                        </span>
+                      ) : null}
                     </Button>
                   </li>
                 );
@@ -119,11 +127,15 @@ export function OcrSettingsPanel({
     >
       {region.allowed_chars === null || region.text_layout === null ? (
         <p className="df-ocr-settings__note">
-          The region inherits the OCR settings. Changing a character or the layout saves its own
-          settings.
+          The region inherits the OCR settings.{" "}
+          {showTextLayout
+            ? "Changing a character or the layout saves its own settings."
+            : "Changing a character saves its own settings."}
         </p>
       ) : null}
 
+      {showTextLayout ? (
+        <>
       <p className="df-ocr-settings__subtitle">Text layout</p>
       <GroupedOptionList
         disabled={disabled}
@@ -153,6 +165,8 @@ export function OcrSettingsPanel({
         }
         selectedIds={[layout]}
       />
+        </>
+      ) : null}
 
       <p className="df-ocr-settings__subtitle">Characters OCR reads</p>
       <GroupedOptionList
