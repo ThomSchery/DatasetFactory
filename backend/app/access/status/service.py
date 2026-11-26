@@ -24,6 +24,7 @@ class SystemStatusSnapshot:
     ffmpeg: DependencyStatus
     ocr: DependencyStatus
     ocr_engine: str
+    ocr_uses_text_layout: bool
     gpu: DependencyStatus
 
     @property
@@ -90,6 +91,7 @@ class SystemStatusAccess:
             ),
             ocr=DependencyStatus("ocr", ocr.available, False, ocr.detail, ocr.reason),
             ocr_engine=self._ocr_probe.engine_name,
+            ocr_uses_text_layout=self._ocr_probe.uses_text_layout,
             gpu=DependencyStatus("gpu", gpu.available, False, gpu.detail, gpu.reason),
         )
 

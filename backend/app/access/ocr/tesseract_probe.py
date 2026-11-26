@@ -31,6 +31,8 @@ class TesseractDependencyProbe:
         self._language = language
 
     engine_name = "Tesseract"
+    # Tesseract has to be told how many lines to expect.
+    uses_text_layout = True
 
     def probe(self) -> ProbeResult:
         if not self._runtime.executable.is_file() or not self._runtime.model.is_file():

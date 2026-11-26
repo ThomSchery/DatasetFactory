@@ -120,6 +120,7 @@ def test_missing_operator_tesseract_is_an_explicit_degraded_200_without_tracebac
     assert response.json()["status"] == "degraded"
     assert response.json()["ocr"] == {
         "engine": "Tesseract",
+        "uses_text_layout": True,
         "available": False,
         "critical": False,
         "detail": (
@@ -143,6 +144,7 @@ def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_ava
     assert response.json()["status"] == "degraded"
     assert response.json()["ocr"] == {
         "engine": "Tesseract",
+        "uses_text_layout": True,
         "available": False,
         "critical": False,
         "detail": (

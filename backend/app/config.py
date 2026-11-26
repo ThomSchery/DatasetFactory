@@ -3,7 +3,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,6 +32,17 @@ class Settings(BaseSettings):
         "C66F0F12ED76F6AA455DAC97684BBC86756D6A732380BEE09122454CFDA3F420"
     )
     tesseract_model_sha256: str = "7D4322BD2A7749724879683FC3912CB542F19906C83BCC1A52132556427170B2"
+    # Which OCR engine runs. Each engine has its own settings below; only the chosen one is used.
+    ocr_engine: Literal["tesseract", "rapidocr"] = "tesseract"
+    rapidocr_model_dir: Path = Path("D:/tools/rapidocr-3.10.0/models")
+    # `rapidocr` and the `onnxruntime` it runs on, as the installed packages report them.
+    rapidocr_version: str = "3.10.0+onnxruntime-1.32.0"
+    # SHA-256 of the native library the models run on (`onnxruntime_pybind11_state`).
+    rapidocr_runtime_sha256: str = (
+        "D4D9DF764064DEE9216DFA9A3933BEAEFC480B9C421A62D3F681168CEC90C23C"
+    )
+    # SHA-256 of the two ONNX files pinned together; see `RapidOcrRuntimeIdentity`.
+    rapidocr_models_sha256: str = "4345A537B9E649F479C94AEDF3682D106471506063C6348F4BE1B17FE5CBFC0F"
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
     log_level: str = "INFO"
@@ -63,12 +74,17 @@ class Settings(BaseSettings):
             raise ValueError(f"DF_LOG_LEVEL must be one of {sorted(allowed)}")
         return normalized
 
-    @field_validator("tesseract_runtime_sha256", "tesseract_model_sha256")
+    @field_validator(
+        "tesseract_runtime_sha256",
+        "tesseract_model_sha256",
+        "rapidocr_runtime_sha256",
+        "rapidocr_models_sha256",
+    )
     @classmethod
     def normalize_sha256(cls, value: str) -> str:
         normalized = value.strip().lower()
         if re.fullmatch(r"[0-9a-f]{64}", normalized) is None:
-            raise ValueError("Tesseract SHA-256 pins must contain 64 hexadecimal characters")
+            raise ValueError("SHA-256 pins must contain 64 hexadecimal characters")
         return normalized
 
     @field_validator("dev_cors_origin")
@@ -91,6 +107,7 @@ class Settings(BaseSettings):
             ("DF_CACHE_DIR", self.cache_dir),
             ("DF_TESSERACT_PATH", self.tesseract_path),
             ("DF_TESSERACT_MODEL_PATH", self.tesseract_model_path),
+            ("DF_RAPIDOCR_MODEL_DIR", self.rapidocr_model_dir),
         ):
             if path.drive.upper() != "D:":
                 raise ValueError(f"{field_name} must be located on D:")

@@ -10,12 +10,16 @@ from backend.app.access.media.probe import FfprobeMediaProbe, ProcessTreeRunner
 from backend.app.access.media.processing import MediaProcessingAccess
 from backend.app.access.ocr import (
     OcrEngine,
+    RapidOcrDependencyProbe,
+    RapidOcrEngine,
+    RapidOcrRuntimeIdentity,
     TesseractDependencyProbe,
     TesseractOcrEngine,
     TesseractProcessRunner,
     TesseractRuntimeIdentity,
 )
-from backend.app.access.status.probe import ResourceProbe, SystemResourceProbe
+from backend.app.access.ocr.rapidocr import locate_onnxruntime_library
+from backend.app.access.status.probe import OcrDependencyProbe, ResourceProbe, SystemResourceProbe
 from backend.app.access.status.service import SystemStatusAccess
 from backend.app.access.store.database import Database
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, upgrade_database
@@ -158,30 +162,44 @@ def build_composition(
         materials,
     )
     active_resource_probe = resource_probe or SystemResourceProbe()
-    tesseract_identity = TesseractRuntimeIdentity(
-        executable=settings.tesseract_path,
-        model=settings.tesseract_model_path,
-        expected_version=settings.tesseract_version,
-        expected_runtime_sha256=settings.tesseract_runtime_sha256,
-        expected_model_sha256=settings.tesseract_model_sha256,
-    )
+    ocr_dependency_probe: OcrDependencyProbe
+    if settings.ocr_engine == "rapidocr":
+        rapidocr_identity = RapidOcrRuntimeIdentity(
+            model_dir=settings.rapidocr_model_dir,
+            runtime_file=locate_onnxruntime_library(),
+            expected_version=settings.rapidocr_version,
+            expected_runtime_sha256=settings.rapidocr_runtime_sha256,
+            expected_models_sha256=settings.rapidocr_models_sha256,
+        )
+        ocr_dependency_probe = RapidOcrDependencyProbe(rapidocr_identity)
+        built_ocr_engine: OcrEngine = RapidOcrEngine(workspace, rapidocr_identity)
+    else:
+        tesseract_identity = TesseractRuntimeIdentity(
+            executable=settings.tesseract_path,
+            model=settings.tesseract_model_path,
+            expected_version=settings.tesseract_version,
+            expected_runtime_sha256=settings.tesseract_runtime_sha256,
+            expected_model_sha256=settings.tesseract_model_sha256,
+        )
+        ocr_dependency_probe = TesseractDependencyProbe(
+            tesseract_identity,
+            active_resource_probe,
+            timeout_seconds=settings.tesseract_timeout_seconds,
+        )
+        built_ocr_engine = TesseractOcrEngine(
+            workspace,
+            tesseract_identity,
+            settings.tesseract_timeout_seconds,
+            TesseractProcessRunner(),
+        )
     status = SystemStatusAccess(
         database,
         workspace,
         settings,
         active_resource_probe,
-        TesseractDependencyProbe(
-            tesseract_identity,
-            active_resource_probe,
-            timeout_seconds=settings.tesseract_timeout_seconds,
-        ),
+        ocr_dependency_probe,
     )
-    active_ocr_engine = ocr_engine or TesseractOcrEngine(
-        workspace,
-        tesseract_identity,
-        settings.tesseract_timeout_seconds,
-        TesseractProcessRunner(),
-    )
+    active_ocr_engine = ocr_engine or built_ocr_engine
     runs = RunRepository(database)
     run_artifacts = RunArtifacts(workspace, logger)
     # Before any worker starts: a run or export entry no row owns can only be what a

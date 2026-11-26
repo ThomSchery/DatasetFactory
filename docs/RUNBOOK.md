@@ -49,6 +49,8 @@ Wartosci sa konfigurowane w `.env`; ponizsze sciezki to domyslny layout:
 | Przegladarki Playwright | `DF_CACHE_DIR\ms-playwright` |
 | FFmpeg/ffprobe | `DF_FFMPEG_PATH` / `DF_FFPROBE_PATH` |
 | Tesseract/model | `DF_TESSERACT_PATH` / `DF_TESSERACT_MODEL_PATH` |
+| RapidOCR/modele | `DF_RAPIDOCR_MODEL_DIR` |
+| Wybor silnika OCR | `DF_OCR_ENGINE` |
 
 ## Czyszczenie stanu
 
@@ -84,6 +86,33 @@ Dashboard pokazuja stan zdegradowany z TD-015; utworzenie realnego runu OCR daje
 kontrolowany blad konfiguracji, nie traceback ani sztuczny wynik. Gdy pliki sa,
 bootstrap i aplikacja wymagaja zgodnych sum. Mismatch jest bledem i nie wolno go
 obchodzic przez wpisanie hasha nieznanego artefaktu.
+
+## Silnik OCR: Tesseract albo RapidOCR
+
+Aplikacja ma jeden silnik OCR naraz; wybiera go `DF_OCR_ENGINE` w `.env`
+(`tesseract`, domyslnie, albo `rapidocr`). Zmiana wymaga restartu backendu.
+Ustawienia drugiego silnika sa ignorowane.
+
+RapidOCR to siec neuronowa, ktora sama znajduje tekst na wycinku, wiec nie
+potrzebuje ustawienia "Text layout" (ekran profilu go wtedy nie pokazuje).
+Biblioteki `rapidocr` i `onnxruntime` sa zaleznosciami projektu (`uv sync`),
+ale modele ONNX dostarcza operator i nigdy nie sa pobierane przy starcie:
+
+- `DF_RAPIDOCR_MODEL_DIR` - katalog na `D:` z dwoma plikami,
+  `PP-OCRv6_det_small.onnx` i `PP-OCRv6_rec_small.onnx` (domyslnie
+  `D:\tools\rapidocr-3.10.0\models`);
+- `DF_RAPIDOCR_VERSION` - `rapidocr` i `onnxruntime` tak, jak zglaszaja je
+  zainstalowane pakiety (`3.10.0+onnxruntime-1.32.0`);
+- `DF_RAPIDOCR_RUNTIME_SHA256` - SHA-256 biblioteki natywnej
+  `onnxruntime_pybind11_state` z `.venv`;
+- `DF_RAPIDOCR_MODELS_SHA256` - SHA-256 tekstu `<nazwa pliku>:<SHA-256 pliku>`
+  dla obu modeli, posortowanych po nazwie, po jednym w wierszu.
+
+Aplikacja mierzy te pliki przy tworzeniu runu i odmawia, gdy cokolwiek nie
+zgadza sie z przypietymi wartosciami (status systemu pokazuje wtedy stan
+zdegradowany, run daje kontrolowany blad). Brak modeli zachowuje sie jak brak
+Tesseracta opisany wyzej. Bramka jakosci RapidOCR nie byla mierzona (TD-027),
+wiec kazdy wynik nadal wymaga recznej weryfikacji.
 
 ## Autorytatywne sciezki FFmpeg
 

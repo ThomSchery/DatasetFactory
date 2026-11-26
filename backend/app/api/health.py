@@ -28,6 +28,8 @@ class OcrStatusResponse(DependencyStatusResponse):
     """The OCR dependency, named after whichever engine is installed."""
 
     engine: str
+    # False when the engine finds the text itself and the profile's text layout is moot.
+    uses_text_layout: bool
 
 
 class HealthResponse(StrictModel):
@@ -64,7 +66,9 @@ def health_response(snapshot: SystemStatusSnapshot) -> HealthResponse:
         workspace=_status_response(snapshot.workspace),
         ffmpeg=_status_response(snapshot.ffmpeg),
         ocr=OcrStatusResponse(
-            **_status_response(snapshot.ocr).model_dump(), engine=snapshot.ocr_engine
+            **_status_response(snapshot.ocr).model_dump(),
+            engine=snapshot.ocr_engine,
+            uses_text_layout=snapshot.ocr_uses_text_layout,
         ),
         gpu=_status_response(snapshot.gpu),
     )

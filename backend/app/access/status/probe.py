@@ -101,4 +101,9 @@ class OcrDependencyProbe(Protocol):
     @property
     def engine_name(self) -> str: ...
 
+    @property
+    def uses_text_layout(self) -> bool:
+        """Whether the engine reads the operator's text layout, or finds the text itself."""
+        ...
+
     def probe(self) -> ProbeResult: ...
