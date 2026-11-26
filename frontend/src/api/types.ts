@@ -56,6 +56,18 @@ export interface OcrDependencyStatus extends DependencyStatus {
   uses_text_layout: boolean;
 }
 
+/** One OCR engine a run may be started with; the list comes from the engines' own probes. */
+export interface OcrEngineStatus {
+  id: string;
+  name: string;
+  available: boolean;
+  code: string;
+  detail: string;
+  /** Whether the engine reads a region's text layout or finds the text itself. */
+  uses_text_layout: boolean;
+  default: boolean;
+}
+
 export interface Health {
   version: string;
   status: "ok" | "degraded" | "unavailable";
@@ -63,6 +75,7 @@ export interface Health {
   workspace: DependencyStatus;
   ffmpeg: DependencyStatus;
   ocr: OcrDependencyStatus;
+  ocr_engines: OcrEngineStatus[];
   gpu: DependencyStatus;
 }
 
@@ -227,6 +240,8 @@ export interface CreateRunRequest {
   profile_id: string;
   video_id: string;
   interval_ms?: number;
+  /** An engine id from `Health.ocr_engines`; absent means the default engine. */
+  ocr_engine?: string;
 }
 
 export interface VersionedMutationRequest {

@@ -355,6 +355,50 @@ describe("Run Setup: from a file to a started run", () => {
     });
   });
 
+  // TK-018: a run names its OCR engine; the list comes from the engines' own probes.
+  it("TK-018: offers the available engines, defaults to the default one and sends the chosen one", async () => {
+    const user = userEvent.setup();
+    state.materials = [materialFixture()];
+    const fetchSpy = stubBackend(state);
+    renderApp(["/run"]);
+
+    const field = await screen.findByRole("combobox", { name: "OCR engine" });
+    await waitFor(() => {
+      expect(field).toHaveValue("Tesseract");
+    });
+    await choose(user, "OCR engine", /RapidOCR/);
+    await choose(user, "Source file", /mecz\.mp4/);
+    await choose(user, "Profile", /Gra testowa/);
+    state.startResponse = {
+      status: 202,
+      body: runFixture({ status: "running", version: 2, current_stage: "sampling" }),
+    };
+    await user.click(screen.getByRole("button", { name: "Run" }));
+
+    await waitFor(() => {
+      const createCall = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).endsWith("/api/v1/runs") && init?.method === "POST",
+      );
+      expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({ ocr_engine: "rapidocr" });
+    });
+  });
+
+  it("TK-018: an engine that is not available is not offered and says why", async () => {
+    const user = userEvent.setup();
+    state.dashboard = emptyDashboard();
+    state.dashboard.system.ocr_engines = [
+      { id: "tesseract", name: "Tesseract", available: true, code: "verified", detail: "OK", uses_text_layout: true, default: true },
+      { id: "rapidocr", name: "RapidOCR", available: false, code: "missing_installation", detail: "models are missing", uses_text_layout: false, default: false },
+    ];
+    stubBackend(state);
+    renderApp(["/run"]);
+
+    await user.click(await screen.findByRole("combobox", { name: "OCR engine" }));
+    expect(await screen.findByRole("option", { name: /Tesseract/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /RapidOCR/ })).toBeNull();
+    expect(screen.getByText("RapidOCR is not available: models are missing")).toBeInTheDocument();
+  });
+
   it("creates the run, starts it and opens its review", async () => {
     const user = userEvent.setup();
     state.materials = [materialFixture()];

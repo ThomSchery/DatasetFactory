@@ -85,6 +85,7 @@ export function RunSetupScreen() {
       profile_id: requestedProfileId ?? "",
       video_id: "",
       interval_ms: DEFAULT_INTERVAL_MS,
+      ocr_engine: "",
     },
   });
   const chosenProfileId = form.watch("profile_id");
@@ -115,6 +116,7 @@ export function RunSetupScreen() {
         profile_id: values.profile_id,
         video_id: values.video_id,
         interval_ms: values.interval_ms,
+        ...(values.ocr_engine ? { ocr_engine: values.ocr_engine } : {}),
       });
       // A dashboard request started before POST can still be in flight. With
       // no cached result Query may otherwise reuse it and publish old state.
@@ -147,6 +149,9 @@ export function RunSetupScreen() {
       void navigate(annotationsPath(run.id));
     }
   };
+
+  const engines = dashboard.data?.system.ocr_engines ?? [];
+  const defaultEngine = engines.find((engine) => engine.default);
 
   const failure = launch.isError ? describeApiError(launch.error) : null;
   const loading = materials.isPending || profiles.isPending;
@@ -325,6 +330,55 @@ export function RunSetupScreen() {
                     {fieldState.error.message}
                   </p>
                 )}
+              </div>
+            )}
+          />
+
+          <Controller
+            control={form.control}
+            name="ocr_engine"
+            render={({ field }) => (
+              <div className="df-run-setup__picker">
+                <p className="df-run-setup__label">
+                  <Icon name="setting" />
+                  <span>OCR engine</span>
+                </p>
+                <GroupedOptionList
+                  disabled={loading || engines.length === 0}
+                  emptyMessage="No OCR engine is available."
+                  filterLabel="OCR engine"
+                  icon="search"
+                  groups={[
+                    {
+                      id: "engines",
+                      label: "Available engines",
+                      options: engines
+                        .filter((engine) => engine.available)
+                        .map((engine) => ({
+                          detail: engine.default ? "default" : undefined,
+                          id: engine.id,
+                          label: engine.name,
+                        })),
+                    },
+                  ]}
+                  label="Available engines"
+                  mode="single"
+                  onChange={(ids) => {
+                    field.onChange(ids[0] ?? "");
+                  }}
+                  placeholder={
+                    engines.find((engine) => engine.id === (field.value || defaultEngine?.id))
+                      ?.name ?? "Choose an engine"
+                  }
+                  selectedIds={[field.value || defaultEngine?.id || ""].filter(Boolean)}
+                />
+                {engines
+                  .filter((engine) => !engine.available)
+                  .map((engine) => (
+                    <p className="df-run-setup__hint" key={engine.id}>
+                      {engine.name} is not available: {engine.detail}
+                    </p>
+                  ))}
               </div>
             )}
           />

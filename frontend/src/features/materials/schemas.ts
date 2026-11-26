@@ -32,6 +32,8 @@ export const DEFAULT_INTERVAL_MS = 1000;
 export const runLaunchSchema = z.object({
   profile_id: z.string().min(1, "Choose a profile."),
   video_id: z.string().min(1, "Choose a source file."),
+  // Empty means the default engine; otherwise an id from `system.ocr_engines`.
+  ocr_engine: z.string().optional(),
   interval_ms: z.coerce
     .number<number>()
     .int("The sample rate must be a whole number of milliseconds.")

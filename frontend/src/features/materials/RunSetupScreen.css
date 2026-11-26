@@ -175,3 +175,11 @@
     margin-block-start: auto;
   }
 }
+
+/* TK-018: why an OCR engine cannot be chosen, under the picker. */
+.df-run-setup__hint {
+  margin: var(--size-none);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-standard);
+}

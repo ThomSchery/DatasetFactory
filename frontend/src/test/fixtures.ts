@@ -32,6 +32,10 @@ export function healthFixture(overrides: Partial<Health> = {}): Health {
     workspace: { ...available, critical: true },
     ffmpeg: { ...available },
     ocr: { ...available, engine: "Tesseract", uses_text_layout: true },
+    ocr_engines: [
+      { id: "tesseract", name: "Tesseract", available: true, code: "verified", detail: "OK", uses_text_layout: true, default: true },
+      { id: "rapidocr", name: "RapidOCR", available: true, code: "verified", detail: "OK", uses_text_layout: false, default: false },
+    ],
     gpu: { available: false, critical: false, detail: "Brak akceleracji CUDA." },
     ...overrides,
   };

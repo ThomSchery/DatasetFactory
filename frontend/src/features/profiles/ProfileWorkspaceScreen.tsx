@@ -73,9 +73,12 @@ export interface ProfileWorkspaceScreenProps {
 export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspaceScreenProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  // The status the app already polls says which engine reads: some need the text layout, some do not.
+  // A run chooses its OCR engine, so the profile cannot know which one will read it. The status
+  // the app already polls names the engines that use the text layout (TK-018).
   const dashboard = useDashboard();
-  const showTextLayout = dashboard.data?.system.ocr.uses_text_layout ?? true;
+  const textLayoutUsedBy = (dashboard.data?.system.ocr_engines ?? [])
+    .filter((engine) => engine.uses_text_layout)
+    .map((engine) => engine.name);
 
   const [draft, setDraft] = useState<ProfileDraft>(emptyDraft);
   const [baseline, setBaseline] = useState<ProfileDraft>(draft);
@@ -623,7 +626,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
               ),
             }));
           }}
-          showTextLayout={showTextLayout}
+          textLayoutUsedBy={textLayoutUsedBy}
           onTextLayoutChange={(layout) => {
             setDraft((current) => ({
               ...current,

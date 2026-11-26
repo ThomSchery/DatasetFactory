@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { dashboardFixture, errorEnvelope, profileFixture, profileSummaryFixture } from "../../test/fixtures";
 import { renderApp, stubFetch, type StubbedResponse } from "../../test/harness";
 import type { GameProfile } from "../../api";
+import type { OcrEngineStatus } from "../../api/types";
 import {
   createRequestFrom,
   draftFromProfile,
@@ -106,11 +107,11 @@ interface StubOptions {
   holdCreate?: Promise<void>;
   holdPreview?: Promise<void>;
   profiles?: GameProfile[];
-  /** What the status says about the OCR engine; Tesseract reads the layout, others do not. */
-  ocrUsesTextLayout?: boolean;
+  /** The OCR engines the status lists; the default fixture has Tesseract (reads the layout) and RapidOCR. */
+  ocrEngines?: OcrEngineStatus[];
 }
 
-function stubProfiles({ create, holdCreate, holdDetail, holdPreview, holdSave, ocrUsesTextLayout = true, preview, profiles, save }: StubOptions = {}) {
+function stubProfiles({ create, holdCreate, holdDetail, holdPreview, holdSave, ocrEngines, preview, profiles, save }: StubOptions = {}) {
   const known = profiles ?? [alpha(), beta()];
   const spy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -118,7 +119,9 @@ function stubProfiles({ create, holdCreate, holdDetail, holdPreview, holdSave, o
     const answer = async (): Promise<StubbedResponse> => {
       if (url.endsWith("/api/v1/dashboard")) {
         const dashboard = dashboardFixture();
-        dashboard.system.ocr.uses_text_layout = ocrUsesTextLayout;
+        if (ocrEngines !== undefined) {
+          dashboard.system.ocr_engines = ocrEngines;
+        }
         return { status: 200, body: dashboard };
       }
       if (url.includes("/profiles/reference-preview") && method === "POST") {
@@ -443,60 +446,29 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     );
   });
 
-  // TK-017: an engine that finds the text itself has no use for the layout.
-  it("TK-017: offers no text layout while the engine finds the text itself", async () => {
+  // TK-018: a run chooses its engine, so the profile always offers the layout and names who uses it.
+  it("TK-018: always offers the text layout and names the engines that read it", async () => {
     const user = userEvent.setup();
-    const profile = alpha();
-    profile.regions[0].allowed_chars = null;
-    profile.regions[0].text_layout = null;
-    stubProfiles({ ocrUsesTextLayout: false, profiles: [profile] });
-    renderApp(["/profiles"]);
-
-    const ocr = await screen.findByRole("region", { name: "OCR settings" });
-    // The summary names the characters only; there is no layout to name.
-    expect(
-      await within(ocr).findByRole("button", {
-        name: "Pasek zdrowia: all 1 characters. Select the region",
-      }),
-    ).toBeInTheDocument();
-    expect(within(ocr).queryByText("Layout inherited")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Select region Pasek zdrowia" }));
-    expect(within(ocr).queryByRole("combobox", { name: "Choose text layout" })).toBeNull();
-    expect(within(ocr).queryByText("Text layout")).toBeNull();
-    expect(within(ocr).getByText(/Changing a character saves its own settings\./)).toBeInTheDocument();
-    expect(
-      within(ocr).getByRole("group", { name: "Characters OCR reads in region Pasek zdrowia" }),
-    ).toBeInTheDocument();
-  });
-
-  it("TK-017: keeps the layout a region already has when the engine does not read it", async () => {
-    const user = userEvent.setup();
-    const spy = stubProfiles({ ocrUsesTextLayout: false });
+    stubProfiles();
     renderApp(["/profiles"]);
     await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
     const ocr = screen.getByRole("region", { name: "OCR settings" });
-    const characters = within(ocr).getByRole("group", {
-      name: "Characters OCR reads in region Pasek zdrowia",
-    });
-    await user.click(within(characters).getByRole("button", { name: /Expand group Numbers/ }));
-    await user.click(within(characters).getByRole("checkbox", { name: "7" }));
-    await user.click(screen.getByRole("button", { name: "Save profile" }));
 
-    // Hidden is not erased: the saved region still carries its layout for the engine that uses it.
-    await waitFor(() =>
-      expect(savedBody(spy)).toMatchObject({
-        regions: [{ allowed_chars: "", text_layout: "line" }],
-      }),
-    );
+    expect(within(ocr).getByRole("combobox", { name: "Choose text layout" })).toBeInTheDocument();
+    // Only engines whose own probe says they read the layout are named; the names are not in the code.
+    expect(await within(ocr).findByText("Used by: Tesseract.")).toBeInTheDocument();
+    expect(within(ocr).queryByText(/RapidOCR/)).toBeNull();
   });
 
-  it("TK-017: offers the text layout while the engine reads it", async () => {
+  it("TK-018: names every engine that reads the layout and none when the status says so", async () => {
     const user = userEvent.setup();
-    stubProfiles({ ocrUsesTextLayout: true });
+    stubProfiles({ ocrEngines: [] });
     renderApp(["/profiles"]);
     await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    const ocr = screen.getByRole("region", { name: "OCR settings" });
 
-    expect(screen.getByRole("combobox", { name: "Choose text layout" })).toBeInTheDocument();
+    expect(within(ocr).getByRole("combobox", { name: "Choose text layout" })).toBeInTheDocument();
+    expect(within(ocr).queryByText(/^Used by:/)).toBeNull();
   });
 
   it("FE-029: an inherited region gets an explicit pair when a character changes", async () => {
