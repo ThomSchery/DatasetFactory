@@ -8,7 +8,7 @@ from typing import ClassVar
 
 import pytest
 
-from backend.app.access.status.service import ProbeResult
+from backend.app.access.status.probe import ProbeResult
 from backend.app.access.store.migrations import upgrade_database
 from backend.app.composition import CompositionRoot, build_composition
 from backend.app.config import Settings

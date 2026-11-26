@@ -7,12 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
-from backend.app.access.ocr import TesseractRuntimeIdentity
-from backend.app.access.status.service import (
-    SystemResourceProbe,
-    SystemStatusAccess,
-    TesseractDependencyProbe,
-)
+from backend.app.access.ocr import TesseractDependencyProbe, TesseractRuntimeIdentity
+from backend.app.access.status.probe import SystemResourceProbe
+from backend.app.access.status.service import SystemStatusAccess
 from backend.app.composition import CompositionRoot
 from backend.app.config import Settings
 from backend.app.main import create_app

@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
+
+from backend.app.engines.definition import class_rules
+from backend.app.engines.definition.class_rules import ClassMove, ClassSnapshot
 
 if TYPE_CHECKING:
     from backend.app.engines.definition.ocr_mapping import OcrCandidate, OcrMappingResult
 
 CategoryKind = Literal["character", "game"]
 _CHARACTER_CATEGORIES = frozenset("-/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-OCR_PAGE_SEGMENTATION_MODES = frozenset({3, 4, 6, 7, 8, 10, 11, 12, 13})
+# How the text sits in a region, in the operator's words and in no engine's: each OCR
+# adapter turns the layout into whatever its engine understands. `auto` leaves the
+# choice to the adapter.
+OCR_TEXT_LAYOUTS: Final[tuple[str, ...]] = ("auto", "line", "word", "block", "sparse")
+DEFAULT_OCR_TEXT_LAYOUT: Final = "auto"
 
 
 def normalize_profile_name(name: str) -> str:
@@ -40,7 +47,7 @@ class RegionDefinition:
     name: str
     bbox: BBox
     allowed_chars: tuple[str, ...] | None = None
-    page_segmentation_mode: int | None = None
+    text_layout: str | None = None
 
 
 @dataclass(frozen=True)
@@ -159,6 +166,48 @@ class DatasetDefinitionEngine:
             category_ids=category_ids,
         )
 
+    # Region ↔ class rules (FE-026, FE-030). The decisions live in `class_rules`; these
+    # methods are the engine's public face, the one persistence is handed.
+
+    @staticmethod
+    def classes_to_remove(
+        existing: Sequence[ClassSnapshot],
+        kept_ids: Collection[str],
+        region_names: Iterable[str],
+    ) -> tuple[ClassSnapshot, ...]:
+        return class_rules.classes_to_remove(existing, kept_ids, region_names)
+
+    @staticmethod
+    def next_class_ordinal(current_max: int | None, *, floor: int = 0) -> int:
+        return class_rules.next_class_ordinal(current_max, floor=floor)
+
+    @staticmethod
+    def class_moves_for_region_renames(
+        classes: Sequence[ClassSnapshot],
+        active_region_names: Iterable[str],
+        renamed: Sequence[tuple[str, str]],
+    ) -> tuple[ClassMove, ...]:
+        return class_rules.class_moves_for_region_renames(classes, active_region_names, renamed)
+
+    @staticmethod
+    def unused_classes_to_drop(
+        classes: Sequence[ClassSnapshot],
+        retired_names: Iterable[str],
+        active_region_names: Iterable[str],
+        used_ids: Collection[str],
+    ) -> tuple[str, ...]:
+        return class_rules.unused_classes_to_drop(
+            classes, retired_names, active_region_names, used_ids
+        )
+
+    @staticmethod
+    def missing_region_classes(
+        class_names: Iterable[str],
+        stored_region_names: Sequence[str],
+        request_order: Sequence[str] = (),
+    ) -> tuple[str, ...]:
+        return class_rules.missing_region_classes(class_names, stored_region_names, request_order)
+
     @staticmethod
     def _validate_region(
         region: RegionDefinition,
@@ -177,8 +226,8 @@ class DatasetDefinitionEngine:
         if bbox.x + bbox.width > source_width or bbox.y + bbox.height > source_height:
             raise DefinitionValidationError("region_out_of_bounds", field="regions", index=index)
         allowed_chars = region.allowed_chars
-        page_segmentation_mode = region.page_segmentation_mode
-        if (allowed_chars is None) != (page_segmentation_mode is None):
+        text_layout = region.text_layout
+        if (allowed_chars is None) != (text_layout is None):
             raise DefinitionValidationError(
                 "incomplete_region_ocr_config", field="regions", index=index
             )
@@ -194,10 +243,10 @@ class DatasetDefinitionEngine:
                 raise DefinitionValidationError(
                     "region_allowed_chars_not_in_profile", field="allowed_chars", index=index
                 )
-            if page_segmentation_mode not in OCR_PAGE_SEGMENTATION_MODES:
+            if text_layout not in OCR_TEXT_LAYOUTS:
                 raise DefinitionValidationError(
-                    "invalid_region_page_segmentation_mode",
-                    field="page_segmentation_mode",
+                    "invalid_region_text_layout",
+                    field="text_layout",
                     index=index,
                 )
             allowed_chars = tuple(
@@ -207,7 +256,7 @@ class DatasetDefinitionEngine:
             name=name,
             bbox=bbox,
             allowed_chars=allowed_chars,
-            page_segmentation_mode=page_segmentation_mode,
+            text_layout=text_layout,
         )
 
     @staticmethod

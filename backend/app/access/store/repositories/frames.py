@@ -25,7 +25,7 @@ from backend.app.access.store.repositories.checkpoints import (
     CheckpointRepository,
 )
 from backend.app.engines.definition import BBox, OcrCandidate
-from backend.app.managers.workflow.state_machine import FrameStage, require_frame_transition
+from backend.app.engines.runstate import FrameStage, require_frame_transition
 
 
 class FrameNotFoundError(LookupError):

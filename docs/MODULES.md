@@ -9,13 +9,15 @@
 |-------|---------|----------------|---------------------------------|
 | `WebClient` | Client | Infrastrukturalna | Widoki React, routing, formularze, wygenerowany klient HTTP i wizualizacja boksów. UI może zmieniać się niezależnie i nie zawiera reguł datasetu. Cienkie route handlery FastAPI są adapterem wejściowym publicznego API managera, nie osobnym modułem domenowym. |
 | `DatasetWorkflow` | Manager | Procesowa | Orkiestruje pionowy przepływ: profil → materiał → pipeline → weryfikacja → eksport oraz udostępnia stan do pollingu. To jeden workflow, więc nie rozbijamy go na wiele managerów. |
-| `DatasetDefinitionEngine` | Engine | Biznesowa | Czyste reguły profilu gry, regionów względnych/pikselowych, klas znaków i mapowania wykryć na anotacje. Zmienia się wraz z polityką datasetu. |
+| `DatasetDefinitionEngine` | Engine | Biznesowa | Czyste reguły profilu gry, regionów względnych/pikselowych, klas znaków i mapowania wykryć na anotacje. Należą tu też reguły „region = klasa” (każdy region ma klasę o swojej nazwie, zmiana nazwy zabiera klasę, usunięcie regionu usuwa jej klasę, chyba że używa jej anotacja — FE-026, FE-030) oraz słownik układów tekstu regionu. Zmienia się wraz z polityką datasetu. Repozytorium dostaje reguły przez własny `Protocol` (wstrzykuje je `composition.py`), więc nie podejmuje decyzji o klasach (TK-013). |
+| `RunStateEngine` | Engine | Procesowa | Czyste reguły cyklu życia runu i klatki: dozwolone przejścia, stany końcowe, ścieżka odzyskiwania. Zmienia się, gdy zmienia się proces (nowy stan, wznawianie). Wydzielony z Managera, bo repozytoria Access muszą znać te reguły, a nie mogą wołać Managera (TK-012). |
 | `AnnotationReviewEngine` | Engine | Biznesowa | Czyste przejścia stanu anotacji: propozycja, korekta klasy, geometria boksu — nowego i istniejącego, usunięcie boksu, akceptacja/odrzucenie klatki oraz ponowne otwarcie odrzuconej. Oddzielone od OCR i UI, bo zasady weryfikacji mogą ewoluować niezależnie. |
 | `CocoExportEngine` | Engine | Format danych | Buduje i waliduje dokument COCO z zaakceptowanych klatek, bez zapisu na dysk. Osobny moduł ogranicza przyszłą podmianę/dodanie formatu eksportu. |
 | `MediaProcessingAccess` | Access | Infrastrukturalna | Ukrywa FFmpeg i OpenCV: metadane wideo, próbkowanie 1 fps, zapis klatek i wycinanie regionów HUD. Narzędzia można podmienić bez zmiany workflow. |
-| `OcrAccess` | Access | Infrastrukturalna | Kontrakt `OcrEngine` i wymienialne adaptery zwracające znaki, boksy, confidence i provenance. Tesseract jest adapterem experimental, nie zatwierdzonym wyborem produkcyjnym. |
+| `OcrAccess` | Access | Infrastrukturalna | Kontrakt `OcrEngine` i wymienialne adaptery zwracające znaki, boksy, confidence i provenance. Kontrakt mówi językiem operatora (układ tekstu: `auto`, `line`, `word`, `block`, `sparse`); adapter tłumaczy go na ustawienie swojego silnika i sam weryfikuje swoją instalację (sonda zależności). Tesseract jest adapterem experimental, nie zatwierdzonym wyborem produkcyjnym (TK-014, TK-015). |
 | `ProjectStoreAccess` | Access | Infrastrukturalna | Repozytoria SQLAlchemy/Alembic dla SQLite oraz kontrolowany zapis plików projektu i eksportu. Ukrywa trwałość przed logiką. |
-| `SystemStatusAccess` | Access | Infrastrukturalna | Odczytuje dostępność FFmpeg/Tesseract, ścieżki robocze oraz stan GPU prezentowany na dashboardzie. Nie uruchamia SAM 3 w v1. |
+| `SystemStatusAccess` | Access | Infrastrukturalna | Odczytuje dostępność FFmpeg i silnika OCR (przez sondę, którą dostarcza adapter), ścieżki robocze oraz stan GPU prezentowany na dashboardzie. Nie uruchamia SAM 3 w v1. |
+| `DesktopAccess` | Access | Infrastrukturalna | Natywne okno wyboru pliku lokalnego użytkownika. Zależy od systemu operacyjnego, więc zmienia się niezależnie od reszty (FE-022); wołane przez Managera (`LocalFileUseCases`), nie przez router (TK-016). |
 
 ## Decyzje o granularności
 
@@ -29,6 +31,8 @@
   zwiększyłoby koszt integracji.
 - Serializacja COCO jest czysta (`CocoExportEngine`), natomiast fizyczny zapis
   pliku należy do `ProjectStoreAccess`.
+- Reguły „region = klasa” zostają w `DatasetDefinitionEngine`, bo profil, regiony i klasy zmieniają się razem; to nie nowy moduł, tylko decyzje wyjęte z SQL.
+- Reguły stanów runu i klatki są osobnym `RunStateEngine`: zmieniają się wraz z procesem, a nie z polityką profilu, i muszą być dostępne dla Access bez wołania w górę.
 - SAM 3, ręczne boksy ikon, edycja profili, auth, chmura, broker wiadomości i
   plugin system są jawnie poza v1 i nie dostają modułów „na zapas”.
 
@@ -52,15 +56,18 @@ graph TD
     C[WebClient<br/>Client] --> M[DatasetWorkflow<br/>Manager]
     M --> D[DatasetDefinitionEngine<br/>Engine]
     M --> V[AnnotationReviewEngine<br/>Engine]
+    M --> E[RunStateEngine<br/>Engine]
     M --> X[CocoExportEngine<br/>Engine]
     M --> P[MediaProcessingAccess<br/>Access]
     M --> O[OcrAccess<br/>Access]
     M --> S[ProjectStoreAccess<br/>Access]
     M --> H[SystemStatusAccess<br/>Access]
+    M --> K[DesktopAccess<br/>Access]
     P --> RF[(FFmpeg / OpenCV / filesystem)]
     O --> RO[(Adapter experimental / przyszły engine)]
     S --> RS[(SQLite / project files)]
     H --> RH[(system / GPU)]
+    K --> RK[(okno systemowe)]
 ```
 
 ## Klasyfikacja IDesign
@@ -69,9 +76,9 @@ graph TD
   wywołuje kontrakt HTTP managera oraz renderuje odpowiedź.
 - **Manager (1):** `DatasetWorkflow` koordynuje scenariusze i niższe moduły;
   brak drugiego managera eliminuje synchroniczne Manager↔Manager.
-- **Engine (3):** moduły definicji, weryfikacji i COCO są deterministyczne,
+- **Engine (4):** moduły definicji, stanów runu, weryfikacji i COCO są deterministyczne,
   testowalne bez HTTP, bazy, filesystemu i procesów zewnętrznych.
-- **Access (4):** media, OCR, persistence i status ukrywają fizyczne zasoby.
+- **Access (5):** media, OCR, persistence, status i okno systemowe ukrywają fizyczne zasoby.
 - **Utility (0):** logger i konfiguracja pozostają małymi współdzielonymi
   pomocnikami, ale nie tworzymy dla nich przedwcześnie modułu.
 
@@ -80,8 +87,8 @@ graph TD
 - [x] Komunikacja tylko w dół: Client → Manager → Engine / Access.
 - [x] Manager↔Manager: nie występuje, ponieważ istnieje jeden manager.
 - [x] Engine nie zależy od SQLite, HTTP, filesystemu, FFmpeg ani Tesseract.
-- [x] Client nie zawiera reguł profilu, pipeline'u, anotacji ani COCO.
-- [x] Access nie wywołuje Managera; zwraca jawne wyniki lub kontrolowane błędy.
+- [x] Client nie zawiera reguł profilu, pipeline'u, anotacji ani COCO i dochodzi do danych tylko przez Managera: `api/` nie importuje `access/` (typy, które renderuje, przechodzą przez szew `managers/workflow/contracts.py`; TK-016).
+- [x] Access nie wywołuje Managera; zwraca jawne wyniki lub kontrolowane błędy. Do TK-012 (2026-11-26) ten punkt był odhaczony bez sprawdzenia: trzy repozytoria importowały reguły stanów z Managera. Teraz pilnuje go `backend/tests/test_architecture_boundaries.py`.
 - [x] Tesseract jest niezaufanym wejściem: adapter parsuje wynik, engine waliduje
   geometrię/klasy, a zapis następuje dopiero przez workflow i po weryfikacji.
 

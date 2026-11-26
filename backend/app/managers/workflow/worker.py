@@ -178,7 +178,7 @@ class WorkflowWorker:
         observations: list[ObservationWrite] = []
         with self._heartbeat(run_id):
             for sample in frame.samples:
-                # Tesseract verifies the pinned runtime/model inside this call,
+                # The engine verifies its pinned runtime/model inside this call,
                 # immediately before launching OCR. Repeating `describe()` here would
                 # hash the same multi-megabyte files once more for every frame.
                 ocr_region = ocr_regions.get(sample.region_id)
@@ -187,7 +187,7 @@ class WorkflowWorker:
                 candidates = self._ocr.detect_characters(
                     sample.crop_relpath,
                     ocr_region.allowed_chars,
-                    ocr_region.page_segmentation_mode,
+                    ocr_region.text_layout,
                 )
                 self._require_provenance(candidates, ocr_region.provenance)
                 region = regions[sample.region_id]
@@ -319,7 +319,8 @@ class WorkflowWorker:
             "region_id": snapshot.region_id,
             "region_name": snapshot.region_name,
             "allowed_chars": "".join(snapshot.allowed_chars),
-            "page_segmentation_mode": snapshot.page_segmentation_mode,
+            "text_layout": snapshot.text_layout,
+            "page_segmentation_mode": snapshot.provenance.page_segmentation_mode,
             "uses_profile_fallback": snapshot.uses_profile_fallback,
             "ocr_provenance": cls._provenance_payload(snapshot.provenance),
         }

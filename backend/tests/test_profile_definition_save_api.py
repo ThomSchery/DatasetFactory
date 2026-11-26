@@ -60,7 +60,7 @@ def _create_payload(source: Path, *, name: str = "Save Game") -> dict[str, Any]:
                 "width": 16,
                 "height": 12,
                 "allowed_chars": "0",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
             },
             {
                 "name": "timer",
@@ -69,7 +69,7 @@ def _create_payload(source: Path, *, name: str = "Save Game") -> dict[str, Any]:
                 "width": 8,
                 "height": 8,
                 "allowed_chars": "1",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
             },
         ],
         "categories": [
@@ -101,7 +101,7 @@ def _definition(profile: dict[str, Any]) -> dict[str, Any]:
                 "width": region["width"],
                 "height": region["height"],
                 "allowed_chars": region["allowed_chars"],
-                "page_segmentation_mode": region["page_segmentation_mode"],
+                "text_layout": region["text_layout"],
             }
             for region in sorted(profile["regions"], key=lambda region: region["name"])
         ],
@@ -156,7 +156,7 @@ def _seed_run(
             region_name=region["name"],
             bbox=BBox(region["x"], region["y"], region["width"], region["height"]),
             allowed_chars=tuple(region["allowed_chars"]),
-            page_segmentation_mode=region["page_segmentation_mode"],
+            text_layout=region["text_layout"],
             provenance=_provenance(),
         )
         for region in profile["regions"]
@@ -281,7 +281,7 @@ def test_inherited_ocr_survives_edit_and_copy(composition: CompositionRoot, tmp_
     with TestClient(app) as client:
         payload = _create_payload(source)
         payload["regions"][0]["allowed_chars"] = None
-        payload["regions"][0]["page_segmentation_mode"] = None
+        payload["regions"][0]["text_layout"] = None
         profile = client.post("/api/v1/profiles", json=payload).json()
         draft = _definition(profile)
         hud = _named(draft["regions"], "HUD")
@@ -290,7 +290,7 @@ def test_inherited_ocr_survives_edit_and_copy(composition: CompositionRoot, tmp_
         assert response.status_code == 200, response.text
         saved = client.get(f"/api/v1/profiles/{profile['id']}").json()
         region = _named(saved["regions"], "renamed")
-        assert (region["allowed_chars"], region["page_segmentation_mode"]) == (None, None)
+        assert (region["allowed_chars"], region["text_layout"]) == (None, None)
         assert (region["x"], region["width"]) == (2, 12)
         copy_payload = _definition(saved)
         copy_payload.pop("expected_version")
@@ -302,16 +302,16 @@ def test_inherited_ocr_survives_edit_and_copy(composition: CompositionRoot, tmp_
         copied = _named(
             client.get(f"/api/v1/profiles/{copy.json()['id']}").json()["regions"], "renamed"
         )
-        assert (copied["allowed_chars"], copied["page_segmentation_mode"]) == (None, None)
+        assert (copied["allowed_chars"], copied["text_layout"]) == (None, None)
         assert copied["id"] != region["id"]
         explicit = _definition(saved)
-        _named(explicit["regions"], "renamed").update(allowed_chars="01", page_segmentation_mode=6)
+        _named(explicit["regions"], "renamed").update(allowed_chars="01", text_layout="block")
         changed = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=explicit)
         assert changed.status_code == 200, changed.text
         changed_region = _named(changed.json()["regions"], "renamed")
-        assert (changed_region["allowed_chars"], changed_region["page_segmentation_mode"]) == (
+        assert (changed_region["allowed_chars"], changed_region["text_layout"]) == (
             "01",
-            6,
+            "block",
         )
 
 
@@ -332,7 +332,7 @@ def test_inherited_ocr_keeps_old_run_snapshot_and_new_run_uses_fallback(
             region = session.get(HudRegion, hud_id)
             assert region is not None
             region.ocr_allowed_chars = None
-            region.ocr_page_segmentation_mode = None
+            region.ocr_text_layout = None
             session.flush()
         legacy = client.get(f"/api/v1/profiles/{profile['id']}").json()
         draft = _definition(legacy)
@@ -346,21 +346,26 @@ def test_inherited_ocr_keeps_old_run_snapshot_and_new_run_uses_fallback(
         snapshot = next(item for item in fresh.ocr_regions if item.region_id == hud_id)
         assert snapshot.bbox.width == 12
         assert snapshot.allowed_chars == ("0", "1")
-        assert snapshot.page_segmentation_mode == fresh.ocr_fallback_page_segmentation_mode == 7
+        assert snapshot.text_layout == "auto"
+        assert (
+            snapshot.provenance.page_segmentation_mode
+            == (fresh.ocr_fallback_page_segmentation_mode)
+            == 7
+        )
         assert after.regions == before.regions
         assert after.samples == before.samples
 
 
-@pytest.mark.parametrize("chars,mode", [(None, 7), ("0", None), ("", 7)])
+@pytest.mark.parametrize("chars,layout", [(None, "line"), ("0", None), ("", "line")])
 def test_save_rejects_partial_or_empty_ocr_configuration(
-    composition: CompositionRoot, tmp_path: Path, chars: str | None, mode: int | None
+    composition: CompositionRoot, tmp_path: Path, chars: str | None, layout: str | None
 ) -> None:
     source = tmp_path / "reference.png"
     _write_png(source, width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
     with TestClient(create_app(composition.settings, composition=composition)) as client:
         profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
         draft = _definition(profile)
-        draft["regions"][0].update(allowed_chars=chars, page_segmentation_mode=mode)
+        draft["regions"][0].update(allowed_chars=chars, text_layout=layout)
         response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
         assert response.status_code in (400, 422), response.text
         assert client.get(f"/api/v1/profiles/{profile['id']}").json() == profile
@@ -463,7 +468,7 @@ def test_removing_a_used_region_retires_it_and_frees_its_name(
                 "width": 10,
                 "height": 10,
                 "allowed_chars": "0",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
             },
         ]
         saved = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
@@ -717,7 +722,7 @@ def test_dropping_a_class_that_annotations_use_is_a_conflict_not_a_deletion(
                         key: region[key]
                         for key in ("name", "x", "y", "width", "height", "allowed_chars")
                     }
-                    | {"page_segmentation_mode": region["page_segmentation_mode"]}
+                    | {"text_layout": region["text_layout"]}
                     for region in draft["regions"]
                 ],
                 "categories": [
@@ -826,12 +831,12 @@ def test_region_ocr_settings_survive_a_save_that_only_moves_a_box(
     with TestClient(app) as client:
         profile = client.post("/api/v1/profiles", json=_create_payload(source)).json()
         draft = _definition(profile)
-        draft["regions"][1] |= {"x": 0, "y": 16, "page_segmentation_mode": 13}
+        draft["regions"][1] |= {"x": 0, "y": 16, "text_layout": "sparse"}
         response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
 
     assert response.status_code == 200, response.text
     moved = _named(response.json()["regions"], "timer")
-    assert (moved["allowed_chars"], moved["page_segmentation_mode"]) == ("1", 13)
+    assert (moved["allowed_chars"], moved["text_layout"]) == ("1", "sparse")
     assert (moved["x"], moved["y"]) == (0, 16)
 
 

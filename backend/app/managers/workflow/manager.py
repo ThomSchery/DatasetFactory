@@ -31,17 +31,13 @@ from backend.app.access.store.repositories.runs import (
     RunVideoNotFoundError,
 )
 from backend.app.access.store.run_artifacts import RunArtifacts
-from backend.app.engines.definition import OcrProvenance
+from backend.app.engines.definition import DEFAULT_OCR_TEXT_LAYOUT, OcrProvenance
+from backend.app.engines.runstate import InvalidTransitionError, RunStatus
 from backend.app.managers.workflow.recovery import RecoveryResult, WorkflowRecovery
-from backend.app.managers.workflow.state_machine import InvalidTransitionError, RunStatus
 from backend.app.managers.workflow.worker import WorkflowWorker
 
-TESSERACT_QUALITY_WARNING = (
-    "Eksperymentalny Tesseract nie przeszedł bramki jakości; każdy wynik OCR "
-    "wymaga pełnej ręcznej weryfikacji."
-)
 FAILED_GATE_WARNING = (
-    "Silnik OCR nie przeszedł bramki jakości; każdy wynik OCR wymaga pełnej ręcznej weryfikacji."
+    "{engine} nie przeszedł bramki jakości; każdy wynik OCR wymaga pełnej ręcznej weryfikacji."
 )
 UNKNOWN_GATE_WARNING = (
     "Bramka jakości silnika OCR nie została zmierzona; każdy wynik OCR wymaga "
@@ -62,11 +58,9 @@ def quality_warning(provenance: OcrProvenance) -> str:
     demand a particular verdict. A clean, non-experimental engine warrants no warning.
     """
     if provenance.quality_gate == "failed":
-        return (
-            TESSERACT_QUALITY_WARNING
-            if provenance.engine_id == "tesseract" and provenance.experimental
-            else FAILED_GATE_WARNING
-        )
+        # Named by what the engine reports about itself — the workflow knows no engine.
+        label = "Eksperymentalny silnik OCR" if provenance.experimental else "Silnik OCR"
+        return FAILED_GATE_WARNING.format(engine=f"{label} ({provenance.engine_id})")
     if provenance.quality_gate == "unknown":
         return UNKNOWN_GATE_WARNING
     return EXPERIMENTAL_WARNING if provenance.experimental else ""
@@ -169,13 +163,13 @@ class DatasetWorkflow:
         profile_allowed_chars: tuple[str, ...],
         fallback_provenance: OcrProvenance,
     ) -> RegionOcrSnapshot:
-        if (region.allowed_chars is None) != (region.page_segmentation_mode is None):
+        if (region.allowed_chars is None) != (region.text_layout is None):
             raise ValueError("incomplete region OCR configuration")
         allowed_chars = region.allowed_chars or profile_allowed_chars
         provenance = (
             fallback_provenance
             if region.allowed_chars is None
-            else self._ocr.describe(allowed_chars, region.page_segmentation_mode)
+            else self._ocr.describe(allowed_chars, region.text_layout)
         )
         self._require_complete_provenance(provenance)
         return RegionOcrSnapshot(
@@ -183,7 +177,7 @@ class DatasetWorkflow:
             region_name=region.region_name,
             bbox=region.bbox,
             allowed_chars=allowed_chars,
-            page_segmentation_mode=provenance.page_segmentation_mode,
+            text_layout=region.text_layout or DEFAULT_OCR_TEXT_LAYOUT,
             provenance=provenance,
             uses_profile_fallback=region.allowed_chars is None,
         )

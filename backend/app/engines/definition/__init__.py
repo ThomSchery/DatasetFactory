@@ -1,5 +1,7 @@
+from backend.app.engines.definition.class_rules import ClassMove, ClassSnapshot, fold_name
 from backend.app.engines.definition.engine import (
-    OCR_PAGE_SEGMENTATION_MODES,
+    DEFAULT_OCR_TEXT_LAYOUT,
+    OCR_TEXT_LAYOUTS,
     BBox,
     CategoryDefinition,
     DatasetDefinitionEngine,
@@ -27,11 +29,14 @@ from backend.app.engines.definition.ocr_mapping import (
 )
 
 __all__ = [
+    "DEFAULT_OCR_TEXT_LAYOUT",
     "EVALUATOR_VERSION",
-    "OCR_PAGE_SEGMENTATION_MODES",
+    "OCR_TEXT_LAYOUTS",
     "AnnotationDraft",
     "BBox",
     "CategoryDefinition",
+    "ClassMove",
+    "ClassSnapshot",
     "DatasetDefinitionEngine",
     "DefinitionValidationError",
     "ExpectedOcrCharacter",
@@ -47,5 +52,6 @@ __all__ = [
     "RegionDefinition",
     "RejectedOcrCandidate",
     "evaluate_ocr",
+    "fold_name",
     "normalize_profile_name",
 ]

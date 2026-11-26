@@ -10,16 +10,13 @@ from backend.app.access.media.probe import FfprobeMediaProbe, ProcessTreeRunner
 from backend.app.access.media.processing import MediaProcessingAccess
 from backend.app.access.ocr import (
     OcrEngine,
+    TesseractDependencyProbe,
     TesseractOcrEngine,
     TesseractProcessRunner,
     TesseractRuntimeIdentity,
 )
-from backend.app.access.status.service import (
-    ResourceProbe,
-    SystemResourceProbe,
-    SystemStatusAccess,
-    TesseractDependencyProbe,
-)
+from backend.app.access.status.probe import ResourceProbe, SystemResourceProbe
+from backend.app.access.status.service import SystemStatusAccess
 from backend.app.access.store.database import Database
 from backend.app.access.store.migrations import SchemaUpgradeBlockedError, upgrade_database
 from backend.app.access.store.reconciliation import ExportReconciler, ReferenceAssetReconciler
@@ -129,7 +126,7 @@ def build_composition(
     )
     project_store = ProjectStore(database, workspace)
     projects = ProjectRepository(database, workspace)
-    profiles = ProfileRepository(database)
+    profiles = ProfileRepository(database, DatasetDefinitionEngine())
     assets = AssetRepository(database, workspace)
     materials = MaterialRepository(database)
     media_processing = MediaProcessingAccess(

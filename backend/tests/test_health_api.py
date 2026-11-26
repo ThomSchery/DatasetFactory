@@ -9,12 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
-from backend.app.access.ocr import TesseractRuntimeIdentity
-from backend.app.access.status.service import (
-    ProbeResult,
-    SystemStatusAccess,
-    TesseractDependencyProbe,
-)
+from backend.app.access.ocr import TesseractDependencyProbe, TesseractRuntimeIdentity
+from backend.app.access.status.probe import ProbeResult
+from backend.app.access.status.service import SystemStatusAccess
 from backend.app.composition import CompositionRoot
 from backend.app.config import Settings
 from backend.app.main import create_app
@@ -63,15 +60,16 @@ def test_health_200_reports_all_dependencies(
     assert body["database"]["available"] is True
     assert body["workspace"]["critical"] is True
     assert body["ffmpeg"]["available"] is True
-    assert body["tesseract"]["available"] is True
+    assert body["ocr"]["available"] is True
+    assert body["ocr"]["engine"] == "Tesseract"
     assert body["gpu"]["available"] is True
     # FE-022 FIX1: every dependency carries a stable code the UI presents in English.
-    names = ("database", "workspace", "ffmpeg", "tesseract", "gpu")
+    names = ("database", "workspace", "ffmpeg", "ocr", "gpu")
     assert {name: body[name]["code"] for name in names} == {
         "database": "available",
         "workspace": "available",
         "ffmpeg": "available",
-        "tesseract": "verified",
+        "ocr": "verified",
         "gpu": "stub_available",
     }
     assert UUID(response.headers["X-Request-ID"]) == UUID(
@@ -120,7 +118,8 @@ def test_missing_operator_tesseract_is_an_explicit_degraded_200_without_tracebac
 
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
-    assert response.json()["tesseract"] == {
+    assert response.json()["ocr"] == {
+        "engine": "Tesseract",
         "available": False,
         "critical": False,
         "detail": (
@@ -142,7 +141,8 @@ def test_operator_tesseract_checksum_mismatch_is_degraded_and_never_reported_ava
 
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
-    assert response.json()["tesseract"] == {
+    assert response.json()["ocr"] == {
+        "engine": "Tesseract",
         "available": False,
         "critical": False,
         "detail": (

@@ -46,7 +46,7 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
         "width",
         "height",
         "ocr_allowed_chars",
-        "ocr_page_segmentation_mode",
+        "ocr_text_layout",
     } <= region_columns.keys()
     assert all(region_columns[name]["nullable"] is False for name in ("x", "y", "width", "height"))
     assert {"id", "relpath", "content_type", "size_bytes"} <= reference_columns.keys()
@@ -126,7 +126,7 @@ def test_initial_migration_up_down_up(settings: Settings) -> None:
     assert {
         "ck_hud_region_origin",
         "ck_hud_region_size",
-        "ck_hud_region_ocr_psm",
+        "ck_hud_region_ocr_layout",
         "ck_hud_region_ocr_config_complete",
     } <= region_checks
     engine.dispose()
@@ -906,7 +906,7 @@ def test_integrity_migration_collision_preflight_is_retry_safe(
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0009"
+            "0010"
         )
         normalized_names = connection.execute(
             text("SELECT id,normalized_name FROM game_profiles ORDER BY id")
@@ -1017,7 +1017,7 @@ def test_documented_cleanup_sql_actually_unblocks_the_migration(settings: Settin
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0009"
+            "0010"
         )
     engine.dispose()
 
@@ -1116,7 +1116,7 @@ def test_workflow_migration_preflight_is_retry_safe_before_any_ddl(settings: Set
     engine = create_engine(settings.database_url)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0009"
+            "0010"
         )
     engine.dispose()
 
@@ -1406,7 +1406,7 @@ def test_region_class_migration_gives_old_regions_their_class(settings: Settings
     ]
     assert versions == {"g": 2, "h": 1}
     assert untouched == 2
-    assert revision == "0009"
+    assert revision == "0010"
 
     # The classes are data now; going back keeps them and changes no schema.
     command.downgrade(config, "0008")
@@ -1465,3 +1465,123 @@ def test_region_class_migration_keeps_definition_order_when_timestamps_tie(
         ]
     engine.dispose()
     assert classes == [("0", 0), ("score_left", 1), ("score_right", 2), ("kill", 3)]
+
+
+def test_text_layout_migration_replaces_the_engine_mode_and_goes_back(settings: Settings) -> None:
+    """0010: a region stores how its text sits, not the engine's number for it."""
+    config = alembic_config(settings)
+    command.upgrade(config, "0009")
+    engine = create_engine(settings.database_url)
+    now = "2026-11-26 10:00:00.000000"
+    modes: dict[str, int | None] = {
+        "r-auto": 3,
+        "r-block-4": 4,
+        "r-block-6": 6,
+        "r-line": 7,
+        "r-word": 8,
+        "r-char": 10,
+        "r-sparse": 11,
+        "r-osd": 12,
+        "r-raw": 13,
+        "r-inherits": None,
+    }
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(id,name,workspace_path,active_profile_id,created_at,updated_at) "
+                "VALUES ('p','Project','D:/workspace',NULL,:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reference_assets "
+                "(id,relpath,content_type,size_bytes,status,created_at,updated_at) "
+                "VALUES ('a','assets/references/g.png','image/png',1,'ready',:now,:now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO game_profiles "
+                "(id,project_id,name,normalized_name,reference_asset_id,source_width,"
+                "source_height,version,created_at,updated_at) "
+                "VALUES ('g','p','g','g','a',1920,1080,1,:now,:now)"
+            ),
+            {"now": now},
+        )
+        for region_id, mode in modes.items():
+            connection.execute(
+                text(
+                    "INSERT INTO hud_regions "
+                    "(id,profile_id,name,x,y,width,height,ocr_allowed_chars,"
+                    "ocr_page_segmentation_mode,created_at,updated_at) "
+                    "VALUES (:id,'g',:id,10,20,100,40,:chars,:mode,:now,:now)"
+                ),
+                {"id": region_id, "chars": None if mode is None else "0", "mode": mode, "now": now},
+            )
+    engine.dispose()
+
+    command.upgrade(config, "0010")
+    engine = create_engine(settings.database_url)
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("hud_regions")}
+    checks = {c["name"] for c in inspector.get_check_constraints("hud_regions")}
+    assert "ocr_text_layout" in columns
+    assert "ocr_page_segmentation_mode" not in columns
+    assert {"ck_hud_region_ocr_layout", "ck_hud_region_ocr_config_complete"} <= checks
+    assert "ck_hud_region_ocr_psm" not in checks
+    with engine.connect() as connection:
+        layouts = {
+            row[0]: row[1]
+            for row in connection.execute(text("SELECT id,ocr_text_layout FROM hud_regions"))
+        }
+        # Runs keep the engine mode they used: it is provenance, not configuration.
+        assert "ocr_page_segmentation_mode" in {
+            column["name"] for column in inspector.get_columns("pipeline_runs")
+        }
+    assert layouts == {
+        "r-auto": "auto",
+        "r-block-4": "block",
+        "r-block-6": "block",
+        "r-line": "line",
+        "r-word": "word",
+        "r-char": "word",
+        "r-sparse": "sparse",
+        "r-osd": "sparse",
+        "r-raw": "line",
+        "r-inherits": None,
+    }
+    with engine.begin() as connection, pytest.raises(sa.exc.IntegrityError):
+        connection.execute(
+            text("UPDATE hud_regions SET ocr_text_layout='columns' WHERE id='r-line'")
+        )
+    with engine.begin() as connection, pytest.raises(sa.exc.IntegrityError):
+        connection.execute(text("UPDATE hud_regions SET ocr_text_layout=NULL WHERE id='r-line'"))
+    engine.dispose()
+
+    command.downgrade(config, "0009")
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        restored = {
+            row[0]: row[1]
+            for row in connection.execute(
+                text("SELECT id,ocr_page_segmentation_mode FROM hud_regions")
+            )
+        }
+    engine.dispose()
+    # A layout goes back to the mode that best stands for it; modes that had no
+    # layout of their own (4, 10, 12, 13) come back as their nearest neighbour.
+    assert restored == {
+        "r-auto": 3,
+        "r-block-4": 6,
+        "r-block-6": 6,
+        "r-line": 7,
+        "r-word": 8,
+        "r-char": 8,
+        "r-sparse": 11,
+        "r-osd": 11,
+        "r-raw": 7,
+        "r-inherits": None,
+    }

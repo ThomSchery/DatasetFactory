@@ -159,7 +159,7 @@ def _region_payload(**overrides: object) -> dict[str, object]:
         "width": 8,
         "height": 8,
         "allowed_chars": "0",
-        "page_segmentation_mode": 7,
+        "text_layout": "line",
         "expected_version": 1,
     }
     payload.update(overrides)
@@ -193,7 +193,7 @@ def test_added_region_gets_its_own_identity_and_bumps_the_profile_version(
     assert added["id"] not in {"", existing_region_id}
     assert (added["x"], added["y"], added["width"], added["height"]) == (4, 4, 8, 8)
     assert added["allowed_chars"] == "0"
-    assert added["page_segmentation_mode"] == 7
+    assert added["text_layout"] == "line"
     # The existing region keeps the identity `region_samples` point at.
     assert body["regions"][0]["id"] == existing_region_id
     assert reloaded.json() == body
@@ -515,9 +515,9 @@ def test_added_region_rejects_characters_that_are_not_profile_classes(
     assert len(reloaded.json()["regions"]) == 1
 
 
-@pytest.mark.parametrize("page_segmentation_mode", (0, 1, 2, 5, 9, 14))
-def test_added_region_rejects_unsupported_page_segmentation_modes(
-    page_segmentation_mode: int,
+@pytest.mark.parametrize("text_layout", ("", "columns", "7", "LINE", "line "))
+def test_added_region_rejects_unknown_text_layouts(
+    text_layout: str,
     composition: CompositionRoot,
     tmp_path: Path,
 ) -> None:
@@ -529,11 +529,11 @@ def test_added_region_rejects_unsupported_page_segmentation_modes(
         created = client.post("/api/v1/profiles", json=_payload(source))
         response = client.post(
             f"/api/v1/profiles/{created.json()['id']}/regions",
-            json=_region_payload(page_segmentation_mode=page_segmentation_mode),
+            json=_region_payload(text_layout=text_layout),
         )
 
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "invalid_region_page_segmentation_mode"
+    assert response.json()["error"]["code"] == "invalid_region_text_layout"
 
 
 def test_region_ocr_config_can_be_edited_without_touching_existing_observations(
@@ -574,7 +574,7 @@ def test_region_ocr_config_can_be_edited_without_touching_existing_observations(
             f"/api/v1/profiles/{profile_id}/regions/{region_before['id']}/ocr-config",
             json={
                 "allowed_chars": "0",
-                "page_segmentation_mode": 6,
+                "text_layout": "block",
                 "expected_version": 1,
             },
         )
@@ -586,7 +586,7 @@ def test_region_ocr_config_can_be_edited_without_touching_existing_observations(
         key: region_before[key] for key in ("id", "name", "x", "y", "width", "height")
     }
     assert region_after["allowed_chars"] == "0"
-    assert region_after["page_segmentation_mode"] == 6
+    assert region_after["text_layout"] == "block"
     with composition.database.session() as session:
         sample_after = session.get(RegionSample, ids["sample"])
         assert sample_after is not None
@@ -625,7 +625,7 @@ def test_region_ocr_config_edit_revalidates_subset_and_region_identity(
             f"/api/v1/profiles/{first.json()['id']}/regions/{first_region_id}/ocr-config",
             json={
                 "allowed_chars": "01",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
                 "expected_version": 1,
             },
         )
@@ -633,7 +633,7 @@ def test_region_ocr_config_edit_revalidates_subset_and_region_identity(
             f"/api/v1/profiles/{first.json()['id']}/regions/{second_region_id}/ocr-config",
             json={
                 "allowed_chars": "0",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
                 "expected_version": 1,
             },
         )

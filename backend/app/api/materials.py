@@ -6,8 +6,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from backend.app.access.store.repositories.materials import MaterialPage, MaterialRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
+from backend.app.managers.workflow.contracts import (
+    MaterialPage,
+    MaterialRecord,
+)
 from backend.app.managers.workflow.material_use_cases import MaterialUseCaseError, MaterialUseCases
 
 

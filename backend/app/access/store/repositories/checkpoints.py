@@ -27,7 +27,7 @@ from backend.app.access.store.ocr_regions import (
 )
 from backend.app.access.store.repositories.runs import ResumeReservation
 from backend.app.access.store.workspace import Workspace, WorkspaceError
-from backend.app.managers.workflow.state_machine import (
+from backend.app.engines.runstate import (
     FrameStage,
     RunStatus,
     require_frame_transition,

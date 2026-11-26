@@ -14,7 +14,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import BaseRoute
 
 from backend.app import __version__
-from backend.app.access.desktop import LocalFilePicker
 from backend.app.api.annotations import create_annotations_router
 from backend.app.api.assets import create_assets_router
 from backend.app.api.dashboard import create_dashboard_router
@@ -31,6 +30,7 @@ from backend.app.composition import CompositionRoot, build_composition
 from backend.app.config import Settings
 from backend.app.managers.workflow.dashboard_use_cases import DashboardUseCases
 from backend.app.managers.workflow.export_use_cases import ExportUseCases
+from backend.app.managers.workflow.local_file_use_cases import LocalFileUseCases
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.material_use_cases import MaterialUseCases
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCases
@@ -136,9 +136,9 @@ def create_app(
         active_composition: CompositionRoot = application.state.composition
         return active_composition.export_use_cases
 
-    def get_file_picker() -> LocalFilePicker:
+    def get_local_files() -> LocalFileUseCases:
         active_composition: CompositionRoot = application.state.composition
-        return active_composition.file_picker
+        return LocalFileUseCases(active_composition.file_picker)
 
     def get_dashboard_use_cases() -> DashboardUseCases:
         active_composition: CompositionRoot = application.state.composition
@@ -153,7 +153,7 @@ def create_app(
     application.include_router(create_frames_router(get_review_use_cases))
     application.include_router(create_exports_router(get_export_use_cases))
     application.include_router(create_dashboard_router(get_dashboard_use_cases))
-    application.include_router(create_local_files_router(get_file_picker))
+    application.include_router(create_local_files_router(get_local_files))
 
     if runtime_settings.spa_dir is not None:
         _mount_spa(application, runtime_settings.spa_dir)

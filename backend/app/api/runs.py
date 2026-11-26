@@ -6,9 +6,14 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from backend.app.access.store.repositories.frames import FramePage, FrameSummary
-from backend.app.access.store.repositories.runs import RunPage, RunRecord, RunSummaryRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
+from backend.app.managers.workflow.contracts import (
+    FramePage,
+    FrameSummary,
+    RunPage,
+    RunRecord,
+    RunSummaryRecord,
+)
 from backend.app.managers.workflow.manager import DatasetWorkflow, WorkflowError
 
 
@@ -44,6 +49,9 @@ class RegionOcrSnapshotResponse(StrictModel):
     width: int
     height: int
     allowed_chars: str
+    # What the operator asked for, in no engine's words; the engine's own setting is
+    # recorded in `provenance`.
+    text_layout: str
     page_segmentation_mode: int
     uses_profile_fallback: bool
     provenance: OcrProvenanceResponse
@@ -166,7 +174,8 @@ def run_response(record: RunRecord) -> RunResponse:
             width=snapshot.bbox.width,
             height=snapshot.bbox.height,
             allowed_chars="".join(snapshot.allowed_chars),
-            page_segmentation_mode=snapshot.page_segmentation_mode,
+            text_layout=snapshot.text_layout,
+            page_segmentation_mode=snapshot.provenance.page_segmentation_mode,
             uses_profile_fallback=snapshot.uses_profile_fallback,
             provenance=OcrProvenanceResponse(**vars(snapshot.provenance)),
         )

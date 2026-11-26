@@ -31,7 +31,12 @@ from backend.app.access.store.repositories.profiles import (
 )
 from backend.app.access.store.repositories.projects import ProjectRepository
 from backend.app.composition import CompositionRoot
-from backend.app.engines.definition import BBox, CategoryDefinition, RegionDefinition
+from backend.app.engines.definition import (
+    BBox,
+    CategoryDefinition,
+    DatasetDefinitionEngine,
+    RegionDefinition,
+)
 from backend.app.main import create_app
 from backend.app.managers.workflow.profile_use_cases import ProfileUseCaseError
 
@@ -299,7 +304,7 @@ def test_profile_repository_gets_historical_profile_by_id(
         first = client.post("/api/v1/profiles", json=_payload(first_source, name="First"))
         second = client.post("/api/v1/profiles", json=_payload(second_source, name="Second"))
 
-    repository = ProfileRepository(composition.database)
+    repository = ProfileRepository(composition.database, DatasetDefinitionEngine())
     assert repository.get(first.json()["id"]).name == "First"
     assert repository.get(second.json()["id"]).name == "Second"
     with pytest.raises(ProfileNotFoundError):
@@ -808,7 +813,7 @@ def test_category_change_rejects_explicit_region_whitelist_breakage_and_names_bl
             "width": 32,
             "height": 24,
             "allowed_chars": "0",
-            "page_segmentation_mode": 7,
+            "text_layout": "line",
         }
     ]
     app = create_app(composition.settings, composition=composition)
@@ -851,7 +856,7 @@ def test_category_rename_not_used_by_explicit_region_still_succeeds(
             "width": 32,
             "height": 24,
             "allowed_chars": "0",
-            "page_segmentation_mode": 7,
+            "text_layout": "line",
         }
     ]
     app = create_app(composition.settings, composition=composition)

@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import Field, model_validator
 
-from backend.app.access.store.repositories.exports import ExportRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
+from backend.app.managers.workflow.contracts import (
+    ExportRecord,
+)
 from backend.app.managers.workflow.export_use_cases import (
     ExportSplitRatios,
     ExportUseCaseError,

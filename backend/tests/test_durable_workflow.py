@@ -53,10 +53,10 @@ from backend.app.engines.definition import (
     OcrCandidate,
     OcrProvenance,
 )
+from backend.app.engines.runstate import InvalidTransitionError
 from backend.app.main import create_app
 from backend.app.managers.workflow.manager import DatasetWorkflow
 from backend.app.managers.workflow.recovery import WorkflowRecovery
-from backend.app.managers.workflow.state_machine import InvalidTransitionError
 from backend.app.managers.workflow.worker import WorkflowWorker
 
 FIXTURES = Path("backend/tests/fixtures")
@@ -90,9 +90,9 @@ class StubOcrEngine:
     def describe(
         self,
         allowed_chars: object,
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> OcrProvenance:
-        del allowed_chars, page_segmentation_mode
+        del allowed_chars, text_layout
         self.describe_calls += 1
         return self._provenance
 
@@ -100,9 +100,9 @@ class StubOcrEngine:
         self,
         crop_relpath: Path,
         allowed_chars: object,
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> tuple[OcrCandidate, ...]:
-        del crop_relpath, allowed_chars, page_segmentation_mode
+        del crop_relpath, allowed_chars, text_layout
         self.detect_calls += 1
         if self.empty:
             return ()
@@ -113,17 +113,20 @@ class StubOcrEngine:
 
 
 class PerRegionOcrEngine:
+    """An adapter that turns each text layout into an engine mode of its own."""
+
     def __init__(self, *, default_psm: int = 7) -> None:
         self.default_psm = default_psm
+        self._mode_by_layout = {"line": 7, "word": 8, "block": 6, "sparse": 11}
         self.detect_calls: list[tuple[Path, tuple[str, ...], int]] = []
 
     def _provenance(
         self,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None,
+        text_layout: str | None,
     ) -> OcrProvenance:
         allowed = tuple(dict.fromkeys(allowed_chars))
-        psm = self.default_psm if page_segmentation_mode is None else page_segmentation_mode
+        psm = self._mode_by_layout.get(text_layout or "auto", self.default_psm)
         config_hash = hashlib.sha256(f"{''.join(allowed)}:{psm}".encode()).hexdigest()
         return OcrProvenance(
             engine_id="per-region-stub",
@@ -140,18 +143,18 @@ class PerRegionOcrEngine:
     def describe(
         self,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> OcrProvenance:
-        return self._provenance(allowed_chars, page_segmentation_mode)
+        return self._provenance(allowed_chars, text_layout)
 
     def detect_characters(
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> tuple[OcrCandidate, ...]:
         allowed = tuple(dict.fromkeys(allowed_chars))
-        provenance = self._provenance(allowed, page_segmentation_mode)
+        provenance = self._provenance(allowed, text_layout)
         self.detect_calls.append((crop_relpath, allowed, provenance.page_segmentation_mode))
         if not allowed:
             return ()
@@ -425,7 +428,7 @@ def test_one_frame_uses_each_regions_own_ocr_settings_and_provenance(
         assert first is not None
         first.name = "score_right"
         first.ocr_allowed_chars = "0"
-        first.ocr_page_segmentation_mode = 7
+        first.ocr_text_layout = "line"
         session.add(
             Category(
                 id=str(uuid4()),
@@ -446,7 +449,7 @@ def test_one_frame_uses_each_regions_own_ocr_settings_and_provenance(
                 width=420,
                 height=96,
                 ocr_allowed_chars="A",
-                ocr_page_segmentation_mode=6,
+                ocr_text_layout="block",
             )
         )
 
@@ -506,7 +509,7 @@ def test_explicit_only_run_and_checkpoints_do_not_publish_unused_fallback_config
         region = session.scalar(select(HudRegion).where(HudRegion.profile_id == seeded.profile_id))
         assert region is not None
         region.ocr_allowed_chars = "0"
-        region.ocr_page_segmentation_mode = 11
+        region.ocr_text_layout = "sparse"
 
     ocr = PerRegionOcrEngine(default_psm=7)
     _install_workflow(composition, StubMediaAccess(composition), ocr)
@@ -588,9 +591,9 @@ def test_legacy_and_equivalent_explicit_region_use_same_parameters_and_stub_resu
             )
             assert region is not None
             assert region.ocr_allowed_chars is None
-            assert region.ocr_page_segmentation_mode is None
+            assert region.ocr_text_layout is None
             region.ocr_allowed_chars = "0"
-            region.ocr_page_segmentation_mode = 7
+            region.ocr_text_layout = "line"
 
         explicit = _create_run(client, seeded)
         assert explicit["ocr_fallback"] is None

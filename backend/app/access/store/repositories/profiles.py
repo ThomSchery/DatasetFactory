@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -20,6 +21,7 @@ from backend.app.access.store.models import (
     ReferenceAsset,
     utc_now,
 )
+from backend.app.engines.definition import ClassMove, ClassSnapshot
 
 # The statuses whose work still reads the profile definition: a queued run may
 # start, and paused, failed and cancelled runs may all resume. Only `completed`
@@ -129,7 +131,7 @@ class RegionDraft:
     width: int
     height: int
     ocr_allowed_chars: str | None = None
-    ocr_page_segmentation_mode: int | None = None
+    ocr_text_layout: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,14 +143,14 @@ class NewRegionDraft:
     width: int
     height: int
     ocr_allowed_chars: str
-    ocr_page_segmentation_mode: int
+    ocr_text_layout: str
     expected_version: int
 
 
 @dataclass(frozen=True)
 class RegionOcrConfigDraft:
     ocr_allowed_chars: str
-    ocr_page_segmentation_mode: int
+    ocr_text_layout: str
     expected_version: int
 
 
@@ -185,7 +187,7 @@ class SavedRegionDraft:
     width: int
     height: int
     ocr_allowed_chars: str | None
-    ocr_page_segmentation_mode: int | None
+    ocr_text_layout: str | None
 
 
 @dataclass(frozen=True)
@@ -248,11 +250,57 @@ class ProfileSummaryRecord:
     active: bool
 
 
+class ProfileClassRules(Protocol):
+    """How a profile's regions and classes belong together (FE-026, FE-030).
+
+    The repository reads the state, asks, and applies the answer inside its own
+    transaction. The rules themselves are the definition engine's — the
+    composition root injects them, so this module holds no decision about which
+    class to add, rename or drop.
+    """
+
+    def classes_to_remove(
+        self,
+        existing: Sequence[ClassSnapshot],
+        kept_ids: Collection[str],
+        region_names: Iterable[str],
+    ) -> tuple[ClassSnapshot, ...]: ...
+
+    def next_class_ordinal(self, current_max: int | None, *, floor: int = 0) -> int: ...
+
+    def class_moves_for_region_renames(
+        self,
+        classes: Sequence[ClassSnapshot],
+        active_region_names: Iterable[str],
+        renamed: Sequence[tuple[str, str]],
+    ) -> tuple[ClassMove, ...]: ...
+
+    def unused_classes_to_drop(
+        self,
+        classes: Sequence[ClassSnapshot],
+        retired_names: Iterable[str],
+        active_region_names: Iterable[str],
+        used_ids: Collection[str],
+    ) -> tuple[str, ...]: ...
+
+    def missing_region_classes(
+        self,
+        class_names: Iterable[str],
+        stored_region_names: Sequence[str],
+        request_order: Sequence[str] = (),
+    ) -> tuple[str, ...]: ...
+
+
+def _snapshot(category: Category) -> ClassSnapshot:
+    return ClassSnapshot(category.id, category.name, category.kind)
+
+
 class ProfileRepository:
     """Persist and hydrate a profile aggregate in one database transaction."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, rules: ProfileClassRules) -> None:
         self._database = database
+        self._rules = rules
 
     def create(self, draft: ProfileAggregateDraft, asset: AssetPublication) -> ProfileRecord:
         published = False
@@ -294,7 +342,7 @@ class ProfileRepository:
                             width=region.width,
                             height=region.height,
                             ocr_allowed_chars=region.ocr_allowed_chars,
-                            ocr_page_segmentation_mode=region.ocr_page_segmentation_mode,
+                            ocr_text_layout=region.ocr_text_layout,
                         )
                         for region in draft.regions
                     ]
@@ -517,7 +565,7 @@ class ProfileRepository:
                         width=draft.width,
                         height=draft.height,
                         ocr_allowed_chars=draft.ocr_allowed_chars,
-                        ocr_page_segmentation_mode=draft.ocr_page_segmentation_mode,
+                        ocr_text_layout=draft.ocr_text_layout,
                     )
                 )
                 session.flush()
@@ -566,7 +614,7 @@ class ProfileRepository:
                 if self._blocking_run(session, profile_id) is not None:
                     raise ProfileRegionBlockedError
                 region.ocr_allowed_chars = draft.ocr_allowed_chars
-                region.ocr_page_segmentation_mode = draft.ocr_page_segmentation_mode
+                region.ocr_text_layout = draft.ocr_text_layout
                 profile.version += 1
                 session.flush()
                 return self._record(session, profile)
@@ -620,7 +668,7 @@ class ProfileRepository:
                 if self._blocking_run(session, profile_id) is not None:
                     raise ProfileRegionBlockedError
 
-                region_names = frozenset(_folded(region.name) for region in draft.regions)
+                region_names = tuple(region.name for region in draft.regions)
                 next_ordinal = self._save_categories(
                     session, profile_id, draft.categories, region_names=region_names
                 )
@@ -716,7 +764,7 @@ class ProfileRepository:
             region.width = item.width
             region.height = item.height
             region.ocr_allowed_chars = item.ocr_allowed_chars
-            region.ocr_page_segmentation_mode = item.ocr_page_segmentation_mode
+            region.ocr_text_layout = item.ocr_text_layout
         session.flush()
 
         for item in added:
@@ -730,78 +778,76 @@ class ProfileRepository:
                     width=item.width,
                     height=item.height,
                     ocr_allowed_chars=item.ocr_allowed_chars,
-                    ocr_page_segmentation_mode=item.ocr_page_segmentation_mode,
+                    ocr_text_layout=item.ocr_text_layout,
                 )
             )
         session.flush()
         return old_names, tuple(retired_names)
 
     @staticmethod
-    def _drop_unused_classes_of(
-        session: Session,
-        profile_id: str,
-        retired: tuple[str, ...],
-    ) -> None:
-        """Delete the class of a gone region name when nothing still needs it (FE-030).
-
-        The user's rule: removing a region removes its class, unless a box in
-        Review uses it. "Uses" is any annotation row, deleted ones included —
-        `annotations.category_id` is RESTRICT, so a row the reviewer discarded
-        still anchors the class and deleting it would fail or take history with
-        it. A class also stays when a region of this very save carries the same
-        name (a box redrawn under its old name), and an OCR character class is
-        never touched: it belongs to the alphabet, not to a region.
-
-        `retired` holds the names of removed regions and the old names of
-        renamed ones. Runs after the renames have moved their classes: a class
-        that followed its region carries the new name and is not a candidate,
-        while one left behind (the region adopted an existing class) is.
-        """
-        if not retired:
-            return
-        retired_keys = {_folded(name) for name in retired}
-        active = {
-            _folded(name)
-            for name in session.scalars(
+    def _active_region_names(session: Session, profile_id: str) -> tuple[str, ...]:
+        return tuple(
+            session.scalars(
                 select(HudRegion.name).where(
                     HudRegion.profile_id == profile_id,
                     HudRegion.retired_at.is_(None),
                 )
             )
-        }
-        for category in session.scalars(
-            select(Category).where(Category.profile_id == profile_id, Category.kind == "game")
-        ):
-            key = _folded(category.name)
-            if key not in retired_keys or key in active:
-                continue
-            used = session.scalar(
-                select(Annotation.id).where(Annotation.category_id == category.id).limit(1)
+        )
+
+    def _drop_unused_classes_of(
+        self,
+        session: Session,
+        profile_id: str,
+        retired: tuple[str, ...],
+    ) -> None:
+        """Delete the classes the rules say a removed region left behind (FE-030).
+
+        `retired` holds the names of removed regions and the old names of renamed
+        ones. Runs after the renames have moved their classes. "Used" is any
+        annotation row, deleted ones included: `annotations.category_id` is
+        RESTRICT, so a row the reviewer discarded still anchors the class.
+        """
+        if not retired:
+            return
+        categories = tuple(
+            session.scalars(select(Category).where(Category.profile_id == profile_id))
+        )
+        used_ids = frozenset(
+            session.scalars(
+                select(Annotation.category_id)
+                .where(Annotation.category_id.in_([category.id for category in categories]))
+                .distinct()
             )
-            if used is None:
+        )
+        doomed = frozenset(
+            self._rules.unused_classes_to_drop(
+                tuple(_snapshot(category) for category in categories),
+                retired,
+                self._active_region_names(session, profile_id),
+                used_ids,
+            )
+        )
+        for category in categories:
+            if category.id in doomed:
                 session.delete(category)
         session.flush()
 
-    @classmethod
     def _save_categories(
-        cls,
+        self,
         session: Session,
         profile_id: str,
         drafts: tuple[SavedCategoryDraft, ...],
         *,
-        region_names: frozenset[str] = frozenset(),
+        region_names: Sequence[str] = (),
     ) -> int:
         """Apply the class half of a save; answer the next free ordinal.
 
-        `region_names` are the folded names of the regions the same save keeps.
-        A class carrying one of them is the region's class (FE-026) and is not
-        removed even when the draft leaves it out: the region would need it back
-        a moment later, under a new identifier and a new ordinal, which is
-        exactly what an export must never see.
-
-        The ordinal answered is counted from the maximum read *before* any
-        removal, so a region class appended later in the same save cannot take
-        the ordinal of a class this save dropped.
+        `region_names` are the names of the regions the same save keeps: the
+        rules keep a class that carries one of them (FE-026) even when the draft
+        leaves it out. The ordinal answered is counted from the maximum read
+        *before* any removal, so a region class appended later in the same save
+        cannot take the ordinal of a class this save dropped.
         """
         existing = {
             category.id: category
@@ -825,23 +871,25 @@ class ProfileRepository:
                 raise CategoryNotFoundError
             kept[item.id] = item
 
-        removed = tuple(
-            category
-            for category_id, category in existing.items()
-            if category_id not in kept and _folded(category.name) not in region_names
+        removed = self._rules.classes_to_remove(
+            tuple(_snapshot(category) for category in existing.values()),
+            kept.keys(),
+            region_names,
         )
+        # The database refuses to drop a class an annotation still points to, so
+        # asking for it is an error the operator can act on, not a silent skip.
         in_use = tuple(
-            (category.id, category.name)
-            for category in removed
+            (dropped.id, dropped.name)
+            for dropped in removed
             if session.scalar(
-                select(Annotation.id).where(Annotation.category_id == category.id).limit(1)
+                select(Annotation.id).where(Annotation.category_id == dropped.id).limit(1)
             )
             is not None
         )
         if in_use:
             raise CategoryInUseError(in_use)
-        for category in removed:
-            session.delete(category)
+        for dropped in removed:
+            session.delete(existing[dropped.id])
         session.flush()
 
         renamed = [
@@ -850,7 +898,7 @@ class ProfileRepository:
             if existing[category_id].name != item.name
         ]
         for category, _ in renamed:
-            category.name = cls._staging_name(category.id)
+            category.name = self._staging_name(category.id)
         session.flush()
         for category, item in renamed:
             category.name = item.name
@@ -860,7 +908,7 @@ class ProfileRepository:
             existing[category_id].kind = item.kind
         session.flush()
 
-        ordinal = (current_max if current_max is not None else -1) + 1
+        ordinal = self._rules.next_class_ordinal(current_max)
         for item in added:
             session.add(
                 Category(
@@ -875,92 +923,56 @@ class ProfileRepository:
         session.flush()
         return ordinal
 
-    @classmethod
     def _follow_region_renames(
-        cls,
+        self,
         session: Session,
         profile_id: str,
         renamed: tuple[tuple[str, str], ...],
     ) -> None:
-        """A renamed region takes its class along (FE-026).
+        """Rename the classes the rules say follow their renamed regions (FE-026).
 
-        Renaming the class row keeps its identifier, so every annotation the
-        operator already drew under the old name follows the region. The class
-        stays where it is when following would be a guess:
-
-        - it is an OCR character class, which belongs to the alphabet;
-        - another region of the same save now carries the old name (a swap, or
-          a new box reusing it), so the class still has a region;
-        - the new name already is a class, which the region simply adopts.
+        Renaming the class row keeps its identifier, so every annotation drawn
+        under the old name follows the region.
         """
         if not renamed:
             return
         categories = {
-            _folded(category.name): category
+            category.id: category
             for category in session.scalars(
                 select(Category).where(Category.profile_id == profile_id)
             )
         }
-        active = {
-            _folded(name)
-            for name in session.scalars(
-                select(HudRegion.name).where(
-                    HudRegion.profile_id == profile_id,
-                    HudRegion.retired_at.is_(None),
-                )
-            )
-        }
-        moves: list[tuple[Category, str]] = []
-        for old_name, new_name in renamed:
-            old_key, new_key = _folded(old_name), _folded(new_name)
-            category = categories.get(old_key)
-            if category is None or category.kind != "game":
-                continue
-            if old_key != new_key and (old_key in active or new_key in categories):
-                continue
-            moves.append((category, new_name))
-            del categories[old_key]
-            categories[new_key] = category
-        for category, _ in moves:
-            category.name = cls._staging_name(category.id)
+        moves = self._rules.class_moves_for_region_renames(
+            tuple(_snapshot(category) for category in categories.values()),
+            self._active_region_names(session, profile_id),
+            renamed,
+        )
+        for move in moves:
+            categories[move.id].name = self._staging_name(move.id)
         session.flush()
-        for category, new_name in moves:
-            category.name = new_name
+        for move in moves:
+            categories[move.id].name = move.new_name
         session.flush()
 
-    @staticmethod
     def _ensure_region_categories(
+        self,
         session: Session,
         profile_id: str,
         *,
         order: tuple[str, ...] = (),
         floor: int = 0,
     ) -> None:
-        """Give every active region a class of its own name (FE-026).
-
-        A HUD region names something the operator wants in the dataset: OCR
-        reads it, and when OCR misses it the operator draws the box by hand
-        under the region's name. So the class has to exist whichever route
-        created the region — the profile screen, `add_region`, `Save as`, or a
-        profile older than this rule. Names fold exactly as the uniqueness rule
-        does, so a region whose name already is a class, of either kind, adds
-        nothing. New classes take ordinals after the current maximum, so no
-        identifier an earlier export derived changes meaning.
+        """Add the classes the rules say the active regions lack (FE-026).
 
         `order` is the region order of the request being written. Regions
         inserted in one flush can share a timestamp, so stored regions break
-        that tie by `rowid` (insertion order), never by the random id.
-
-        `floor` is the lowest ordinal a new class may take. A whole-definition
-        save passes the next ordinal counted before it removed any class, so a
-        dropped class's ordinal is never handed to a different class.
+        that tie by `rowid` (insertion order), never by the random id. `floor`
+        is the lowest ordinal a new class may take; a whole-definition save
+        passes the next ordinal counted before it removed any class.
         """
-        taken = {
-            _folded(name)
-            for name in session.scalars(
-                select(Category.name).where(Category.profile_id == profile_id)
-            )
-        }
+        class_names = tuple(
+            session.scalars(select(Category.name).where(Category.profile_id == profile_id))
+        )
         stored = tuple(
             session.scalars(
                 select(HudRegion.name)
@@ -968,20 +980,13 @@ class ProfileRepository:
                 .order_by(HudRegion.created_at, literal_column("hud_regions.rowid"))
             )
         )
-        active = {_folded(name) for name in stored}
-        missing: list[str] = []
-        for name in (*order, *stored):
-            key = _folded(name)
-            if key in taken or key not in active:
-                continue
-            taken.add(key)
-            missing.append(name.strip())
+        missing = self._rules.missing_region_classes(class_names, stored, order)
         if not missing:
             return
         current_max = session.scalar(
             select(func.max(Category.ordinal)).where(Category.profile_id == profile_id)
         )
-        ordinal = max(floor, (current_max if current_max is not None else -1) + 1)
+        ordinal = self._rules.next_class_ordinal(current_max, floor=floor)
         for name in missing:
             session.add(
                 Category(
@@ -1145,7 +1150,7 @@ class ProfileRepository:
                 item.width,
                 item.height,
                 item.ocr_allowed_chars,
-                item.ocr_page_segmentation_mode,
+                item.ocr_text_layout,
             )
             for item in session.scalars(
                 select(HudRegion)

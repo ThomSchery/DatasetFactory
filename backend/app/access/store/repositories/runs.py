@@ -29,7 +29,7 @@ from backend.app.access.store.ocr_regions import (
     encode_region_ocr_snapshots,
 )
 from backend.app.engines.definition import BBox, OcrProvenance
-from backend.app.managers.workflow.state_machine import (
+from backend.app.engines.runstate import (
     NONTERMINAL_RUN_STATUSES,
     InvalidTransitionError,
     RunStatus,
@@ -91,7 +91,7 @@ class RegionOcrDraft:
     region_name: str
     bbox: BBox
     allowed_chars: tuple[str, ...] | None
-    page_segmentation_mode: int | None
+    text_layout: str | None
 
 
 @dataclass(frozen=True)
@@ -227,7 +227,7 @@ class RunRepository:
                         if region.ocr_allowed_chars is not None
                         else None
                     ),
-                    page_segmentation_mode=region.ocr_page_segmentation_mode,
+                    text_layout=region.ocr_text_layout,
                 )
                 # A retired region governs no future run: it stays only so the
                 # samples of the runs that used it keep their geometry and OCR.

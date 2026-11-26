@@ -3,11 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.app.access.store.repositories.profiles import ProfileRecord
-from backend.app.access.store.repositories.projects import ProjectRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel
 from backend.app.api.health import HealthResponse, health_response
 from backend.app.api.runs import RunResponse, run_response
+from backend.app.managers.workflow.contracts import (
+    ProfileRecord,
+    ProjectRecord,
+)
 from backend.app.managers.workflow.dashboard_use_cases import DashboardSnapshot, DashboardUseCases
 
 

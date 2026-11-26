@@ -241,21 +241,38 @@ def test_describe_measures_the_runtime_instead_of_trusting_the_pins(tmp_path: Pa
     assert swapped_model.value.code == "ocr_provenance_mismatch"
 
 
-def test_per_call_psm_reaches_tesseract_and_changes_provenance(tmp_path: Path) -> None:
+def test_text_layout_reaches_tesseract_as_its_own_mode_and_changes_provenance(
+    tmp_path: Path,
+) -> None:
     workspace = _workspace(tmp_path)
     crop_relpath = _copy_crop(workspace)
     runner = FixtureWritingRunner()
     engine = TesseractOcrEngine(workspace, _fake_runtime(tmp_path), 30, runner)
 
-    candidates = engine.detect_characters(crop_relpath, ["A"], 6)
-    described = engine.describe(["A"], 6)
+    candidates = engine.detect_characters(crop_relpath, ["A"], "sparse")
+    described = engine.describe(["A"], "sparse")
     default_description = engine.describe(["A"])
 
-    assert runner.arguments[0][runner.arguments[0].index("--psm") + 1] == "6"
+    assert runner.arguments[0][runner.arguments[0].index("--psm") + 1] == "11"
     assert "tessedit_char_whitelist=A" in runner.arguments[0]
     assert candidates[0].provenance == described
-    assert described.page_segmentation_mode == 6
+    assert described.page_segmentation_mode == 11
     assert described.config_hash != default_description.config_hash
+
+
+@pytest.mark.parametrize(
+    ("layout", "mode"),
+    [(None, 6), ("auto", 6), ("line", 7), ("word", 8), ("block", 6), ("sparse", 11)],
+)
+def test_each_text_layout_is_one_tesseract_mode(
+    tmp_path: Path, layout: str | None, mode: int
+) -> None:
+    """`auto` is a uniform block, not a single line: a region with two lines reads."""
+    engine = TesseractOcrEngine(
+        _workspace(tmp_path), _fake_runtime(tmp_path), 30, FixtureWritingRunner()
+    )
+
+    assert engine.describe(["A"], layout).page_segmentation_mode == mode
 
 
 def test_empty_allowed_chars_return_no_candidates_without_running_tesseract(
@@ -266,14 +283,14 @@ def test_empty_allowed_chars_return_no_candidates_without_running_tesseract(
     runner = FixtureWritingRunner()
     engine = TesseractOcrEngine(workspace, _fake_runtime(tmp_path), 30, runner)
 
-    assert engine.detect_characters(crop_relpath, (), 7) == ()
+    assert engine.detect_characters(crop_relpath, (), "line") == ()
     assert runner.calls == 0
     assert not tuple(workspace.resolve_relpath("runs/test").glob(".ocr-*"))
 
 
-@pytest.mark.parametrize("page_segmentation_mode", (0, 1, 2, 5, 9, 14))
-def test_engine_rejects_unsupported_per_region_psm(
-    page_segmentation_mode: int,
+@pytest.mark.parametrize("text_layout", ("", "columns", "7", "LINE"))
+def test_engine_rejects_unknown_text_layouts(
+    text_layout: str,
     tmp_path: Path,
 ) -> None:
     engine = TesseractOcrEngine(
@@ -283,8 +300,8 @@ def test_engine_rejects_unsupported_per_region_psm(
         FixtureWritingRunner(),
     )
 
-    with pytest.raises(ValueError, match="unsupported page segmentation mode"):
-        engine.describe(["A"], page_segmentation_mode)
+    with pytest.raises(ValueError, match="unsupported text layout"):
+        engine.describe(["A"], text_layout)
 
 
 def test_numeric_region_drops_letter_candidates_before_mapping(tmp_path: Path) -> None:
@@ -293,7 +310,7 @@ def test_numeric_region_drops_letter_candidates_before_mapping(tmp_path: Path) -
     runner = FixtureWritingRunner(characters="W0")
     engine = TesseractOcrEngine(workspace, _fake_runtime(tmp_path), 30, runner)
 
-    candidates = engine.detect_characters(crop_relpath, tuple("0123456789"), 7)
+    candidates = engine.detect_characters(crop_relpath, tuple("0123456789"), "line")
 
     assert [candidate.char for candidate in candidates] == ["0"]
 
@@ -536,10 +553,10 @@ def test_configured_real_tesseract_runs_adapter_with_pinned_provenance(tmp_path:
 
     candidates = engine.detect_characters(crop_relpath, EXPECTED["allowed_chars"])
     explicit_default_candidates = engine.detect_characters(
-        crop_relpath, EXPECTED["allowed_chars"], 7
+        crop_relpath, EXPECTED["allowed_chars"], "auto"
     )
     provenance = engine.describe(EXPECTED["allowed_chars"])
-    explicit_default_provenance = engine.describe(EXPECTED["allowed_chars"], 7)
+    explicit_default_provenance = engine.describe(EXPECTED["allowed_chars"], "auto")
 
     assert provenance.engine_id == "tesseract"
     assert provenance.engine_version == settings.tesseract_version

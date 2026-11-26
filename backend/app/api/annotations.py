@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from backend.app.access.store.repositories.annotations import StoredAnnotation
 from backend.app.api.errors import StrictModel, error_envelope
+from backend.app.managers.workflow.contracts import (
+    StoredAnnotation,
+)
 from backend.app.managers.workflow.review_use_cases import ReviewUseCaseError, ReviewUseCases
 
 

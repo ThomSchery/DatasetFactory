@@ -39,10 +39,10 @@ from backend.app.access.store.run_artifacts import RunArtifacts
 from backend.app.access.store.workspace import Workspace
 from backend.app.composition import CompositionRoot
 from backend.app.engines.definition import DatasetDefinitionEngine, OcrProvenance
+from backend.app.engines.runstate import RunStatus
 from backend.app.main import create_app
 from backend.app.managers.workflow.manager import DatasetWorkflow, WorkflowError
 from backend.app.managers.workflow.recovery import WorkflowRecovery
-from backend.app.managers.workflow.state_machine import RunStatus
 from backend.app.managers.workflow.worker import WorkflowWorker
 from backend.tests.test_durable_workflow import (
     StubMediaAccess,

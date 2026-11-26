@@ -39,9 +39,9 @@ class DeterministicE2eOcrEngine:
     def describe(
         self,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> OcrProvenance:
-        del page_segmentation_mode
+        del text_layout
         if not allowed_chars:
             raise ValueError("e2e profile must define a character category")
         return self._provenance
@@ -50,9 +50,9 @@ class DeterministicE2eOcrEngine:
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> tuple[OcrCandidate, ...]:
-        del page_segmentation_mode
+        del text_layout
         self._control_root.mkdir(parents=True, exist_ok=True)
         frame_index = int(crop_relpath.parent.name)
         hold_marker = self._control_root / OCR_HOLD_MARKER

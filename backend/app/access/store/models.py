@@ -98,14 +98,13 @@ class HudRegion(TimestampMixin, Base):
         CheckConstraint("x >= 0 AND y >= 0", name="ck_hud_region_origin"),
         CheckConstraint("width > 0 AND height > 0", name="ck_hud_region_size"),
         CheckConstraint(
-            "ocr_page_segmentation_mode IS NULL OR "
-            "ocr_page_segmentation_mode IN (3,4,6,7,8,10,11,12,13)",
-            name="ck_hud_region_ocr_psm",
+            "ocr_text_layout IS NULL OR ocr_text_layout IN ('auto','line','word','block','sparse')",
+            name="ck_hud_region_ocr_layout",
         ),
         CheckConstraint(
-            "(ocr_allowed_chars IS NULL AND ocr_page_segmentation_mode IS NULL) OR "
+            "(ocr_allowed_chars IS NULL AND ocr_text_layout IS NULL) OR "
             "(ocr_allowed_chars IS NOT NULL AND length(ocr_allowed_chars) > 0 AND "
-            "ocr_page_segmentation_mode IS NOT NULL)",
+            "ocr_text_layout IS NOT NULL)",
             name="ck_hud_region_ocr_config_complete",
         ),
     )
@@ -120,7 +119,7 @@ class HudRegion(TimestampMixin, Base):
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     ocr_allowed_chars: Mapped[str | None] = mapped_column(Text)
-    ocr_page_segmentation_mode: Mapped[int | None] = mapped_column(Integer)
+    ocr_text_layout: Mapped[str | None] = mapped_column(String(16))
     retired_at: Mapped[datetime | None] = mapped_column(index=True)
 
 

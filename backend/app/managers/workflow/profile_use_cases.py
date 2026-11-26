@@ -80,7 +80,7 @@ class SavedRegion:
     width: int
     height: int
     allowed_chars: tuple[str, ...] | None
-    page_segmentation_mode: int | None
+    text_layout: str | None
 
 
 @dataclass(frozen=True)
@@ -405,7 +405,7 @@ class ProfileUseCases:
                                 if region.allowed_chars is not None
                                 else None
                             ),
-                            ocr_page_segmentation_mode=region.page_segmentation_mode,
+                            ocr_text_layout=region.text_layout,
                         )
                         for region in definition.regions
                     ),
@@ -499,7 +499,7 @@ class ProfileUseCases:
                 category.name for category in profile.categories if category.kind == "character"
             ),
         )
-        whitelist, mode = self._required_ocr_config(definition)
+        whitelist, layout = self._required_ocr_config(definition)
         try:
             return self._profiles.add_region(
                 profile_id,
@@ -511,7 +511,7 @@ class ProfileUseCases:
                     width=definition.bbox.width,
                     height=definition.bbox.height,
                     ocr_allowed_chars=whitelist,
-                    ocr_page_segmentation_mode=mode,
+                    ocr_text_layout=layout,
                     expected_version=expected_version,
                 ),
             )
@@ -532,7 +532,7 @@ class ProfileUseCases:
         profile_id: str,
         region_id: str,
         allowed_chars: tuple[str, ...],
-        page_segmentation_mode: int,
+        text_layout: str,
         expected_version: int,
     ) -> ProfileRecord:
         profile = self.get_profile(profile_id)
@@ -544,7 +544,7 @@ class ProfileUseCases:
                 name=existing.name,
                 bbox=BBox(existing.x, existing.y, existing.width, existing.height),
                 allowed_chars=allowed_chars,
-                page_segmentation_mode=page_segmentation_mode,
+                text_layout=text_layout,
             ),
             source_width=profile.source_width,
             source_height=profile.source_height,
@@ -552,14 +552,14 @@ class ProfileUseCases:
                 category.name for category in profile.categories if category.kind == "character"
             ),
         )
-        whitelist, mode = self._required_ocr_config(definition)
+        whitelist, layout = self._required_ocr_config(definition)
         try:
             return self._profiles.update_region_ocr_config(
                 profile_id,
                 region_id,
                 RegionOcrConfigDraft(
                     ocr_allowed_chars=whitelist,
-                    ocr_page_segmentation_mode=mode,
+                    ocr_text_layout=layout,
                     expected_version=expected_version,
                 ),
             )
@@ -600,7 +600,7 @@ class ProfileUseCases:
                     name=region.name,
                     bbox=BBox(region.x, region.y, region.width, region.height),
                     allowed_chars=region.allowed_chars,
-                    page_segmentation_mode=region.page_segmentation_mode,
+                    text_layout=region.text_layout,
                 )
                 for region in regions
             ),
@@ -624,7 +624,7 @@ class ProfileUseCases:
                 if validated_region.allowed_chars is not None
                 else None
             )
-            mode = validated_region.page_segmentation_mode
+            layout = validated_region.text_layout
             region_drafts.append(
                 SavedRegionDraft(
                     id=draft.id,
@@ -634,7 +634,7 @@ class ProfileUseCases:
                     width=validated_region.bbox.width,
                     height=validated_region.bbox.height,
                     ocr_allowed_chars=whitelist,
-                    ocr_page_segmentation_mode=mode,
+                    ocr_text_layout=layout,
                 )
             )
         category_drafts = tuple(
@@ -758,13 +758,13 @@ class ProfileUseCases:
             raise ProfileUseCaseError(exc.code, details=details) from exc
 
     @staticmethod
-    def _required_ocr_config(definition: RegionDefinition) -> tuple[str, int]:
+    def _required_ocr_config(definition: RegionDefinition) -> tuple[str, str]:
         """Every write path states both settings; a region never half-configures."""
-        if definition.allowed_chars is None or definition.page_segmentation_mode is None:
+        if definition.allowed_chars is None or definition.text_layout is None:
             raise ProfileUseCaseError(
                 "incomplete_region_ocr_config", details={"field": "allowed_chars"}
             )
-        return "".join(definition.allowed_chars), definition.page_segmentation_mode
+        return "".join(definition.allowed_chars), definition.text_layout
 
     @staticmethod
     def _region_name_conflict(error: RegionNameExistsError) -> ProfileUseCaseError:
@@ -808,11 +808,11 @@ def region_definition(
     width: int,
     height: int,
     allowed_chars: tuple[str, ...] | None = None,
-    page_segmentation_mode: int | None = None,
+    text_layout: str | None = None,
 ) -> RegionDefinition:
     return RegionDefinition(
         name=name,
         bbox=BBox(x=x, y=y, width=width, height=height),
         allowed_chars=allowed_chars,
-        page_segmentation_mode=page_segmentation_mode,
+        text_layout=text_layout,
     )

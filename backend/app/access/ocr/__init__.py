@@ -6,11 +6,13 @@ from backend.app.access.ocr.tesseract import (
     TesseractProcessRunner,
     TesseractRuntimeIdentity,
 )
+from backend.app.access.ocr.tesseract_probe import TesseractDependencyProbe
 
 __all__ = [
     "OcrEngine",
     "OcrProcessError",
     "OcrProcessResult",
+    "TesseractDependencyProbe",
     "TesseractOcrEngine",
     "TesseractOutputParser",
     "TesseractProcessRunner",

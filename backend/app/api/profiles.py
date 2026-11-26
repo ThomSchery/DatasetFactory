@@ -6,9 +6,12 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from backend.app.access.store.repositories.profiles import ProfileRecord, ProfileSummaryRecord
 from backend.app.api.errors import ErrorEnvelope, StrictModel, error_envelope
 from backend.app.engines.definition import CategoryDefinition, RegionDefinition
+from backend.app.managers.workflow.contracts import (
+    ProfileRecord,
+    ProfileSummaryRecord,
+)
 from backend.app.managers.workflow.profile_use_cases import (
     ProfileUseCaseError,
     ProfileUseCases,
@@ -25,7 +28,7 @@ class RegionRequest(StrictModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     allowed_chars: str | None = Field(default=None, min_length=1)
-    page_segmentation_mode: int | None = None
+    text_layout: str | None = None
 
 
 class AddRegionRequest(StrictModel):
@@ -41,13 +44,13 @@ class AddRegionRequest(StrictModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     allowed_chars: str = Field(min_length=1)
-    page_segmentation_mode: int
+    text_layout: str
     expected_version: int = Field(ge=1)
 
 
 class UpdateRegionOcrConfigRequest(StrictModel):
     allowed_chars: str = Field(min_length=1)
-    page_segmentation_mode: int
+    text_layout: str
     expected_version: int = Field(ge=1)
 
 
@@ -61,7 +64,7 @@ class SavedRegionRequest(StrictModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     allowed_chars: str | None = Field(min_length=1)
-    page_segmentation_mode: int | None
+    text_layout: str | None
 
 
 class SavedCategoryRequest(StrictModel):
@@ -131,7 +134,7 @@ class RegionResponse(StrictModel):
     width: int
     height: int
     allowed_chars: str | None = None
-    page_segmentation_mode: int | None = None
+    text_layout: str | None = None
 
 
 class CategoryResponse(StrictModel):
@@ -185,7 +188,7 @@ def _response(record: ProfileRecord) -> GameProfileResponse:
                 width=region.width,
                 height=region.height,
                 allowed_chars=region.ocr_allowed_chars,
-                page_segmentation_mode=region.ocr_page_segmentation_mode,
+                text_layout=region.ocr_text_layout,
             )
             for region in record.regions
         ),
@@ -391,7 +394,7 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                 allowed_chars=(
                     tuple(region.allowed_chars) if region.allowed_chars is not None else None
                 ),
-                page_segmentation_mode=region.page_segmentation_mode,
+                text_layout=region.text_layout,
             )
             for region in payload.regions
         )
@@ -498,7 +501,7 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                     width=payload.width,
                     height=payload.height,
                     allowed_chars=tuple(payload.allowed_chars),
-                    page_segmentation_mode=payload.page_segmentation_mode,
+                    text_layout=payload.text_layout,
                 ),
                 expected_version=payload.expected_version,
             )
@@ -528,7 +531,7 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                 profile_id=profile_id,
                 region_id=region_id,
                 allowed_chars=tuple(payload.allowed_chars),
-                page_segmentation_mode=payload.page_segmentation_mode,
+                text_layout=payload.text_layout,
                 expected_version=payload.expected_version,
             )
         except ProfileUseCaseError as error:
@@ -569,7 +572,7 @@ def create_profiles_router(use_cases_provider: ProfileUseCasesProvider) -> APIRo
                             if region.allowed_chars is not None
                             else None
                         ),
-                        page_segmentation_mode=region.page_segmentation_mode,
+                        text_layout=region.text_layout,
                     )
                     for region in payload.regions
                 ),

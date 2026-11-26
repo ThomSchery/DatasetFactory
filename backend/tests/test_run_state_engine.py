@@ -12,7 +12,7 @@ import itertools
 
 import pytest
 
-from backend.app.managers.workflow.state_machine import (
+from backend.app.engines.runstate import (
     FRAME_STAGES,
     RUN_STATUSES,
     InvalidTransitionError,

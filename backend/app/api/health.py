@@ -6,11 +6,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from backend.app import __version__
-from backend.app.access.status.service import (
+from backend.app.api.errors import ErrorEnvelope, error_envelope
+from backend.app.managers.workflow.contracts import (
     DependencyStatus,
     SystemStatusSnapshot,
 )
-from backend.app.api.errors import ErrorEnvelope, error_envelope
 
 
 class StrictModel(BaseModel):
@@ -24,13 +24,19 @@ class DependencyStatusResponse(StrictModel):
     code: str
 
 
+class OcrStatusResponse(DependencyStatusResponse):
+    """The OCR dependency, named after whichever engine is installed."""
+
+    engine: str
+
+
 class HealthResponse(StrictModel):
     version: str
     status: Literal["ok", "degraded", "unavailable"]
     database: DependencyStatusResponse
     workspace: DependencyStatusResponse
     ffmpeg: DependencyStatusResponse
-    tesseract: DependencyStatusResponse
+    ocr: OcrStatusResponse
     gpu: DependencyStatusResponse
 
 
@@ -51,13 +57,15 @@ def health_response(snapshot: SystemStatusSnapshot) -> HealthResponse:
             "unavailable"
             if not snapshot.operational
             else "degraded"
-            if not snapshot.ffmpeg.available or not snapshot.tesseract.available
+            if not snapshot.ffmpeg.available or not snapshot.ocr.available
             else "ok"
         ),
         database=_status_response(snapshot.database),
         workspace=_status_response(snapshot.workspace),
         ffmpeg=_status_response(snapshot.ffmpeg),
-        tesseract=_status_response(snapshot.tesseract),
+        ocr=OcrStatusResponse(
+            **_status_response(snapshot.ocr).model_dump(), engine=snapshot.ocr_engine
+        ),
         gpu=_status_response(snapshot.gpu),
     )
 

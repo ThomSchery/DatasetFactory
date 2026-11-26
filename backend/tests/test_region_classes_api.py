@@ -113,7 +113,7 @@ def test_adding_a_region_adds_its_class(composition: CompositionRoot, tmp_path: 
                 "width": 8,
                 "height": 8,
                 "allowed_chars": "0",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
                 "expected_version": profile["version"],
             },
         )
@@ -140,7 +140,7 @@ def test_a_region_drawn_in_a_save_gets_its_class(
                 "width": 8,
                 "height": 8,
                 "allowed_chars": "01",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
             }
         )
         response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)
@@ -277,7 +277,7 @@ def test_a_region_class_never_takes_the_ordinal_of_a_class_dropped_in_the_same_s
                 "width": 8,
                 "height": 8,
                 "allowed_chars": "0",
-                "page_segmentation_mode": 7,
+                "text_layout": "line",
             }
         )
         response = client.put(f"/api/v1/profiles/{profile['id']}/definition", json=draft)

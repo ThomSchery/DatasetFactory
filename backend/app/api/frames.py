@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import Field, model_validator
 
-from backend.app.access.store.repositories.annotations import StoredFrameReview
 from backend.app.api.annotations import (
     AnnotationResponse,
     BBoxRequest,
@@ -13,6 +12,9 @@ from backend.app.api.annotations import (
     review_error,
 )
 from backend.app.api.errors import ErrorEnvelope, StrictModel
+from backend.app.managers.workflow.contracts import (
+    StoredFrameReview,
+)
 from backend.app.managers.workflow.review_use_cases import ReviewUseCaseError, ReviewUseCases
 
 

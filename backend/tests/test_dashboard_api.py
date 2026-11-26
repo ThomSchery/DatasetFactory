@@ -26,7 +26,6 @@ from backend.app.access.store.models import (
 from backend.app.composition import CompositionRoot
 from backend.app.config import Settings
 from backend.app.main import create_app
-from backend.app.managers.workflow.manager import TESSERACT_QUALITY_WARNING
 
 TECH_PLAN = Path("docs/TECH_PLAN.md")
 
@@ -38,6 +37,12 @@ class DashboardSeed:
     run_id: str
     frame_ids: tuple[str, ...]
     category_id: str
+
+
+EXPERIMENTAL_FAILED_WARNING = (
+    "Eksperymentalny silnik OCR (tesseract) nie przeszedł bramki jakości; "
+    "każdy wynik OCR wymaga pełnej ręcznej weryfikacji."
+)
 
 
 def _seed(
@@ -298,7 +303,7 @@ def test_dashboard_carries_the_experimental_ocr_warning(
         tmp_path,
         experimental=True,
         quality_gate="failed",
-        warning=TESSERACT_QUALITY_WARNING,
+        warning=EXPERIMENTAL_FAILED_WARNING,
     )
     with TestClient(create_app(settings, composition=composition)) as client:
         body = client.get("/api/v1/dashboard").json()
@@ -306,7 +311,7 @@ def test_dashboard_carries_the_experimental_ocr_warning(
 
     assert body["run"]["experimental"] is True
     assert body["run"]["quality_gate"] == "failed"
-    assert body["run"]["warning"] == TESSERACT_QUALITY_WARNING
+    assert body["run"]["warning"] == EXPERIMENTAL_FAILED_WARNING
     assert body["run"]["warning"] == run["warning"]
 
 

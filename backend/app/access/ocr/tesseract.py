@@ -15,7 +15,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Literal, Protocol, cast
+from typing import Final, Literal, Protocol, cast
 from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
@@ -24,6 +24,15 @@ from backend.app.access.ocr.protocol import OcrProcessError
 from backend.app.access.store.workspace import Workspace, WorkspaceError
 from backend.app.engines.definition import BBox
 from backend.app.engines.definition.ocr_mapping import OcrCandidate, OcrProvenance
+
+# The operator's text layouts (`DatasetDefinitionEngine`) in Tesseract's page segmentation modes.
+_PAGE_SEGMENTATION_MODE_BY_LAYOUT: Final[dict[str, int]] = {
+    "auto": 6,
+    "line": 7,
+    "word": 8,
+    "block": 6,
+    "sparse": 11,
+}
 
 
 @dataclass(frozen=True)
@@ -327,7 +336,6 @@ class TesseractOcrEngine:
         *,
         parser: TesseractOutputParser | None = None,
         language: str = "eng",
-        page_segmentation_mode: int = 7,
         retry_backoff_seconds: float = 1.0,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -337,18 +345,17 @@ class TesseractOcrEngine:
         self._runner = runner
         self._parser = parser or TesseractOutputParser()
         self._language = language
-        self._page_segmentation_mode = page_segmentation_mode
         self._retry_backoff_seconds = retry_backoff_seconds
         self._sleeper = sleeper
 
     def describe(
         self,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> OcrProvenance:
         allowed = self._normalize_allowed_chars(allowed_chars)
         whitelist = "".join(allowed)
-        psm = self._effective_page_segmentation_mode(page_segmentation_mode)
+        psm = self._page_segmentation_mode_for(text_layout)
         # Measured, not declared: this provenance is persisted on the run and on the
         # sample/crop checkpoints long before the first OCR call would verify it.
         runtime_hash, model_hash = self._runtime.verified_hashes(language=self._language)
@@ -369,11 +376,11 @@ class TesseractOcrEngine:
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> tuple[OcrCandidate, ...]:
         crop = self._resolve_crop(crop_relpath)
         allowed = self._normalize_allowed_chars(allowed_chars)
-        psm = self._effective_page_segmentation_mode(page_segmentation_mode)
+        psm = self._page_segmentation_mode_for(text_layout)
         if not allowed:
             return ()
         runtime_hash, model_hash = self._runtime.verified_hashes(language=self._language)
@@ -482,11 +489,19 @@ class TesseractOcrEngine:
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def _effective_page_segmentation_mode(self, value: int | None) -> int:
-        psm = self._page_segmentation_mode if value is None else value
-        if type(psm) is not int or psm not in {3, 4, 6, 7, 8, 10, 11, 12, 13}:
-            raise ValueError("unsupported page segmentation mode")
-        return psm
+    @staticmethod
+    def _page_segmentation_mode_for(text_layout: str | None) -> int:
+        """Tesseract's own word for the operator's text layout.
+
+        This is the only place that knows `--psm`. `auto` is `6`, a uniform block:
+        it reads a single line like `7` does, and it also reads a region with
+        several lines, which `7` returns empty for. Measured on one real run
+        (`health & armour`, two lines): `7` read 0 of 45 numbers, `6` read 11.
+        """
+        mode = _PAGE_SEGMENTATION_MODE_BY_LAYOUT.get("auto" if text_layout is None else text_layout)
+        if mode is None:
+            raise ValueError("unsupported text layout")
+        return mode
 
     @staticmethod
     def _normalize_allowed_chars(allowed_chars: Collection[str]) -> tuple[str, ...]:

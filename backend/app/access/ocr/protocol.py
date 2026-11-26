@@ -21,14 +21,14 @@ class OcrEngine(Protocol):
     def describe(
         self,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> OcrProvenance: ...
 
     def detect_characters(
         self,
         crop_relpath: Path,
         allowed_chars: Collection[str],
-        page_segmentation_mode: int | None = None,
+        text_layout: str | None = None,
     ) -> tuple[OcrCandidate, ...]: ...
 
     def cancel_current(self) -> None: ...
