@@ -107,12 +107,27 @@
     background: var(--color-surface-neutral-default);
   }
 
+  /* FE-033: the field grows with the window instead of the fixed Figma 479 px
+     (still its minimum). What the window height loses above and below the
+     field is the shell bar, the main padding, the workspace switch with its
+     margin, and this panel's padding and border — all existing tokens. */
+  .df-profile-workspace {
+    --df-profile-field-height: max(
+      calc(var(--profile-image-height-md) + var(--element-gap-lg) + var(--control-height-md)),
+      calc(
+        100dvh - var(--topbar-height) - 3 * var(--site-padding) - var(--control-height-md) - 2 *
+          var(--element-padding-y-md) - 2 * var(--element-padding-y-lg) - 2 *
+          var(--border-width-default)
+      )
+    );
+  }
+
   .df-profile-workspace__canvas .df-region-canvas {
-    height: calc(var(--profile-image-height-md) + var(--element-gap-lg) + var(--control-height-md));
+    height: var(--df-profile-field-height);
   }
 
   .df-profile-workspace__empty-image .df-file-tile__pick.df-button {
-    height: calc(var(--profile-image-height-md) + var(--element-gap-lg) + var(--control-height-md));
+    height: var(--df-profile-field-height);
   }
 
   .df-profile-workspace__run.df-button {

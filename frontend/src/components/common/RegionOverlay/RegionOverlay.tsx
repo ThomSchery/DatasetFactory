@@ -133,6 +133,8 @@ interface PanGesture {
 
 const FIT_VIEW: ViewTransform = { scale: 1, x: 0, y: 0 };
 const MAX_ZOOM = 8;
+/** FE-033: with `fill` the picture may be zoomed out to half its starting size. */
+const MIN_FILL_ZOOM = 0.5;
 const ZOOM_STEP = 1.25;
 const SPACE_INTERACTION_OWNER_SELECTOR = [
   "button",
@@ -175,6 +177,8 @@ function rounded(value: number): number {
  * proportion that fits ("contain"), centred — scale 1 is then the whole frame.
  * FE-025 (user, 2026-11-10: "fit the image in the window"): scale 1 is also
  * where every picture starts; the FE-022 cover crop is gone.
+ * FE-033 (user, 2026-11-26): the starting box is never larger than the
+ * source — a small frame starts at 1:1 instead of being upscaled and blurred.
  */
 interface StageLayout {
   baseHeight: number;
@@ -223,7 +227,7 @@ function legacyLayout(bounds: { width: number; height: number }): StageLayout {
 
 function fillLayout(viewport: { width: number; height: number }, source: SourceSize): StageLayout {
   const ratio = source.width / source.height;
-  const baseWidth = Math.min(viewport.width, viewport.height * ratio);
+  const baseWidth = Math.min(viewport.width, viewport.height * ratio, source.width);
   const baseHeight = baseWidth / ratio;
   return {
     baseHeight,
@@ -349,6 +353,17 @@ export function RegionOverlay({
       : null;
   const fillLayoutRef = useRef<StageLayout | null>(fillLayoutValue);
   fillLayoutRef.current = fillLayoutValue;
+  const minZoom = fill ? MIN_FILL_ZOOM : 1;
+  const minZoomRef = useRef(minZoom);
+  minZoomRef.current = minZoom;
+  /**
+   * FE-033: with a placed `fill` stage the value is the displayed size against
+   * the source pixels, so 100 % is 1:1. Without it, relative to the start view.
+   */
+  const zoomPercent =
+    fillLayoutValue !== null && source !== null && source.width > 0
+      ? (view.scale * fillLayoutValue.baseWidth * 100) / source.width
+      : view.scale * 100;
   /** The view is still the starting one, so a resize may recompute it. */
   const atStartViewRef = useRef(true);
 
@@ -427,7 +442,7 @@ export function RegionOverlay({
 
   function applyZoom(requestedScale: number, anchor: SourcePoint, layout: StageLayout): void {
     const current = viewRef.current;
-    const scale = rounded(Math.min(MAX_ZOOM, Math.max(1, requestedScale)));
+    const scale = rounded(Math.min(MAX_ZOOM, Math.max(minZoomRef.current, requestedScale)));
     if (scale === current.scale) {
       return;
     }
@@ -520,7 +535,13 @@ export function RegionOverlay({
       return;
     }
     const handleWheel = (event: globalThis.WheelEvent) => {
-      if (!event.ctrlKey || event.deltaY === 0) {
+      if (!event.ctrlKey) {
+        return;
+      }
+      // FE-033: Ctrl-wheel over the picture is always the picture's gesture.
+      // At a zoom limit nothing happens — the browser must not zoom the page.
+      event.preventDefault();
+      if (event.deltaY === 0) {
         return;
       }
       const viewport = viewportRef.current;
@@ -530,16 +551,11 @@ export function RegionOverlay({
       }
       const bounds = viewport.getBoundingClientRect();
       const requested =
-        event.deltaY < 0
-          ? viewRef.current.scale * ZOOM_STEP
-          : event.deltaY > 0
-            ? viewRef.current.scale / ZOOM_STEP
-            : viewRef.current.scale;
-      const scale = rounded(Math.min(MAX_ZOOM, Math.max(1, requested)));
+        event.deltaY < 0 ? viewRef.current.scale * ZOOM_STEP : viewRef.current.scale / ZOOM_STEP;
+      const scale = rounded(Math.min(MAX_ZOOM, Math.max(minZoomRef.current, requested)));
       if (scale === viewRef.current.scale) {
         return;
       }
-      event.preventDefault();
       const anchor = {
         x: event.clientX - bounds.left,
         y: event.clientY - bounds.top,
@@ -1264,7 +1280,7 @@ export function RegionOverlay({
           <div aria-label="Canvas view" className="df-region-overlay__zoom-controls" role="group">
             <Button
               aria-label="Zoom out"
-              disabled={view.scale <= 1}
+              disabled={view.scale <= minZoom}
               onClick={() => {
                 zoomAtViewportCenter("out");
               }}
@@ -1275,7 +1291,7 @@ export function RegionOverlay({
               <Icon name="zoom-out" />
             </Button>
             <output aria-label="Canvas zoom" className="df-region-overlay__zoom-value">
-              {String(Math.round(view.scale * 100))}%
+              {String(Math.round(zoomPercent))}%
             </output>
             <Button
               aria-label="Zoom in"
@@ -1292,7 +1308,7 @@ export function RegionOverlay({
             <Button
               aria-label="Pan"
               aria-pressed={panMode}
-              disabled={view.scale === 1}
+              disabled={view.scale <= 1}
               onClick={() => {
                 setPanMode((current) => !current);
               }}
@@ -1307,7 +1323,7 @@ export function RegionOverlay({
               disabled={view.scale === 1 && view.x === 0 && view.y === 0}
               onClick={resetView}
               size="sm"
-              title="Reset view — show the whole frame"
+              title="Reset view — the whole frame, at most 1:1"
               variant="secondary"
             >
               <Icon name="reset" />

@@ -888,7 +888,8 @@ describe("the drawing surface", () => {
     expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
   });
 
-  it("leaves Ctrl-wheel to the browser when the requested zoom is already at a limit", () => {
+  // FE-033 (user, 2026-11-26): at a limit the browser must not zoom the page.
+  it("keeps Ctrl-wheel from the browser even when the zoom is already at a limit", () => {
     renderOverlay();
     const surface = surfaceElement();
     layOutSurface(surface, 960);
@@ -900,7 +901,8 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: 100,
     });
-    expect(atMinimum).toBe(true);
+    expect(atMinimum).toBe(false);
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("100%");
 
     const withinRange = fireEvent.wheel(surface, {
       clientX: 480,
@@ -926,7 +928,8 @@ describe("the drawing surface", () => {
       ctrlKey: true,
       deltaY: -100,
     });
-    expect(atMaximum).toBe(true);
+    expect(atMaximum).toBe(false);
+    expect(screen.getByLabelText("Canvas zoom")).toHaveTextContent("800%");
   });
 
   it.each([
@@ -1783,9 +1786,10 @@ describe("fill: the whole frame fits the field (FE-025, replaces the FE-022 crop
       );
 
       // 1920 × 1080 in a 400 × 400 field: the whole frame is 400 × 225,
-      // centred 87.5 px from the top, at 100 % — nothing is cropped.
+      // centred 87.5 px from the top — nothing is cropped. FE-033: the value
+      // is against source pixels, 400 / 1920 = 21 %.
       const zoom = screen.getByRole("status", { name: "Canvas zoom" });
-      expect(zoom).toHaveTextContent("100%");
+      expect(zoom).toHaveTextContent("21%");
       const stage = document.querySelector<HTMLElement>(".df-region-overlay__zoom-stage");
       expect(stage?.style.width).toBe("400px");
       expect(stage?.style.height).toBe("225px");
@@ -1795,10 +1799,73 @@ describe("fill: the whole frame fits the field (FE-025, replaces the FE-022 crop
       expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
 
       await user.click(screen.getByRole("button", { name: "Zoom in" }));
-      expect(zoom).not.toHaveTextContent("100%");
+      expect(zoom).toHaveTextContent("26%");
+      await user.click(screen.getByRole("button", { name: "Reset view" }));
+      expect(zoom).toHaveTextContent("21%");
+      expect(stage?.style.transform).toBe("translate(0px, 0px) scale(1)");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // FE-033 (user, 2026-11-26): never upscale at the start — like Roboflow.
+  it("starts a frame smaller than the field at 1:1, centred, and zooms out to half", async () => {
+    const user = userEvent.setup();
+    const wideField = function (this: Element): DOMRect {
+      const width = this.classList.contains("df-region-overlay") ? 1600 : 0;
+      const height = this.classList.contains("df-region-overlay") ? 900 : 0;
+      return {
+        left: 0,
+        top: 0,
+        width,
+        height,
+        right: width,
+        bottom: height,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    };
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(wideField);
+    try {
+      render(
+        <RegionOverlay
+          fill
+          imageAlt="Frame"
+          imageUrl="/frame.png"
+          label="Boxes"
+          shapes={[]}
+          source={{ width: 1280, height: 720 }}
+        />,
+      );
+
+      const zoom = screen.getByRole("status", { name: "Canvas zoom" });
+      const stage = document.querySelector<HTMLElement>(".df-region-overlay__zoom-stage");
+      expect(stage?.style.width).toBe("1280px");
+      expect(stage?.style.height).toBe("720px");
+      expect(stage?.style.left).toBe("160px");
+      expect(stage?.style.top).toBe("90px");
+      expect(zoom).toHaveTextContent("100%");
+
+      const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+      for (let step = 0; step < 6; step += 1) {
+        if (!zoomOut.hasAttribute("disabled")) {
+          await user.click(zoomOut);
+        }
+      }
+      expect(zoom).toHaveTextContent("50%");
+      expect(zoomOut).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Pan" })).toBeDisabled();
+
+      // Ctrl-wheel at the floor stays the picture's gesture.
+      const surface = document.querySelector(".df-region-overlay__surface") as Element;
+      expect(fireEvent.wheel(surface, { clientX: 800, clientY: 450, ctrlKey: true, deltaY: 100 })).toBe(
+        false,
+      );
+      expect(zoom).toHaveTextContent("50%");
+
       await user.click(screen.getByRole("button", { name: "Reset view" }));
       expect(zoom).toHaveTextContent("100%");
-      expect(stage?.style.transform).toBe("translate(0px, 0px) scale(1)");
     } finally {
       spy.mockRestore();
     }

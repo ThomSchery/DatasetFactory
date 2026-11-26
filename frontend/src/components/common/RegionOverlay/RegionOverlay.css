@@ -51,7 +51,9 @@
   width: 100%;
   height: 100%;
   max-width: none;
-  object-fit: contain;
+  /* FE-033: until the stage is placed, the same rule as the placed view —
+     whole frame, never larger than the source. */
+  object-fit: scale-down;
   border-radius: var(--radius-none);
 }
 
