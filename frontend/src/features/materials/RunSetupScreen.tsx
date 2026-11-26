@@ -23,11 +23,11 @@ import { Field } from "../../components/common/Field";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Icon } from "../../components/common/Icon";
 import { Panel } from "../../components/common/Panel";
+import { RegionOverlay, type OverlayShape } from "../../components/common/RegionOverlay";
 import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { RunPanel } from "../dashboard/RunPanel";
 import { useDashboard } from "../dashboard/dashboardQuery";
-import { ReferenceImage } from "../profiles/ReferenceImage";
 import { DEFAULT_INTERVAL_MS, runLaunchSchema, type RunLaunchValues } from "./schemas";
 import "./RunSetupScreen.css";
 
@@ -46,6 +46,8 @@ function errorText(error: ErrorPresentation): string {
  * panel — Source file, Profile, Sample rate and the Run button at its foot —
  * beside the preview of the chosen profile's screenshot. Below 768 px the
  * preview comes first, then the panel, then Run across the full width.
+ * FE-034: the preview is the Profile picture field — a read-only
+ * `RegionOverlay` with the profile's regions, the same zoom tools and height.
  *
  * Run creates the run and starts it. Starting acquires the single run slot and
  * may answer `409 active_run`; the run then waits, queued, in the compact
@@ -94,6 +96,18 @@ export function RunSetupScreen() {
     queryKey: queryKeys.profile(previewProfileId ?? "none"),
     queryFn: ({ signal }) => getProfile(previewProfileId as string, signal),
   });
+  /** The asset URL whose image failed to load, and a key that remounts it on retry. */
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const [imageReloadKey, setImageReloadKey] = useState(0);
+  const previewShapes: OverlayShape[] = (preview.data?.regions ?? []).map((region) => ({
+    displayLabel: region.name,
+    height: region.height,
+    id: region.id,
+    label: region.name,
+    width: region.width,
+    x: region.x,
+    y: region.y,
+  }));
 
   const launch = useMutation({
     mutationFn: async (values: RunLaunchValues): Promise<LaunchResult> => {
@@ -159,11 +173,29 @@ export function RunSetupScreen() {
     <div className="df-run-setup">
       <h1 className="df-run-setup__heading">Run Setup</h1>
 
-      <div className="df-run-setup__preview">
-        {preview.isSuccess ? (
-          <ReferenceImage
-            alt={`Reference screenshot of profile ${preview.data.name}`}
-            url={preview.data.reference_asset_url}
+      {/* FE-034: the same picture field as Profile, read-only. */}
+      <section aria-label="Reference screenshot" className="df-run-setup__preview">
+        {preview.isSuccess && failedImageUrl === preview.data.reference_asset_url ? (
+          <FatalError
+            description="The image could not be loaded from the API. The file may have moved out of the workspace."
+            onRetry={() => {
+              setFailedImageUrl(null);
+              setImageReloadKey((key) => key + 1);
+            }}
+            title="The image did not load"
+          />
+        ) : preview.isSuccess ? (
+          <RegionOverlay
+            fill
+            imageAlt={`Reference screenshot of profile ${preview.data.name}`}
+            imageUrl={preview.data.reference_asset_url}
+            key={`${preview.data.reference_asset_url}#${String(imageReloadKey)}`}
+            label="HUD regions on the reference screenshot"
+            onImageError={() => {
+              setFailedImageUrl(preview.data.reference_asset_url);
+            }}
+            shapes={previewShapes}
+            source={{ width: preview.data.source_width, height: preview.data.source_height }}
           />
         ) : (
           <div className="df-run-setup__placeholder">
@@ -176,7 +208,7 @@ export function RunSetupScreen() {
             )}
           </div>
         )}
-      </div>
+      </section>
 
       <Panel className="df-run-setup__column" hideTitle radius="sm" title="Run settings">
         <div className="df-run-setup__fields">

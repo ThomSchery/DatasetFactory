@@ -148,6 +148,18 @@
   --profile-image-height-md: 479px;
   --review-image-height-sm: 511px;
   --review-image-height-md: 543px;
+  /* FE-033/FE-034: the picture field of Profile and Run Setup from 768 px —
+     image plus its tool row. It grows with the window instead of the fixed
+     Figma 479 px (still its minimum). Subtracted: the shell bar, the main
+     padding, the workspace switch with its margin, and the picture panel's
+     padding and border. */
+  --workspace-image-field-height: max(
+    calc(var(--profile-image-height-md) + var(--element-gap-lg) + var(--control-height-md)),
+    calc(
+      100dvh - var(--topbar-height) - 3 * var(--site-padding) - var(--control-height-md) - 2 *
+        var(--element-padding-y-md) - 2 * var(--element-padding-y-lg) - 2 * var(--border-width-default)
+    )
+  );
   /* The width the design harness renders a component gallery at. The product
      itself has no minimum width any more: FE-021 replaced `WidthGuard` with a
      layout that works from 360 px up. */

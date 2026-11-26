@@ -29,15 +29,17 @@
   white-space: nowrap;
 }
 
+/* FE-034: the preview is the Profile canvas — the same field heights, the
+   same read-only `RegionOverlay` with its tool row under the picture. Phone:
+   the picture box itself is the 279 px field. */
 .df-run-setup__preview {
+  display: grid;
   min-width: 0;
-  aspect-ratio: 328 / 173;
 }
 
-.df-run-setup__preview .df-reference-image,
+.df-run-setup__preview .df-region-canvas,
 .df-run-setup__placeholder {
-  width: 100%;
-  height: 100%;
+  height: calc(var(--profile-image-height-sm) + var(--element-gap-lg) + var(--field-height));
 }
 
 .df-run-setup__placeholder {
@@ -111,12 +113,6 @@
   color: var(--color-text-weak-default);
 }
 
-@media (min-width: 576px) {
-  .df-run-setup__preview {
-    aspect-ratio: 544 / 297;
-  }
-}
-
 @media (min-width: 768px) {
   .df-run-setup {
     grid-template-columns: var(--workspace-run-column) minmax(0, 1fr);
@@ -133,10 +129,19 @@
     white-space: normal;
   }
 
+  /* FE-034: the Profile canvas panel (Figma `Frame 52` chrome). */
   .df-run-setup__preview {
     grid-column: 2;
     grid-row: 1 / span 2;
-    aspect-ratio: 947 / 521;
+    padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+    border: var(--border-width-default) solid var(--color-stroke-panel-default);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-neutral-default);
+  }
+
+  .df-run-setup__preview .df-region-canvas,
+  .df-run-setup__placeholder {
+    height: var(--workspace-image-field-height);
   }
 
   /* Wider screens: the whole column is the panel, and Run sits at its foot. */

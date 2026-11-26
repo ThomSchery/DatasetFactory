@@ -333,6 +333,19 @@ describe("Run Setup: from a file to a started run", () => {
     ).toHaveAttribute("src", "/api/v1/assets/references/asset-2");
   });
 
+  // FE-034: the preview is the Profile picture field, read-only.
+  it("previews the profile like Profile does: its regions and the zoom tools, no drawing", async () => {
+    stubBackend(state);
+    renderApp(["/run?profile=profile-1"]);
+
+    const regions = await screen.findByRole("listbox", { name: "HUD regions on the reference screenshot" });
+    expect(within(regions).getByRole("option", { name: /Pasek zdrowia/ })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Canvas view" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Draw region" })).toBeNull();
+    expect(regions).not.toHaveClass("df-region-overlay__surface--drawable");
+  });
+
   it("takes the profile from the address when Profile sends the operator here", async () => {
     stubBackend(state);
     renderApp(["/run?profile=profile-1"]);
