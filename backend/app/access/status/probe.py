@@ -99,6 +99,11 @@ class OcrDependencyProbe(Protocol):
     """
 
     @property
+    def engine_id(self) -> str:
+        """The identifier a run names the engine by (`OcrEngineRegistry`)."""
+        ...
+
+    @property
     def engine_name(self) -> str: ...
 
     @property

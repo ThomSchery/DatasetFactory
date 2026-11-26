@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from backend.app.access.status.probe import OcrDependencyProbe, ProbeResult, ResourceProbe
@@ -18,6 +19,19 @@ class DependencyStatus:
 
 
 @dataclass(frozen=True)
+class OcrEngineStatus:
+    """One installed OCR engine, as its own probe reports it."""
+
+    id: str
+    name: str
+    available: bool
+    code: str
+    detail: str
+    uses_text_layout: bool
+    default: bool
+
+
+@dataclass(frozen=True)
 class SystemStatusSnapshot:
     database: DependencyStatus
     workspace: DependencyStatus
@@ -25,6 +39,7 @@ class SystemStatusSnapshot:
     ocr: DependencyStatus
     ocr_engine: str
     ocr_uses_text_layout: bool
+    ocr_engines: tuple[OcrEngineStatus, ...]
     gpu: DependencyStatus
 
     @property
@@ -42,12 +57,15 @@ class SystemStatusAccess:
         settings: Settings,
         resource_probe: ResourceProbe,
         ocr_probe: OcrDependencyProbe,
+        ocr_probes: Sequence[OcrDependencyProbe] = (),
     ) -> None:
         self._database = database
         self._workspace = workspace
         self._settings = settings
         self._resource_probe = resource_probe
         self._ocr_probe = ocr_probe
+        # Every engine a run may choose; the first one is the default and also `ocr_probe`.
+        self._ocr_probes = tuple(ocr_probes) or (ocr_probe,)
 
     def snapshot(self) -> SystemStatusSnapshot:
         database_available = self._database.check_health()
@@ -64,7 +82,24 @@ class SystemStatusAccess:
             output_marker="ffprobe version",
             timeout_seconds=self._settings.ffprobe_timeout_seconds,
         )
-        ocr = self._ocr_probe.probe()
+        engines: list[OcrEngineStatus] = []
+        ocr = ProbeResult(False, "unavailable")
+        for probe in self._ocr_probes:
+            result = probe.probe()
+            is_default = probe.engine_id == self._ocr_probe.engine_id
+            if is_default:
+                ocr = result
+            engines.append(
+                OcrEngineStatus(
+                    id=probe.engine_id,
+                    name=probe.engine_name,
+                    available=result.available,
+                    code=result.reason,
+                    detail=result.detail,
+                    uses_text_layout=probe.uses_text_layout,
+                    default=is_default,
+                )
+            )
         gpu = self._resource_probe.gpu(timeout_seconds=self._settings.ffprobe_timeout_seconds)
         ffmpeg_status = self._combined_ffmpeg_status(ffmpeg, ffprobe)
         return SystemStatusSnapshot(
@@ -92,6 +127,7 @@ class SystemStatusAccess:
             ocr=DependencyStatus("ocr", ocr.available, False, ocr.detail, ocr.reason),
             ocr_engine=self._ocr_probe.engine_name,
             ocr_uses_text_layout=self._ocr_probe.uses_text_layout,
+            ocr_engines=tuple(engines),
             gpu=DependencyStatus("gpu", gpu.available, False, gpu.detail, gpu.reason),
         )
 

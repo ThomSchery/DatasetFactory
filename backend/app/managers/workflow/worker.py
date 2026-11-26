@@ -13,7 +13,12 @@ from backend.app.access.media.processing import (
     RegionCrop,
     SampledFrame,
 )
-from backend.app.access.ocr import OcrEngine, OcrProcessError
+from backend.app.access.ocr import (
+    OcrEngine,
+    OcrEngineRegistry,
+    OcrProcessError,
+    UnknownOcrEngineError,
+)
 from backend.app.access.store.ocr_regions import RegionOcrSnapshot
 from backend.app.access.store.repositories.checkpoints import (
     CheckpointArtifactError,
@@ -64,7 +69,7 @@ class WorkflowWorker:
         checkpoints: CheckpointRepository,
         recovery: WorkflowRecovery,
         media: WorkflowMediaAccess,
-        ocr: OcrEngine,
+        ocr: OcrEngine | OcrEngineRegistry,
         definition: DatasetDefinitionEngine,
         logger: logging.Logger,
         *,
@@ -77,7 +82,8 @@ class WorkflowWorker:
         self._checkpoints = checkpoints
         self._recovery = recovery
         self._media = media
-        self._ocr = ocr
+        # A bare engine is a registry of one.
+        self._ocr = ocr if isinstance(ocr, OcrEngineRegistry) else OcrEngineRegistry.of(ocr)
         self._definition = definition
         self._logger = logger
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
@@ -175,6 +181,11 @@ class WorkflowWorker:
         run = self._runs.get(run_id)
         regions = {region.id: region for region in frame.regions}
         ocr_regions = {region.region_id: region for region in run.ocr_regions}
+        # The run names its engine once, at creation; a resumed run reads with the same one.
+        try:
+            engine = self._ocr.get(run.ocr_engine)
+        except UnknownOcrEngineError as exc:
+            raise OcrProcessError("ocr_engine_unavailable") from exc
         observations: list[ObservationWrite] = []
         with self._heartbeat(run_id):
             for sample in frame.samples:
@@ -184,7 +195,7 @@ class WorkflowWorker:
                 ocr_region = ocr_regions.get(sample.region_id)
                 if ocr_region is None:
                     raise OcrProcessError("ocr_region_config_missing")
-                candidates = self._ocr.detect_characters(
+                candidates = engine.detect_characters(
                     sample.crop_relpath,
                     ocr_region.allowed_chars,
                     ocr_region.text_layout,

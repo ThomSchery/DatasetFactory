@@ -6,7 +6,12 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from backend.app.access.ocr import OcrEngine, OcrProcessError
+from backend.app.access.ocr import (
+    OcrEngine,
+    OcrEngineRegistry,
+    OcrProcessError,
+    UnknownOcrEngineError,
+)
 from backend.app.access.store.ocr_regions import RegionOcrSnapshot
 from backend.app.access.store.repositories.checkpoints import CheckpointReservationError
 from backend.app.access.store.repositories.frames import (
@@ -82,14 +87,15 @@ class DatasetWorkflow:
         frames: FrameRepository,
         recovery: WorkflowRecovery,
         worker: WorkflowWorker,
-        ocr: OcrEngine,
+        ocr: OcrEngine | OcrEngineRegistry,
         artifacts: RunArtifacts,
     ) -> None:
         self._runs = runs
         self._frames = frames
         self._recovery = recovery
         self._worker = worker
-        self._ocr = ocr
+        # A bare engine is a registry of one.
+        self._ocr = ocr if isinstance(ocr, OcrEngineRegistry) else OcrEngineRegistry.of(ocr)
         self._artifacts = artifacts
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dataset-workflow")
         self._lock = threading.Lock()
@@ -104,19 +110,30 @@ class DatasetWorkflow:
     def recover_startup(self) -> RecoveryResult:
         return self._recovery.recover_startup()
 
-    def create_run(self, *, profile_id: str, video_id: str, interval_ms: int) -> RunRecord:
+    def create_run(
+        self,
+        *,
+        profile_id: str,
+        video_id: str,
+        interval_ms: int,
+        ocr_engine: str | None = None,
+    ) -> RunRecord:
         if interval_ms <= 0:
             raise WorkflowError("invalid_interval", details={"field": "interval_ms"})
+        try:
+            engine = self._ocr.get(ocr_engine)
+        except UnknownOcrEngineError as exc:
+            raise WorkflowError("ocr_engine_unknown", details={"field": "ocr_engine"}) from exc
         for _ in range(3):
             record = self._try_create_run(
-                profile_id=profile_id, video_id=video_id, interval_ms=interval_ms
+                profile_id=profile_id, video_id=video_id, interval_ms=interval_ms, engine=engine
             )
             if record is not None:
                 return record
         raise WorkflowError("profile_changed_during_run_creation")
 
     def _try_create_run(
-        self, *, profile_id: str, video_id: str, interval_ms: int
+        self, *, profile_id: str, video_id: str, interval_ms: int, engine: OcrEngine
     ) -> RunRecord | None:
         try:
             context = self._runs.creation_context(profile_id, video_id)
@@ -130,14 +147,14 @@ class DatasetWorkflow:
         ):
             raise WorkflowError("profile_resolution_mismatch")
         try:
-            provenance = self._ocr.describe(context.allowed_chars)
+            provenance = engine.describe(context.allowed_chars)
         except (OcrProcessError, ValueError) as exc:
             code = exc.code if isinstance(exc, OcrProcessError) else "ocr_configuration_invalid"
             raise WorkflowError(code) from exc
         self._require_complete_provenance(provenance)
         try:
             region_snapshots = tuple(
-                self._region_ocr_snapshot(region, context.allowed_chars, provenance)
+                self._region_ocr_snapshot(region, context.allowed_chars, provenance, engine)
                 for region in context.regions
             )
         except (OcrProcessError, ValueError) as exc:
@@ -162,6 +179,7 @@ class DatasetWorkflow:
         region: RegionOcrDraft,
         profile_allowed_chars: tuple[str, ...],
         fallback_provenance: OcrProvenance,
+        engine: OcrEngine,
     ) -> RegionOcrSnapshot:
         if (region.allowed_chars is None) != (region.text_layout is None):
             raise ValueError("incomplete region OCR configuration")
@@ -169,7 +187,7 @@ class DatasetWorkflow:
         provenance = (
             fallback_provenance
             if region.allowed_chars is None
-            else self._ocr.describe(allowed_chars, region.text_layout)
+            else engine.describe(allowed_chars, region.text_layout)
         )
         self._require_complete_provenance(provenance)
         return RegionOcrSnapshot(

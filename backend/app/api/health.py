@@ -32,6 +32,18 @@ class OcrStatusResponse(DependencyStatusResponse):
     uses_text_layout: bool
 
 
+class OcrEngineStatusResponse(StrictModel):
+    """One OCR engine a run may be started with."""
+
+    id: str
+    name: str
+    available: bool
+    code: str
+    detail: str
+    uses_text_layout: bool
+    default: bool
+
+
 class HealthResponse(StrictModel):
     version: str
     status: Literal["ok", "degraded", "unavailable"]
@@ -39,6 +51,7 @@ class HealthResponse(StrictModel):
     workspace: DependencyStatusResponse
     ffmpeg: DependencyStatusResponse
     ocr: OcrStatusResponse
+    ocr_engines: list[OcrEngineStatusResponse]
     gpu: DependencyStatusResponse
 
 
@@ -70,6 +83,7 @@ def health_response(snapshot: SystemStatusSnapshot) -> HealthResponse:
             engine=snapshot.ocr_engine,
             uses_text_layout=snapshot.ocr_uses_text_layout,
         ),
+        ocr_engines=[OcrEngineStatusResponse(**vars(engine)) for engine in snapshot.ocr_engines],
         gpu=_status_response(snapshot.gpu),
     )
 

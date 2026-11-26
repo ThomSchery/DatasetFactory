@@ -1,6 +1,7 @@
 from backend.app.access.ocr.protocol import OcrEngine, OcrProcessError
 from backend.app.access.ocr.rapidocr import RapidOcrEngine, RapidOcrRuntimeIdentity
 from backend.app.access.ocr.rapidocr_probe import RapidOcrDependencyProbe
+from backend.app.access.ocr.registry import OcrEngineEntry, OcrEngineRegistry, UnknownOcrEngineError
 from backend.app.access.ocr.tesseract import (
     OcrProcessResult,
     TesseractOcrEngine,
@@ -12,6 +13,8 @@ from backend.app.access.ocr.tesseract_probe import TesseractDependencyProbe
 
 __all__ = [
     "OcrEngine",
+    "OcrEngineEntry",
+    "OcrEngineRegistry",
     "OcrProcessError",
     "OcrProcessResult",
     "RapidOcrDependencyProbe",
@@ -22,4 +25,5 @@ __all__ = [
     "TesseractOutputParser",
     "TesseractProcessRunner",
     "TesseractRuntimeIdentity",
+    "UnknownOcrEngineError",
 ]

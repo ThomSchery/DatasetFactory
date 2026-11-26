@@ -23,7 +23,7 @@ from backend.app.access.media.processing import (
     RegionCrop,
     SampledFrame,
 )
-from backend.app.access.ocr import OcrEngine, OcrProcessError
+from backend.app.access.ocr import OcrEngine, OcrEngineRegistry, OcrProcessError
 from backend.app.access.store.models import (
     Annotation,
     Category,
@@ -373,7 +373,7 @@ def _seed(
 def _install_workflow(
     composition: CompositionRoot,
     media: StubMediaAccess,
-    ocr: OcrEngine,
+    ocr: OcrEngine | OcrEngineRegistry,
     *,
     heartbeat_interval_seconds: float = 0.05,
 ) -> tuple[DatasetWorkflow, RunRepository, WorkflowRecovery]:

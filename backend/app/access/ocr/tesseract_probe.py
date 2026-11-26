@@ -30,6 +30,7 @@ class TesseractDependencyProbe:
         self._timeout_seconds = timeout_seconds
         self._language = language
 
+    engine_id = "tesseract"
     engine_name = "Tesseract"
     # Tesseract has to be told how many lines to expect.
     uses_text_layout = True

@@ -21,6 +21,8 @@ class CreateRunRequest(StrictModel):
     profile_id: str = Field(min_length=1)
     video_id: str = Field(min_length=1)
     interval_ms: int = Field(default=1000, gt=0)
+    # An engine identifier from `system.ocr_engines`; absent means the default engine.
+    ocr_engine: str | None = Field(default=None, min_length=1)
 
 
 class VersionedMutationRequest(StrictModel):
@@ -279,6 +281,7 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
                 profile_id=payload.profile_id,
                 video_id=payload.video_id,
                 interval_ms=payload.interval_ms,
+                ocr_engine=payload.ocr_engine,
             )
         except WorkflowError as error:
             return _workflow_error(request, error)

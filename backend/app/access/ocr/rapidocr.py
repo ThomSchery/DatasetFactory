@@ -23,7 +23,7 @@ import importlib.util
 import math
 import threading
 from collections.abc import Callable, Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal
 
@@ -114,6 +114,11 @@ class RapidOcrRuntimeIdentity:
     experimental: bool = True
     # Not measured: the quality gate of `docs/OCR_SPIKE.md` has only been run on Tesseract.
     quality_gate: Literal["passed", "failed", "unknown"] = "unknown"
+    # The last measurement and the file signature it was taken at. The status probe and the
+    # engine share it, so polling the status does not hash 47 MB on every request.
+    _measured: dict[str, tuple[tuple[tuple[str, int, int], ...], VerifiedRapidOcr]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     @property
     def detection_model(self) -> Path:
@@ -137,6 +142,10 @@ class RapidOcrRuntimeIdentity:
                 raise OcrProcessError("ocr_provenance_unknown")
         if self.version_reader() != self.expected_version:
             raise OcrProcessError("ocr_provenance_mismatch")
+        signature = self.signature()
+        last = self._measured.get("last")
+        if last is not None and last[0] == signature:
+            return last[1]
         runtime_hash = _file_sha256(self.runtime_file)
         manifest = "".join(
             f"{path.name}:{_file_sha256(path)}\n"
@@ -145,7 +154,9 @@ class RapidOcrRuntimeIdentity:
         models_hash = hashlib.sha256(manifest.encode("utf-8")).hexdigest()
         if runtime_hash != runtime_pin or models_hash != models_pin:
             raise OcrProcessError("ocr_provenance_mismatch")
-        return VerifiedRapidOcr(runtime_sha256=runtime_hash, models_sha256=models_hash)
+        verified = VerifiedRapidOcr(runtime_sha256=runtime_hash, models_sha256=models_hash)
+        self._measured["last"] = (signature, verified)
+        return verified
 
     def signature(self) -> tuple[tuple[str, int, int], ...]:
         """Size and modification time of every pinned file; a change means measure again."""
@@ -210,8 +221,6 @@ class RapidOcrEngine:
         self._runtime = runtime
         self._reader_factory = reader_factory
         self._reader: CharacterReader | None = None
-        self._verified_for: tuple[tuple[str, int, int], ...] | None = None
-        self._verified: VerifiedRapidOcr | None = None
         self._lock = threading.Lock()
         self._reading = False
         self._cancelled = False
@@ -254,15 +263,8 @@ class RapidOcrEngine:
     # --- measuring and provenance ---
 
     def _measure(self) -> VerifiedRapidOcr:
-        """Hash the installation again only when one of its files changed."""
-        signature = self._runtime.signature()
-        with self._lock:
-            if self._verified is not None and self._verified_for == signature:
-                return self._verified
-        verified = self._runtime.verified()
-        with self._lock:
-            self._verified, self._verified_for = verified, signature
-        return verified
+        """The measured installation; it is hashed again only when one of its files changed."""
+        return self._runtime.verified()
 
     def _provenance(self, allowed: tuple[str, ...], verified: VerifiedRapidOcr) -> OcrProvenance:
         return OcrProvenance(

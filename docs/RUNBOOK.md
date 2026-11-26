@@ -89,9 +89,12 @@ obchodzic przez wpisanie hasha nieznanego artefaktu.
 
 ## Silnik OCR: Tesseract albo RapidOCR
 
-Aplikacja ma jeden silnik OCR naraz; wybiera go `DF_OCR_ENGINE` w `.env`
-(`tesseract`, domyslnie, albo `rapidocr`). Zmiana wymaga restartu backendu.
-Ustawienia drugiego silnika sa ignorowane.
+Silnik OCR wybiera sie przy kazdym runie w Run Setup (pole "OCR engine"); lista
+pokazuje tylko silniki, ktorych instalacja przeszla weryfikacje, a pozostale
+wymienia z powodem. `DF_OCR_ENGINE` w `.env` (`tesseract`, domyslnie, albo
+`rapidocr`) ustawia tylko silnik domyslny, zmiana wymaga restartu backendu. Run
+wznawia sie zawsze na silniku, na ktorym go utworzono. Dwa runy nie pracuja
+naraz: drugi start daje `409 active_run`.
 
 RapidOCR to siec neuronowa, ktora sama znajduje tekst na wycinku, wiec nie
 potrzebuje ustawienia "Text layout" (ekran profilu go wtedy nie pokazuje).

@@ -8,6 +8,7 @@ from backend.app.access.status.probe import ProbeResult
 class RapidOcrDependencyProbe:
     """Verify the operator-installed library and weights for system diagnostics."""
 
+    engine_id = "rapidocr"
     engine_name = "RapidOCR"
     # The engine finds the text itself, so the operator's text layout means nothing to it.
     uses_text_layout = False

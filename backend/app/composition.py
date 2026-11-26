@@ -10,6 +10,8 @@ from backend.app.access.media.probe import FfprobeMediaProbe, ProcessTreeRunner
 from backend.app.access.media.processing import MediaProcessingAccess
 from backend.app.access.ocr import (
     OcrEngine,
+    OcrEngineEntry,
+    OcrEngineRegistry,
     RapidOcrDependencyProbe,
     RapidOcrEngine,
     RapidOcrRuntimeIdentity,
@@ -66,6 +68,7 @@ class CompositionRoot:
     system_status: SystemStatusAccess
     media_processing: MediaProcessingAccess
     ocr_engine: OcrEngine
+    ocr_engines: OcrEngineRegistry
     profile_use_cases: ProfileUseCases
     material_use_cases: MaterialUseCases
     review_use_cases: ReviewUseCases
@@ -162,44 +165,62 @@ def build_composition(
         materials,
     )
     active_resource_probe = resource_probe or SystemResourceProbe()
-    ocr_dependency_probe: OcrDependencyProbe
-    if settings.ocr_engine == "rapidocr":
-        rapidocr_identity = RapidOcrRuntimeIdentity(
-            model_dir=settings.rapidocr_model_dir,
-            runtime_file=locate_onnxruntime_library(),
-            expected_version=settings.rapidocr_version,
-            expected_runtime_sha256=settings.rapidocr_runtime_sha256,
-            expected_models_sha256=settings.rapidocr_models_sha256,
-        )
-        ocr_dependency_probe = RapidOcrDependencyProbe(rapidocr_identity)
-        built_ocr_engine: OcrEngine = RapidOcrEngine(workspace, rapidocr_identity)
-    else:
-        tesseract_identity = TesseractRuntimeIdentity(
-            executable=settings.tesseract_path,
-            model=settings.tesseract_model_path,
-            expected_version=settings.tesseract_version,
-            expected_runtime_sha256=settings.tesseract_runtime_sha256,
-            expected_model_sha256=settings.tesseract_model_sha256,
-        )
-        ocr_dependency_probe = TesseractDependencyProbe(
-            tesseract_identity,
-            active_resource_probe,
-            timeout_seconds=settings.tesseract_timeout_seconds,
-        )
-        built_ocr_engine = TesseractOcrEngine(
-            workspace,
-            tesseract_identity,
-            settings.tesseract_timeout_seconds,
-            TesseractProcessRunner(),
-        )
+    # The one place that names the OCR engines. Everything above asks the registry.
+    rapidocr_identity = RapidOcrRuntimeIdentity(
+        model_dir=settings.rapidocr_model_dir,
+        runtime_file=locate_onnxruntime_library(),
+        expected_version=settings.rapidocr_version,
+        expected_runtime_sha256=settings.rapidocr_runtime_sha256,
+        expected_models_sha256=settings.rapidocr_models_sha256,
+    )
+    tesseract_identity = TesseractRuntimeIdentity(
+        executable=settings.tesseract_path,
+        model=settings.tesseract_model_path,
+        expected_version=settings.tesseract_version,
+        expected_runtime_sha256=settings.tesseract_runtime_sha256,
+        expected_model_sha256=settings.tesseract_model_sha256,
+    )
+    ocr_entries = (
+        OcrEngineEntry(
+            "tesseract",
+            TesseractOcrEngine(
+                workspace,
+                tesseract_identity,
+                settings.tesseract_timeout_seconds,
+                TesseractProcessRunner(),
+            ),
+            TesseractDependencyProbe(
+                tesseract_identity,
+                active_resource_probe,
+                timeout_seconds=settings.tesseract_timeout_seconds,
+            ),
+        ),
+        OcrEngineEntry(
+            "rapidocr",
+            RapidOcrEngine(workspace, rapidocr_identity),
+            RapidOcrDependencyProbe(rapidocr_identity),
+        ),
+    )
+    # The default engine comes first, so its probe is the one the status calls `ocr`.
+    ordered_entries = sorted(ocr_entries, key=lambda entry: entry.id != settings.ocr_engine)
+    ocr_probes: list[OcrDependencyProbe] = [
+        entry.probe for entry in ordered_entries if entry.probe is not None
+    ]
     status = SystemStatusAccess(
         database,
         workspace,
         settings,
         active_resource_probe,
-        ocr_dependency_probe,
+        ocr_probes[0],
+        ocr_probes,
     )
-    active_ocr_engine = ocr_engine or built_ocr_engine
+    # An engine handed in by the caller (a harness, a test double) replaces them all.
+    ocr_registry = (
+        OcrEngineRegistry.of(ocr_engine)
+        if ocr_engine is not None
+        else OcrEngineRegistry(ocr_entries, settings.ocr_engine)
+    )
+    active_ocr_engine = ocr_registry.get()
     runs = RunRepository(database)
     run_artifacts = RunArtifacts(workspace, logger)
     # Before any worker starts: a run or export entry no row owns can only be what a
@@ -233,7 +254,7 @@ def build_composition(
         checkpoints,
         workflow_recovery,
         media_processing,
-        active_ocr_engine,
+        ocr_registry,
         DatasetDefinitionEngine(),
         logger,
     )
@@ -242,7 +263,7 @@ def build_composition(
         frames,
         workflow_recovery,
         workflow_worker,
-        active_ocr_engine,
+        ocr_registry,
         run_artifacts,
     )
     recovery_result = dataset_workflow.recover_startup()
@@ -262,6 +283,7 @@ def build_composition(
         status,
         media_processing,
         active_ocr_engine,
+        ocr_registry,
         profile_use_cases,
         material_use_cases,
         review_use_cases,
