@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CHARACTER_CLASS_ALPHABET,
-  OCR_PAGE_SEGMENTATION_OPTIONS,
+  OCR_TEXT_LAYOUT_OPTIONS,
   categorySchema,
   isDuplicateName,
   profileCreateSchema,
@@ -27,7 +27,7 @@ const VALID = {
       width: 100,
       height: 40,
       allowed_chars: "7",
-      page_segmentation_mode: 7,
+      text_layout: "line",
     },
   ],
   categories: [{ kind: "character" as const, name: "7" }],
@@ -150,18 +150,20 @@ describe("per-region OCR configuration", () => {
     ).toContain("Characters outside the profile classes: W. Add the classes or remove these characters from the range.");
   });
 
-  it("offers only recognizing PSM modes and explains every option", () => {
-    expect(OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => Number(option.value))).toEqual([
-      3, 4, 6, 7, 8, 10, 11, 12, 13,
+  it("offers text layouts in the operator's words and names no OCR engine", () => {
+    expect(OCR_TEXT_LAYOUT_OPTIONS.map((option) => option.value)).toEqual([
+      "auto",
+      "line",
+      "word",
+      "block",
+      "sparse",
     ]);
-    expect(OCR_PAGE_SEGMENTATION_OPTIONS.every((option) => option.label.length > 5)).toBe(true);
-    expect(OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => String(option.value))).not.toContain("0");
-    expect(OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === "6")?.label).not.toContain(
-      "wiele wierszy",
-    );
-    expect(OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === "11")?.label).toContain(
-      "Sparse text lines",
-    );
+    expect(OCR_TEXT_LAYOUT_OPTIONS.every((option) => option.label.length > 5)).toBe(true);
+    // The first one is the default: a region is not forced to be one line.
+    expect(OCR_TEXT_LAYOUT_OPTIONS[0].value).toBe("auto");
+    for (const option of OCR_TEXT_LAYOUT_OPTIONS) {
+      expect(`${option.label} ${option.short}`).not.toMatch(/tesseract|psm|\d/i);
+    }
   });
 });
 

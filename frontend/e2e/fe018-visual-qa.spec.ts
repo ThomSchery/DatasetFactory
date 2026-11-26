@@ -124,7 +124,7 @@ test("FE-018 pokazuje dodawanie regionu i te same zwijane grupy klas na obu ekra
       await expect(page.getByRole("checkbox", { name: character, exact: true })).toHaveAttribute("aria-checked", "true");
     }
     // FE-029: OCR settings is the panel itself, always open.
-    await expect(page.getByLabel("Text layout (PSM)")).toHaveAttribute("placeholder", /^7 —/);
+    await expect(page.getByLabel("Choose text layout")).toHaveAttribute("placeholder", /^Automatic/);
     await shoot(page, `profile-add-region-${suffix}`);
 
     const profileClasses = page.getByRole("group", { name: "Numbers" });

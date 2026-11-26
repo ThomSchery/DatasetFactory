@@ -49,13 +49,18 @@ export interface DependencyStatus {
   detail: string;
 }
 
+/** The OCR dependency, named after whichever engine is installed. */
+export interface OcrDependencyStatus extends DependencyStatus {
+  engine: string;
+}
+
 export interface Health {
   version: string;
   status: "ok" | "degraded" | "unavailable";
   database: DependencyStatus;
   workspace: DependencyStatus;
   ffmpeg: DependencyStatus;
-  tesseract: DependencyStatus;
+  ocr: OcrDependencyStatus;
   gpu: DependencyStatus;
 }
 
@@ -70,7 +75,7 @@ export interface RegionInput {
   width: number;
   height: number;
   allowed_chars?: string | null;
-  page_segmentation_mode?: number | null;
+  text_layout?: string | null;
 }
 
 export interface CategoryInput {
@@ -90,13 +95,13 @@ export interface RenameCategoryRequest extends CategoryInput {
  */
 export interface AddRegionRequest extends RegionInput {
   allowed_chars: string;
-  page_segmentation_mode: number;
+  text_layout: string;
   expected_version: number;
 }
 
 export interface UpdateRegionOcrConfigRequest {
   allowed_chars: string;
-  page_segmentation_mode: number;
+  text_layout: string;
   expected_version: number;
 }
 
@@ -116,7 +121,7 @@ export interface SavedRegionInput {
   width: number;
   height: number;
   allowed_chars: string | null;
-  page_segmentation_mode: number | null;
+  text_layout: string | null;
 }
 
 export interface SavedCategoryInput {
@@ -242,6 +247,9 @@ export interface RegionOcrSnapshot {
   region_id: string;
   region_name: string;
   allowed_chars: string;
+  /** What the operator asked for, in no engine's words. */
+  text_layout: string;
+  /** The engine's own setting for it, as the run recorded it. */
   page_segmentation_mode: number;
   uses_profile_fallback: boolean;
   provenance: OcrProvenance;

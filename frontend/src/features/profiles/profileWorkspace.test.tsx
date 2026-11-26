@@ -60,7 +60,7 @@ function alpha(): GameProfile {
         width: 100,
         height: 40,
         allowed_chars: "7",
-        page_segmentation_mode: 7,
+        text_layout: "line",
       },
     ],
     categories: [
@@ -86,7 +86,7 @@ function beta(): GameProfile {
         width: 50,
         height: 20,
         allowed_chars: "7",
-        page_segmentation_mode: 7,
+        text_layout: "line",
       },
     ],
     categories: [{ id: "category-7b", name: "7", kind: "character" }],
@@ -230,11 +230,11 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
   it("preserves inherited OCR on edits and copies, and distinguishes an empty whitelist", () => {
     const profile = alpha();
     profile.regions[0].allowed_chars = null;
-    profile.regions[0].page_segmentation_mode = null;
+    profile.regions[0].text_layout = null;
     const baseline = draftFromProfile(profile);
     const edited = { ...baseline, regions: baseline.regions.map((region) => ({ ...region, name: "Nowa", x: 15 })) };
-    expect(saveRequestFrom(edited).regions[0]).toMatchObject({ name: "Nowa", x: 15, allowed_chars: null, page_segmentation_mode: null });
-    expect(createRequestFrom(edited, "Kopia").regions[0]).toMatchObject({ allowed_chars: null, page_segmentation_mode: null });
+    expect(saveRequestFrom(edited).regions[0]).toMatchObject({ name: "Nowa", x: 15, allowed_chars: null, text_layout: null });
+    expect(createRequestFrom(edited, "Kopia").regions[0]).toMatchObject({ allowed_chars: null, text_layout: null });
     expect(createRequestFrom(edited, "Kopia").regions[0]).not.toHaveProperty("id");
     const empty = { ...baseline, regions: baseline.regions.map((region) => ({ ...region, allowed_chars: "" })) };
     expect(isDirty(empty, baseline)).toBe(true);
@@ -244,16 +244,16 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const user = userEvent.setup();
     const profile = alpha();
     profile.regions[0].allowed_chars = null;
-    profile.regions[0].page_segmentation_mode = null;
+    profile.regions[0].text_layout = null;
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
     await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
-    await user.click(screen.getByRole("combobox", { name: "Text layout (PSM)" }));
-    await user.click(screen.getByRole("option", { name: /^6 —/ }));
+    await user.click(screen.getByRole("combobox", { name: "Choose text layout" }));
+    await user.click(screen.getByRole("option", { name: /^A block of several lines/ }));
     // FE-030: the closed field shows the short name, which fits the column.
-    expect(screen.getByRole("combobox", { name: "Text layout (PSM)" })).toHaveValue("6 — Uniform block");
+    expect(screen.getByRole("combobox", { name: "Choose text layout" })).toHaveValue("Block of lines");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
-    await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", page_segmentation_mode: 6 }] }));
+    await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", text_layout: "block" }] }));
   });
 
   it("blocks both saves while an unaccepted sketch exists", async () => {
@@ -299,7 +299,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const ocr = screen.getByRole("region", { name: "OCR settings" });
     expect(
       within(ocr).getByRole("button", {
-        name: "Pasek zdrowia: 1 of 1 characters, 7 — One text line. Select the region",
+        name: "Pasek zdrowia: 1 of 1 characters, One line. Select the region",
       }),
     ).toBeInTheDocument();
     expect(await screen.findByAltText(/Reference screenshot of profile Alpha/)).toBeInTheDocument();
@@ -345,7 +345,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
             height: 40,
             id: "region-hp",
             name: "Zdrowie",
-            page_segmentation_mode: 7,
+            text_layout: "line",
             width: 100,
             x: 10,
             y: 20,
@@ -415,7 +415,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const ocr = await screen.findByRole("region", { name: "OCR settings" });
     await user.click(
       await within(ocr).findByRole("button", {
-        name: "Pasek zdrowia: 2 of 3 characters, 7 — One text line. Select the region",
+        name: "Pasek zdrowia: 2 of 3 characters, One line. Select the region",
       }),
     );
     // A summary row selects the region, and the panel now edits it.
@@ -445,7 +445,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
       { id: "category-hud", name: "health", kind: "game" },
     ];
     profile.regions[0].allowed_chars = null;
-    profile.regions[0].page_segmentation_mode = null;
+    profile.regions[0].text_layout = null;
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
 
@@ -467,7 +467,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     // A region never half-configures: the layout becomes explicit with it.
     await waitFor(() =>
       expect(savedBody(spy)).toMatchObject({
-        regions: [{ allowed_chars: "7", page_segmentation_mode: 7 }],
+        regions: [{ allowed_chars: "7", text_layout: "auto" }],
       }),
     );
   });

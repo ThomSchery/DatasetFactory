@@ -69,8 +69,8 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
             <p>No run holds the workflow slot. Showing the local OCR engine status.</p>
             <DataList
               items={[
-                { label: "Engine", value: "Tesseract" },
-                { label: "Status", value: describeDependency(dashboard.data.system.tesseract) },
+                { label: "Engine", value: dashboard.data.system.ocr.engine },
+                { label: "Status", value: describeDependency(dashboard.data.system.ocr) },
               ]}
             />
             </>
@@ -109,7 +109,7 @@ export function OcrEngineDialog({ open, onClose }: OcrEngineDialogProps) {
           <ul className="df-ocr-engine__dependencies">
             {(
               [
-                ["Tesseract", dashboard.data.system.tesseract],
+                [dashboard.data.system.ocr.engine, dashboard.data.system.ocr],
                 ["FFmpeg", dashboard.data.system.ffmpeg],
                 ["Workspace", dashboard.data.system.workspace],
                 ["Database", dashboard.data.system.database],

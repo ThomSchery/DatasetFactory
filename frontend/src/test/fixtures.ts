@@ -31,7 +31,7 @@ export function healthFixture(overrides: Partial<Health> = {}): Health {
     database: { ...available, critical: true },
     workspace: { ...available, critical: true },
     ffmpeg: { ...available },
-    tesseract: { ...available },
+    ocr: { ...available, engine: "Tesseract" },
     gpu: { available: false, critical: false, detail: "Brak akceleracji CUDA." },
     ...overrides,
   };
@@ -94,7 +94,7 @@ export function profileFixture(overrides: Partial<GameProfile> = {}): GameProfil
         width: 100,
         height: 40,
         allowed_chars: null,
-        page_segmentation_mode: null,
+        text_layout: null,
       },
     ],
     categories: [{ id: "category-1", name: "7", kind: "character" }],

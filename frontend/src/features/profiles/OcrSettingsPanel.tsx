@@ -3,10 +3,7 @@ import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Panel } from "../../components/common/Panel";
 import { InlineError } from "../../components/common/UiStates";
 import { regionCharacterCount, type DraftCategory, type DraftRegion } from "./profileDraft";
-import {
-  DEFAULT_REGION_PAGE_SEGMENTATION_MODE,
-  OCR_PAGE_SEGMENTATION_OPTIONS,
-} from "./schemas";
+import { DEFAULT_REGION_TEXT_LAYOUT, OCR_TEXT_LAYOUT_OPTIONS } from "./schemas";
 import "./OcrSettingsPanel.css";
 
 export interface OcrSettingsPanelProps {
@@ -16,7 +13,7 @@ export interface OcrSettingsPanelProps {
   /** Every region of the draft, summarised while none is selected. */
   regions: readonly DraftRegion[];
   onAllowedCharsChange: (allowedChars: string) => void;
-  onPageSegmentationModeChange: (mode: number) => void;
+  onTextLayoutChange: (layout: string) => void;
   onSelectRegion: (key: string) => void;
   disabled?: boolean;
 }
@@ -27,14 +24,11 @@ const GROUPS: readonly { id: string; label: string; test: (name: string) => bool
   { id: "symbols", label: "Symbols", test: (name) => !/^[0-9A-Z]$/.test(name) },
 ];
 
-function layoutLabel(mode: number | null): string {
-  if (mode === null) {
+function layoutLabel(layout: string | null): string {
+  if (layout === null) {
     return "Layout inherited";
   }
-  return (
-    OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(mode))?.short ??
-    `Layout ${String(mode)}`
-  );
+  return OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === layout)?.short ?? `Layout ${layout}`;
 }
 
 /**
@@ -47,7 +41,7 @@ function layoutLabel(mode: number | null): string {
  * the backend, which knows the annotations). It answers one question per
  * region: which characters, in which text layout.
  *
- *  - With a region selected it edits that region: the text layout (PSM) and
+ *  - With a region selected it edits that region: the text layout and
  *    the characters OCR may read, as three collapsible groups whose header
  *    selects the whole group — the "super-category" the user asked for, so the
  *    alphabet never has to be scrolled as one list.
@@ -58,7 +52,7 @@ export function OcrSettingsPanel({
   region,
   regions,
   onAllowedCharsChange,
-  onPageSegmentationModeChange,
+  onTextLayoutChange,
   onSelectRegion,
   disabled = false,
 }: OcrSettingsPanelProps) {
@@ -86,7 +80,7 @@ export function OcrSettingsPanel({
                 return (
                   <li key={item.key}>
                     <Button
-                      aria-label={`${item.name}: ${read}, ${layoutLabel(item.page_segmentation_mode)}. Select the region`}
+                      aria-label={`${item.name}: ${read}, ${layoutLabel(item.text_layout)}. Select the region`}
                       className="df-ocr-settings__summary-row"
                       disabled={disabled}
                       onClick={() => {
@@ -97,7 +91,7 @@ export function OcrSettingsPanel({
                       <span className="df-ocr-settings__summary-name">{item.name}</span>
                       <span className="df-ocr-settings__summary-detail">{read}</span>
                       <span className="df-ocr-settings__summary-layout">
-                        {layoutLabel(item.page_segmentation_mode)}
+                        {layoutLabel(item.text_layout)}
                       </span>
                     </Button>
                   </li>
@@ -114,7 +108,7 @@ export function OcrSettingsPanel({
   const unsupported = [...new Set([...selected])].filter(
     (char) => !characters.some((category) => category.name === char),
   );
-  const psm = region.page_segmentation_mode ?? DEFAULT_REGION_PAGE_SEGMENTATION_MODE;
+  const layout = region.text_layout ?? DEFAULT_REGION_TEXT_LAYOUT;
 
   return (
     <Panel
@@ -123,7 +117,7 @@ export function OcrSettingsPanel({
       radius="sm"
       title="OCR settings"
     >
-      {region.allowed_chars === null || region.page_segmentation_mode === null ? (
+      {region.allowed_chars === null || region.text_layout === null ? (
         <p className="df-ocr-settings__note">
           The region inherits the OCR settings. Changing a character or the layout saves its own
           settings.
@@ -134,12 +128,12 @@ export function OcrSettingsPanel({
       <GroupedOptionList
         disabled={disabled}
         emptyMessage="No layout matches."
-        filterLabel="Text layout (PSM)"
+        filterLabel="Choose text layout"
         groups={[
           {
-            id: "psm",
-            label: "Tesseract page segmentation",
-            options: OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => ({
+            id: "layout",
+            label: "How the text sits in the region",
+            options: OCR_TEXT_LAYOUT_OPTIONS.map((option) => ({
               id: option.value,
               label: option.label,
               selectedLabel: option.short,
@@ -151,14 +145,13 @@ export function OcrSettingsPanel({
         onChange={(ids) => {
           const [first] = ids;
           if (first !== undefined) {
-            onPageSegmentationModeChange(Number(first));
+            onTextLayoutChange(first);
           }
         }}
         placeholder={
-          OCR_PAGE_SEGMENTATION_OPTIONS.find((option) => option.value === String(psm))?.short ??
-          "Text layout (PSM)"
+          OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === layout)?.short ?? "Text layout"
         }
-        selectedIds={[String(psm)]}
+        selectedIds={[layout]}
       />
 
       <p className="df-ocr-settings__subtitle">Characters OCR reads</p>

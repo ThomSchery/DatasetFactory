@@ -209,9 +209,9 @@ function layerRow(frame: Frame, layer: string, pick: "first" | "last"): Row {
 // --- deterministic API ------------------------------------------------------
 
 const REGIONS = [
-  { id: "region-a", name: "Region A", x: 40, y: 40, width: 220, height: 60, allowed_chars: "12", page_segmentation_mode: 7 },
-  { id: "region-b", name: "Region B", x: 520, y: 30, width: 180, height: 50, allowed_chars: null, page_segmentation_mode: null },
-  { id: "region-c", name: "Region C", x: 900, y: 600, width: 200, height: 80, allowed_chars: "3", page_segmentation_mode: 7 },
+  { id: "region-a", name: "Region A", x: 40, y: 40, width: 220, height: 60, allowed_chars: "12", text_layout: "line" },
+  { id: "region-b", name: "Region B", x: 520, y: 30, width: 180, height: 50, allowed_chars: null, text_layout: null },
+  { id: "region-c", name: "Region C", x: 900, y: 600, width: 200, height: 80, allowed_chars: "3", text_layout: "line" },
 ];
 
 const CATEGORIES = [

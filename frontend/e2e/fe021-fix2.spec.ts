@@ -8,7 +8,7 @@ const imagePath = path.resolve(process.cwd(), "../backend/tests/fixtures/video/s
 test("FIX2: move and resize the selected profile region and persist its geometry", async ({ page, request }) => {
   const created = await request.post(`${apiBase}/profiles`, { data: {
     name: `FIX2 geometry ${Date.now()}`, reference_image_path: imagePath,
-    regions: [{ name: "HUD", x: 100, y: 100, width: 600, height: 300, allowed_chars: "7", page_segmentation_mode: 7 }],
+    regions: [{ name: "HUD", x: 100, y: 100, width: 600, height: 300, allowed_chars: "7", text_layout: "line" }],
     categories: [{ name: "7", kind: "character" }],
   } });
   expect(created.status(), await created.text()).toBe(201);

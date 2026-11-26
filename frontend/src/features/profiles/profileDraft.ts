@@ -5,7 +5,7 @@ import type {
   GameProfile,
   SaveProfileDefinitionRequest,
 } from "../../api";
-import { DEFAULT_REGION_PAGE_SEGMENTATION_MODE } from "./schemas";
+import { DEFAULT_REGION_TEXT_LAYOUT } from "./schemas";
 
 /*
  * The profile workspace holds one draft and compares it against the baseline
@@ -30,7 +30,7 @@ export interface DraftRegion {
   width: number;
   height: number;
   allowed_chars: string | null;
-  page_segmentation_mode: number | null;
+  text_layout: string | null;
 }
 
 export interface DraftCategory {
@@ -112,7 +112,7 @@ export function draftFromProfile(profile: GameProfile): ProfileDraft {
       width: region.width,
       height: region.height,
       allowed_chars: region.allowed_chars ?? null,
-      page_segmentation_mode: region.page_segmentation_mode ?? null,
+      text_layout: region.text_layout ?? null,
     })),
     categories: profile.categories.map((category) => ({
       key: draftKey("category"),
@@ -140,7 +140,7 @@ function comparable(draft: ProfileDraft): string {
         region.width,
         region.height,
         region.allowed_chars,
-        region.page_segmentation_mode,
+        region.text_layout,
       ]),
     )
     .sort();
@@ -244,7 +244,7 @@ export function withAcceptedSketch(
     width: sketch.width,
     height: sketch.height,
     allowed_chars: characterAlphabetOf(draft),
-    page_segmentation_mode: DEFAULT_REGION_PAGE_SEGMENTATION_MODE,
+    text_layout: DEFAULT_REGION_TEXT_LAYOUT,
   };
   const categories = hasCategoryNamed(draft, trimmed)
     ? draft.categories
@@ -288,7 +288,7 @@ export function saveRequestFrom(draft: ProfileDraft): SaveProfileDefinitionReque
       height: region.height,
       id: region.id,
       name: region.name.trim(),
-      page_segmentation_mode: region.page_segmentation_mode,
+      text_layout: region.text_layout,
       width: region.width,
       x: region.x,
       y: region.y,
@@ -320,7 +320,7 @@ export function createRequestFrom(draft: ProfileDraft, name: string): CreateProf
       allowed_chars: region.allowed_chars,
       height: region.height,
       name: region.name.trim(),
-      page_segmentation_mode: region.page_segmentation_mode,
+      text_layout: region.text_layout,
       width: region.width,
       x: region.x,
       y: region.y,

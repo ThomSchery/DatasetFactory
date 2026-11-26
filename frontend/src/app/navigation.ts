@@ -96,7 +96,7 @@ export interface PipelineStage {
 export const PIPELINE_STAGES: readonly PipelineStage[] = [
   { label: "Sampling", description: "Frames at the chosen interval", inV1: true },
   { label: "HUD regions", description: "Crops of the profile regions", inV1: true },
-  { label: "OCR", description: "Character proposals from Tesseract", inV1: true },
+  { label: "OCR", description: "Character proposals from the OCR engine", inV1: true },
   { label: "SAM 3", description: "Segmentation — planned after v1", inV1: false },
   { label: "Review", description: "A human decision per frame", inV1: true },
 ];

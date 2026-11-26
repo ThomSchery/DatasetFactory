@@ -78,11 +78,11 @@ const PROFILE: GameProfile = profileFixture({
   ],
   name: "Polish profile",
   regions: [
-    { id: "region-a", name: "Region A", x: 40, y: 40, width: 220, height: 60, allowed_chars: "12", page_segmentation_mode: 7 },
-    { id: "region-b", name: "Region B", x: 520, y: 30, width: 180, height: 50, allowed_chars: null, page_segmentation_mode: null },
+    { id: "region-a", name: "Region A", x: 40, y: 40, width: 220, height: 60, allowed_chars: "12", text_layout: "line" },
+    { id: "region-b", name: "Region B", x: 520, y: 30, width: 180, height: 50, allowed_chars: null, text_layout: null },
     // FIX2: around the centre of the frame, so it stays in view when Zoom in
     // (which zooms about the centre) reaches 596 %.
-    { id: "region-c", name: "Region C", x: 560, y: 380, width: 160, height: 90, allowed_chars: "3", page_segmentation_mode: 7 },
+    { id: "region-c", name: "Region C", x: 560, y: 380, width: 160, height: 90, allowed_chars: "3", text_layout: "line" },
   ],
   source_height: 852,
   source_width: 1280,

@@ -32,37 +32,26 @@ export const CHARACTER_CLASS_ALPHABET: readonly string[] = [
 const CHARACTER_CLASSES = new Set(CHARACTER_CLASS_ALPHABET);
 
 /**
- * Tesseract page segmentation modes OCR may use.
+ * How the text sits in a region, in the operator's words. No OCR engine is named
+ * here: each engine turns the layout into whatever setting it understands, so a
+ * different engine changes nothing on this screen.
  *
- * `label` explains the mode and is what the open list shows (rows wrap).
- * `short` fits the closed field and the region summary in the 247 px profile
- * column, where a long label used to be cut off mid-word (FE-030).
+ * `label` is what the open list shows (rows wrap). `short` fits the closed field
+ * and the region summary in the 247 px profile column (FE-030).
  */
-export const OCR_PAGE_SEGMENTATION_OPTIONS = [
-  { value: "3", label: "3 — Automatic page layout", short: "3 — Automatic layout" },
-  { value: "4", label: "4 — A column of text of variable sizes", short: "4 — Column of text" },
-  { value: "6", label: "6 — One uniform block of text", short: "6 — Uniform block" },
-  { value: "7", label: "7 — One text line", short: "7 — One text line" },
-  { value: "8", label: "8 — One word", short: "8 — One word" },
-  { value: "10", label: "10 — One character", short: "10 — One character" },
-  {
-    value: "11",
-    label: "11 — Sparse text lines or fragments (verified for HUD)",
-    short: "11 — Sparse text (HUD)",
-  },
-  {
-    value: "12",
-    label: "12 — Sparse text with orientation detection",
-    short: "12 — Sparse + orientation",
-  },
-  { value: "13", label: "13 — Raw single line", short: "13 — Raw single line" },
+export const OCR_TEXT_LAYOUT_OPTIONS = [
+  { value: "auto", label: "Automatic — OCR decides", short: "Automatic" },
+  { value: "line", label: "One line of text", short: "One line" },
+  { value: "word", label: "One word or number", short: "One word" },
+  { value: "block", label: "A block of several lines", short: "Block of lines" },
+  { value: "sparse", label: "Scattered pieces of text", short: "Scattered text" },
 ] as const;
 
-export const DEFAULT_REGION_PAGE_SEGMENTATION_MODE = 7;
+export type OcrTextLayout = (typeof OCR_TEXT_LAYOUT_OPTIONS)[number]["value"];
 
-const OCR_PAGE_SEGMENTATION_MODES = new Set<number>(
-  OCR_PAGE_SEGMENTATION_OPTIONS.map((option) => Number(option.value)),
-);
+export const DEFAULT_REGION_TEXT_LAYOUT: OcrTextLayout = "auto";
+
+const OCR_TEXT_LAYOUTS = new Set<string>(OCR_TEXT_LAYOUT_OPTIONS.map((option) => option.value));
 
 export function characterClassesOf(
   categories: readonly { kind: "character" | "game"; name: string }[],
@@ -74,10 +63,10 @@ export function characterClassesOf(
 
 export function regionOcrValidation(
   allowedChars: string,
-  pageSegmentationMode: number,
+  textLayout: string,
   characterClasses: readonly string[],
-): { allowedChars?: string; pageSegmentationMode?: string } {
-  const errors: { allowedChars?: string; pageSegmentationMode?: string } = {};
+): { allowedChars?: string; textLayout?: string } {
+  const errors: { allowedChars?: string; textLayout?: string } = {};
   if (allowedChars.length === 0) {
     errors.allowedChars = "Enter at least one allowed character.";
   } else {
@@ -87,8 +76,8 @@ export function regionOcrValidation(
       errors.allowedChars = `Characters outside the profile classes: ${unsupported.join(" ")}. Add the classes or remove these characters from the range.`;
     }
   }
-  if (!OCR_PAGE_SEGMENTATION_MODES.has(pageSegmentationMode)) {
-    errors.pageSegmentationMode = "Choose a supported text layout.";
+  if (!OCR_TEXT_LAYOUTS.has(textLayout)) {
+    errors.textLayout = "Choose a supported text layout.";
   }
   return errors;
 }
@@ -136,12 +125,9 @@ export const regionSchema = z.object({
   width: z.number().int().positive("A region needs a positive width."),
   height: z.number().int().positive("A region needs a positive height."),
   allowed_chars: z.string().min(1, "Enter at least one allowed character."),
-  page_segmentation_mode: z
-    .number()
-    .int()
-    .refine((value) => OCR_PAGE_SEGMENTATION_MODES.has(value), {
-      message: "Choose a supported text layout.",
-    }),
+  text_layout: z.string().refine((value) => OCR_TEXT_LAYOUTS.has(value), {
+    message: "Choose a supported text layout.",
+  }),
 });
 
 export type RegionValue = z.infer<typeof regionSchema>;
@@ -194,7 +180,7 @@ export const profileCreateSchema = z
     profile.regions.forEach((region, index) => {
       const errors = regionOcrValidation(
         region.allowed_chars,
-        region.page_segmentation_mode,
+        region.text_layout,
         characterClasses,
       );
       if (errors.allowedChars !== undefined) {

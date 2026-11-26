@@ -40,7 +40,7 @@ import {
   characterAlphabetOf,
   type ProfileDraft,
 } from "./profileDraft";
-import { DEFAULT_REGION_PAGE_SEGMENTATION_MODE } from "./schemas";
+import { DEFAULT_REGION_TEXT_LAYOUT } from "./schemas";
 import "./ProfileWorkspaceScreen.css";
 
 /*
@@ -614,17 +614,17 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
               ...current,
               regions: current.regions.map((region) =>
                 region.key === selectedRegionKey
-                  ? { ...region, allowed_chars: allowedChars, page_segmentation_mode: region.page_segmentation_mode ?? DEFAULT_REGION_PAGE_SEGMENTATION_MODE }
+                  ? { ...region, allowed_chars: allowedChars, text_layout: region.text_layout ?? DEFAULT_REGION_TEXT_LAYOUT }
                   : region,
               ),
             }));
           }}
-          onPageSegmentationModeChange={(mode) => {
+          onTextLayoutChange={(layout) => {
             setDraft((current) => ({
               ...current,
               regions: current.regions.map((region) =>
                 region.key === selectedRegionKey
-                  ? { ...region, allowed_chars: region.allowed_chars ?? characterAlphabetOf(current), page_segmentation_mode: mode }
+                  ? { ...region, allowed_chars: region.allowed_chars ?? characterAlphabetOf(current), text_layout: layout }
                   : region,
               ),
             }));
