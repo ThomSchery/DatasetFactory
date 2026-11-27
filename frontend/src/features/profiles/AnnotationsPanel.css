@@ -47,3 +47,8 @@
 .df-annotations__selection .df-collapsible-group__header {
   border-bottom: var(--border-width-default) solid var(--color-workspace-outline);
 }
+
+/* FE-038: the filter has the quiet workspace outline, as on Run. */
+.df-annotations__filter .df-field__control:not(:focus) {
+  border-color: var(--color-workspace-outline);
+}

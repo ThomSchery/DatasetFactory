@@ -127,14 +127,16 @@ export function AnnotationsPanel({
         </Button>
       </div>
 
-      <TextField
-        autoComplete="off"
-        hideLabel
-        label="Filter regions"
-        onChange={(event) => { setFilter(event.target.value); }}
-        placeholder={`Filter ${regions.length} regions`}
-        value={filter}
-      />
+      <div className="df-annotations__filter">
+        <TextField
+          autoComplete="off"
+          hideLabel
+          label="Filter regions"
+          onChange={(event) => { setFilter(event.target.value); }}
+          placeholder={`Filter ${regions.length} regions`}
+          value={filter}
+        />
+      </div>
       <div className="df-annotations__selection">
         <span className="df-annotations__selection-count">{selectedIds.length} of {regions.length}</span>
         <GroupedOptionList

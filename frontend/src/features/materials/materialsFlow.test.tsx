@@ -116,6 +116,17 @@ async function choose(
   await user.click(await screen.findByRole("option", { name: option }));
 }
 
+/** FE-038: no engine is pre-selected, so a run names one explicitly. */
+async function chooseEngine(user: ReturnType<typeof userEvent.setup>, name: RegExp = /Tesseract/) {
+  await user.click(await screen.findByRole("button", { name }));
+}
+
+/** FE-038: scan-rule regions start folded. */
+async function openRegionRule(user: ReturnType<typeof userEvent.setup>, region: string) {
+  await user.click(await screen.findByRole("button", { name: `Expand group ${region}` }));
+  return screen.findByRole("group", { name: `Text layout for ${region}` });
+}
+
 describe("Upload: the Figma tile", () => {
   it("opens the system dialog from the tile and imports the chosen file in place", async () => {
     const user = userEvent.setup();
@@ -291,6 +302,7 @@ describe("Run Setup: from a file to a started run", () => {
 
     await choose(user, "Source file", /mecz\.mp4/);
     await choose(user, "Profile", /Gra testowa/);
+    await chooseEngine(user);
     await user.click(screen.getByRole("button", { name: "Run" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The profile changed while the run was being created",
@@ -356,14 +368,20 @@ describe("Run Setup: from a file to a started run", () => {
   });
 
   // TK-018: a run names its OCR engine; the list comes from the engines' own probes.
-  it("TK-018: offers the available engines, defaults to the default one and sends the chosen one", async () => {
+  it("TK-018/FE-038: lists RapidOCR first, pre-selects no engine and sends the chosen one", async () => {
     const user = userEvent.setup();
     state.materials = [materialFixture()];
     const fetchSpy = stubBackend(state);
     renderApp(["/run"]);
 
-    const engine = await screen.findByRole("button", { name: /Tesseract/ });
-    await waitFor(() => { expect(engine).toHaveAttribute("aria-pressed", "true"); });
+    const engines = within(await screen.findByRole("group", { name: "OCR engine" }));
+    await waitFor(() => { expect(engines.getAllByRole("button")).toHaveLength(2); });
+    expect(engines.getAllByRole("button").map((button) => button.textContent)).toEqual([
+      expect.stringMatching(/^RapidOCR/), expect.stringMatching(/^Tesseract/),
+    ]);
+    for (const button of engines.getAllByRole("button")) {
+      expect(button).toHaveAttribute("aria-pressed", "false");
+    }
     await user.click(screen.getByRole("button", { name: /RapidOCR/ }));
     await choose(user, "Source file", /mecz\.mp4/);
     await choose(user, "Profile", /Gra testowa/);
@@ -403,6 +421,7 @@ describe("Run Setup: from a file to a started run", () => {
 
     await choose(user, "Source file", /mecz\.mp4/);
     await choose(user, "Profile", /Gra testowa/);
+    await chooseEngine(user);
     await user.clear(screen.getByLabelText("Sample rate"));
     await user.type(screen.getByLabelText("Sample rate"), "500");
     state.startResponse = {
@@ -419,6 +438,7 @@ describe("Run Setup: from a file to a started run", () => {
         profile_id: "profile-1",
         video_id: "video-1",
         interval_ms: 500,
+        ocr_engine: "tesseract",
       });
     });
 
@@ -441,6 +461,7 @@ describe("Run Setup: from a file to a started run", () => {
     await choose(user, "Source file", /mecz\.mp4/);
     expect(screen.getByRole("combobox", { name: "Source file" })).toHaveValue("mecz.mp4");
     await choose(user, "Profile", /Gra testowa/);
+    await chooseEngine(user);
     await user.click(screen.getByRole("button", { name: "Run" }));
 
     expect(await screen.findByText(/Another run is already active/)).toBeInTheDocument();
@@ -466,6 +487,8 @@ describe("Run Setup: from a file to a started run", () => {
     await screen.findByLabelText("Source file");
     await user.click(screen.getByRole("button", { name: "Run" }));
     expect(await screen.findByText("Choose a source file.")).toBeInTheDocument();
+    // FE-038: no engine is chosen for the operator, so it is asked for too.
+    expect(screen.getByText("Choose an OCR engine.")).toBeInTheDocument();
     expect(
       fetchSpy.mock.calls.some(
         ([url, init]) => String(url).endsWith("/api/v1/runs") && init?.method === "POST",
@@ -482,7 +505,8 @@ describe("per-run scan rules", () => {
     const fetchSpy = stubBackend(state);
     renderApp(["/run?profile=profile-1"]);
     await choose(user, "Source file", /mecz\.mp4/);
-    const region = await screen.findByRole("group", { name: "Text layout for Pasek zdrowia" });
+    await chooseEngine(user);
+    const region = await openRegionRule(user, "Pasek zdrowia");
     await user.click(within(region).getByRole("button", { name: "One word" }));
     await user.click(screen.getByRole("button", { name: "Run" }));
     await waitFor(() => {
@@ -490,5 +514,42 @@ describe("per-run scan rules", () => {
       expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({ region_text_layouts: { "region-1": "word" } });
     });
     expect(fetchSpy.mock.calls.some(([url, init]) => String(url).includes("/profiles") && ["POST", "PATCH", "PUT"].includes(init?.method ?? "GET"))).toBe(false);
+  });
+
+  // FE-038: "auto" is read as a block of lines, so that is what the operator sees.
+  it("shows the layout a region is really read with instead of Automatic", async () => {
+    const user = userEvent.setup();
+    state.materials = [materialFixture()];
+    stubBackend(state);
+    renderApp(["/run?profile=profile-1"]);
+    await choose(user, "Source file", /mecz\.mp4/);
+    await chooseEngine(user);
+    expect(screen.queryByRole("group", { name: "Text layout for Pasek zdrowia" })).toBeNull();
+    const region = await openRegionRule(user, "Pasek zdrowia");
+
+    expect(within(region).getByRole("button", { name: "Block of lines" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("region", { name: "Scan rules" })).queryByText("Automatic")).toBeNull();
+  });
+
+  // FE-038: an engine that detects text itself reads no layout — no rules, all Automatic.
+  it("hides scan rules for an engine that ignores the text layout and sends no layouts", async () => {
+    const user = userEvent.setup();
+    state.materials = [materialFixture()];
+    const fetchSpy = stubBackend(state);
+    renderApp(["/run?profile=profile-1"]);
+    await choose(user, "Source file", /mecz\.mp4/);
+    await chooseEngine(user);
+    const region = await openRegionRule(user, "Pasek zdrowia");
+    await user.click(within(region).getByRole("button", { name: "One word" }));
+
+    await user.click(screen.getByRole("button", { name: /RapidOCR/ }));
+    expect(screen.queryByRole("region", { name: "Scan rules" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => {
+      const request = fetchSpy.mock.calls.find(([url, init]) => String(url).endsWith("/runs") && init?.method === "POST");
+      const body = JSON.parse(String(request?.[1]?.body)) as Record<string, unknown>;
+      expect(body).toMatchObject({ ocr_engine: "rapidocr" });
+      expect(body).not.toHaveProperty("region_text_layouts");
+    });
   });
 });

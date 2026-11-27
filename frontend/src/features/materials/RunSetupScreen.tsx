@@ -27,9 +27,9 @@ import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { RunPanel } from "../dashboard/RunPanel";
 import { useDashboard } from "../dashboard/dashboardQuery";
-import { OCR_TEXT_LAYOUT_OPTIONS } from "../profiles/schemas";
 import { formatDuration } from "./materialFormat";
-import { ScanRules } from "./ScanRules";
+import { textLayoutName } from "../profiles/schemas";
+import { effectiveTextLayout, ScanRules } from "./ScanRules";
 import { DEFAULT_INTERVAL_MS, runLaunchSchema, type RunLaunchValues } from "./schemas";
 import "./RunSetupScreen.css";
 
@@ -56,6 +56,9 @@ function errorText(error: ErrorPresentation): string {
  * active-run block under the button. The two pickers are comboboxes, never
  * native `<select>`s.
  */
+
+/** FE-038: the engine listed first on Run. */
+const FIRST_OCR_ENGINE = "rapidocr";
 export function RunSetupScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -104,8 +107,21 @@ export function RunSetupScreen() {
   const [imageReloadKey, setImageReloadKey] = useState(0);
   const [runRules, setRunRules] = useState<{ profileId: string; layouts: Record<string, string> }>({ profileId: "", layouts: {} });
   const layouts = runRules.profileId === preview.data?.id ? runRules.layouts : {};
+  // FE-038: RapidOCR leads the list and nothing is chosen until the operator
+  // picks an engine; the backend default is never pre-selected.
+  const engines = [...(dashboard.data?.system.ocr_engines ?? [])].sort(
+    (a, b) => Number(b.id === FIRST_OCR_ENGINE) - Number(a.id === FIRST_OCR_ENGINE),
+  );
+  const engineChoiceRequired = engines.some((engine) => engine.available);
+  const engineId = form.watch("ocr_engine");
+  const selectedEngine = engines.find((engine) => engine.id === engineId);
+  // FE-038: scan rules exist only for an engine that reads the text layout;
+  // any other engine detects text on its own, so every region is Automatic.
+  const usesTextLayout = selectedEngine?.uses_text_layout === true;
   const previewShapes: OverlayShape[] = (preview.data?.regions ?? []).map((region) => ({
-    displayLabel: `${region.name} · ${OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === (layouts[region.id] ?? region.text_layout ?? "auto"))?.short ?? "Automatic"}`,
+    displayLabel: selectedEngine === undefined
+      ? region.name
+      : `${region.name} · ${usesTextLayout ? textLayoutName(effectiveTextLayout(region, layouts)) : "Automatic"}`,
     height: region.height,
     id: region.id,
     label: region.name,
@@ -155,8 +171,6 @@ export function RunSetupScreen() {
     }
   };
 
-  const engines = dashboard.data?.system.ocr_engines ?? [];
-  const defaultEngine = engines.find((engine) => engine.default);
 
   const failure = launch.isError ? describeApiError(launch.error) : null;
   const loading = materials.isPending || profiles.isPending;
@@ -167,8 +181,6 @@ export function RunSetupScreen() {
   const selectedVideoId = form.watch("video_id");
   const selectedMaterial = materialItems.find((item) => item.id === selectedVideoId);
   const interval = Number(form.watch("interval_ms"));
-  const engineId = form.watch("ocr_engine") || defaultEngine?.id;
-  const selectedEngine = engines.find((engine) => engine.id === engineId);
 
   const runButton = (
     <Button
@@ -245,12 +257,21 @@ export function RunSetupScreen() {
           id="df-run-setup-form"
           noValidate
           onSubmit={form.handleSubmit((values) => {
+            if (engineChoiceRequired && !values.ocr_engine) {
+              form.setError("ocr_engine", { type: "required", message: "Choose an OCR engine." });
+              return;
+            }
             setStartError(null);
             launch.mutate({
               ...values,
-              ...(runRules.profileId === values.profile_id && Object.keys(layouts).length > 0
+              ...(usesTextLayout && runRules.profileId === values.profile_id && Object.keys(layouts).length > 0
                 ? { region_text_layouts: layouts } : {}),
             });
+          }, (errors) => {
+            // Every missing choice is named at once, the engine included.
+            if (engineChoiceRequired && !form.getValues("ocr_engine") && errors.ocr_engine === undefined) {
+              form.setError("ocr_engine", { type: "required", message: "Choose an OCR engine." });
+            }
           })}
         >
           <Controller
@@ -356,7 +377,7 @@ export function RunSetupScreen() {
           <Controller
             control={form.control}
             name="ocr_engine"
-            render={({ field }) => (
+            render={({ field, fieldState }) => (
               <div className="df-run-setup__picker df-run-setup__picker--engine">
                 <p className="df-run-setup__label">
                   <Icon name="setting" />
@@ -365,11 +386,14 @@ export function RunSetupScreen() {
                 <div aria-label="OCR engine" className="df-run-setup__engines" role="group">
                   {engines.map((engine) => (
                     <Button
-                      aria-pressed={(field.value || defaultEngine?.id) === engine.id}
+                      aria-pressed={field.value === engine.id}
                       className="df-run-setup__engine"
                       disabled={loading || !engine.available}
                       key={engine.id}
-                      onClick={() => { field.onChange(engine.id); }}
+                      onClick={() => {
+                        field.onChange(engine.id);
+                        form.clearErrors("ocr_engine");
+                      }}
                       variant="secondary"
                     >
                       <span aria-hidden="true" className="df-run-setup__radio" />
@@ -383,11 +407,16 @@ export function RunSetupScreen() {
                   ))}
                 </div>
                 {engines.length === 0 ? <p className="df-run-setup__hint">No OCR engine is available.</p> : null}
+                {fieldState.error === undefined ? null : (
+                  <p className="df-run-setup__error" role="alert">
+                    {fieldState.error.message}
+                  </p>
+                )}
               </div>
             )}
           />
 
-          {preview.isSuccess && preview.data.regions.length > 0 ? (
+          {usesTextLayout && preview.isSuccess && preview.data.regions.length > 0 ? (
             <ScanRules
               disabled={launch.isPending}
               key={preview.data.id}

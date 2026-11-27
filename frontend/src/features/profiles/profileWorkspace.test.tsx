@@ -499,7 +499,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     // The summary says an inheriting region reads everything, layout inherited.
     expect(
       await within(ocr).findByRole("button", {
-        name: "Pasek zdrowia: all 2 characters, Layout inherited. Select the region",
+        name: "Pasek zdrowia: all 2 characters, Block of lines. Select the region",
       }),
     ).toBeInTheDocument();
     await user.click(within(ocr).getByRole("button", { name: /Select the region/ }));

@@ -200,3 +200,17 @@
   border-top: var(--border-width-default) solid var(--color-workspace-outline);
   padding-top: var(--toolbar-gap);
 }
+
+/* FE-038: the profile picker is one row - glass, name, chevron - as on Run. */
+.df-profile-workspace__profile-panel > .df-grouped-options .df-grouped-options__separator {
+  display: none;
+}
+
+/* FE-038: beside the panel the picture grows with the width only until the
+   page would scroll; past that the box keeps its height and the frame is
+   fitted inside it (zoom and pan as before). */
+@media (min-width: 769px) {
+  .df-profile-workspace__canvas .df-region-overlay {
+    max-height: var(--workspace-preview-max-height);
+  }
+}

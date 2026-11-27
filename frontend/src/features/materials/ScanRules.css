@@ -42,11 +42,3 @@
 .df-scan-rules .df-collapsible-group__toggle { min-height: var(--toolbar-control-height); }
 .df-scan-rules .df-collapsible-group__toggle::after { content: ""; position: absolute; inset: 0; }
 .df-scan-rules .df-collapsible-group__toggle { position: static; }
-.df-scan-rules .df-run-setup__label > span {
-  padding: var(--size-xxs) var(--size-xs);
-  border-radius: var(--radius-pill);
-  border: var(--border-width-default) solid var(--color-workspace-outline);
-  color: var(--color-icon-strong-default);
-  letter-spacing: normal;
-  text-transform: none;
-}

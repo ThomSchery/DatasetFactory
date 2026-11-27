@@ -44,12 +44,33 @@ export const OCR_TEXT_LAYOUT_OPTIONS = [
   { value: "line", label: "One line of text", short: "One line" },
   { value: "word", label: "One word or number", short: "One word" },
   { value: "block", label: "A block of several lines", short: "Block of lines" },
-  { value: "sparse", label: "Scattered pieces of text", short: "Scattered text" },
+  { value: "sparse", label: "Scattered pieces of text", short: "Scattered" },
 ] as const;
 
 export type OcrTextLayout = (typeof OCR_TEXT_LAYOUT_OPTIONS)[number]["value"];
 
 export const DEFAULT_REGION_TEXT_LAYOUT: OcrTextLayout = "auto";
+
+/**
+ * FE-038: "auto" is not a fifth behaviour. The only engine that reads layouts
+ * (Tesseract) maps it to the same page segmentation as a block of lines
+ * (PSM 6, backend/app/access/ocr/tesseract.py), so screens show and offer that
+ * value instead of an "Automatic" nobody can predict.
+ */
+export const AUTOMATIC_TEXT_LAYOUT_READS_AS: OcrTextLayout = "block";
+
+/** The layouts an operator picks from: the four real ones, no "Automatic". */
+export const OCR_TEXT_LAYOUT_CHOICES = OCR_TEXT_LAYOUT_OPTIONS.filter((option) => option.value !== "auto");
+
+/** The layout a region is read with; a region without its own uses the profile default. */
+export function readTextLayout(layout: string | null | undefined): string {
+  const value = layout ?? DEFAULT_REGION_TEXT_LAYOUT;
+  return value === "auto" ? AUTOMATIC_TEXT_LAYOUT_READS_AS : value;
+}
+
+export function textLayoutName(layout: string): string {
+  return OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === layout)?.short ?? layout;
+}
 
 const OCR_TEXT_LAYOUTS = new Set<string>(OCR_TEXT_LAYOUT_OPTIONS.map((option) => option.value));
 

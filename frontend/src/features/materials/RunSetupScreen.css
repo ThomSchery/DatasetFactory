@@ -369,3 +369,16 @@
 }
 
 .df-run-setup__label { color: var(--color-text-weak-default); }
+
+/* FE-038: the mockup's quiet outlines. Unselected engine cards, scan-rule
+   rows and tiles, the sample-rate field and presets use the workspace
+   outline; the amber frame stays for the chosen one. */
+.df-run-setup__form .df-button--secondary:not([aria-pressed="true"]),
+.df-run-setup__form .df-field__control:not(.df-grouped-options *),
+.df-scan-rules .df-collapsible-group__header:not(:has([aria-expanded="true"])) {
+  border-color: var(--color-workspace-outline);
+}
+
+/* FE-038: a picker is one row - glass, text, chevron - as in the mockup; no
+   inner frame and no separator before the chevron. */
+.df-run-setup__form .df-grouped-options__separator { display: none; }

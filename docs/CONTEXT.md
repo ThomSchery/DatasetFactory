@@ -318,12 +318,18 @@ that exact profile for editing; per-run OCR rule overrides are not added.
 
 ## FE-037 - full-window frame and per-run scan rules, 2026-11-27
 
-The shell fills the window (bar and rail at 0,0); only the content container
-is capped (549/732/960/1164/1368 px, 24 px margin). The user decided that OCR
+The shell fills the window (bar and rail at 0,0). Since FE-038 the content
+has no width cap either: it fills the window beside the rail, 24 px from each
+edge. The user decided that OCR
 scan rules chosen on Run apply to that single run only, never to the saved
 profile: `POST /runs` takes an optional `region_text_layouts` map, validated
 against the run's regions and the known layouts and frozen into the existing
 `ocr_regions` snapshot (no migration, no profile write). This supersedes the
-FE-036 note that per-run overrides are not added. Setup has no permanent OCR
+FE-036 note that per-run overrides are not added. Since FE-038 Scan rules
+appear only for an engine that reads the text layout (Tesseract); with
+RapidOCR every region is Automatic and no layouts are sent. Run lists RapidOCR first
+and pre-selects no engine: the operator must choose one. A region without
+its own layout shows the layout it is read with - Tesseract reads "auto" as
+"Block of lines" (PSM 6) - on Run and in Profile OCR settings. Setup has no permanent OCR
 settings panel; the profile's characters and layouts are edited from
 More > Profile OCR settings, in a dialog, and saved with the profile.

@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { Region } from "../../api";
 import { Button } from "../../components/common/Button";
 import { CollapsibleGroup } from "../../components/common/CollapsibleGroup";
-import { OCR_TEXT_LAYOUT_OPTIONS } from "../profiles/schemas";
+import { OCR_TEXT_LAYOUT_CHOICES, readTextLayout, textLayoutName } from "../profiles/schemas";
 import "./ScanRules.css";
 
 interface ScanRulesProps {
@@ -13,13 +13,18 @@ interface ScanRulesProps {
   disabled?: boolean;
 }
 
-const OPTIONS = OCR_TEXT_LAYOUT_OPTIONS.filter((option) => option.value !== "auto");
+const OPTIONS = OCR_TEXT_LAYOUT_CHOICES;
+
+export function effectiveTextLayout(region: Region, layouts: Readonly<Record<string, string>>): string {
+  return readTextLayout(layouts[region.id] ?? region.text_layout);
+}
 
 /** Edits only the pending run request. No profile mutation is made here. */
 export function ScanRules({ regions, layouts, onChange, disabled = false }: ScanRulesProps) {
   const [allOpen, setAllOpen] = useState(false);
-  const [openRegion, setOpenRegion] = useState<string | null>(regions[0]?.id ?? null);
-  const current = (region: Region) => layouts[region.id] ?? region.text_layout ?? "auto";
+  // FE-038: every region starts folded; the operator opens the one to change.
+  const [openRegion, setOpenRegion] = useState<string | null>(null);
+  const current = (region: Region) => effectiveTextLayout(region, layouts);
   const firstRule = regions[0] ? current(regions[0]) : undefined;
   const sharedRule = regions.every((region) => current(region) === firstRule) ? firstRule : undefined;
 
@@ -35,7 +40,7 @@ export function ScanRules({ regions, layouts, onChange, disabled = false }: Scan
           variant="secondary"
         >
           <RuleGlyph layout={option.value} />
-          <span>{option.value === "sparse" ? "Scattered" : option.short}</span>
+          <span>{textLayoutName(option.value)}</span>
         </Button>
       ))}
     </div>
@@ -43,7 +48,7 @@ export function ScanRules({ regions, layouts, onChange, disabled = false }: Scan
 
   return (
     <section aria-label="Scan rules" className="df-scan-rules">
-      <p className="df-run-setup__label">Scan rules <span>{regions.length} regions</span></p>
+      <p className="df-run-setup__label">Scan rules</p>
       <CollapsibleGroup
         label="Same rule for all regions"
         markerPlacement="end"
@@ -58,7 +63,6 @@ export function ScanRules({ regions, layouts, onChange, disabled = false }: Scan
       <div className="df-scan-rules__regions">
         {regions.map((region) => {
           const layout = current(region);
-          const label = OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === layout)?.short ?? layout;
           return (
             <CollapsibleGroup
               key={region.id}
@@ -70,8 +74,8 @@ export function ScanRules({ regions, layouts, onChange, disabled = false }: Scan
                 <span className="df-scan-rules__summary">
                   <strong>{region.name}</strong>
                   <span className="df-scan-rules__rule-value">
-                    {layout !== "auto" ? <RuleGlyph layout={layout} /> : null}
-                    {layout === "sparse" ? "Scattered" : label}
+                    <RuleGlyph layout={layout} />
+                    {textLayoutName(layout)}
                   </span>
                 </span>
               }

@@ -3,7 +3,7 @@ import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Panel } from "../../components/common/Panel";
 import { InlineError } from "../../components/common/UiStates";
 import { regionCharacterCount, type DraftCategory, type DraftRegion } from "./profileDraft";
-import { DEFAULT_REGION_TEXT_LAYOUT, OCR_TEXT_LAYOUT_OPTIONS } from "./schemas";
+import { OCR_TEXT_LAYOUT_CHOICES, readTextLayout, textLayoutName } from "./schemas";
 import "./OcrSettingsPanel.css";
 
 export interface OcrSettingsPanelProps {
@@ -30,11 +30,9 @@ const GROUPS: readonly { id: string; label: string; test: (name: string) => bool
   { id: "symbols", label: "Symbols", test: (name) => !/^[0-9A-Z]$/.test(name) },
 ];
 
+/** FE-038: the layout the region is really read with, never "Automatic". */
 function layoutLabel(layout: string | null): string {
-  if (layout === null) {
-    return "Layout inherited";
-  }
-  return OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === layout)?.short ?? `Layout ${layout}`;
+  return textLayoutName(readTextLayout(layout));
 }
 
 /**
@@ -115,7 +113,7 @@ export function OcrSettingsPanel({
   const unsupported = [...new Set([...selected])].filter(
     (char) => !characters.some((category) => category.name === char),
   );
-  const layout = region.text_layout ?? DEFAULT_REGION_TEXT_LAYOUT;
+  const layout = readTextLayout(region.text_layout);
 
   return (
     <Panel
@@ -143,7 +141,7 @@ export function OcrSettingsPanel({
           {
             id: "layout",
             label: "How the text sits in the region",
-            options: OCR_TEXT_LAYOUT_OPTIONS.map((option) => ({
+            options: OCR_TEXT_LAYOUT_CHOICES.map((option) => ({
               id: option.value,
               label: option.label,
               selectedLabel: option.short,
@@ -158,9 +156,7 @@ export function OcrSettingsPanel({
             onTextLayoutChange(first);
           }
         }}
-        placeholder={
-          OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === layout)?.short ?? "Text layout"
-        }
+        placeholder={textLayoutName(layout)}
         selectedIds={[layout]}
       />
 

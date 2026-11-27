@@ -242,17 +242,27 @@
   --shell-rail-compact: 44px;
   --shell-nav-control: 34px;
   --shell-padding-compact: 12px;
-  --content-max-xs: 549px;
-  --content-max-sm: 732px;
-  --content-max-md: 960px;
-  --content-max-lg: 1164px;
-  --content-max-xl: 1368px;
   --panel-padding: 14px;
   --workspace-gap: var(--size-md);
   --upload-height-compact: 240px;
   --upload-height-sm: 300px;
   --upload-height: 320px;
   --preview-aspect-ratio: 16 / 9;
+  /* FE-038: the tallest Setup picture that keeps the page inside the window
+     beside the panel: the bar, the content margins, the Upload/Profile/Run
+     switch (control + its padding + border) and its gap, the picture panel's
+     padding and border, and the tool row with its gap. Never below the phone
+     picture height. */
+  --workspace-preview-max-height: max(
+    var(--profile-image-height-sm),
+    calc(
+      100dvh - var(--topbar-height) - 2 * var(--site-padding)
+        - (var(--control-height-sm) + var(--toolbar-gap) + 2 * var(--border-width-default))
+        - var(--switch-gap)
+        - 2 * (var(--shell-padding-compact) + var(--border-width-default))
+        - var(--toolbar-gap) - var(--toolbar-control-height)
+    )
+  );
   --switch-gap: 14px;
   --toolbar-control-height: 30px;
   --toolbar-zoom-width: 38px;

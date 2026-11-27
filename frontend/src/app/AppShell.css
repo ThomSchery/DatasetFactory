@@ -146,8 +146,8 @@
   background: var(--color-shell-bar-default);
 }
 .df-shell__content {
+  /* FE-038: the content fills the window beside the rail, 24 px from each edge. */
   width: calc(100% - 2 * var(--site-padding));
-  max-width: var(--content-max-xs);
   margin: var(--site-padding) auto;
   min-width: 0;
 }
@@ -180,16 +180,6 @@
     grid-template-columns: var(--sidenav-width) minmax(0, 1fr);
   }
   .df-shell__bar { padding-inline: var(--size-sm); }
-  .df-shell__content { max-width: var(--content-max-sm); }
   .df-shell__segments { gap: var(--element-gap-md); padding: calc(var(--toolbar-gap) / 2); }
   .df-shell__segments .df-nav-item--segment { padding-inline: var(--segment-inline); }
-}
-@media (min-width: 768px) {
-  .df-shell__content { max-width: var(--content-max-md); }
-}
-@media (min-width: 992px) {
-  .df-shell__content { max-width: var(--content-max-lg); }
-}
-@media (min-width: 1200px) {
-  .df-shell__content { max-width: var(--content-max-xl); }
 }
