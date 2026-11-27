@@ -2,8 +2,9 @@
  * Figma Run frames 1378:2014 and 1362:1567–1570 (FE-022).
  *
  * Below 768 px: preview, then the fields panel, then Run across the full
- * width. From 768 px: "Run Setup" over a 205 px panel whose foot holds Run,
- * level with the bottom of the preview beside it.
+ * width. From 768 px: a panel whose foot holds Run, level with the bottom of
+ * the preview beside it. FE-035: its frame is Profile's (247 px column, panel
+ * inset 8 px, same top edge and picture panel), not the Figma 205 px column.
  *
  * The same elements serve both layouts; only which box wears the panel chrome
  * changes — the fields on a phone, the whole column on a wider screen.
@@ -11,7 +12,9 @@
 .df-run-setup {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--site-padding);
+  /* FE-035: under the picture, as on Profile — its tool row already separates
+     the two (Figma draws 16 here; the user asked for one gap on both tabs). */
+  gap: var(--element-gap-lg);
   min-width: 0;
 }
 
@@ -114,25 +117,24 @@
 }
 
 @media (min-width: 768px) {
+  /*
+   * FE-035: the same frame as Profile, so switching the tab moves nothing —
+   * one column of `--workspace-profile-column`, the same gap, and one row that
+   * starts at the same y. The "Run Setup" heading stays for a screen reader
+   * (it is hidden above) instead of taking a line over the column, which put
+   * this column 35 px lower than Profile's.
+   */
   .df-run-setup {
     grid-template-columns: var(--workspace-run-column) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto;
+    gap: var(--site-padding);
     align-items: start;
-  }
-
-  .df-run-setup__heading {
-    position: static;
-    width: auto;
-    height: auto;
-    margin: var(--size-none);
-    clip: auto;
-    white-space: normal;
   }
 
   /* FE-034: the Profile canvas panel (Figma `Frame 52` chrome). */
   .df-run-setup__preview {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
     border: var(--border-width-default) solid var(--color-stroke-panel-default);
     border-radius: var(--radius-sm);
@@ -148,8 +150,12 @@
   .df-run-setup__column.df-panel {
     display: flex;
     flex-direction: column;
+    grid-column: 1;
+    grid-row: 1;
     align-self: stretch;
     gap: var(--element-gap-lg);
+    /* Profile insets its panels by the same 8 px inside its 247 px column. */
+    margin-inline: var(--element-padding-x-md);
     padding: var(--element-padding-y-lg) var(--element-padding-x-md);
     border-color: var(--color-stroke-panel-default);
     background: var(--color-surface-neutral-default);

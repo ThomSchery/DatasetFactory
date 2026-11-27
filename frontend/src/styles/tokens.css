@@ -139,7 +139,9 @@
   --list-row-height: 35px;
   --class-row-height: 40px;
   --workspace-profile-column: 247px;
-  --workspace-run-column: 205px;
+  /* FE-035: Run Setup uses Profile's column, so the tabs share one frame
+     (Figma draws 205 px). */
+  --workspace-run-column: var(--workspace-profile-column);
   --workspace-review-column: 261px;
   --workspace-switch-width: 361px;
   /* Figma picture fields: Profile 328 × 279 (phone) and 479 px tall in the

@@ -92,7 +92,7 @@ Section 2 of `tokens.css`; each entry names its source.
 |---|---|---|
 | Spacing above 48 | `--size-xxl` 64, `--size-3xl` 80 | 8-point scale, FE-SETUP |
 | Control heights | `--control-height-sm/md/lg` 32 / 40 / 48, `--measure-copy` | FE-SETUP |
-| Geometry | top bar 44, icon 24, strip 56, fields 34 / 42, rows 35 / 40, columns 247 / 205 / 261 / 361, picture heights, `--workspace-panel-width`, `--data-list-column-min` 160 | Figma 05.11 `geometry.json` (FE-022), FE-SETUP |
+| Geometry | top bar 44, icon 24, strip 56, fields 34 / 42, rows 35 / 40, columns 247 (Profile and Run, FE-035) / 261 / 361, picture heights, `--workspace-panel-width`, `--data-list-column-min` 160 | Figma 05.11 `geometry.json` (FE-022), FE-SETUP |
 | Width thresholds | 576 / 768 / 992 / 1200 | `breakpoints.ts`; `@media` cannot read a variable |
 | Fonts | families, weights 300 / 400 / 600 / 700 | Figma uses Inter; the plugin exports no family or weight |
 | Text sizes | `--font-size-sm` 14, `-lg` 20, `-xl` 24, `-2xl` 32 | Figma 03.11 scale; `text/p/*` stops at 16 |

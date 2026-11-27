@@ -83,16 +83,49 @@ interface KeyControl {
    * more — so the exception follows the element instead of loosening the
    * threshold for everything.
    */
-  shiftedBy?: { reason: string; selector: string };
+  shiftedBy?: Shift | Shift[];
+  /**
+   * From 768 px the control sits at the foot of this element rather than under
+   * the fields Figma draws it under, because the app's picture makes the
+   * element taller. Its bottom edge must then be level with the foot's, minus
+   * the foot's padding - instead of the y rule, which cannot hold.
+   */
+  footOf?: { reason: string; selector: string };
+}
+
+/**
+ * Something the app draws above a control that Figma does not, or draws at
+ * another size. `replaces` names the Figma layer it takes the place of: only
+ * the height it adds beyond that layer's is allowed.
+ */
+interface Shift {
+  reason: string;
+  replaces?: string;
+  selector: string;
 }
 
 /** The side column's row gap (`--element-gap-lg`), with a pixel to spare. */
 const COLUMN_GAP_ALLOWANCE = 16;
 
 interface ScreenSpec {
-  column: { layer: string; selector: string } | null;
-  /** Picture field: its height follows the width (`aspect`) or is fixed. */
-  image: { layer: string; selector: string; height: "aspect" | "fixed" };
+  /**
+   * `expectedWidth` is a deliberate departure from the Figma column, with the
+   * decision that made it; the measured width is then compared with it instead.
+   */
+  column: { expectedWidth?: { reason: string; value: number }; layer: string; selector: string } | null;
+  /**
+   * Picture field: its height follows the width (`aspect`), is fixed, or grows
+   * with the window (`grows`, FE-033): from 768 px the Figma height is then a
+   * minimum and the page must still fit the window; on a phone it is `fixed`.
+   * `sameAs` compares the picture with another screen's Figma frame, when the
+   * app deliberately draws it as that screen does.
+   */
+  image: {
+    height: "aspect" | "fixed" | "grows";
+    layer: string;
+    sameAs?: { reason: string; screen: Screen };
+    selector: string;
+  };
   keys: KeyControl[];
   ready: string;
   route: string;
@@ -103,9 +136,22 @@ interface ScreenSpec {
    * still be on screen.
    */
   absentLabels?: { label: string; reason: string }[];
+  /** What the app draws that makes the screen's content end lower than Figma's. */
+  contentShifts?: Shift[];
   /** A step that brings the screen into the state the Figma frame draws. */
   prepare?: (page: Page) => Promise<void>;
 }
+
+/**
+ * Run Setup against Figma frames 1378:2014 and 1362:1567-1570: its picture is
+ * the Profile field (FE-034, 279 px on a phone, the window height from 768 px)
+ * where Figma draws a short one, and it has an OCR engine picker (TK-018) Figma
+ * does not. Both put the Run button lower and the content longer.
+ */
+const RUN_SHIFTS: Shift[] = [
+  { reason: "FE-034 Profile picture field", replaces: "Frame 126", selector: ".df-run-setup__preview" },
+  { reason: "TK-018 OCR engine picker", selector: ".df-run-setup__picker--engine" },
+];
 
 const SCREENS: Record<Screen, ScreenSpec> = {
   upload: {
@@ -121,7 +167,7 @@ const SCREENS: Record<Screen, ScreenSpec> = {
     image: {
       layer: "Frame 126",
       selector: ".df-profile-workspace__canvas .df-region-overlay",
-      height: "fixed",
+      height: "grows",
     },
     keys: [
       { label: "Save profile", layer: "game-x", pick: "first", selector: ".df-profile-workspace__save" },
@@ -145,10 +191,37 @@ const SCREENS: Record<Screen, ScreenSpec> = {
     },
   },
   run: {
-    column: { layer: "cross-view", selector: ".df-run-setup__column" },
-    image: { layer: "Frame 126", selector: ".df-run-setup__preview", height: "aspect" },
-    keys: [{ label: "Run", layer: "save-profile", pick: "last", selector: ".df-run-setup__run" }],
-    ready: ".df-reference-image__img",
+    contentShifts: RUN_SHIFTS,
+    column: {
+      // FE-035 (user, 2026-11-27): switching Profile ↔ Run must not move the
+      // picture, so Run uses Profile's 247 px column and insets its panel by
+      // the same 8 px: 247 − 2 × 8.
+      expectedWidth: { reason: "FE-035: same frame as Profile", value: 231 },
+      layer: "cross-view",
+      selector: ".df-run-setup__column",
+    },
+    image: {
+      height: "grows",
+      layer: "Frame 126",
+      // FE-034 (user, 2026-11-26): "Run must be unified with how it is in
+      // Profiles" — the same read-only picture field, not Figma's 515 × 282.
+      sameAs: { reason: "FE-034: the Profile picture field", screen: "profile" },
+      selector: ".df-run-setup__preview .df-region-overlay",
+    },
+    keys: [
+      {
+        footOf: {
+          reason: "the Run Setup column, as tall as the picture panel (FE-034)",
+          selector: ".df-run-setup__column",
+        },
+        label: "Run",
+        layer: "save-profile",
+        pick: "last",
+        selector: ".df-run-setup__run",
+        shiftedBy: RUN_SHIFTS,
+      },
+    ],
+    ready: ".df-region-overlay__surface",
     root: ".df-run-setup",
     route: "/run",
   },
@@ -195,6 +268,34 @@ function isDataText(text: string): boolean {
 /** "All (25)" is a label with a data count: the label part must be there. */
 function labelPart(text: string): string {
   return text.replace(/\s*\(\d+\)$/, "");
+}
+
+function shiftsOf(key: KeyControl): Shift[] {
+  return key.shiftedBy === undefined ? [] : Array.isArray(key.shiftedBy) ? key.shiftedBy : [key.shiftedBy];
+}
+
+/**
+ * What the shifts allow: each element's height, plus a column gap, less the
+ * height of the Figma layer it replaces. A shift whose element is not on the
+ * screen is reported, never allowed.
+ */
+function shiftAllowance(
+  shifts: Shift[],
+  rects: (DOMRectLike | null | undefined)[],
+  frame: Frame,
+): { missing: string[]; total: number } {
+  const missing: string[] = [];
+  let total = 0;
+  shifts.forEach((shift, index) => {
+    const rect = rects[index];
+    if (rect === null || rect === undefined) {
+      missing.push(shift.reason);
+      return;
+    }
+    total += rect.height;
+    total += shift.replaces === undefined ? COLUMN_GAP_ALLOWANCE : -layerRow(frame, shift.replaces, "first")[4];
+  });
+  return { missing, total };
 }
 
 function layerRow(frame: Frame, layer: string, pick: "first" | "last"): Row {
@@ -328,10 +429,16 @@ interface Measured {
   contentBottom: number;
   image: DOMRectLike | null;
   keys: (DOMRectLike | null)[];
-  /** For each key, the element its `shiftedBy` names, when it has one. */
-  keyShifts: (DOMRectLike | null)[];
+  /** For each key, the elements its `shiftedBy` names (none: an empty list). */
+  keyShifts: (DOMRectLike | null)[][];
+  /** For each key, the element its `footOf` names, when it has one. */
+  keyFeet: (DOMRectLike | null)[];
+  /** The elements the screen's `contentShifts` name. */
+  contentShifts: (DOMRectLike | null)[];
   notices: number;
   origin: number;
+  /** How far the document runs past the window, in px (≤ 0: it fits). */
+  overflowY: number;
   radiusViolations: string[];
   root: DOMRectLike | null;
   scrollWidth: number;
@@ -348,7 +455,15 @@ interface DOMRectLike {
 
 async function measure(page: Page, spec: ScreenSpec): Promise<Measured> {
   return page.evaluate(
-    ({ columnSelector, imageSelector, keySelectors, keyShiftSelectors, rootSelector }) => {
+    ({
+      columnSelector,
+      contentShiftSelectors,
+      imageSelector,
+      keyFootSelectors,
+      keySelectors,
+      keyShiftSelectors,
+      rootSelector,
+    }) => {
       const visible = (element: Element) => {
         const box = element.getBoundingClientRect();
         const style = getComputedStyle(element);
@@ -418,9 +533,12 @@ async function measure(page: Page, spec: ScreenSpec): Promise<Measured> {
         contentBottom,
         image: rect(imageSelector),
         keys: keySelectors.map((selector) => rect(selector)),
-        keyShifts: keyShiftSelectors.map((selector) => rect(selector)),
+        keyShifts: keyShiftSelectors.map((selectors) => selectors.map((selector) => rect(selector))),
+        keyFeet: keyFootSelectors.map((selector) => rect(selector)),
+        contentShifts: contentShiftSelectors.map((selector) => rect(selector)),
         notices: document.querySelectorAll("main .df-notice").length,
         origin,
+        overflowY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
         radiusViolations,
         root: rect(rootSelector),
         scrollWidth: document.documentElement.scrollWidth,
@@ -431,7 +549,9 @@ async function measure(page: Page, spec: ScreenSpec): Promise<Measured> {
       columnSelector: spec.column?.selector ?? null,
       imageSelector: spec.image.selector,
       keySelectors: spec.keys.map((key) => key.selector),
-      keyShiftSelectors: spec.keys.map((key) => key.shiftedBy?.selector ?? null),
+      keyShiftSelectors: spec.keys.map((key) => shiftsOf(key).map((shift) => shift.selector)),
+      keyFootSelectors: spec.keys.map((key) => key.footOf?.selector ?? null),
+      contentShiftSelectors: (spec.contentShifts ?? []).map((shift) => shift.selector),
       rootSelector: spec.root,
     },
   );
@@ -520,7 +640,7 @@ function checkFrame(
   if (spec.column !== null) {
     const column = frame.rows.find((row) => row[0] === "f" && row[row.length - 1] === spec.column?.layer);
     if (column !== undefined && column[3] < frame.w - 40) {
-      const expected = column[3];
+      const expected = spec.column.expectedWidth?.value ?? column[3];
       const actual = measured.column?.width ?? -1;
       checks.column = `${actual.toFixed(0)}/${String(expected)}`;
       if (!within(actual, expected, 4)) failures.push(`column ${checks.column} ≠ ±4`);
@@ -528,8 +648,15 @@ function checkFrame(
   }
 
   // Picture field.
-  const imageRow = layerRow(frame, spec.image.layer, "first");
+  const sameAs = spec.image.sameAs;
+  const sameAsId = sameAs === undefined ? null : geometry.screenToFrame[sameAs.screen]?.[String(width)];
+  const pictureFrame =
+    sameAsId === null || sameAsId === undefined ? frame : (geometry.frames[sameAsId] ?? frame);
+  const imageRow = layerRow(pictureFrame, spec.image.layer, "first");
   const expectedWidth = imageRow[3] - delta;
+  // FE-033: from 768 px the picture field grows with the window, so Figma's
+  // height is its minimum, and what the window allows must fit without scrolling.
+  const grows = spec.image.height === "grows" && mode !== "phone";
   const expectedHeight =
     spec.image.height === "aspect" ? imageRow[4] * (expectedWidth / imageRow[3]) : imageRow[4];
   const image = measured.image;
@@ -538,8 +665,17 @@ function checkFrame(
   } else {
     const dw = image.width / expectedWidth - 1;
     const dh = image.height / expectedHeight - 1;
-    checks.image = `${image.width.toFixed(0)}×${image.height.toFixed(0)} vs ${expectedWidth.toFixed(0)}×${expectedHeight.toFixed(0)} (${(dw * 100).toFixed(1)}%/${(dh * 100).toFixed(1)}%)`;
-    if (Math.abs(dw) > 0.04 || Math.abs(dh) > 0.04) failures.push(`picture ${checks.image} beyond ±4%`);
+    checks.image =
+      `${image.width.toFixed(0)}×${image.height.toFixed(0)} vs ${expectedWidth.toFixed(0)}×${expectedHeight.toFixed(0)} (${(dw * 100).toFixed(1)}%/${(dh * 100).toFixed(1)}%)` +
+      (grows ? " height is a minimum (FE-033)" : "") +
+      (sameAs === undefined ? "" : ` as ${sameAs.screen} (${sameAs.reason})`);
+    if (Math.abs(dw) > 0.04) failures.push(`picture width ${checks.image} beyond ±4%`);
+    if (grows ? dh < -0.04 : Math.abs(dh) > 0.04) {
+      failures.push(`picture height ${checks.image} ${grows ? "below the Figma minimum −4%" : "beyond ±4%"}`);
+    }
+    if (grows && measured.overflowY > 0) {
+      failures.push(`the page runs ${measured.overflowY.toFixed(0)} px past the window`);
+    }
   }
 
   // Key controls.
@@ -552,17 +688,31 @@ function checkFrame(
       failures.push(`${key.label} missing`);
       return;
     }
-    const shift = key.shiftedBy === undefined ? null : measured.keyShifts[index];
-    if (key.shiftedBy !== undefined && (shift === null || shift === undefined)) {
-      failures.push(`${key.label}: ${key.shiftedBy.reason} missing`);
-      return;
-    }
-    const allowance = 32 + (shift === null || shift === undefined ? 0 : shift.height + COLUMN_GAP_ALLOWANCE);
-    checks[key.label] =
-      `y ${actual.top.toFixed(0)}/${String(figma[2])}` +
-      (key.shiftedBy === undefined ? "" : ` (+${allowance.toFixed(0)} ${key.shiftedBy.reason})`);
-    if (actual.top > figma[2] + allowance) {
-      failures.push(`${key.label} y ${actual.top.toFixed(0)} > ${String(figma[2])}+${allowance.toFixed(0)}`);
+    const footed = key.footOf !== undefined && mode !== "phone";
+    if (footed && key.footOf !== undefined) {
+      const foot = measured.keyFeet[index];
+      if (foot === null || foot === undefined) {
+        failures.push(`${key.label}: ${key.footOf.reason} missing`);
+        return;
+      }
+      // The foot's padding and border: 8 + 1 px, with a few to spare.
+      const above = foot.top + foot.height - (actual.top + actual.height);
+      checks[key.label] = `${above.toFixed(0)} px above the foot of ${key.footOf.reason}`;
+      if (above < 0 || above > 16) failures.push(`${key.label} ${checks[key.label]}, expected 0-16`);
+    } else {
+      const shifts = shiftsOf(key);
+      const { missing: missingShifts, total } = shiftAllowance(shifts, measured.keyShifts[index] ?? [], frame);
+      if (missingShifts.length > 0) {
+        failures.push(`${key.label}: ${missingShifts.join(", ")} missing`);
+        return;
+      }
+      const allowance = 32 + total;
+      checks[key.label] =
+        `y ${actual.top.toFixed(0)}/${String(figma[2])}` +
+        (shifts.length === 0 ? "" : ` (+${allowance.toFixed(0)} ${shifts.map((shift) => shift.reason).join(", ")})`);
+      if (actual.top > figma[2] + allowance) {
+        failures.push(`${key.label} y ${actual.top.toFixed(0)} > ${String(figma[2])}+${allowance.toFixed(0)}`);
+      }
     }
     if (figma[2] < 900 && actual.top >= 900) failures.push(`${key.label} below the fold`);
   });
@@ -585,8 +735,15 @@ function checkFrame(
   if (missing.length > 0) failures.push(`labels missing: ${missing.join(", ")}`);
 
   // Content bottom.
-  const limit = frame.contentBottom * 1.1;
-  checks.bottom = `${measured.contentBottom.toFixed(0)}/${String(frame.contentBottom)}`;
+  const contentShifts = spec.contentShifts ?? [];
+  const content = shiftAllowance(contentShifts, measured.contentShifts, frame);
+  if (content.missing.length > 0) failures.push(`content: ${content.missing.join(", ")} missing`);
+  const limit = (frame.contentBottom + content.total) * 1.1;
+  checks.bottom =
+    `${measured.contentBottom.toFixed(0)}/${String(frame.contentBottom)}` +
+    (contentShifts.length === 0
+      ? ""
+      : ` (+${content.total.toFixed(0)} ${contentShifts.map((shift) => shift.reason).join(", ")})`);
   if (measured.contentBottom > limit) failures.push(`content bottom ${checks.bottom} > +10%`);
 
   // Radii, warnings, bar.

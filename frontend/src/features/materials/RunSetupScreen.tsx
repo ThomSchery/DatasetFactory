@@ -338,7 +338,7 @@ export function RunSetupScreen() {
             control={form.control}
             name="ocr_engine"
             render={({ field }) => (
-              <div className="df-run-setup__picker">
+              <div className="df-run-setup__picker df-run-setup__picker--engine">
                 <p className="df-run-setup__label">
                   <Icon name="setting" />
                   <span>OCR engine</span>
