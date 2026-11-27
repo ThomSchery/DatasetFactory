@@ -27,13 +27,13 @@
   max-width: 100%;
   min-height: var(--field-height);
   border: var(--border-width-default) solid var(--color-stroke-control-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding-inline: var(--element-padding-x-lg);
   background: var(--color-surface-neutral-default);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-ui);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-light);
+  font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   letter-spacing: var(--letter-spacing-normal);
   text-align: center;
@@ -148,4 +148,15 @@
   to {
     transform: rotate(1turn);
   }
+}
+
+.df-button--primary, .df-button--emphasis,
+.df-button--emphasis:hover:not(:disabled), .df-button--emphasis:active:not(:disabled) {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-icon-strong-default);
+}
+.df-button[aria-pressed="true"], .df-button[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-icon-strong-default);
 }

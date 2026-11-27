@@ -366,3 +366,24 @@
 .df-region-overlay__label--manual {
   background: var(--color-status-success-default);
 }
+
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) .df-region-canvas { gap: var(--toolbar-gap); }
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) :is(.df-region-overlay__toolbar, .df-region-overlay__zoom-controls) {
+  gap: var(--size-xs);
+}
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) .df-region-overlay__toolbar .df-button {
+  min-height: var(--toolbar-control-height);
+}
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) .df-region-overlay__toolbar .df-button:not(.df-profile-workspace__run) {
+  width: var(--shell-nav-control);
+  min-width: var(--shell-nav-control);
+}
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) .df-region-overlay__zoom-value { min-width: var(--toolbar-zoom-width); }
+
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) .df-region-overlay__label:not([data-tone="draft"]) {
+  top: var(--df-overlay-label-bottom);
+  transform: scale(var(--df-overlay-inverse-zoom, 1));
+}
+:is(.df-profile-workspace__canvas, .df-run-setup__preview) .df-region-overlay__label { font-size: var(--text-p-xs); }
+.df-profile-workspace__canvas .df-region-overlay__label[data-tone="draft"] { background: var(--color-text-strong-default); }
+.df-profile-workspace__canvas .df-region-overlay__shape--draft .df-region-overlay__shape-fill { stroke: var(--color-text-strong-default); }

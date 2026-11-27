@@ -10,7 +10,7 @@ import {
   parseRootVariables,
 } from "./designPreset";
 
-const presetCss = readFileSync("src/styles/design-preset.css", "utf8");
+const presetCss = readFileSync("src/styles/design-preset.css", "utf8").replace(/\r\n/g, "\n");
 
 describe("convertThemeBlocks", () => {
   it("turns `@theme static` into `:root` and keeps everything else as it was", () => {
@@ -71,8 +71,8 @@ describe("the committed preset", () => {
     const converted = convertThemeBlocks(presetCss, "design-preset.css");
     expect(converted).not.toMatch(/@theme/);
     const variables = parseRootVariables(converted);
-    expect(variables.get("--color-surface-page")).toBe("#23262c");
-    expect(variables.get("--spacing-site-padding-xs")).toBe("16px");
+    expect(variables.get("--color-surface-page")).toBe("#1b1e25");
+    expect(variables.get("--spacing-site-padding-xs")).toBe("24px");
     expect(variables.get("--text-p-sm")).toBe("12px");
     expect(variables.get("--border-width-1")).toBe("1px");
     // 49 variables in the `@theme static` block and `--border-width-1` on `:root`.
@@ -92,20 +92,20 @@ describe("the committed preset", () => {
     expect(checkedOut).toMatch(/^:root \{\n {2}--border-width-1: 1px;\n\}\n$/m);
   });
 
-  it("is still the plugin's export, untouched (FE-024: never edited by hand)", () => {
-    expect(presetCss.startsWith("/* Preset_3 | Colors: Dark;")).toBe(true);
+  it("identifies the active user-selected Instatic preset", () => {
+    expect(presetCss.startsWith("/* Instatic: DatasetFactory - Final mockup (grid)")).toBe(true);
     expect(presetCss).toMatch(/^@theme static \{$/m);
     expect(presetCss).toMatch(/^:root \{\n {2}--border-width-1: 1px;\n\}\n$/m);
   });
 
   it("swapping the preset changes the converted variables (no value is cached elsewhere)", () => {
     const swapped = presetCss
-      .replace("--color-surface-page: #23262c;", "--color-surface-page: #101214;")
-      .replace("--spacing-site-padding-xs: 16px;", "--spacing-site-padding-xs: 24px;");
+      .replace("--color-surface-page: #1b1e25;", "--color-surface-page: #101214;")
+      .replace("--spacing-site-padding-xs: 24px;", "--spacing-site-padding-xs: 32px;");
     const variables = parseRootVariables(convertThemeBlocks(swapped));
     expect(variables.get("--color-surface-page")).toBe("#101214");
-    expect(variables.get("--spacing-site-padding-xs")).toBe("24px");
-    expect(variables.get("--color-surface-panel")).toBe("#2b303a");
+    expect(variables.get("--spacing-site-padding-xs")).toBe("32px");
+    expect(variables.get("--color-surface-panel")).toBe("#23272f");
   });
 });
 

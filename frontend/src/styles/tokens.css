@@ -1,12 +1,10 @@
 /*
  * DatasetFactory design tokens — the mapping layer over the design preset.
  *
- * The design centre is `design-preset.css`, the export of the user's
- * figma-tailwind-tokens plugin (Preset_3, Figma document `DataSetFactory`,
- * values equal to the capture of 2026-11-05 in `designs/figma-2026-11-05/`).
- * Its `@theme` block is converted to `:root` variables at build time
- * (`designPreset.ts`, FE-024). Overwriting that file with a new export changes
- * the look of the whole application without touching this one.
+ * The design centre is `design-preset.css`: the active Instatic Final mockup
+ * palette (FE-036), retaining the previous Figma variable contract. Its @theme
+ * block becomes :root at build time through designPreset.ts. Shared geometry
+ * absent from that preset is centralised in section 2 below.
  *
  * This file has two sections, and `src/test/architecture.test.ts` polices
  * both:
@@ -65,9 +63,8 @@
   /* BWIDTH-06, BORDER-05/06 — the preset's one border width. */
   --border-width-default: var(--border-width-1);
 
-  /* COLOR-01..10 — the Figma semantic palette. The document is monochrome
-     slate: there is no brand hue, and the accent that marks focus, selection
-     and a drawn region is the document's own `border/focus` = `text/primary`.
+  /* COLOR-01..10 — the Figma semantic palette. The active Final mockup palette uses graphite surfaces and an amber
+     border/focus accent for focus, selection and drawn regions (FE-036).
      COLOR-02: `surface/page` is the 60 %, `surface/panel` the 30 %,
      `border/focus` the 10 %. */
   --color-background-primary-default: var(--color-surface-page);
@@ -131,10 +128,10 @@
   /* Figma 05.11 geometry read from `designs/figma-2026-11-05/geometry.json`
      (FE-022): 44 px top bar, 24 px icons, 34–42 px fields, the 56 px icon
      strip, and the fixed left columns of the three workspaces. */
-  --topbar-height: 44px;
+  --topbar-height: 40px;
   --icon-size: 24px;
-  --sidenav-width: 56px;
-  --field-height: 34px;
+  --sidenav-width: 52px;
+  --field-height: 42px;
   --field-height-lg: 42px;
   --list-row-height: 35px;
   --class-row-height: 40px;
@@ -182,7 +179,7 @@
   --font-family-sans: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-family-ui: var(--font-family-sans);
   --font-family-mono: "JetBrains Mono", "Cascadia Mono", "Segoe UI Mono", ui-monospace, monospace;
-  --font-weight-light: 300; /* Figma: navigation, buttons and field labels. */
+  --font-weight-light: 400; /* Figma: navigation, buttons and field labels. */
   --font-weight-regular: 400;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
@@ -234,6 +231,40 @@
   --opacity-hover: 0.8;
   --opacity-disabled: 0.2;
   --spinner-duration: 800ms;
+
+  /* FE-036: extracted from Instatic df-final-mockup. Layout/palette values
+     are centralised here; component CSS only consumes these roles. */
+  --color-canvas-default: #15171c;
+  --color-shell-bar-default: #22262e;
+  --color-shell-rail-default: #20242c;
+  --radius-panel: 10px;
+  --radius-shell: 12px;
+  --shell-rail-compact: 44px;
+  --shell-nav-control: 34px;
+  --shell-padding-compact: 12px;
+  --content-max-xs: 549px;
+  --content-max-sm: 732px;
+  --content-max-md: 960px;
+  --content-max-lg: 1164px;
+  --content-max-xl: 1368px;
+  --panel-padding: 14px;
+  --workspace-gap: var(--size-md);
+  --upload-height-compact: 240px;
+  --upload-height-sm: 300px;
+  --upload-height: 320px;
+  --preview-aspect-ratio: 16 / 9;
+  --switch-gap: 14px;
+  --toolbar-control-height: 30px;
+  --toolbar-zoom-width: 38px;
+  --toolbar-gap: 10px;
+  --segment-inline: 20px;
+  --card-column-gap: 18px;
+  --card-actions-width: 138px;
+  --list-scroll-height: 230px;
+  --color-workspace-outline: #3b4150;
+  --color-workspace-row: rgb(255 255 255 / 1.6%);
+  --font-size-caption: 11px;
+  --font-size-label: 13px;
 
   color-scheme: dark;
 }

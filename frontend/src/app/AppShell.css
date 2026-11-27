@@ -1,9 +1,4 @@
-/*
- * The Figma shell (FE-022): a 44 px `surface/panel` bar with ☰ and ⋮, the
- * 56 px icon strip from 768 px, and the screen with a 16 px margin at every
- * width (`site/padding/XS`). Below 768 px the strip is a drawer, so the screen
- * takes the full width.
- */
+/* Full-window application shell; only __content has a width cap (FE-037). */
 
 .df-shell {
   display: grid;
@@ -12,7 +7,12 @@
     "main";
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--topbar-height) 1fr;
-  min-height: 100vh;
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
   background: var(--color-background-primary-default); /* COLOR-02: the 60%. */
 }
 
@@ -72,18 +72,18 @@
 .df-shell__main {
   grid-area: main;
   min-width: 0;
-  padding: var(--site-padding);
+  padding: 0;
 }
 
 .df-shell__switch {
   display: flex;
   justify-content: center;
-  margin-block-end: var(--site-padding);
+  margin-block-end: var(--switch-gap);
 }
 
 .df-shell__segments {
   display: grid;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-columns: auto;
   grid-auto-flow: column;
   gap: var(--element-gap-md);
   width: min(100%, var(--workspace-switch-width));
@@ -135,4 +135,61 @@
 .df-ocr-engine__detail {
   color: var(--color-text-weak-default);
   overflow-wrap: anywhere;
+}
+
+/* FE-037: page chrome reaches viewport edges; content is independently bounded. */
+.df-shell[data-strip="open"] {
+  grid-template-columns: var(--shell-rail-compact) minmax(0, 1fr);
+}
+.df-shell__bar {
+  padding-inline: var(--shell-padding-compact);
+  background: var(--color-shell-bar-default);
+}
+.df-shell__content {
+  width: calc(100% - 2 * var(--site-padding));
+  max-width: var(--content-max-xs);
+  margin: var(--site-padding) auto;
+  min-width: 0;
+}
+.df-shell__segments {
+  width: fit-content;
+  max-width: 100%;
+  gap: var(--size-xxs);
+  padding: var(--size-xxs);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  background: var(--color-shell-rail-default);
+}
+.df-shell__segments .df-nav-item__icon {
+  display: none;
+}
+.df-shell__segments .df-nav-item--segment {
+  min-height: var(--control-height-sm);
+  padding-inline: var(--shell-padding-compact);
+  border-color: var(--color-surface-transparent);
+  background: var(--color-surface-transparent);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-label);
+}
+.df-shell__segments .df-nav-item--active {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-icon-strong-default);
+}
+@media (min-width: 576px) {
+  .df-shell[data-strip="open"] {
+    grid-template-columns: var(--sidenav-width) minmax(0, 1fr);
+  }
+  .df-shell__bar { padding-inline: var(--size-sm); }
+  .df-shell__content { max-width: var(--content-max-sm); }
+  .df-shell__segments { gap: var(--element-gap-md); padding: calc(var(--toolbar-gap) / 2); }
+  .df-shell__segments .df-nav-item--segment { padding-inline: var(--segment-inline); }
+}
+@media (min-width: 768px) {
+  .df-shell__content { max-width: var(--content-max-md); }
+}
+@media (min-width: 992px) {
+  .df-shell__content { max-width: var(--content-max-lg); }
+}
+@media (min-width: 1200px) {
+  .df-shell__content { max-width: var(--content-max-xl); }
 }

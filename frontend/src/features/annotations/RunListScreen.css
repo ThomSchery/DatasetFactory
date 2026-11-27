@@ -1,79 +1,59 @@
-.df-run-list,
-.df-run-list__items {
+.df-run-list, .df-run-list__items, .df-run-list__identity, .df-run-list__progress {
   display: grid;
-  gap: var(--size-lg);
+  min-width: 0;
 }
-
 .df-run-list__items {
+  gap: var(--toolbar-gap);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-
-.df-run-list__row {
-  display: grid;
-  gap: var(--size-md);
-  padding: var(--size-md);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-neutral-raised);
-}
-
-.df-run-list__heading,
-.df-run-list__badges,
-.df-run-list__review-counts,
-.df-run-list__actions,
-.df-run-list__pagination {
-  display: flex;
-  align-items: center;
-  gap: var(--size-xs);
-}
-
-.df-run-list__heading {
-  justify-content: space-between;
-}
-
-.df-run-list__identity {
-  display: grid;
-  gap: var(--size-none);
-}
-
-.df-run-list__identity strong {
+.df-run-list > .df-panel { padding: 0; border: 0; background: transparent; gap: var(--size-xxs); }
+.df-run-list > .df-panel .df-panel__title {
+  text-transform: none;
   color: var(--color-text-strong-default);
   font-size: var(--font-size-md);
-  line-height: var(--line-height-tight);
+  letter-spacing: normal;
 }
-
-.df-run-list__identity span,
-.df-run-list__review-counts,
-.df-run-list__pagination span {
+.df-run-list__note { margin: 0; color: var(--color-text-weak-default); font-size: var(--font-size-xs); }
+.df-run-list__row {
+  display: grid;
+  gap: var(--panel-padding) var(--card-column-gap);
+  align-items: center;
+  padding: var(--size-sm) var(--card-column-gap);
+  border: var(--border-width-default) solid var(--color-workspace-outline);
+  border-radius: var(--radius-panel);
+  background: var(--color-workspace-row);
+}
+.df-run-list__row:hover { border-color: var(--color-stroke-control-default); }
+.df-run-list__identity span, .df-run-list__review-counts {
   color: var(--color-text-weak-default);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-loose);
+  font: var(--font-size-caption)/var(--line-height-standard) var(--font-family-mono);
+  overflow-wrap: anywhere;
 }
-
-.df-run-list__badges,
-.df-run-list__review-counts {
+.df-run-list__row .df-data-list--columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.df-run-list__row .df-data-list__hint { display: none; }
+.df-run-list__actions, .df-run-list__review-counts, .df-run-list__badges, .df-run-list__pagination {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: var(--size-xs);
+}
+.df-run-list__progress { gap: var(--element-gap-md); }
+.df-run-list__actions > .df-button { flex: 1; min-height: var(--shell-nav-control); }
+.df-run-list__actions .df-run-list__delete { min-height: var(--size-md); color: var(--color-status-error-default); }
+.df-run-list__badges { justify-content: center; }
+.df-run-list__badges .df-status-badge--brand { color: var(--color-icon-strong-default); border-color: var(--color-fill-brand-impeccable); }
+.df-run-list__pagination { justify-content: center; }
+@media (min-width: 576px) {
+  .df-run-list__row .df-data-list--columns { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
+  .df-run-list__row { grid-template-columns: minmax(0, 1.5fr) 1.1fr .7fr .6fr .9fr minmax(0, 1.6fr) auto; }
+  .df-run-list__row .df-data-list--columns { display: contents; }
+  .df-run-list__actions { min-width: var(--card-actions-width); flex-direction: column; align-items: stretch; }
 }
 
-.df-run-list__actions {
-  justify-content: flex-end;
-}
-
-.df-run-list__pagination {
-  justify-content: center;
-}
-
-/* FE-024: below the `md` breakpoint (breakpoints.ts); was 720, which no Figma
-   frame defines. */
-@media (max-width: 767.98px) {
-  .df-run-list__heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .df-run-list__actions {
-    justify-content: flex-start;
-  }
-}
+.df-run-list__actions > .df-run-list__delete { flex: none; }
+.df-run-list__identity strong { font-size: var(--font-size-md); }
+.df-run-list__row .df-ui-state__progress-label { font-size: var(--font-size-xs); }

@@ -47,7 +47,7 @@
   min-height: var(--field-height);
   padding: var(--element-padding-y-md) var(--element-padding-x-lg);
   border: var(--border-width-default) solid var(--color-stroke-control-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   outline: var(--border-width-default) solid var(--color-surface-transparent);
   outline-offset: calc(-1 * var(--border-width-default));
   background: var(--color-background-primary-default);

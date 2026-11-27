@@ -69,7 +69,7 @@ export function MaterialsScreen() {
         pathLabel="Video file path"
         pathPlaceholder="D:\videos\match.mp4"
       >
-        {imported === null ? undefined : materialSummary(imported)}
+        {imported === null ? "MP4 · MKV · MOV" : materialSummary(imported)}
       </FilePickerTile>
     </div>
   );

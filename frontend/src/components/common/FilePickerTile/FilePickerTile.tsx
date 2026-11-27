@@ -83,6 +83,7 @@ export function FilePickerTile({
       }}
     >
       <Button
+        aria-label={label}
         className="df-file-tile__pick"
         disabled={disabled}
         loading={busy}

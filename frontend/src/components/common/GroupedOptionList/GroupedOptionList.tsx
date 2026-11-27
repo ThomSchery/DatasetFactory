@@ -83,6 +83,7 @@ export interface GroupedOptionListProps {
   /** Text in the empty filter; defaults to `filterLabel`. A single choice
    * passes the chosen name here, so the closed control shows the selection. */
   placeholder?: string;
+  showSelectedDetail?: boolean;
   /** Maximum Unicode code points; unlike native maxLength, astral characters count once. */
   filterMaxCodePoints?: number;
   filterMaxLength?: number;
@@ -218,6 +219,7 @@ export function GroupedOptionList({
   onConfirm,
   onFilterChange,
   placeholder,
+  showSelectedDetail = false,
   selectedIds,
 }: GroupedOptionListProps) {
   const listId = useId();
@@ -669,6 +671,9 @@ export function GroupedOptionList({
                 : query
             }
           />
+          {showSelectedDetail && !open && selectedOptions[0]?.detail ? (
+            <small className="df-grouped-options__selected-detail">{selectedOptions[0].detail}</small>
+          ) : null}
         </div>
         <div className="df-grouped-options__control-actions">
           {mode === "multiple" && selectedIds.length > 0 ? (

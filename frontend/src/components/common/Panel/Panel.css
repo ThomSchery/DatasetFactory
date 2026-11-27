@@ -8,7 +8,7 @@
   display: grid;
   gap: var(--element-gap-lg);
   min-width: 0;
-  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
+  padding: var(--panel-padding);
   border: var(--border-width-default) solid var(--color-stroke-panel-default);
   background: var(--color-surface-neutral-default);
   color: var(--color-text-strong-default);
@@ -19,11 +19,11 @@
 }
 
 .df-panel--radius-sm {
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-panel);
 }
 
 .df-panel--radius-md {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-panel);
 }
 
 .df-panel__header {
@@ -51,4 +51,11 @@
   display: grid;
   gap: var(--element-gap-lg);
   min-width: 0;
+}
+
+.df-panel__title {
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-standard);
+  text-transform: uppercase;
 }

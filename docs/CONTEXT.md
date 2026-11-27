@@ -293,3 +293,21 @@ Użytkownik zdecydował: aplikacja ma wyglądać jak Figma 05.11 (`designs/figma
 ### Centrum wyglądu: preset z pluginu figma-tailwind-tokens (2026-11-10, FE-024)
 
 Użytkownik zdecydował: jedynym źródłem wartości wyglądu jest `frontend/src/styles/design-preset.css` — eksport jego pluginu figma-tailwind-tokens (Preset_3, tryby Colors Dark / Dimensions / Borders / Typography / Variable collection Mode 1), wersjonowany bajt w bajt i nigdy nie edytowany ręcznie. Nowy eksport nadpisuje ten plik i zmienia wygląd całej aplikacji bez edycji innych plików. Blok Tailwind `@theme` presetu jest zamieniany na zmienne `:root` w czasie budowania przez mały plugin Vite w repo (`frontend/src/styles/designPreset.ts`); `tokens.css` jest warstwą mapowania `var()` na zmienne presetu, a wartości, których plugin nie eksportuje, trzyma w jednej sekcji „Not in the preset yet”. Progi szerokości mają jeden kanoniczny zestaw w `frontend/src/styles/breakpoints.ts`. Decyzja F16 bez zmian: Tailwind nie wchodzi do v1. Instrukcja podmiany presetu: `frontend/src/styles/README.md`.
+
+
+## FE-036 - Final mockup (grid), 2026-11-27
+
+The user selected Instatic `DatasetFactory - Final mockup (grid)` as the new
+visual baseline, superseding the earlier Figma palette and fixed-column layout.
+The application keeps its existing CSS preset/mapping mechanism (no Tailwind
+migration): palette in `frontend/src/styles/design-preset.css`, shared geometry
+in `tokens.css`, thresholds in `breakpoints.ts`. The preserved previous export
+and source decision are in `designs/final-mockup-grid/`.
+
+The shell has a 24px outer margin, graphite surfaces, amber selection, and a
+collapsible icon rail at every width. Setup and Run show preview before options
+through 768px inclusive. At 769+ they use a 12-column grid: panel 5/12, 4/12 at
+LG and 3/12 at XL, with a 24px gap. Upload, Setup, Run and the Annotations run
+list follow this layout; the existing review editor and its in-progress FE-032
+behaviour remain. Scan rules on Run reflect saved profile settings and link to
+that exact profile for editing; per-run OCR rule overrides are not added.

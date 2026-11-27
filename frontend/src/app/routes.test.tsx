@@ -30,11 +30,6 @@ function sections() {
   return screen.getByRole("navigation", { name: "Sections" });
 }
 
-/** The drawer's own list inside the open "Sections" modal (FE-023 FIX2: the
- * modal element also holds ☰ and the inert page, so links are looked up here). */
-function drawerNav(dialog: HTMLElement) {
-  return within(dialog).getByRole("navigation", { name: "Sections" });
-}
 
 beforeEach(() => {
   // The built screens query the API on mount; an empty install is the
@@ -63,7 +58,7 @@ beforeEach(() => {
     }
     const runMatch = url.match(/\/api\/v1\/runs\/([^/?]+)$/);
     if (runMatch) {
-      return { status: 200, body: runFixture({ id: runMatch[1] }) };
+      return { status: 200, body: runFixture({ id: runMatch[1], status: "review_ready" }) };
     }
     return { status: 200, body: emptyDashboard() };
   });
@@ -223,150 +218,21 @@ describe("navigation shell", () => {
     expect(controlled()).toBe(sections());
   });
 
-  it("hides the sections below 768 px and opens them as a drawer from ☰", async () => {
+  it("keeps the compact icon rail and page live on a phone, with a working collapse toggle", async () => {
     setViewportWidth(360);
     const user = userEvent.setup();
     renderApp(["/materials"]);
     const toggle = screen.getByRole("button", { name: "Sections" });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
-
-    await user.click(toggle);
-    const drawer = screen.getByRole("dialog", { name: "Sections" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(drawer).toContainElement(document.getElementById(toggle.getAttribute("aria-controls") ?? ""));
-    expect(within(drawerNav(drawer)).queryByRole("button")).toBeNull();
-    expect(within(drawerNav(drawer)).getByRole("link", { name: "Upload" })).toHaveFocus();
-
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
-    expect(toggle).toHaveFocus();
-  });
-
-  it("makes one labelled modal of ☰ and the drawer while it is open (FIX2)", async () => {
-    setViewportWidth(360);
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    const toggle = screen.getByRole("button", { name: "Sections" });
-    expect(toggle.closest("[role=dialog]")).toBeNull();
-
-    await user.click(toggle);
-    const modal = screen.getByRole("dialog", { name: "Sections" });
-    expect(modal).toHaveAttribute("aria-modal", "true");
-    expect(modal).toContainElement(toggle);
-    expect(modal).toContainElement(drawerNav(modal));
-    expect(modal).toContainElement(document.getElementById(toggle.getAttribute("aria-controls") ?? ""));
-    // ☰ is the same node: nothing was moved into the modal.
-    expect(screen.getByRole("button", { name: "Sections" })).toBe(toggle);
-
-    await user.click(toggle);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(toggle.closest("[role=dialog]")).toBeNull();
-    expect(toggle).toHaveFocus();
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("closes the drawer with the same ☰ that opened it", async () => {
-    setViewportWidth(360);
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    const toggle = screen.getByRole("button", { name: "Sections" });
-    await user.click(toggle);
-    expect(screen.getByRole("dialog", { name: "Sections" })).toBeInTheDocument();
-
-    await user.click(toggle);
-    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveFocus();
-  });
-
-  it("traps focus in ☰ and the drawer and closes it after a choice", async () => {
-    setViewportWidth(360);
-    const user = userEvent.setup();
-    const app = renderApp(["/materials"]);
-    const toggle = screen.getByRole("button", { name: "Sections" });
-    await user.click(toggle);
-    const drawer = screen.getByRole("dialog", { name: "Sections" });
-    expect(within(drawerNav(drawer)).getByRole("link", { name: "Upload" })).toHaveFocus();
-
-    // FE-023 FIX1: the modal scope is ☰ plus the drawer's sections.
-    await user.tab({ shift: true });
-    expect(toggle).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(within(drawerNav(drawer)).getByRole("link", { name: "Annotations" })).toHaveFocus();
-    await user.tab();
-    expect(toggle).toHaveFocus();
-    await user.tab();
-    expect(within(drawerNav(drawer)).getByRole("link", { name: "Upload" })).toHaveFocus();
-
-    await user.click(within(drawerNav(drawer)).getByRole("link", { name: "Setup for scan" }));
-    await waitFor(() => {
-      expect(app.router.state.location.pathname).toBe("/profiles");
-    });
-    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
-  });
-
-  it("keeps ⋮ More, the skip link and the page out of reach while the drawer is open", async () => {
-    setViewportWidth(360);
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    const more = screen.getByRole("button", { name: "More" });
-    const main = document.getElementById("df-main");
-    const skip = screen.getByRole("link", { name: "Skip to content" });
-    expect(more.closest("[inert]")).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Sections" }));
-    expect(screen.getByRole("dialog", { name: "Sections" })).toBeInTheDocument();
-    // FE-023 FIX1: everything outside ☰ and the drawer is inert.
-    for (const outside of [more, main, skip]) expect(outside?.closest("[inert]")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Sections" }).closest("[inert]")).toBeNull();
-    expect(screen.getByRole("dialog", { name: "Sections" }).closest("[inert]")).toBeNull();
-
-    await user.keyboard("{Escape}");
+    expect(within(sections()).getByRole("link", { name: "Setup for scan" })).toBeInTheDocument();
     expect(document.querySelector("[inert]")).toBeNull();
-  });
-
-  it("closes the drawer with Escape from ☰ as well as from a section", async () => {
-    setViewportWidth(360);
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    const toggle = screen.getByRole("button", { name: "Sections" });
-
     await user.click(toggle);
-    await user.tab({ shift: true });
+    expect(screen.queryByRole("navigation", { name: "Sections" })).toBeNull();
     expect(toggle).toHaveFocus();
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
-    expect(toggle).toHaveFocus();
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-
     await user.click(toggle);
-    const drawer = screen.getByRole("dialog", { name: "Sections" });
-    await user.tab();
-    expect(within(drawerNav(drawer)).getByRole("link", { name: "Setup for scan" })).toHaveFocus();
-    await user.keyboard("{Escape}");
+    expect(within(sections()).getByRole("link", { name: "Upload" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
-    expect(toggle).toHaveFocus();
-  });
-
-  it("leaves the header and page live with the strip from 768 px", async () => {
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    await user.click(screen.getByRole("button", { name: "Sections" }));
     expect(document.querySelector("[inert]")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Sections" }));
-    expect(document.querySelector("[inert]")).toBeNull();
-    await openMenu(user);
-    expect(screen.getByRole("button", { name: "More" })).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("closes the drawer on a click outside it", async () => {
-    setViewportWidth(360);
-    const user = userEvent.setup();
-    renderApp(["/materials"]);
-    await user.click(screen.getByRole("button", { name: "Sections" }));
-    await user.pointer({ keys: "[MouseLeft]", target: screen.getByTestId("side-nav-scrim") });
-    expect(screen.queryByRole("dialog", { name: "Sections" })).toBeNull();
   });
 
   it("keeps the remaining destinations and the OCR engine report in the menu", async () => {

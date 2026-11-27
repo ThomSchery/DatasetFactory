@@ -7,14 +7,17 @@
  * 992 / 1200 px; 360 is the smallest supported window, not a threshold.
  */
 export const BREAKPOINTS = {
+  /** Setup and Run stay stacked through 768 px inclusive. */
+  workspace: 769,
   /** Phone → wide phone: the Review picture gets its tool row, Run Setup its aspect ratio. */
   sm: 576,
-  /** The side bar becomes a strip; the three workspaces get their fixed left column. */
+  /** The frame max width changes; Setup/Run stack at this exact width. */
   md: 768,
   /** Wide desktop: the Review picture grows with the window. */
   lg: 992,
-  /** Figma's widest frame. */
+  /** Full desktop layout and compact run list. */
   xl: 1200,
+  xxl: 1400,
 } as const;
 
 export type BreakpointName = keyof typeof BREAKPOINTS;
@@ -28,9 +31,9 @@ export function maxWidthBelow(name: BreakpointName): number {
 }
 
 /** Every value a `@media (min-width: …)` in `frontend/src` may use, in px. */
-export const MIN_WIDTH_QUERY_VALUES: readonly number[] = Object.values(BREAKPOINTS);
+export const MIN_WIDTH_QUERY_VALUES: readonly number[] = Object.values(BREAKPOINTS).filter((width) => width > 0).sort((a, b) => a - b);
 
 /** Every value a `@media (max-width: …)` in `frontend/src` may use, in px. */
 export const MAX_WIDTH_QUERY_VALUES: readonly number[] = (
   Object.keys(BREAKPOINTS) as BreakpointName[]
-).map(maxWidthBelow);
+).filter((name) => BREAKPOINTS[name] > 0).map(maxWidthBelow).sort((a, b) => a - b);

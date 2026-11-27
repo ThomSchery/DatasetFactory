@@ -233,8 +233,8 @@ describe("width thresholds come from breakpoints.ts alone", () => {
   });
 
   it("pairs each max-width with the min-width it must not overlap", () => {
-    expect(MIN_WIDTH_QUERY_VALUES).toEqual([576, 768, 992, 1200]);
-    expect(MAX_WIDTH_QUERY_VALUES).toEqual([575.98, 767.98, 991.98, 1199.98]);
+    expect(MIN_WIDTH_QUERY_VALUES).toEqual([576, 768, 769, 992, 1200, 1400]);
+    expect(MAX_WIDTH_QUERY_VALUES).toEqual([575.98, 767.98, 768.98, 991.98, 1199.98, 1399.98]);
   });
 
   it("keeps the width literals out of the TS sources", () => {
@@ -246,8 +246,8 @@ describe("width thresholds come from breakpoints.ts alone", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("drives the shell's strip layout from the md breakpoint", () => {
+  it("keeps the approved icon strip available at every width", () => {
     const shell = readFileSync("src/app/AppShell.tsx", "utf8");
-    expect(shell).toMatch(/const STRIP_MIN_WIDTH = BREAKPOINTS\.md;/);
+    expect(shell).toContain('mode="strip"');
   });
 });

@@ -84,10 +84,10 @@ function contrast(foreground: string, background: string): number {
 
 describe("token resolution (FE-024)", () => {
   it("follows the var() chain from an application token to the preset's exact hex", () => {
-    expect(resolve("color-background-primary-default")).toBe("#23262c");
-    expect(resolve("color-surface-neutral-default")).toBe("#2b303a");
-    expect(resolve("color-stroke-control-default")).toBe("#959eb0");
-    expect(resolve("color-fill-brand-impeccable")).toBe("#f6f7f8");
+    expect(resolve("color-background-primary-default")).toBe("#1b1e25");
+    expect(resolve("color-surface-neutral-default")).toBe("#23272f");
+    expect(resolve("color-stroke-control-default")).toBe("#8a91a2");
+    expect(resolve("color-fill-brand-impeccable")).toBe("#e8b04a");
     expect(resolve("font-size-xs")).toBe("12px");
     expect(resolve("border-width-default")).toBe("1px");
   });
@@ -150,12 +150,7 @@ describe("Impeccable token contrast", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
-  it("records why the error tone is not used as text on a raised surface", () => {
-    // FE-001-F2: `Notice --error` carries its tone through the accent border and
-    // the soft background instead of a tinted title, because this pair misses
-    // AA for small text. Pinned so a later refactor cannot quietly re-tint it.
-    expect(
-      contrast("color-status-error-default", "color-surface-neutral-raised"),
-    ).toBeLessThan(4.5);
+  it("keeps the error tone readable on the new raised surface", () => {
+    expect(contrast("color-status-error-default", "color-surface-neutral-raised")).toBeGreaterThanOrEqual(4.5);
   });
 });

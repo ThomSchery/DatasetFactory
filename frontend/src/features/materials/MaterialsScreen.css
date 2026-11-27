@@ -4,3 +4,38 @@
   gap: var(--element-gap-lg);
   min-width: 0;
 }
+
+.df-upload .df-file-tile__pick.df-button {
+  min-height: var(--upload-height-compact);
+  max-height: none;
+  aspect-ratio: auto;
+  border-color: var(--color-workspace-outline);
+  padding: var(--size-md) var(--size-sm) var(--shell-rail-compact);
+  border-radius: var(--radius-panel);
+  background: var(--color-shell-rail-default);
+}
+.df-upload .df-file-tile__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+.df-upload .df-file-tile__path-toggle.df-button {
+  color: var(--color-fill-brand-impeccable);
+}
+.df-upload .df-file-tile__fallback {
+  inset: auto var(--size-sm) var(--shell-padding-compact) auto;
+}
+@media (min-width: 576px) {
+  .df-upload .df-file-tile__pick.df-button { min-height: var(--upload-height-sm); }
+}
+@media (min-width: 768px) {
+  .df-upload .df-file-tile__pick.df-button {
+    min-height: var(--upload-height);
+  }
+}
+
+.df-upload .df-file-tile__detail {
+  font: var(--font-size-caption) var(--font-family-mono);
+}
+.df-upload .df-file-tile__body > .df-icon { width: var(--control-height-sm); height: var(--control-height-sm); }
+.df-upload .df-file-tile__pick:hover:not(:disabled) { border-color: var(--color-fill-brand-impeccable); }
+.df-upload .df-file-tile__path-toggle { padding: 0; }

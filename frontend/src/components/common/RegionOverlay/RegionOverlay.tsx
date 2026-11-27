@@ -1225,10 +1225,12 @@ export function RegionOverlay({
               <span
                 className={`df-region-overlay__label df-region-overlay__label--${shape.sourceKind ?? "ocr"}`}
                 data-overlay-label-for={shape.id}
+                data-tone={shape.tone}
                 key={shape.id}
                 style={
                   {
                     "--df-overlay-label-left": `${(shape.x / source.width) * 100}%`,
+                    "--df-overlay-label-bottom": `${((shape.y + shape.height) / source.height) * 100}%`,
                     "--df-overlay-label-top": `${(shape.y / source.height) * 100}%`,
                   } as CSSProperties
                 }

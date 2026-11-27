@@ -62,3 +62,22 @@
 .df-side-nav--drawer .df-side-nav__list {
   align-items: stretch;
 }
+
+/* FE-036: the icon rail stays visible on compact screens too. */
+.df-shell > .df-side-nav--strip {
+  width: 100%;
+  height: 100%;
+  min-height: calc(100dvh - var(--topbar-height));
+  padding: var(--shell-padding-compact) 0;
+  background: var(--color-shell-rail-default);
+}
+.df-side-nav--strip .df-nav-item--strip {
+  width: var(--shell-nav-control);
+  height: var(--shell-nav-control);
+  min-height: var(--shell-nav-control);
+  border-radius: var(--radius-md);
+}
+.df-side-nav--strip .df-nav-item--active {
+  background: var(--color-fill-brand-impeccable-soft);
+  color: var(--color-icon-strong-default);
+}

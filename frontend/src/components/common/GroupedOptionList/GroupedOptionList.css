@@ -18,7 +18,7 @@
   min-height: var(--field-height);
   padding: var(--size-none) var(--element-padding-y-md) var(--size-none) var(--element-padding-x-md);
   border: var(--border-width-default) solid var(--color-stroke-control-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-background-primary-default);
   flex-wrap: wrap;
 }
@@ -53,7 +53,7 @@
   min-height: var(--control-height-sm);
   padding-inline-start: var(--size-xs);
   border: var(--border-width-default) solid var(--color-stroke-weak-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-surface-neutral-raised);
   color: var(--color-text-strong-default);
   font-family: var(--font-family-ui);
@@ -74,7 +74,7 @@
   min-width: var(--control-height-sm);
   padding-inline: var(--size-none);
   border-color: var(--color-surface-transparent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-surface-transparent);
   color: var(--color-icon-weak-default);
 }
@@ -246,7 +246,7 @@
   min-height: var(--control-height-sm);
   padding: calc(var(--size-xs) / 2) var(--size-xs);
   /* RADIUS-04: smaller than the list container, which pads it. */
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--color-text-strong-default);
   cursor: pointer;
   font-family: var(--font-family-ui);
@@ -346,4 +346,21 @@
   min-height: var(--list-row-height);
   margin-inline-start: var(--size-none);
   padding-inline: var(--element-padding-x-lg);
+}
+
+.df-grouped-options__filter:has(.df-grouped-options__selected-detail) .df-field__control {
+  min-height: 0;
+  padding-block: 0;
+  font-weight: var(--font-weight-semibold);
+}
+.df-grouped-options__selected-detail {
+  display: block;
+  padding-inline: var(--size-xxs);
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-caption);
+}
+
+:is(.df-profile-workspace__profile-panel, .df-run-setup__form) .df-grouped-options__control:not(:focus-within):not(:hover) {
+  border-color: var(--color-workspace-outline);
+  background: var(--color-workspace-row);
 }

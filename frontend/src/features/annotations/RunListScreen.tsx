@@ -46,21 +46,9 @@ function RunRow({ onDelete, run }: { onDelete: (run: RunSummary) => void; run: R
 
   return (
     <li className="df-run-list__row">
-      <div className="df-run-list__heading">
-        <div className="df-run-list__identity">
-          <strong>{run.profile_name}</strong>
-          <span>Run {run.id}</span>
-        </div>
-        <div className="df-run-list__badges">
-          <StatusBadge srLabel="Run status:" tone={status.tone}>
-            {status.label}
-          </StatusBadge>
-          {run.exported ? (
-            <StatusBadge srLabel="Export:" tone="success">
-              Exported
-            </StatusBadge>
-          ) : null}
-        </div>
+      <div className="df-run-list__identity">
+        <strong>{run.profile_name}</strong>
+        <span>Run {run.id}</span>
       </div>
 
       <DataList
@@ -76,17 +64,32 @@ function RunRow({ onDelete, run }: { onDelete: (run: RunSummary) => void; run: R
         ]}
         layout="columns"
       />
-      <Progress
-        label={`Reviewed ${String(reviewed)} of ${String(run.review_counts.total)} frames`}
-        max={run.review_counts.total}
-        value={reviewed}
-      />
-      <div className="df-run-list__review-counts">
-        <span>Pending: {String(run.review_counts.pending)}</span>
-        <span>Accepted: {String(run.review_counts.accepted)}</span>
-        <span>Rejected: {String(run.review_counts.rejected)}</span>
+      <div className="df-run-list__progress">
+        <Progress
+          label={`Reviewed ${String(reviewed)} of ${String(run.review_counts.total)} frames`}
+          max={run.review_counts.total}
+          value={reviewed}
+        />
+        <div className="df-run-list__review-counts">
+          <span>Pending: {String(run.review_counts.pending)}</span>
+          <span>Accepted: {String(run.review_counts.accepted)}</span>
+          <span>Rejected: {String(run.review_counts.rejected)}</span>
+        </div>
       </div>
       <div className="df-run-list__actions">
+        <div className="df-run-list__badges">
+          <StatusBadge srLabel="Run status:" tone={status.tone}>
+            {status.label}
+          </StatusBadge>
+          {run.exported ? (
+            <StatusBadge srLabel="Export:" tone="success">
+              Exported
+            </StatusBadge>
+          ) : null}
+        </div>
+        <Button onClick={() => void navigate(annotationsPath(run.id))}>
+          Open review
+        </Button>
         <Button
           aria-label={`Delete run ${run.id}`}
           disabled={processing}
@@ -94,12 +97,10 @@ function RunRow({ onDelete, run }: { onDelete: (run: RunSummary) => void; run: R
             onDelete(run);
           }}
           title={processing ? "Pause or cancel the run before deleting it." : undefined}
-          variant="secondary"
+          className="df-run-list__delete"
+          variant="muted"
         >
           Delete
-        </Button>
-        <Button onClick={() => void navigate(annotationsPath(run.id))}>
-          Open review
         </Button>
       </div>
     </li>
@@ -143,6 +144,7 @@ export function RunListScreen() {
   return (
     <div className="df-run-list">
       <Panel title="Runs to review">
+        <p className="df-run-list__note">Frames count the frames that exist in the run, not the planned number.</p>
         {runs.isPending ? <Loading label="Loading runs…" /> : null}
         {runs.isError ? (
           <FatalError
