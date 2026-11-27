@@ -116,7 +116,7 @@
   color: var(--color-text-weak-default);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 769px) {
   /*
    * FE-035: the same frame as Profile, so switching the tab moves nothing —
    * one column of `--workspace-profile-column`, the same gap, and one row that
@@ -189,3 +189,183 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-standard);
 }
+
+/* FE-036: the same 12-column workspace for Setup and Run. */
+.df-run-setup {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--size-sm) var(--workspace-gap);
+  align-items: start;
+}
+.df-run-setup__column {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  min-width: 0;
+}
+.df-run-setup__preview {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  padding: var(--shell-padding-compact);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-panel);
+  background: var(--color-shell-rail-default);
+}
+.df-run-setup__preview .df-region-canvas,
+.df-run-setup .df-run-setup__placeholder,
+.df-run-setup .df-file-tile__pick.df-button {
+  height: auto;
+  min-height: 0;
+}
+.df-run-setup__preview .df-region-canvas {
+  grid-template-rows: auto auto;
+}
+.df-run-setup__preview .df-region-overlay,
+.df-run-setup .df-run-setup__placeholder,
+.df-run-setup .df-file-tile__pick.df-button {
+  aspect-ratio: var(--preview-aspect-ratio);
+}
+@media (min-width: 769px) {
+  .df-run-setup {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .df-run-setup > .df-run-setup__column {
+    grid-column: 1 / span 5;
+    grid-row: 1;
+    padding: 0;
+    margin: 0;
+  }
+  .df-run-setup > .df-run-setup__preview {
+    grid-column: 6 / span 7;
+    grid-row: 1;
+  }
+}
+@media (min-width: 992px) {
+  .df-run-setup > .df-run-setup__column {
+    grid-column: 1 / span 4;
+  }
+  .df-run-setup > .df-run-setup__preview {
+    grid-column: 5 / span 8;
+  }
+}
+@media (min-width: 1200px) {
+  .df-run-setup > .df-run-setup__column {
+    grid-column: 1 / span 3;
+  }
+  .df-run-setup > .df-run-setup__preview {
+    grid-column: 4 / span 9;
+  }
+}
+
+.df-run-setup .df-run-setup__column.df-panel {
+  display: grid;
+  align-self: start;
+  padding: var(--panel-padding);
+  border-color: var(--color-stroke-panel-default);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-neutral-default);
+}
+.df-run-setup .df-run-setup__fields {
+  padding: 0;
+  border: 0;
+  background: var(--color-surface-transparent);
+}
+.df-run-setup .df-run-setup__column > .df-panel__body {
+  display: grid;
+  gap: var(--size-sm);
+}
+.df-run-setup .df-run-setup__form {
+  gap: var(--size-sm);
+}
+.df-run-setup .df-run-setup__run.df-button {
+  color: var(--color-icon-strong-default);
+}
+
+/* Final mockup: visible engine choices and compact source-profile rules. */
+.df-run-setup__engines, .df-run-setup__rules, .df-run-setup__rule-list {
+  display: grid;
+  gap: var(--size-xs);
+  min-width: 0;
+}
+.df-run-setup__rule-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.df-run-setup__engine.df-button {
+  justify-content: start;
+  width: 100%;
+  padding: var(--size-xs);
+  text-align: start;
+}
+.df-run-setup__engine .df-button__content {
+  width: 100%;
+}
+.df-run-setup__radio {
+  flex: none;
+  width: var(--size-sm);
+  height: var(--size-sm);
+  border: var(--border-width-default) solid var(--color-stroke-control-default);
+  border-radius: var(--radius-pill);
+}
+.df-run-setup__engine[aria-pressed="true"] .df-run-setup__radio {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable);
+  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--color-surface-neutral-default);
+}
+.df-run-setup__engine-copy {
+  display: grid;
+  gap: var(--size-xxs);
+  min-width: 0;
+}
+.df-run-setup__engine-copy strong {
+  font-size: var(--font-size-label);
+}
+.df-run-setup__engine-copy small {
+  color: var(--color-text-weak-default);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-standard);
+}
+.df-run-setup__rule {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--size-xs);
+  padding: var(--size-xs);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-pressed);
+}
+.df-run-setup__rule strong {
+  overflow-wrap: anywhere;
+}
+.df-run-setup__rule span {
+  color: var(--color-icon-strong-default);
+}
+.df-run-setup__label {
+  justify-content: space-between;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+.df-run-setup__label > .df-icon, .df-run-setup__form .df-field__label > .df-icon {
+  display: none;
+}
+.df-run-setup__rates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--size-xxs);
+}
+.df-run-setup__rates .df-button {
+  min-width: 0;
+  min-height: var(--control-height-sm);
+  padding-inline: var(--size-xxs);
+}
+.df-run-setup .df-run-setup__run.df-button {
+  background: var(--color-fill-brand-impeccable);
+  color: var(--color-text-on-brand);
+}
+.df-run-setup__run.df-button .df-icon {
+  color: currentColor;
+}
+
+.df-run-setup__label { color: var(--color-text-weak-default); }

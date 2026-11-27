@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Outlet, useLocation, useMatches } from "react-router";
 
 import { AppMenu } from "../components/common/AppMenu";
@@ -17,6 +17,11 @@ import {
 import "./AppShell.css";
 
 const MAIN_CONTENT_ID = "df-main";
+
+export interface ProfileSettingsMenu {
+  profileSettingsOpen: boolean;
+  closeProfileSettings: () => void;
+}
 
 interface RouteHandle {
   heading?: string;
@@ -46,6 +51,10 @@ export function AppShell() {
   const location = useLocation();
   const [stripOpen, setStripOpen] = useState(true);
   const [ocrOpen, setOcrOpen] = useState(false);
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const profileRoute = location.pathname.replace(/\/$/, "");
+  const isProfile = profileRoute === "/profiles" || profileRoute === "/profiles/new";
+  useEffect(() => setProfileSettingsOpen(false), [location.key]);
   const navId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const showSwitch = WORKSPACE_SWITCH_PATHS.includes(location.pathname);
@@ -72,19 +81,36 @@ export function AppShell() {
         <nav aria-label="More destinations" className="df-shell__more">
           <AppMenu
             actions={(close) => (
-              <li>
-                <Button
-                  className="df-shell__menu-action"
-                  onClick={() => {
-                    close();
-                    setOcrOpen(true);
-                  }}
-                  variant="muted"
-                >
-                  <Icon name="info" />
-                  OCR engine
-                </Button>
-              </li>
+              <>
+                <li>
+                  <Button
+                    className="df-shell__menu-action"
+                    onClick={() => {
+                      close();
+                      setOcrOpen(true);
+                    }}
+                    variant="muted"
+                  >
+                    <Icon name="info" />
+                    OCR engine
+                  </Button>
+                </li>
+                {isProfile ? (
+                  <li>
+                    <Button
+                      className="df-shell__menu-action"
+                      onClick={() => {
+                        close();
+                        setProfileSettingsOpen(true);
+                      }}
+                      variant="muted"
+                    >
+                      <Icon name="setting" />
+                      Profile OCR settings
+                    </Button>
+                  </li>
+                ) : null}
+              </>
             )}
             destinations={MENU_DESTINATIONS}
             label="More"
@@ -125,7 +151,7 @@ export function AppShell() {
             </ul>
           </nav>
         ) : null}
-        <Outlet />
+        <Outlet context={{ profileSettingsOpen, closeProfileSettings: () => setProfileSettingsOpen(false) } satisfies ProfileSettingsMenu} />
         </div>
       </main>
 

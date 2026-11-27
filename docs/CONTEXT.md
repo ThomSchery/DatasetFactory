@@ -311,3 +311,15 @@ LG and 3/12 at XL, with a 24px gap. Upload, Setup, Run and the Annotations run
 list follow this layout; the existing review editor and its in-progress FE-032
 behaviour remain. Scan rules on Run reflect saved profile settings and link to
 that exact profile for editing; per-run OCR rule overrides are not added.
+
+## FE-037 - full-window frame and per-run scan rules, 2026-11-27
+
+The shell fills the window (bar and rail at 0,0); only the content container
+is capped (549/732/960/1164/1368 px, 24 px margin). The user decided that OCR
+scan rules chosen on Run apply to that single run only, never to the saved
+profile: `POST /runs` takes an optional `region_text_layouts` map, validated
+against the run's regions and the known layouts and frozen into the existing
+`ocr_regions` snapshot (no migration, no profile write). This supersedes the
+FE-036 note that per-run overrides are not added. Setup has no permanent OCR
+settings panel; the profile's characters and layouts are edited from
+More > Profile OCR settings, in a dialog, and saved with the profile.

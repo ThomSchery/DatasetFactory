@@ -230,6 +230,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+async function openProfileOcrSettings(user = userEvent.setup()) {
+  expect(screen.queryByRole("region", { name: "OCR settings" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "More" }));
+  await user.click(screen.getByRole("button", { name: "Profile OCR settings" }));
+  return screen.findByRole("region", { name: "OCR settings" });
+}
+
 describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
   it("gives each test room for several slow waits, not just one (FE-023 P3-a)", ({ task }) => {
     // A test that spends one full `asyncUtilTimeout` on a slow first render
@@ -257,11 +264,13 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     profile.regions[0].text_layout = null;
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
+    await openProfileOcrSettings(user);
     await user.click(screen.getByRole("combobox", { name: "Choose text layout" }));
     await user.click(screen.getByRole("option", { name: /^A block of several lines/ }));
     // FE-030: the closed field shows the short name, which fits the column.
     expect(screen.getByRole("combobox", { name: "Choose text layout" })).toHaveValue("Block of lines");
+    await user.click(screen.getByRole("button", { name: "Done" }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "7", text_layout: "block" }] }));
   });
@@ -270,7 +279,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const user = userEvent.setup();
     stubProfiles();
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     await user.clear(screen.getByLabelText(/^Region name/));
     await user.type(screen.getByLabelText(/^Region name/), "Zdrowie");
     const surface = await loadScreenshot();
@@ -285,7 +294,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const user = userEvent.setup();
     stubProfiles();
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     await user.clear(screen.getByLabelText(/^Region name/));
     await user.type(screen.getByLabelText(/^Region name/), "Zdrowie");
     const surface = await loadScreenshot();
@@ -306,12 +315,13 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const annotations = screen.getByRole("region", { name: "Annotations" });
     expect(within(annotations).getByText("Pasek zdrowia")).toBeInTheDocument();
     // FE-029: with nothing selected, OCR settings summarises every region.
-    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    const ocr = await openProfileOcrSettings();
     expect(
       within(ocr).getByRole("button", {
         name: "Pasek zdrowia: 1 of 1 characters, One line. Select the region",
       }),
     ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByAltText(/Reference screenshot of profile Alpha/)).toBeInTheDocument();
   });
 
@@ -323,7 +333,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const save = await screen.findByRole("button", { name: "Save profile" });
     expect(save).toBeDisabled();
 
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     const name = await screen.findByLabelText(/^Region name/);
     await user.clear(name);
     await user.type(name, "Zdrowie");
@@ -340,7 +350,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const spy = stubProfiles();
     renderApp(["/profiles"]);
 
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     const name = await screen.findByLabelText(/^Region name/);
     await user.clear(name);
     await user.type(name, "Zdrowie");
@@ -422,17 +432,13 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
 
-    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    const ocr = await openProfileOcrSettings(user);
     await user.click(
       await within(ocr).findByRole("button", {
         name: "Pasek zdrowia: 2 of 3 characters, One line. Select the region",
       }),
     );
     // A summary row selects the region, and the panel now edits it.
-    expect(screen.getByRole("button", { name: "Select region Pasek zdrowia" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(within(ocr).getByText("Text layout")).toBeInTheDocument();
     const characters = within(ocr).getByRole("group", {
       name: "Characters OCR reads in region Pasek zdrowia",
@@ -440,6 +446,11 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     // The alphabet is grouped, not one long list: Letters is its own group.
     await user.click(within(characters).getByRole("button", { name: /Expand group Letters/ }));
     await user.click(within(characters).getByRole("checkbox", { name: "A" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.getByRole("checkbox", { name: /^Pasek zdrowia \(/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() =>
       expect(savedBody(spy)).toMatchObject({ regions: [{ allowed_chars: "78A" }] }),
@@ -451,8 +462,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const user = userEvent.setup();
     stubProfiles();
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
-    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
+    const ocr = await openProfileOcrSettings(user);
 
     expect(within(ocr).getByRole("combobox", { name: "Choose text layout" })).toBeInTheDocument();
     // Only engines whose own probe says they read the layout are named; the names are not in the code.
@@ -464,8 +475,8 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const user = userEvent.setup();
     stubProfiles({ ocrEngines: [] });
     renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
-    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
+    const ocr = await openProfileOcrSettings(user);
 
     expect(within(ocr).getByRole("combobox", { name: "Choose text layout" })).toBeInTheDocument();
     expect(within(ocr).queryByText(/^Used by:/)).toBeNull();
@@ -484,20 +495,21 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const spy = stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
 
-    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    const ocr = await openProfileOcrSettings(user);
     // The summary says an inheriting region reads everything, layout inherited.
     expect(
       await within(ocr).findByRole("button", {
         name: "Pasek zdrowia: all 2 characters, Layout inherited. Select the region",
       }),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(within(ocr).getByRole("button", { name: /Select the region/ }));
     expect(within(ocr).getByText(/inherits the OCR settings/)).toBeInTheDocument();
     const characters = within(ocr).getByRole("group", {
       name: "Characters OCR reads in region Pasek zdrowia",
     });
     await user.click(within(characters).getByRole("button", { name: /Expand group Numbers/ }));
     await user.click(within(characters).getByRole("checkbox", { name: "8" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     // A region never half-configures: the layout becomes explicit with it.
     await waitFor(() =>
@@ -514,10 +526,11 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     stubProfiles({ profiles: [profile] });
     renderApp(["/profiles"]);
 
-    const ocr = await screen.findByRole("region", { name: "OCR settings" });
+    const ocr = await openProfileOcrSettings();
     expect(
       await within(ocr).findByRole("button", { name: /^Pasek zdrowia: 1 of 1 characters/ }),
     ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(within(screen.getByRole("region", { name: "Annotations" })).getByText("(1)")).toBeInTheDocument();
   });
 
@@ -529,14 +542,15 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     renderApp(["/profiles"]);
 
     const surface = await loadScreenshot();
-    await user.click(screen.getByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(screen.getByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     // The only way to delete a region now: on the picture (Delete or its menu).
     fireEvent.keyDown(within(surface).getByRole("option", { name: /^Pasek zdrowia:/ }), {
       key: "Delete",
     });
 
     expect(within(screen.getByRole("region", { name: "Annotations" })).queryByText("Pasek zdrowia")).toBeNull();
-    expect(within(screen.getByRole("region", { name: "OCR settings" })).getByText(/No regions yet/)).toBeInTheDocument();
+    expect(within(await openProfileOcrSettings(user)).getByText(/No regions yet/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Done" }));
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     // The draft keeps sending the stored class; the backend deletes it unless a
     // box in Review uses it (FE-030), so there is never a category_in_use here.
@@ -616,7 +630,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     stubProfiles();
     renderApp(["/profiles"]);
 
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     const name = await screen.findByLabelText(/^Region name/);
     await user.clear(name);
     await user.type(name, "Zdrowie");
@@ -640,7 +654,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const user = userEvent.setup();
     stubProfiles();
     const { router } = renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     await user.clear(screen.getByLabelText(/^Region name/));
     await user.type(screen.getByLabelText(/^Region name/), "Zdrowie");
     await user.click(screen.getByRole("link", { name: "Run" }));
@@ -659,7 +673,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     const held = new Promise<void>((resolve) => { release = resolve; });
     stubProfiles({ holdSave: held });
     const { router } = renderApp(["/profiles"]);
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     await user.clear(screen.getByLabelText(/^Region name/));
     await user.type(screen.getByLabelText(/^Region name/), "Zdrowie");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
@@ -742,7 +756,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     renderApp(["/profiles"]);
     await expectOpenProfile("Alpha");
     await chooseProfile(user, "Beta");
-    expect(screen.getByRole("button", { name: "Select region Pasek zdrowia" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: /^Pasek zdrowia \(/ })).toHaveAttribute("aria-disabled", "true");
     release();
     await expectOpenProfile("Beta");
   });
@@ -754,7 +768,7 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     });
     renderApp(["/profiles"]);
 
-    await user.click(await screen.findByRole("button", { name: "Select region Pasek zdrowia" }));
+    await user.click(await screen.findByRole("checkbox", { name: /^Pasek zdrowia \(/ }));
     const name = await screen.findByLabelText(/^Region name/);
     await user.clear(name);
     await user.type(name, "Zdrowie");
@@ -817,8 +831,9 @@ describe("the profile workspace", { timeout: TEST_TIMEOUT_MS }, () => {
     renderApp(["/profiles/new"]);
 
     expect(await screen.findByRole("button", { name: "Add screenshot (JPG/PNG)" })).toBeInTheDocument();
-    const ocr = screen.getByRole("region", { name: "OCR settings" });
+    const ocr = await openProfileOcrSettings();
     expect(within(ocr).getByText(/No regions yet/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
   });
 

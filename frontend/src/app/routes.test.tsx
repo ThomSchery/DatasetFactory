@@ -107,7 +107,7 @@ describe("the routes", () => {
       screen.getByRole("button", { name: "Add screenshot (JPG/PNG)" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Annotations" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "OCR settings" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "OCR settings" })).toBeNull();
   });
 
   it("opens the active profile in the same workspace at /profiles", async () => {

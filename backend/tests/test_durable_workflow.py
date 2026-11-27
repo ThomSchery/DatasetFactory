@@ -1896,3 +1896,73 @@ def test_deleting_another_run_while_a_run_works_leaves_the_working_run_alone(
             assert client.get(f"/api/v1/runs/{finished['id']}").status_code == 404
     finally:
         database.dispose()
+
+
+def test_run_layout_overrides_are_persisted_consumed_and_never_change_profile(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    with composition.database.session() as session:
+        region = session.scalar(select(HudRegion).where(HudRegion.profile_id == seeded.profile_id))
+        assert region is not None
+        region_id = region.id
+        region.ocr_allowed_chars = "0"
+        region.ocr_text_layout = "line"
+    ocr = PerRegionOcrEngine()
+    _install_workflow(composition, StubMediaAccess(composition), ocr)
+    app = create_app(composition.settings, composition=composition)
+    with TestClient(app) as client:
+        before = client.get(f"/api/v1/profiles/{seeded.profile_id}").json()
+        response = client.post(
+            "/api/v1/runs",
+            json={
+                "profile_id": seeded.profile_id,
+                "video_id": seeded.video_id,
+                "interval_ms": 1000,
+                "region_text_layouts": {region_id: "word"},
+            },
+        )
+        assert response.status_code == 201, response.text
+        created = response.json()
+        assert created["ocr_regions"][0]["text_layout"] == "word"
+        assert created["ocr_regions"][0]["page_segmentation_mode"] == 8
+        assert client.get(f"/api/v1/profiles/{seeded.profile_id}").json() == before
+        next_run = _create_run(client, seeded)
+        assert next_run["ocr_regions"][0]["text_layout"] == "line"
+        assert next_run["ocr_regions"][0]["page_segmentation_mode"] == 7
+        assert (
+            client.get(f"/api/v1/runs/{created['id']}").json()["ocr_regions"][0]["text_layout"]
+            == "word"
+        )
+        response = client.post(
+            f"/api/v1/runs/{created['id']}/start", json={"expected_version": created["version"]}
+        )
+        assert response.status_code == 202
+        _wait_status(client, created["id"], "review_ready")
+    assert [(allowed, psm) for _, allowed, psm in ocr.detect_calls] == [(("0",), 8)]
+
+
+def test_run_layout_override_rejects_unknown_region_and_invalid_layout(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    _install_workflow(composition, StubMediaAccess(composition), PerRegionOcrEngine())
+    with TestClient(create_app(composition.settings, composition=composition)) as client:
+        for overrides, code in [
+            ({"unknown-region": "word"}, "ocr_configuration_invalid"),
+            ({"unknown-region": "columns"}, "validation_error"),
+        ]:
+            response = client.post(
+                "/api/v1/runs",
+                json={
+                    "profile_id": seeded.profile_id,
+                    "video_id": seeded.video_id,
+                    "interval_ms": 1000,
+                    "region_text_layouts": overrides,
+                },
+            )
+            assert response.status_code == 400, response.text
+            assert response.json()["error"]["code"] == code
+        assert client.get("/api/v1/runs").json()["total"] == 0

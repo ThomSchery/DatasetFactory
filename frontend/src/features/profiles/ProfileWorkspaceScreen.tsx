@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBlocker, useNavigate } from "react-router";
+import { useBlocker, useNavigate, useOutletContext, useSearchParams } from "react-router";
 
 import {
   createProfile,
@@ -16,6 +16,7 @@ import {
   saveProfileDefinition,
 } from "../../api";
 import type { GameProfile } from "../../api";
+import type { ProfileSettingsMenu } from "../../app/AppShell";
 import { runSetupPath } from "../../app/navigation";
 import { Button } from "../../components/common/Button";
 import { Dialog } from "../../components/common/Dialog";
@@ -72,7 +73,9 @@ export interface ProfileWorkspaceScreenProps {
 
 export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspaceScreenProps) {
   const queryClient = useQueryClient();
+  const { profileSettingsOpen, closeProfileSettings } = useOutletContext<ProfileSettingsMenu>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // A run chooses its OCR engine, so the profile cannot know which one will read it. The status
   // the app already polls names the engines that use the text layout (TK-018).
   const dashboard = useDashboard();
@@ -83,7 +86,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
   const [draft, setDraft] = useState<ProfileDraft>(emptyDraft);
   const [baseline, setBaseline] = useState<ProfileDraft>(draft);
   const [openProfileId, setOpenProfileId] = useState<string | null>(null);
-  const [wantedProfileId, setWantedProfileId] = useState<string | null>(null);
+  const [wantedProfileId, setWantedProfileId] = useState<string | null>(() => initialCreate ? null : searchParams.get("profile"));
   const [startedBlank, setStartedBlank] = useState(initialCreate);
   const [selectedRegionKey, setSelectedRegionKey] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
@@ -309,6 +312,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
       : [
           {
             ...(geometryPreview?.id === SKETCH_ID ? geometryPreview.rect : sketch),
+            displayLabel: sketchName || "New region",
             id: SKETCH_ID,
             label: "New region, waiting for a name",
             tone: "draft" as const,
@@ -440,6 +444,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             <Button
               aria-label="Draw region"
               aria-pressed={drawMode}
+              variant="secondary"
               className="df-profile-workspace__tool"
               disabled={editingDisabled}
               onClick={() => setDrawMode((active) => !active)}
@@ -450,6 +455,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             </Button>
             <Button
               aria-label="Change screenshot"
+              variant="secondary"
               className="df-profile-workspace__tool"
               disabled={editingDisabled}
               onClick={() => {
@@ -474,8 +480,7 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
             size="md"
             title={draft.profileId === null ? "Save the profile first" : "Run with this profile"}
           >
-            <Icon name="arrow-right-square" />
-            Run
+            Run <Icon name="arrow-right" />
           </Button>
         }
       />
@@ -488,160 +493,165 @@ export function ProfileWorkspaceScreen({ initialCreate = false }: ProfileWorkspa
       </section>
 
       <div className="df-profile-workspace__controls">
-        {profiles.isPending ? <Loading label="Loading profiles…" /> : null}
-        {profiles.isError ? (
-          <FatalError
-            description={(() => {
-              const failure = describeApiError(profiles.error);
-              return `${failure.message} ${failure.action}`;
-            })()}
-            onRetry={() => void profiles.refetch()}
-            title="Profiles could not be loaded"
-          />
-        ) : null}
-        {profiles.isSuccess ? (
-          <ProfileSearchField
-            disabled={busy}
-            onNew={() => {
-              requestSwitch({ kind: "new" });
-            }}
-            onSelect={(profileId) => {
-              requestSwitch({ kind: "profile", profileId });
-            }}
-            profiles={profiles.data}
-            selectedId={draft.profileId}
-            selectedName={draft.profileId === null ? null : draft.name}
-          />
-        ) : null}
-        {detail.isPending && targetId !== null ? (
-          <Loading label="Loading the profile definition…" />
-        ) : null}
-        {detail.isError ? (
-          <FatalError
-            description={(() => {
-              const failure = describeApiError(detail.error);
-              return `${failure.message} ${failure.action}`;
-            })()}
-            onRetry={() => void detail.refetch()}
-            title="The profile definition could not be loaded"
-          />
-        ) : null}
+        <div className="df-profile-workspace__profile-panel">
+          {profiles.isPending ? <Loading label="Loading profiles…" /> : null}
+          {profiles.isError ? (
+            <FatalError
+              description={(() => {
+                const failure = describeApiError(profiles.error);
+                return `${failure.message} ${failure.action}`;
+              })()}
+              onRetry={() => void profiles.refetch()}
+              title="Profiles could not be loaded"
+            />
+          ) : null}
+          {profiles.isSuccess ? (
+            <ProfileSearchField
+              disabled={busy}
+              onNew={() => {
+                requestSwitch({ kind: "new" });
+              }}
+              onSelect={(profileId) => {
+                requestSwitch({ kind: "profile", profileId });
+              }}
+              profiles={profiles.data}
+              selectedId={draft.profileId}
+              selectedName={draft.profileId === null ? null : draft.name}
+            />
+          ) : null}
+          {detail.isPending && targetId !== null ? (
+            <Loading label="Loading the profile definition…" />
+          ) : null}
+          {detail.isError ? (
+            <FatalError
+              description={(() => {
+                const failure = describeApiError(detail.error);
+                return `${failure.message} ${failure.action}`;
+              })()}
+              onRetry={() => void detail.refetch()}
+              title="The profile definition could not be loaded"
+            />
+          ) : null}
 
-        <AnnotationsPanel
-          categories={draft.categories}
-          disabled={editingDisabled}
-          nameInputRef={(element) => {
-            sketchInputRef.current = element;
-          }}
-          onAccept={acceptSketch}
-          onReject={rejectSketch}
-          onRename={(key, name) => {
-            setDraft((current) => ({
-              ...current,
-              regions: current.regions.map((region) =>
-                region.key === key ? { ...region, name } : region,
-              ),
-            }));
-          }}
-          onSelect={setSelectedRegionKey}
-          onSketchNameChange={(name) => {
-            setSketchName(name);
-            setSketchError(undefined);
-          }}
-          regions={draft.regions}
-          selectedKey={selectedRegionKey}
-          sketch={sketch}
-          sketchError={sketchError}
-          sketchName={sketchName}
-        />
+          <AnnotationsPanel
+            categories={draft.categories}
+            disabled={editingDisabled}
+            nameInputRef={(element) => {
+              sketchInputRef.current = element;
+            }}
+            onAccept={acceptSketch}
+            onReject={rejectSketch}
+            onRename={(key, name) => {
+              setDraft((current) => ({
+                ...current,
+                regions: current.regions.map((region) =>
+                  region.key === key ? { ...region, name } : region,
+                ),
+              }));
+            }}
+            onSelect={setSelectedRegionKey}
+            onSketchNameChange={(name) => {
+              setSketchName(name);
+              setSketchError(undefined);
+            }}
+            regions={draft.regions}
+            selectedKey={selectedRegionKey}
+            sketch={sketch}
+            sketchError={sketchError}
+            sketchName={sketchName}
+          />
 
-        <div className="df-profile-workspace__save">
-          <Button
-            className="df-profile-workspace__save-profile"
-            disabled={!canSave || editingDisabled || sketch !== null}
-            loading={save.isPending}
-            loadingLabel="Saving the profile…"
-            onClick={() => {
-              save.mutate(draft);
-            }}
-            title={saveTitle}
-            // Figma note: Save profile changes colour once the draft differs.
-            variant={canSave && sketch === null ? "emphasis" : "secondary"}
-          >
-            <Icon name="save" />
-            Save profile
-          </Button>
-          <Button
-            disabled={editingDisabled || draft.referenceAssetId === null || sketch !== null}
-            onClick={() => {
-              setSaveAsName(draft.profileId === null ? draft.name : `${draft.name} (copy)`);
-              setSaveAsError(undefined);
-              saveAs.reset();
-              setSaveAsOpen(true);
-            }}
-          >
-            <Icon name="add" />
-            Save as
-          </Button>
+          <div className="df-profile-workspace__save">
+            <Button
+              className="df-profile-workspace__save-profile"
+              disabled={!canSave || editingDisabled || sketch !== null}
+              loading={save.isPending}
+              loadingLabel="Saving the profile…"
+              onClick={() => {
+                save.mutate(draft);
+              }}
+              title={saveTitle}
+              // Figma note: Save profile changes colour once the draft differs.
+              variant={canSave && sketch === null ? "emphasis" : "secondary"}
+            >
+              Save profile
+            </Button>
+            <Button
+              disabled={editingDisabled || draft.referenceAssetId === null || sketch !== null}
+              onClick={() => {
+                setSaveAsName(draft.profileId === null ? draft.name : `${draft.name} (copy)`);
+                setSaveAsError(undefined);
+                saveAs.reset();
+                setSaveAsOpen(true);
+              }}
+            >
+              <Icon name="add" />
+              Save as
+            </Button>
+          </div>
+          {/* COLOR-09: the filled Save profile is not the only sign of a dirty draft. */}
+          {dirty ? (
+            <p className="df-visually-hidden" role="status">
+              Unsaved changes
+            </p>
+          ) : null}
+
+          {regionConflict === null ? null : (
+            <InlineError
+              message={`Region “${regionConflict.name}” already exists in this profile. Rename it and save again.`}
+            />
+          )}
+          {saveFailure === null || regionConflict !== null ? null : (
+            <InlineError
+              message={
+                isVersionConflict(save.error)
+                  ? "The profile changed in another tab. Load it again and repeat your changes — the draft stays here."
+                  : `${saveFailure.message} ${saveFailure.action}`
+              }
+            />
+          )}
         </div>
-        {/* COLOR-09: the filled Save profile is not the only sign of a dirty draft. */}
-        {dirty ? (
-          <p className="df-visually-hidden" role="status">
-            Unsaved changes
-          </p>
-        ) : null}
 
-        {regionConflict === null ? null : (
-          <InlineError
-            message={`Region “${regionConflict.name}” already exists in this profile. Rename it and save again.`}
-          />
-        )}
-        {saveFailure === null || regionConflict !== null ? null : (
-          <InlineError
-            message={
-              isVersionConflict(save.error)
-                ? "The profile changed in another tab. Load it again and repeat your changes — the draft stays here."
-                : `${saveFailure.message} ${saveFailure.action}`
-            }
-          />
-        )}
-
-        {/*
-          FE-029: what OCR reads, and nothing else. Classes are added by naming
-          a drawn box, so the panel no longer lists, renames or deletes them.
-          Deleting a region on the screenshot drops an unsaved class with it
-          (`categoriesToSend`); a saved one is deleted by the save unless a box
-          in Review uses it (FE-030 — only the backend knows the annotations).
-        */}
-        <OcrSettingsPanel
-          categories={draft.categories}
-          disabled={editingDisabled}
-          onAllowedCharsChange={(allowedChars) => {
-            setDraft((current) => ({
-              ...current,
-              regions: current.regions.map((region) =>
-                region.key === selectedRegionKey
-                  ? { ...region, allowed_chars: allowedChars, text_layout: region.text_layout ?? DEFAULT_REGION_TEXT_LAYOUT }
-                  : region,
-              ),
-            }));
-          }}
-          textLayoutUsedBy={textLayoutUsedBy}
-          onTextLayoutChange={(layout) => {
-            setDraft((current) => ({
-              ...current,
-              regions: current.regions.map((region) =>
-                region.key === selectedRegionKey
-                  ? { ...region, allowed_chars: region.allowed_chars ?? characterAlphabetOf(current), text_layout: layout }
-                  : region,
-              ),
-            }));
-          }}
-          onSelectRegion={setSelectedRegionKey}
-          region={selectedRegion}
-          regions={draft.regions}
-        />
       </div>
+
+      <Dialog
+        actions={<Button onClick={closeProfileSettings}>Done</Button>}
+        description="Changes stay in this draft until you save the profile."
+        onClose={closeProfileSettings}
+        open={profileSettingsOpen}
+        title="Profile OCR settings"
+      >
+        {profileSettingsOpen ? (
+          <OcrSettingsPanel
+            categories={draft.categories}
+            disabled={editingDisabled}
+            onAllowedCharsChange={(allowedChars) => {
+              setDraft((current) => ({
+                ...current,
+                regions: current.regions.map((region) =>
+                  region.key === selectedRegionKey
+                    ? { ...region, allowed_chars: allowedChars, text_layout: region.text_layout ?? DEFAULT_REGION_TEXT_LAYOUT }
+                    : region,
+                ),
+              }));
+            }}
+            textLayoutUsedBy={textLayoutUsedBy}
+            onTextLayoutChange={(layout) => {
+              setDraft((current) => ({
+                ...current,
+                regions: current.regions.map((region) =>
+                  region.key === selectedRegionKey
+                    ? { ...region, allowed_chars: region.allowed_chars ?? characterAlphabetOf(current), text_layout: layout }
+                    : region,
+                ),
+              }));
+            }}
+            onSelectRegion={setSelectedRegionKey}
+            region={selectedRegion}
+            regions={draft.regions}
+          />
+        ) : null}
+      </Dialog>
 
       <Dialog
         actions={

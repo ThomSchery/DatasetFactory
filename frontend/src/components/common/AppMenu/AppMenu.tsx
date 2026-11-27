@@ -106,6 +106,7 @@ export function AppMenu({ actions, destinations, label }: AppMenuProps) {
         {actions === undefined
           ? null
           : actions(() => {
+              toggleRef.current?.focus();
               setOpen(false);
             })}
       </ul>

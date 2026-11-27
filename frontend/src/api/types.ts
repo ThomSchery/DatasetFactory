@@ -242,6 +242,8 @@ export interface CreateRunRequest {
   interval_ms?: number;
   /** An engine id from `Health.ocr_engines`; absent means the default engine. */
   ocr_engine?: string;
+  /** Overrides only this run; saved profile values stay unchanged. */
+  region_text_layouts?: Record<string, string>;
 }
 
 export interface VersionedMutationRequest {

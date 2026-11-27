@@ -23,6 +23,8 @@ class CreateRunRequest(StrictModel):
     interval_ms: int = Field(default=1000, gt=0)
     # An engine identifier from `system.ocr_engines`; absent means the default engine.
     ocr_engine: str | None = Field(default=None, min_length=1)
+    # Applied only to this run's persisted region snapshots, never to its profile.
+    region_text_layouts: dict[str, Literal["auto", "line", "word", "block", "sparse"]] | None = None
 
 
 class VersionedMutationRequest(StrictModel):
@@ -282,6 +284,7 @@ def create_runs_router(workflow_provider: WorkflowProvider) -> APIRouter:
                 video_id=payload.video_id,
                 interval_ms=payload.interval_ms,
                 ocr_engine=payload.ocr_engine,
+                region_text_layouts=payload.region_text_layouts,
             )
         except WorkflowError as error:
             return _workflow_error(request, error)

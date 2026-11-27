@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import re
 import threading
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -36,7 +37,7 @@ from backend.app.access.store.repositories.runs import (
     RunVideoNotFoundError,
 )
 from backend.app.access.store.run_artifacts import RunArtifacts
-from backend.app.engines.definition import DEFAULT_OCR_TEXT_LAYOUT, OcrProvenance
+from backend.app.engines.definition import DEFAULT_OCR_TEXT_LAYOUT, OCR_TEXT_LAYOUTS, OcrProvenance
 from backend.app.engines.runstate import InvalidTransitionError, RunStatus
 from backend.app.managers.workflow.recovery import RecoveryResult, WorkflowRecovery
 from backend.app.managers.workflow.worker import WorkflowWorker
@@ -117,6 +118,7 @@ class DatasetWorkflow:
         video_id: str,
         interval_ms: int,
         ocr_engine: str | None = None,
+        region_text_layouts: Mapping[str, str] | None = None,
     ) -> RunRecord:
         if interval_ms <= 0:
             raise WorkflowError("invalid_interval", details={"field": "interval_ms"})
@@ -124,16 +126,31 @@ class DatasetWorkflow:
             engine = self._ocr.get(ocr_engine)
         except UnknownOcrEngineError as exc:
             raise WorkflowError("ocr_engine_unknown", details={"field": "ocr_engine"}) from exc
+        layouts = dict(region_text_layouts or {})
+        if any(layout not in OCR_TEXT_LAYOUTS for layout in layouts.values()):
+            raise WorkflowError(
+                "ocr_configuration_invalid", details={"field": "region_text_layouts"}
+            )
         for _ in range(3):
             record = self._try_create_run(
-                profile_id=profile_id, video_id=video_id, interval_ms=interval_ms, engine=engine
+                profile_id=profile_id,
+                video_id=video_id,
+                interval_ms=interval_ms,
+                engine=engine,
+                region_text_layouts=layouts,
             )
             if record is not None:
                 return record
         raise WorkflowError("profile_changed_during_run_creation")
 
     def _try_create_run(
-        self, *, profile_id: str, video_id: str, interval_ms: int, engine: OcrEngine
+        self,
+        *,
+        profile_id: str,
+        video_id: str,
+        interval_ms: int,
+        engine: OcrEngine,
+        region_text_layouts: Mapping[str, str],
     ) -> RunRecord | None:
         try:
             context = self._runs.creation_context(profile_id, video_id)
@@ -141,6 +158,10 @@ class DatasetWorkflow:
             raise WorkflowError("profile_not_found") from exc
         except RunVideoNotFoundError as exc:
             raise WorkflowError("video_not_found") from exc
+        if set(region_text_layouts) - {region.region_id for region in context.regions}:
+            raise WorkflowError(
+                "ocr_configuration_invalid", details={"field": "region_text_layouts"}
+            )
         if (context.profile_width, context.profile_height) != (
             context.video_width,
             context.video_height,
@@ -154,7 +175,13 @@ class DatasetWorkflow:
         self._require_complete_provenance(provenance)
         try:
             region_snapshots = tuple(
-                self._region_ocr_snapshot(region, context.allowed_chars, provenance, engine)
+                self._region_ocr_snapshot(
+                    region,
+                    context.allowed_chars,
+                    provenance,
+                    engine,
+                    region_text_layouts.get(region.region_id),
+                )
                 for region in context.regions
             )
         except (OcrProcessError, ValueError) as exc:
@@ -180,12 +207,17 @@ class DatasetWorkflow:
         profile_allowed_chars: tuple[str, ...],
         fallback_provenance: OcrProvenance,
         engine: OcrEngine,
+        text_layout_override: str | None = None,
     ) -> RegionOcrSnapshot:
         if (region.allowed_chars is None) != (region.text_layout is None):
             raise ValueError("incomplete region OCR configuration")
         allowed_chars = region.allowed_chars or profile_allowed_chars
+        if text_layout_override is not None and not allowed_chars:
+            raise ValueError("a run layout override needs character classes")
         provenance = (
-            fallback_provenance
+            engine.describe(allowed_chars, text_layout_override)
+            if text_layout_override is not None
+            else fallback_provenance
             if region.allowed_chars is None
             else engine.describe(allowed_chars, region.text_layout)
         )
@@ -195,9 +227,9 @@ class DatasetWorkflow:
             region_name=region.region_name,
             bbox=region.bbox,
             allowed_chars=allowed_chars,
-            text_layout=region.text_layout or DEFAULT_OCR_TEXT_LAYOUT,
+            text_layout=text_layout_override or region.text_layout or DEFAULT_OCR_TEXT_LAYOUT,
             provenance=provenance,
-            uses_profile_fallback=region.allowed_chars is None,
+            uses_profile_fallback=region.allowed_chars is None and text_layout_override is None,
         )
 
     def start(self, run_id: str, *, expected_version: int) -> RunRecord:

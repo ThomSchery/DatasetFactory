@@ -362,11 +362,9 @@ describe("Run Setup: from a file to a started run", () => {
     const fetchSpy = stubBackend(state);
     renderApp(["/run"]);
 
-    const field = await screen.findByRole("combobox", { name: "OCR engine" });
-    await waitFor(() => {
-      expect(field).toHaveValue("Tesseract");
-    });
-    await choose(user, "OCR engine", /RapidOCR/);
+    const engine = await screen.findByRole("button", { name: /Tesseract/ });
+    await waitFor(() => { expect(engine).toHaveAttribute("aria-pressed", "true"); });
+    await user.click(screen.getByRole("button", { name: /RapidOCR/ }));
     await choose(user, "Source file", /mecz\.mp4/);
     await choose(user, "Profile", /Gra testowa/);
     state.startResponse = {
@@ -393,10 +391,8 @@ describe("Run Setup: from a file to a started run", () => {
     stubBackend(state);
     renderApp(["/run"]);
 
-    await user.click(await screen.findByRole("combobox", { name: "OCR engine" }));
-    expect(await screen.findByRole("option", { name: /Tesseract/ })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /RapidOCR/ })).toBeNull();
-    expect(screen.getByText("RapidOCR is not available: models are missing")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Tesseract/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /RapidOCR.*models are missing/ })).toBeDisabled();
   });
 
   it("creates the run, starts it and opens its review", async () => {
@@ -475,5 +471,24 @@ describe("Run Setup: from a file to a started run", () => {
         ([url, init]) => String(url).endsWith("/api/v1/runs") && init?.method === "POST",
       ),
     ).toBe(false);
+  });
+});
+
+
+describe("per-run scan rules", () => {
+  it("sends the chosen layout only in the run request, without saving the profile", async () => {
+    const user = userEvent.setup();
+    state.materials = [materialFixture()];
+    const fetchSpy = stubBackend(state);
+    renderApp(["/run?profile=profile-1"]);
+    await choose(user, "Source file", /mecz\.mp4/);
+    const region = await screen.findByRole("group", { name: "Text layout for Pasek zdrowia" });
+    await user.click(within(region).getByRole("button", { name: "One word" }));
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => {
+      const request = fetchSpy.mock.calls.find(([url, init]) => String(url).endsWith("/runs") && init?.method === "POST");
+      expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({ region_text_layouts: { "region-1": "word" } });
+    });
+    expect(fetchSpy.mock.calls.some(([url, init]) => String(url).includes("/profiles") && ["POST", "PATCH", "PUT"].includes(init?.method ?? "GET"))).toBe(false);
   });
 });

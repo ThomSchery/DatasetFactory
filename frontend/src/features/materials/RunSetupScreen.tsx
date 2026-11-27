@@ -16,10 +16,9 @@ import {
   runPollInterval,
   startRun,
 } from "../../api";
-import type { ErrorPresentation, PipelineRun, RunAction } from "../../api";
+import type { CreateRunRequest, ErrorPresentation, PipelineRun, RunAction } from "../../api";
 import { annotationsPath } from "../../app/navigation";
 import { Button } from "../../components/common/Button";
-import { Field } from "../../components/common/Field";
 import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Icon } from "../../components/common/Icon";
 import { Panel } from "../../components/common/Panel";
@@ -28,6 +27,9 @@ import { TextField } from "../../components/common/TextField";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
 import { RunPanel } from "../dashboard/RunPanel";
 import { useDashboard } from "../dashboard/dashboardQuery";
+import { OCR_TEXT_LAYOUT_OPTIONS } from "../profiles/schemas";
+import { formatDuration } from "./materialFormat";
+import { ScanRules } from "./ScanRules";
 import { DEFAULT_INTERVAL_MS, runLaunchSchema, type RunLaunchValues } from "./schemas";
 import "./RunSetupScreen.css";
 
@@ -100,8 +102,10 @@ export function RunSetupScreen() {
   /** The asset URL whose image failed to load, and a key that remounts it on retry. */
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const [imageReloadKey, setImageReloadKey] = useState(0);
+  const [runRules, setRunRules] = useState<{ profileId: string; layouts: Record<string, string> }>({ profileId: "", layouts: {} });
+  const layouts = runRules.profileId === preview.data?.id ? runRules.layouts : {};
   const previewShapes: OverlayShape[] = (preview.data?.regions ?? []).map((region) => ({
-    displayLabel: region.name,
+    displayLabel: `${region.name} · ${OCR_TEXT_LAYOUT_OPTIONS.find((option) => option.value === (layouts[region.id] ?? region.text_layout ?? "auto"))?.short ?? "Automatic"}`,
     height: region.height,
     id: region.id,
     label: region.name,
@@ -111,12 +115,13 @@ export function RunSetupScreen() {
   }));
 
   const launch = useMutation({
-    mutationFn: async (values: RunLaunchValues): Promise<LaunchResult> => {
+    mutationFn: async (values: RunLaunchValues & Pick<CreateRunRequest, "region_text_layouts">): Promise<LaunchResult> => {
       const run = await createRun({
         profile_id: values.profile_id,
         video_id: values.video_id,
         interval_ms: values.interval_ms,
         ...(values.ocr_engine ? { ocr_engine: values.ocr_engine } : {}),
+        ...(values.region_text_layouts ? { region_text_layouts: values.region_text_layouts } : {}),
       });
       // A dashboard request started before POST can still be in flight. With
       // no cached result Query may otherwise reuse it and publish old state.
@@ -159,6 +164,12 @@ export function RunSetupScreen() {
   const materialItems = materials.data?.items ?? [];
   const profileItems = profiles.data ?? [];
 
+  const selectedVideoId = form.watch("video_id");
+  const selectedMaterial = materialItems.find((item) => item.id === selectedVideoId);
+  const interval = Number(form.watch("interval_ms"));
+  const engineId = form.watch("ocr_engine") || defaultEngine?.id;
+  const selectedEngine = engines.find((engine) => engine.id === engineId);
+
   const runButton = (
     <Button
       className="df-run-setup__run"
@@ -199,6 +210,7 @@ export function RunSetupScreen() {
             onImageError={() => {
               setFailedImageUrl(preview.data.reference_asset_url);
             }}
+            trailing={<span className="df-run-setup__hint">Each box is read with the rule set for it.</span>}
             shapes={previewShapes}
             source={{ width: preview.data.source_width, height: preview.data.source_height }}
           />
@@ -234,7 +246,11 @@ export function RunSetupScreen() {
           noValidate
           onSubmit={form.handleSubmit((values) => {
             setStartError(null);
-            launch.mutate(values);
+            launch.mutate({
+              ...values,
+              ...(runRules.profileId === values.profile_id && Object.keys(layouts).length > 0
+                ? { region_text_layouts: layouts } : {}),
+            });
           })}
         >
           <Controller
@@ -253,6 +269,7 @@ export function RunSetupScreen() {
                       ? "No video imported yet. Add one on Upload."
                       : "No source file matches."
                   }
+                  showSelectedDetail
                   filterLabel="Source file"
                   icon="search"
                   groups={[
@@ -260,7 +277,7 @@ export function RunSetupScreen() {
                       id: "materials",
                       label: "Imported videos",
                       options: materialItems.map((material) => ({
-                        detail: `${String(material.width)}×${String(material.height)}`,
+                        detail: `${formatDuration(material.duration_ms)} · ${String(material.width)}×${String(material.height)}`,
                         id: material.id,
                         label: material.basename,
                       })),
@@ -302,6 +319,7 @@ export function RunSetupScreen() {
                       ? "No profile yet. Create one in Setup for scan."
                       : "No profile matches."
                   }
+                  showSelectedDetail
                   filterLabel="Profile"
                   icon="search"
                   groups={[
@@ -311,6 +329,7 @@ export function RunSetupScreen() {
                       options: profileItems.map((profile) => ({
                         id: profile.id,
                         label: profile.name,
+                        detail: `${profile.region_count} regions`,
                       })),
                     },
                   ]}
@@ -343,59 +362,67 @@ export function RunSetupScreen() {
                   <Icon name="setting" />
                   <span>OCR engine</span>
                 </p>
-                <GroupedOptionList
-                  disabled={loading || engines.length === 0}
-                  emptyMessage="No OCR engine is available."
-                  filterLabel="OCR engine"
-                  icon="search"
-                  groups={[
-                    {
-                      id: "engines",
-                      label: "Available engines",
-                      options: engines
-                        .filter((engine) => engine.available)
-                        .map((engine) => ({
-                          detail: engine.default ? "default" : undefined,
-                          id: engine.id,
-                          label: engine.name,
-                        })),
-                    },
-                  ]}
-                  label="Available engines"
-                  mode="single"
-                  onChange={(ids) => {
-                    field.onChange(ids[0] ?? "");
-                  }}
-                  placeholder={
-                    engines.find((engine) => engine.id === (field.value || defaultEngine?.id))
-                      ?.name ?? "Choose an engine"
-                  }
-                  selectedIds={[field.value || defaultEngine?.id || ""].filter(Boolean)}
-                />
-                {engines
-                  .filter((engine) => !engine.available)
-                  .map((engine) => (
-                    <p className="df-run-setup__hint" key={engine.id}>
-                      {engine.name} is not available: {engine.detail}
-                    </p>
+                <div aria-label="OCR engine" className="df-run-setup__engines" role="group">
+                  {engines.map((engine) => (
+                    <Button
+                      aria-pressed={(field.value || defaultEngine?.id) === engine.id}
+                      className="df-run-setup__engine"
+                      disabled={loading || !engine.available}
+                      key={engine.id}
+                      onClick={() => { field.onChange(engine.id); }}
+                      variant="secondary"
+                    >
+                      <span aria-hidden="true" className="df-run-setup__radio" />
+                      <span className="df-run-setup__engine-copy">
+                        <strong>{engine.name}</strong>
+                        <small>{engine.available
+                          ? engine.uses_text_layout ? "Uses the region text layout" : "Automatic text detection"
+                          : `Not available: ${engine.detail}`}</small>
+                      </span>
+                    </Button>
                   ))}
+                </div>
+                {engines.length === 0 ? <p className="df-run-setup__hint">No OCR engine is available.</p> : null}
               </div>
             )}
           />
 
+          {preview.isSuccess && preview.data.regions.length > 0 ? (
+            <ScanRules
+              disabled={launch.isPending}
+              key={preview.data.id}
+              layouts={layouts}
+              onChange={(next) => { setRunRules({ profileId: preview.data.id, layouts: next }); }}
+              regions={preview.data.regions}
+            />
+          ) : null}
+
           <TextField
             {...form.register("interval_ms")}
-            description="Milliseconds between sampled frames."
             error={form.formState.errors.interval_ms?.message}
             inputMode="numeric"
             label="Sample rate"
             labelIcon="setting"
             suffix="ms"
           />
+          <div aria-label="Sample rate presets" className="df-run-setup__rates" role="group">
+            {[500, 1000, 2000].map((rate) => (
+              <Button aria-pressed={Number(form.watch("interval_ms")) === rate} key={rate}
+                onClick={() => { form.setValue("interval_ms", rate, { shouldValidate: true }); }}
+                size="sm" variant="secondary">{rate}</Button>
+            ))}
+          </div>
         </form>
         </div>
 
         <div className="df-run-setup__run-slot">{runButton}</div>
+
+        {selectedMaterial && interval > 0 && Number.isInteger(interval) && chosenProfileId && preview.isSuccess ? (
+          <p className="df-run-setup__hint">
+            {Math.max(1, Math.ceil(selectedMaterial.duration_ms / interval))} frames · {preview.data.regions.length} regions
+            {selectedEngine ? ` · ${selectedEngine.name}` : ""}
+          </p>
+        ) : null}
 
         {failure === null ? null : <InlineError message={errorText(failure)} />}
         {startError === null ? null : <InlineError message={errorText(startError)} />}

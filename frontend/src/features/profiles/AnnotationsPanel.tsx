@@ -1,6 +1,7 @@
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { Button } from "../../components/common/Button";
+import { GroupedOptionList } from "../../components/common/GroupedOptionList";
 import { Panel } from "../../components/common/Panel";
 import { TextField } from "../../components/common/TextField";
 import { InlineError } from "../../components/common/UiStates";
@@ -18,7 +19,7 @@ export interface AnnotationsPanelProps {
   regions: readonly DraftRegion[];
   categories: readonly DraftCategory[];
   selectedKey: string | null;
-  onSelect: (key: string) => void;
+  onSelect: (key: string | null) => void;
   onRename: (key: string, name: string) => void;
   /** The box just drawn, waiting to be named; `null` when there is none. */
   sketch: AnnotationSketch | null;
@@ -64,6 +65,13 @@ export function AnnotationsPanel({
   disabled = false,
 }: AnnotationsPanelProps) {
   const suggestionsId = useId();
+  const [filter, setFilter] = useState("");
+  const [marked, setMarked] = useState<readonly string[]>([]);
+  useEffect(() => {
+    if (selectedKey !== null) setMarked((current) => current.includes(selectedKey) ? current : [...current, selectedKey]);
+  }, [selectedKey]);
+  const visible = regions.filter((region) => region.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
+  const selectedIds = marked.filter((key) => regions.some((region) => region.key === key));
   const selected = regions.find((region) => region.key === selectedKey) ?? null;
   const naming = sketch !== null;
   const renameEmpty = !naming && selected !== null && selected.name.trim() === "";
@@ -104,42 +112,12 @@ export function AnnotationsPanel({
         }}
         placeholder={naming ? "Class name" : "Draw a region on the screenshot"}
         ref={nameInputRef}
+        suffix={naming ? "↵" : undefined}
         spellCheck={false}
         value={naming ? sketchName : (selected?.name ?? "")}
       />
 
-      <ul aria-label="Regions on this screenshot" className="df-annotations__list">
-        {regions.length === 0 ? (
-          <li className="df-annotations__empty">No regions yet.</li>
-        ) : (
-          regions.map((region) => (
-            <li
-              className="df-annotations__row"
-              data-selected={region.key === selectedKey || undefined}
-              key={region.key}
-            >
-              <Button
-                aria-label={`Select region ${region.name}`}
-                aria-pressed={region.key === selectedKey}
-                className="df-annotations__row-select"
-                disabled={disabled}
-                onClick={() => {
-                  onSelect(region.key);
-                }}
-                variant="muted"
-              >
-                <span className="df-annotations__row-name">{region.name}</span>
-                <span className="df-annotations__row-detail">
-                  ({regionCharacterCount(region, categories) ?? "all"})
-                </span>
-              </Button>
-            </li>
-          ))
-        )}
-      </ul>
-
-      {renameEmpty ? <InlineError message="A region needs a name before the profile can be saved." /> : null}
-
+      {naming ? <p className="df-annotations__hint">Name the region, then Accept. Esc throws the box away.</p> : null}
       <div className="df-annotations__actions">
         <Button disabled={disabled || !naming} onClick={onReject}>
           Reject
@@ -148,6 +126,42 @@ export function AnnotationsPanel({
           Accept
         </Button>
       </div>
+
+      <TextField
+        autoComplete="off"
+        hideLabel
+        label="Filter regions"
+        onChange={(event) => { setFilter(event.target.value); }}
+        placeholder={`Filter ${regions.length} regions`}
+        value={filter}
+      />
+      <div className="df-annotations__selection">
+        <span className="df-annotations__selection-count">{selectedIds.length} of {regions.length}</span>
+        <GroupedOptionList
+          disabled={disabled}
+          emptyMessage={regions.length === 0 ? "No regions yet." : "No regions match."}
+          filterLabel="Regions on this screenshot"
+          groups={[{ id: "regions", label: "Select all", options: visible.map((region) => ({
+            // FE-029: the profile's own characters, counted once each.
+            detail: `(${regionCharacterCount(region, categories) ?? "all"})`,
+            id: region.key,
+            label: region.name,
+          })) }]}
+          inline
+          label="Regions on this screenshot"
+          mode="multiple"
+          onChange={(ids) => {
+            setMarked(ids);
+            const added = ids.find((id) => !selectedIds.includes(id));
+            onSelect(added ?? (selectedKey !== null && ids.includes(selectedKey) ? selectedKey : ids.at(-1) ?? null));
+          }}
+          selectedIds={selectedIds}
+        />
+      </div>
+
+      {renameEmpty ? <InlineError message="A region needs a name before the profile can be saved." /> : null}
+
+
     </Panel>
   );
 }

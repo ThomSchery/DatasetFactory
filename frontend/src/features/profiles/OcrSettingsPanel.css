@@ -175,3 +175,45 @@
   grid-column: 1 / -1;
   overflow-wrap: anywhere;
 }
+
+.df-ocr-settings .df-grouped-options--inline .df-collapsible-group__header,
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option {
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-pressed);
+}
+.df-ocr-settings .df-grouped-options--inline .df-collapsible-group__content {
+  grid-template-columns: repeat(auto-fill, minmax(var(--control-height-sm), 1fr));
+  gap: var(--size-xxs);
+}
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option {
+  justify-content: center;
+  min-height: var(--control-height-sm);
+  padding: var(--size-xxs);
+  font-family: var(--font-family-mono);
+}
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option .df-grouped-options__mark {
+  display: none;
+}
+.df-ocr-settings .df-grouped-options--inline .df-grouped-options__row--option[aria-checked="true"] {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable-soft);
+}
+.df-ocr-settings__subtitle {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Keep the footer in place when a region picker opens or closes on blur. */
+.df-dialog:has(.df-ocr-settings) {
+  height: min(calc(100dvh - var(--size-lg)), calc(var(--size-3xl) * 8));
+}
+.df-dialog__body:has(> .df-ocr-settings) {
+  box-sizing: border-box;
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.df-dialog__body > .df-ocr-settings {
+  min-height: 0;
+  align-content: start;
+  overflow-y: auto;
+}

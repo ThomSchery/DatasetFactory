@@ -1,0 +1,52 @@
+.df-scan-rules, .df-scan-rules__regions {
+  display: grid;
+  gap: var(--size-xs);
+  min-width: 0;
+}
+.df-scan-rules .df-field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.df-scan-rules .df-collapsible-group__header {
+  padding: var(--size-xxs) var(--size-xs);
+  border: var(--border-width-default) solid var(--color-stroke-panel-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-neutral-pressed);
+}
+.df-scan-rules__summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--size-xxs); min-width: 0; }
+.df-scan-rules__summary strong { overflow-wrap: anywhere; }
+.df-scan-rules__summary > span { color: var(--color-icon-strong-default); }
+.df-scan-rules__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--element-gap-md); }
+.df-scan-rules__option.df-button { justify-content: start; padding: var(--size-xs); text-align: start; }
+.df-scan-rules__option .df-button__content { display: grid; gap: var(--size-xxs); }
+.df-scan-rules__glyph { display: grid; gap: var(--border-width-emphasis); width: var(--icon-size); padding: var(--size-xxs); border: var(--border-width-default) solid var(--color-stroke-control-default); border-radius: var(--radius-sm); }
+.df-scan-rules__glyph i { height: var(--border-width-emphasis); background: currentColor; }
+.df-scan-rules__glyph[data-layout="line"] i:not(:first-child),
+.df-scan-rules__glyph[data-layout="word"] i:not(:first-child) { visibility: hidden; }
+.df-scan-rules__glyph[data-layout="word"] i:first-child { width: 50%; justify-self: center; }
+.df-scan-rules__glyph[data-layout="block"] i:last-child { width: 60%; }
+.df-scan-rules__glyph[data-layout="sparse"] i { width: 50%; }
+.df-scan-rules__glyph[data-layout="sparse"] i:nth-child(2) { justify-self: end; }
+@media (min-width: 576px) { .df-scan-rules__options { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 769px) { .df-scan-rules__options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.df-scan-rules__rule-value { display: inline-flex; align-items: center; gap: var(--size-xxs); }
+.df-scan-rules__rule-value .df-scan-rules__glyph { width: var(--icon-size); }
+.df-scan-rules__option .df-scan-rules__glyph { width: var(--shell-nav-control); }
+.df-scan-rules .df-collapsible-group__header {
+  position: relative;
+  min-height: var(--field-height);
+  background: var(--color-workspace-row);
+}
+.df-scan-rules .df-collapsible-group__header:has([aria-expanded="true"]) {
+  border-color: var(--color-fill-brand-impeccable);
+  background: var(--color-fill-brand-impeccable-soft);
+}
+.df-scan-rules .df-collapsible-group__toggle { min-height: var(--toolbar-control-height); }
+.df-scan-rules .df-collapsible-group__toggle::after { content: ""; position: absolute; inset: 0; }
+.df-scan-rules .df-collapsible-group__toggle { position: static; }
+.df-scan-rules .df-run-setup__label > span {
+  padding: var(--size-xxs) var(--size-xs);
+  border-radius: var(--radius-pill);
+  border: var(--border-width-default) solid var(--color-workspace-outline);
+  color: var(--color-icon-strong-default);
+  letter-spacing: normal;
+  text-transform: none;
+}

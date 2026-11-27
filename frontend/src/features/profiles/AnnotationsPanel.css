@@ -6,26 +6,6 @@
   min-height: var(--list-row-height);
 }
 
-.df-annotations__list {
-  display: grid;
-  align-content: start;
-  /* A fixed box: drawing or removing a region never moves what is below. */
-  height: calc(var(--list-row-height) * 4);
-  margin: var(--size-none);
-  padding: var(--element-padding-y-lg) var(--size-none);
-  overflow-y: auto;
-  border: var(--border-width-default) solid var(--color-stroke-panel-default);
-  border-radius: var(--radius-sm);
-  background: var(--color-background-primary-default);
-  list-style: none;
-}
-
-.df-annotations__empty {
-  padding: var(--element-padding-y-lg) var(--element-padding-x-lg);
-  color: var(--color-text-placeholder-default);
-  font-size: var(--font-size-xs);
-}
-
 /* FE-030: the name field offers existing class names as suggestions
    (`datalist`), and Chromium draws its own arrow for that — browser chrome no
    design token reaches. Suggestions stay; the stray arrow goes. */
@@ -34,73 +14,36 @@
   display: none !important;
 }
 
-/* FE-029: the row is one select button; regions are deleted on the picture. */
-.df-annotations__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  min-height: var(--list-row-height);
-}
-
-/* FE-025: hover `surface/panel-hover`, pressed `surface/panel-pressed`,
-   the selected region `surface/panel-selected` with `text/primary`. */
-.df-annotations__row:hover {
-  background: var(--color-surface-neutral-raised);
-}
-
-.df-annotations__row[data-selected] {
-  background: var(--color-surface-neutral-selected);
-}
-
-.df-annotations__row .df-button--muted,
-.df-annotations__row .df-button--muted:hover:not(:disabled),
-.df-annotations__row .df-button--muted[aria-pressed="true"],
-.df-annotations__row .df-button--muted[aria-pressed="true"]:hover:not(:disabled) {
-  border-color: var(--color-surface-transparent);
-  background: var(--color-surface-transparent);
-}
-
-.df-annotations__row .df-button--muted:active:not(:disabled) {
-  background: var(--color-surface-neutral-pressed);
-}
-
-.df-annotations__row[data-selected] .df-annotations__row-select.df-button {
-  color: var(--color-text-strong-default);
-}
-
-.df-annotations__row-select.df-button {
-  justify-content: space-between;
-  width: 100%;
-  min-width: 0;
-  min-height: var(--list-row-height);
-  border-radius: var(--radius-none);
-  color: var(--color-text-weak-default);
-  font-weight: var(--font-weight-regular);
-}
-
-.df-annotations__row-select .df-button__content {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-}
-
-.df-annotations__row-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-align: start;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.df-annotations__row-detail {
-  flex: none;
-  padding-inline-start: var(--element-gap-lg);
-  font-variant-numeric: tabular-nums;
-}
-
 .df-annotations__actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--element-gap-md);
+}
+
+.df-annotations__hint { margin: 0; color: var(--color-text-weak-default); font-size: var(--font-size-xs); line-height: var(--line-height-standard); }
+.df-annotations__selection { position: relative; min-width: 0; padding: var(--size-xxs); border: var(--border-width-default) solid var(--color-stroke-panel-default); border-radius: var(--radius-md); background: var(--color-background-primary-default); }
+.df-annotations__selection-count { position: absolute; top: var(--shell-padding-compact); right: var(--size-xs); color: var(--color-text-weak-default); font-size: var(--font-size-xs); pointer-events: none; }
+.df-annotations__selection .df-collapsible-group__toggle { display: none; }
+.df-annotations__selection .df-collapsible-group__header { padding-inline-end: var(--size-xxl); }
+.df-annotations__selection .df-collapsible-group__content { max-height: var(--list-scroll-height); overflow-y: auto; }
+.df-annotations__selection .df-grouped-options__row { min-height: var(--list-row-height); margin: 0; padding: var(--size-xxs) var(--size-xs); border-radius: var(--radius-sm); }
+.df-annotations__selection .df-grouped-options__row[aria-checked="true"] { background: var(--color-fill-brand-impeccable-soft); }
+
+.df-annotations__actions .df-button:first-child:enabled { color: var(--color-status-error-default); }
+.df-annotations__actions .df-button:last-child:enabled {
+  border-color: var(--color-fill-brand-impeccable);
+  color: var(--color-icon-strong-default);
+  background: var(--color-fill-brand-impeccable-soft);
+}
+
+.df-annotations__selection .df-grouped-options__row[aria-checked="false"] .df-grouped-options__mark {
+  color: var(--color-text-weak-default);
+}
+.df-annotations__selection .df-grouped-options__mark .df-icon {
+  width: var(--size-sm);
+  height: var(--size-sm);
+  color: inherit;
+}
+.df-annotations__selection .df-collapsible-group__header {
+  border-bottom: var(--border-width-default) solid var(--color-workspace-outline);
 }
