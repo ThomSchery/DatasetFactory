@@ -7,21 +7,38 @@ from contextlib import contextmanager
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
+# SQLite lets one writer in at a time; every other write waits up to this long for
+# the lock and then fails with "database is locked". The run worker writes while the
+# operator keeps working (deleting another run, saving a review), and a run whose
+# write gives up fails. On 2026-11-27, with OCR saturating the CPU, the lock stayed
+# taken for about 10 s while the only other write in the log, deleting a run
+# (0.2 s on an idle machine), was in flight; 5 s failed the working run. Every
+# transaction here is short, so this is time spent behind a slow transaction; a
+# lock held for longer still fails the write.
+DEFAULT_BUSY_TIMEOUT_MS = 30_000
+
 
 class Database:
     """Own the SQLite engine and short-lived SQLAlchemy sessions."""
 
-    def __init__(self, database_url: str) -> None:
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+    ) -> None:
+        if busy_timeout_ms < 0:
+            raise ValueError("busy_timeout_ms must not be negative")
+        self._busy_timeout_ms = busy_timeout_ms
         self.engine = create_engine(database_url, future=True)
         self._sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         event.listen(self.engine, "connect", self._configure_sqlite)
 
-    @staticmethod
-    def _configure_sqlite(dbapi_connection: sqlite3.Connection, _: object) -> None:
+    def _configure_sqlite(self, dbapi_connection: sqlite3.Connection, _: object) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute(f"PRAGMA busy_timeout={int(self._busy_timeout_ms)}")
         cursor.close()
 
     @contextmanager

@@ -267,9 +267,20 @@ class WorkflowWorker:
         stopped = threading.Event()
 
         def beat() -> None:
-            self._runs.heartbeat(run_id)
-            while not stopped.wait(self._heartbeat_interval_seconds):
-                self._runs.heartbeat(run_id)
+            while True:
+                try:
+                    self._runs.heartbeat(run_id)
+                except Exception:
+                    # A missed beat is not a failed run, and a thread that dies here
+                    # stops beating for the rest of the stage. The next beat tries
+                    # again; a database that is really gone fails the stage itself.
+                    self._logger.warning(
+                        "workflow_heartbeat_failed",
+                        exc_info=True,
+                        extra={"run_id": run_id},
+                    )
+                if stopped.wait(self._heartbeat_interval_seconds):
+                    return
 
         thread = threading.Thread(target=beat, name=f"workflow-heartbeat-{run_id}", daemon=True)
         thread.start()

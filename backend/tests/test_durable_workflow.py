@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sqlite3
 import threading
 import time
 from collections.abc import Collection
@@ -14,8 +15,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend.app.access.media.processing import (
     CropRegion,
@@ -24,6 +25,7 @@ from backend.app.access.media.processing import (
     SampledFrame,
 )
 from backend.app.access.ocr import OcrEngine, OcrEngineRegistry, OcrProcessError
+from backend.app.access.store.database import Database
 from backend.app.access.store.models import (
     Annotation,
     Category,
@@ -376,11 +378,14 @@ def _install_workflow(
     ocr: OcrEngine | OcrEngineRegistry,
     *,
     heartbeat_interval_seconds: float = 0.05,
+    database: Database | None = None,
+    runs: RunRepository | None = None,
 ) -> tuple[DatasetWorkflow, RunRepository, WorkflowRecovery]:
     composition.dataset_workflow.shutdown()
-    runs = RunRepository(composition.database)
-    frames = FrameRepository(composition.database)
-    checkpoints = CheckpointRepository(composition.database, composition.workspace)
+    database = database or composition.database
+    runs = runs or RunRepository(database)
+    frames = FrameRepository(database)
+    checkpoints = CheckpointRepository(database, composition.workspace)
     recovery = WorkflowRecovery(runs, checkpoints)
     worker = WorkflowWorker(
         runs,
@@ -1712,3 +1717,182 @@ def test_ocr_warning_containing_recovery_literal_remains_valid_provenance(
     assert first == second
     assert first.invalidations == ()
     assert first.skipped_reviewed_frames == ()
+
+
+def _hold_write_lock(
+    database_path: Path,
+    seconds: float,
+    held: threading.Event,
+) -> threading.Thread:
+    """Another writer takes the SQLite write lock and keeps it for `seconds`."""
+
+    def hold() -> None:
+        connection = sqlite3.connect(database_path, timeout=30, isolation_level=None)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            held.set()
+            time.sleep(seconds)
+            connection.execute("ROLLBACK")
+        finally:
+            connection.close()
+
+    thread = threading.Thread(target=hold, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_database_default_busy_timeout_outlasts_a_slow_writer(tmp_path: Path) -> None:
+    # 5 s failed a run when another run was deleted under OCR load (2026-11-27).
+    database = Database(f"sqlite:///{(tmp_path / 'default.db').as_posix()}")
+    try:
+        with database.engine.connect() as connection:
+            assert connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one() == 30_000
+    finally:
+        database.dispose()
+
+
+def test_database_write_waits_for_another_writer_up_to_its_busy_timeout(tmp_path: Path) -> None:
+    path = tmp_path / "contention.db"
+    with sqlite3.connect(path) as setup:
+        setup.execute("PRAGMA journal_mode=WAL")
+        setup.execute("CREATE TABLE item (id INTEGER PRIMARY KEY)")
+    patient = Database(f"sqlite:///{path.as_posix()}", busy_timeout_ms=5000)
+    impatient = Database(f"sqlite:///{path.as_posix()}", busy_timeout_ms=100)
+    try:
+        # Open both pools first, so their connection pragmas never meet the holder.
+        assert patient.check_health() and impatient.check_health()
+        held = threading.Event()
+        holder = _hold_write_lock(path, 0.6, held)
+        assert held.wait(5)
+
+        with (
+            pytest.raises(OperationalError, match="database is locked"),
+            impatient.session() as session,
+        ):
+            session.execute(text("INSERT INTO item (id) VALUES (1)"))
+        started = time.monotonic()
+        with patient.session() as session:
+            session.execute(text("INSERT INTO item (id) VALUES (2)"))
+        waited = time.monotonic() - started
+        holder.join(5)
+
+        assert waited >= 0.2
+        with patient.session() as session:
+            assert session.execute(text("SELECT id FROM item")).scalars().all() == [2]
+    finally:
+        patient.dispose()
+        impatient.dispose()
+
+
+class FlakyHeartbeatRuns(RunRepository):
+    """Run storage whose first heartbeats meet a locked database."""
+
+    def __init__(self, database: Database, *, failures: int) -> None:
+        super().__init__(database)
+        self.failures = failures
+        self.heartbeat_calls = 0
+
+    def heartbeat(self, run_id: str) -> None:
+        self.heartbeat_calls += 1
+        if self.heartbeat_calls <= self.failures:
+            raise OperationalError(
+                "UPDATE pipeline_runs",
+                {},
+                sqlite3.OperationalError("database is locked"),
+            )
+        super().heartbeat(run_id)
+
+
+def test_heartbeat_keeps_beating_after_a_failed_beat_and_the_run_finishes(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path)
+    media = StubMediaAccess(composition, block_sample=True)
+    runs = FlakyHeartbeatRuns(composition.database, failures=2)
+    _install_workflow(
+        composition,
+        media,
+        StubOcrEngine(),
+        heartbeat_interval_seconds=0.05,
+        runs=runs,
+    )
+    app = create_app(composition.settings, composition=composition)
+
+    with TestClient(app) as client:
+        created = _create_run(client, seeded)
+        started = client.post(
+            f"/api/v1/runs/{created['id']}/start",
+            json={"expected_version": created["version"]},
+        )
+        assert started.status_code == 202
+        assert media.sample_started.wait(2)
+
+        try:
+            before = runs.get(created["id"]).last_heartbeat_at
+            seen = runs.heartbeat_calls
+            # A beat that starts after `seen` was read, past the failing ones, has to land.
+            wanted = max(seen, runs.failures) + 2
+            deadline = time.monotonic() + 2
+            while runs.heartbeat_calls < wanted and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert runs.heartbeat_calls >= wanted
+            after = runs.get(created["id"]).last_heartbeat_at
+            assert before is not None and after is not None and after > before
+        finally:
+            # Never leave the worker parked in the sample, or closing the client waits.
+            media.release_sample.set()
+        completed = _wait_status(client, created["id"], "review_ready")
+        assert completed["error_code"] is None
+
+
+def test_deleting_another_run_while_a_run_works_leaves_the_working_run_alone(
+    composition: CompositionRoot,
+    tmp_path: Path,
+) -> None:
+    seeded = _seed(composition, tmp_path, duration_ms=2000)
+    media = StubMediaAccess(composition)
+    database = Database(composition.settings.database_url, busy_timeout_ms=5000)
+    _install_workflow(composition, media, StubOcrEngine(), database=database)
+    app = create_app(composition.settings, composition=composition)
+
+    try:
+        with TestClient(app) as client:
+            finished = _create_run(client, seeded)
+            started = client.post(
+                f"/api/v1/runs/{finished['id']}/start",
+                json={"expected_version": finished["version"]},
+            )
+            assert started.status_code == 202
+            finished = _wait_status(client, finished["id"], "review_ready")
+
+            media.block_sample = True
+            media.sample_started.clear()
+            working = _create_run(client, seeded)
+            started = client.post(
+                f"/api/v1/runs/{working['id']}/start",
+                json={"expected_version": working["version"]},
+            )
+            assert started.status_code == 202
+            assert media.sample_started.wait(2)
+
+            try:
+                deleted = client.delete(
+                    f"/api/v1/runs/{finished['id']}",
+                    params={"expected_version": finished["version"]},
+                )
+                assert deleted.status_code == 204
+                # A slow writer takes the database while the worker has work to save.
+                held = threading.Event()
+                holder = _hold_write_lock(composition.settings.database_path, 1.0, held)
+                assert held.wait(5)
+            finally:
+                media.release_sample.set()
+
+            completed = _wait_status(client, working["id"], "review_ready", timeout_seconds=10)
+            holder.join(5)
+            assert completed["error_code"] is None
+            assert completed["completed_frames"] == completed["total_frames"]
+            assert client.get(f"/api/v1/runs/{finished['id']}").status_code == 404
+    finally:
+        database.dispose()
