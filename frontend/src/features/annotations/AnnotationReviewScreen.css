@@ -125,6 +125,19 @@
   height: 100%;
 }
 
+.df-review-workspace__preview .df-reference-image {
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+/* FE-032: before the first frame the profile picture spans the workspace;
+   keep it inside the window like the frame preview. */
+.df-review-workspace__all-state .df-reference-image__img {
+  /* The frame navigator row sits above it, where Setup has the switch. */
+  max-height: calc(var(--workspace-image-field-height) - var(--control-height-md) - var(--site-padding));
+}
+
 .df-review-workspace__preview .df-region-overlay {
   border-radius: var(--radius-md);
 }

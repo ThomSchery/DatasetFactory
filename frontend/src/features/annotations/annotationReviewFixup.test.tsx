@@ -360,6 +360,93 @@ describe("FE-001-F4-FIX1 interaction regressions", () => {
     );
     expect(screen.getByRole("option", { name: /^7, source OCR:/ })).toBeInTheDocument();
   });
+
+  it("uses the run profile until sampling finishes, then shows the frame and unlocks after OCR", async () => {
+    let stage: FrameDetail["stage_status"] = "pending";
+    const profile = { ...PROFILE, reference_asset_url: "/api/v1/assets/references/history-image" };
+    const get = reviewGet({
+      profile,
+      run: runFixture({ profile_id: PROFILE.id, status: "running" }),
+      frame: () => frameDetailFixture({
+        stage_status: stage,
+        annotations: stage === "review_pending" ? [annotationFixture()] : [],
+      }),
+      frames: () => framePageFixture({ items: [frameSummaryFixture({ stage_status: stage })] }),
+    });
+    stubFetch((url) => requireResponse(get(url), url));
+    renderApp(["/annotations/run-1"]);
+
+    const reference = await screen.findByRole("img", { name: /Reference screenshot of profile/ });
+    expect(reference).toHaveAttribute("src", profile.reference_asset_url);
+    expect(screen.queryByRole("img", { name: /Frame 17 of run/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Annotation boxes on the frame" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Code: frame_image_not_found/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load the image again" })).not.toBeInTheDocument();
+
+    stage = "sampled";
+    const sampled = await screen.findByRole("img", { name: /Frame 17 of run run-1/ }, { timeout: 3500 });
+    expect(sampled).toHaveAttribute("src", "/api/v1/frames/frame-1/image");
+    expect(screen.queryByRole("img", { name: /Reference screenshot/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept frame" })).not.toBeInTheDocument();
+
+    stage = "review_pending";
+    expect(await screen.findByRole("button", { name: "Accept frame" }, { timeout: 3500 })).toBeEnabled();
+    expect(screen.queryByText(/OCR is still running/)).not.toBeInTheDocument();
+  }, 10000);
+
+  it("shows the profile while the first frame is being reserved and picks up new frames automatically", async () => {
+    let hasFrame = false;
+    const get = reviewGet({
+      run: runFixture({ profile_id: PROFILE.id, status: "running" }),
+      frames: (url) => {
+        const status = new URL(url, "http://datasetfactory.test").searchParams.get("review_status");
+        const matches = hasFrame && (status === null || status === "pending");
+        return framePageFixture({ items: matches ? [frameSummaryFixture()] : [], total: matches ? 1 : 0 });
+      },
+    });
+    stubFetch((url) => requireResponse(get(url), url));
+    renderApp(["/annotations/run-1"]);
+
+    expect(await screen.findByRole("img", { name: /Reference screenshot of profile/ })).toHaveAttribute(
+      "src", PROFILE.reference_asset_url,
+    );
+    expect(screen.getByText(/while the run prepares its first frame/)).toBeInTheDocument();
+
+    hasFrame = true;
+    expect(await screen.findByRole("img", { name: /Frame 17 of run run-1/ }, { timeout: 3500 })).toHaveAttribute(
+      "src", "/api/v1/frames/frame-1/image",
+    );
+    expect(screen.queryByText(/while the run prepares its first frame/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pending 1" })).toBeInTheDocument();
+  });
+
+  it("does not pretend a pending frame of a stopped run is still being sampled", async () => {
+    const get = reviewGet({
+      run: runFixture({ profile_id: PROFILE.id, status: "failed" }),
+      frame: () => frameDetailFixture({ stage_status: "pending", annotations: [] }),
+      frames: () => framePageFixture({ items: [frameSummaryFixture({ stage_status: "pending" })] }),
+    });
+    stubFetch((url) => requireResponse(get(url), url));
+    renderApp(["/annotations/run-1"]);
+
+    expect(await screen.findByRole("img", { name: /Frame 17 of run run-1/ })).toHaveAttribute(
+      "src", "/api/v1/frames/frame-1/image",
+    );
+    expect(screen.queryByRole("img", { name: /Reference screenshot/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/while this frame is being sampled/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the empty state for a finished run with no matching frames", async () => {
+    const get = reviewGet({
+      run: runFixture({ profile_id: PROFILE.id, status: "completed" }),
+      frames: framePageFixture({ items: [], total: 0 }),
+    });
+    stubFetch((url) => requireResponse(get(url), url));
+    renderApp(["/annotations/run-1"]);
+
+    expect(await screen.findByText("No frames for this filter")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /Reference screenshot/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("success refetches authoritative versions", () => {

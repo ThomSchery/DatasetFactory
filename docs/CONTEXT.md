@@ -294,6 +294,10 @@ Użytkownik zdecydował: aplikacja ma wyglądać jak Figma 05.11 (`designs/figma
 
 Użytkownik zdecydował: jedynym źródłem wartości wyglądu jest `frontend/src/styles/design-preset.css` — eksport jego pluginu figma-tailwind-tokens (Preset_3, tryby Colors Dark / Dimensions / Borders / Typography / Variable collection Mode 1), wersjonowany bajt w bajt i nigdy nie edytowany ręcznie. Nowy eksport nadpisuje ten plik i zmienia wygląd całej aplikacji bez edycji innych plików. Blok Tailwind `@theme` presetu jest zamieniany na zmienne `:root` w czasie budowania przez mały plugin Vite w repo (`frontend/src/styles/designPreset.ts`); `tokens.css` jest warstwą mapowania `var()` na zmienne presetu, a wartości, których plugin nie eksportuje, trzyma w jednej sekcji „Not in the preset yet”. Progi szerokości mają jeden kanoniczny zestaw w `frontend/src/styles/breakpoints.ts`. Decyzja F16 bez zmian: Tailwind nie wchodzi do v1. Instrukcja podmiany presetu: `frontend/src/styles/README.md`.
 
+### Podgląd przy uruchamianiu runa (2026-11-25, FE-032)
+
+Review frames automatycznie pokazuje obraz zapisany w profilu danego runa, dopóki run trwa i nie ma jeszcze klatek albo wybrana klatka czeka na próbkowanie. Klatka `pending` runa zakończonego błędem lub anulowanego zostaje przy komunikacie o brakującym obrazie. Po zapisaniu klatki podgląd przełącza się na rzeczywisty obraz z nagrania. Lista, liczniki i nieukończona klatka odświeżają się zgodnie z polityką pollingu runa. Edycja jest dostępna dopiero po OCR; obraz profilu nie zastępuje brakującego pliku gotowej klatki.
+
 
 ## FE-036 - Final mockup (grid), 2026-11-27
 

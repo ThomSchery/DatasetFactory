@@ -3,7 +3,9 @@ import type {
   FrameStage,
   ReviewDecision,
   ReviewStatus,
+  RunStatus,
 } from "./types";
+import { runPollInterval } from "./runStatus";
 
 export type ReviewStatusFilter = ReviewStatus | "all";
 
@@ -57,6 +59,16 @@ export function describeReviewStatus(status: ReviewStatus): StatusPresentation {
 
 export function describeFrameStage(stage: FrameStage): StatusPresentation {
   return FRAME_STAGE_COPY[stage];
+}
+
+/** Pending frames are reserved in the database before sampling writes the image. */
+export function hasSampledFrameImage(stage: FrameStage): boolean {
+  return stage !== "pending";
+}
+
+/** Follow unfinished frames until the worker hands them over for review. */
+export function framePollInterval(runStatus: RunStatus, stage: FrameStage | undefined): number | false {
+  return stage === "review_pending" ? false : runPollInterval(runStatus);
 }
 
 export interface FrameReviewCapabilities {

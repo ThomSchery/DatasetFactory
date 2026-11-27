@@ -210,11 +210,13 @@ describe("annotation review query states", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Loading the run and its annotation profile");
   });
 
-  it("renders the explicit empty state without hiding the rejected filter", async () => {
+  it("previews the profile before the first frame without hiding the rejected filter", async () => {
     reviewApi({ frames: framePageFixture({ items: [], total: 0 }) });
     renderApp(["/annotations/run-1"]);
 
-    expect(await screen.findByText("No frames for this filter")).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /Reference screenshot of profile/ })).toHaveAttribute(
+      "src", PROFILE.reference_asset_url,
+    );
     expect(screen.getByRole("button", { name: /Rejected/ })).toBeInTheDocument();
   });
 

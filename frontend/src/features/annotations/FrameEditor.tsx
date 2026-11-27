@@ -7,13 +7,16 @@ import {
   createProfileCategory,
   describeErrorCode,
   frameImageUrl,
+  framePollInterval,
   frameReviewCapabilities,
   getFrame,
   getPreviousFrameClasses,
+  hasSampledFrameImage,
   invalidateFor,
   isActiveAnnotation,
   isVersionConflict,
   queryKeys,
+  runPollInterval,
   type Annotation,
   type BBox,
   type CategoryInput,
@@ -22,6 +25,7 @@ import {
   type FrameSummary,
   type GameProfile,
   type ReviewStatusFilter,
+  type RunStatus,
 } from "../../api";
 import { Button } from "../../components/common/Button";
 import {
@@ -38,6 +42,7 @@ import {
   type OverlayShape,
 } from "../../components/common/RegionOverlay";
 import { FatalError, InlineError, Loading } from "../../components/common/UiStates";
+import { ReferenceImage } from "../profiles/ReferenceImage";
 import {
   ANNOTATION_POPOVER_SCOPE_ATTRIBUTE,
   AnnotationPopover,
@@ -79,6 +84,7 @@ interface FrameEditorProps {
   onSelect: (frameId: string) => void;
   profile: GameProfile;
   runId: string;
+  runStatus: RunStatus;
 }
 
 type CreateCategoryAssignment =
@@ -177,10 +183,12 @@ export function FrameEditor({
   onSelect,
   profile,
   runId,
+  runStatus,
 }: FrameEditorProps) {
   const frameQuery = useQuery({
     queryKey: queryKeys.frame(frameId),
     queryFn: ({ signal }) => getFrame(frameId, signal),
+    refetchInterval: (query) => framePollInterval(runStatus, query.state.data?.stage_status),
   });
 
   if (frameQuery.isPending) {
@@ -241,6 +249,7 @@ export function FrameEditor({
       onSelect={onSelect}
       profile={profile}
       runId={runId}
+      runStatus={runStatus}
     />
   );
 }
@@ -350,6 +359,7 @@ function LoadedFrameEditor({
   onSelect,
   profile,
   runId,
+  runStatus,
 }: LoadedFrameEditorProps) {
   const queryClient = useQueryClient();
   const imageErrorCopy = describeErrorCode("frame_image_not_found");
@@ -402,6 +412,9 @@ function LoadedFrameEditor({
    */
   const [pendingCreated, setPendingCreated] = useState<Annotation | null>(null);
   const capabilities = frameReviewCapabilities(frame.stage_status, frame.review_status);
+  // FE-032: only a run that is still working will sample this frame; a pending
+  // frame of a failed or cancelled run keeps the missing-image error.
+  const showingProfileImage = !hasSampledFrameImage(frame.stage_status) && runPollInterval(runStatus) !== false;
   const activeAnnotations = useMemo(() => {
     const stored = frame.annotations.filter(isActiveAnnotation);
     return pendingCreated === null || stored.some((item) => item.id === pendingCreated.id)
@@ -1377,7 +1390,7 @@ function LoadedFrameEditor({
             </p>
           )}
           {actionError === null ? null : <InlineError message={errorMessage(actionError)} />}
-          {imageError ? (
+          {imageError && !showingProfileImage ? (
             <div className="df-review-image-error">
               <InlineError
                 message={`${imageErrorCopy.message} ${imageErrorCopy.action} Code: frame_image_not_found.`}
@@ -1452,7 +1465,13 @@ function LoadedFrameEditor({
         aria-label={`Frame ${frame.frame_index} preview`}
         className="df-review-workspace__preview"
       >
-        <RegionOverlay
+        {showingProfileImage ? (
+          <ReferenceImage
+            alt={`Reference screenshot of profile ${profile.name}`}
+            caption="Showing the profile screenshot while this frame is being sampled."
+            url={profile.reference_asset_url}
+          />
+        ) : <RegionOverlay
           disabled={editorDisabled}
           fill
           imageAlt={`Frame ${frame.frame_index} of run ${runId}`}
@@ -1475,7 +1494,7 @@ function LoadedFrameEditor({
           selectedId={selectedId}
           shapes={shapes}
           source={{ width: frame.width, height: frame.height }}
-        />
+        />}
       </section>
     </>
   );

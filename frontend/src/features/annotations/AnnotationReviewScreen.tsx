@@ -17,6 +17,7 @@ import {
   type RunStatus,
 } from "../../api";
 import { Empty, FatalError, Loading } from "../../components/common/UiStates";
+import { ReferenceImage } from "../profiles/ReferenceImage";
 import { FrameEditor, ReviewChrome } from "./FrameEditor";
 import { reviewMutationKey } from "./reviewMutations";
 import "./AnnotationReviewScreen.css";
@@ -98,6 +99,9 @@ function ReviewForRun({ runId }: { runId: string }) {
     refetchInterval: (query) => runPollInterval(query.state.data?.status),
   });
   const profileId = runQuery.data?.profile_id;
+  const framesPollInterval = runQuery.data === undefined
+    ? false
+    : runPollInterval(runQuery.data.status);
   const profileQuery = useQuery({
     enabled: profileId !== undefined,
     queryKey: queryKeys.profile(profileId ?? "pending-run-profile"),
@@ -114,6 +118,7 @@ function ReviewForRun({ runId }: { runId: string }) {
       review_status: reviewStatusQuery(filter),
     }),
     queryFn: ({ signal }) => listFilteredRunFrames(runId, filter, signal),
+    refetchInterval: framesPollInterval,
   });
   const countStatuses = ["pending", "accepted", "rejected"] as const;
   const countQueries = useQueries({
@@ -123,6 +128,7 @@ function ReviewForRun({ runId }: { runId: string }) {
         queryKey: queryKeys.runFrames(runId, countQuery),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
           listRunFrames(runId, countQuery, signal),
+        refetchInterval: framesPollInterval,
       };
     }),
   });
@@ -153,7 +159,10 @@ function ReviewForRun({ runId }: { runId: string }) {
     }
 
     async function refetchTerminalFrameState(): Promise<void> {
-      await framesQuery.refetch();
+      await queryClient.refetchQueries({
+        queryKey: queryKeys.runFrames(runId),
+        type: "active",
+      });
       if (activeFrameId !== null) {
         await queryClient.refetchQueries({
           exact: true,
@@ -164,7 +173,7 @@ function ReviewForRun({ runId }: { runId: string }) {
     }
 
     void refetchTerminalFrameState();
-  }, [activeFrameId, framesQuery.refetch, queryClient, runId, runQuery.data?.status]);
+  }, [activeFrameId, queryClient, runId, runQuery.data?.status]);
 
   if (runQuery.isPending) {
     return (
@@ -247,10 +256,18 @@ function ReviewForRun({ runId }: { runId: string }) {
           selectedId={null}
         />
         <div className="df-review-workspace__all-state">
-          <Empty
-            description="Change the status filter or wait until the run produces frames. Rejected frames are under Rejected."
-            title="No frames for this filter"
-          />
+          {counts.total === 0 && framesPollInterval !== false ? (
+            <ReferenceImage
+              alt={`Reference screenshot of profile ${profileQuery.data.name}`}
+              caption="Showing the profile screenshot while the run prepares its first frame."
+              url={profileQuery.data.reference_asset_url}
+            />
+          ) : (
+            <Empty
+              description="Change the status filter or wait until the run produces frames. Rejected frames are under Rejected."
+              title="No frames for this filter"
+            />
+          )}
         </div>
       </>
     );
@@ -274,6 +291,7 @@ function ReviewForRun({ runId }: { runId: string }) {
           onSelect={setSelectedFrameId}
           profile={profileQuery.data}
           runId={runId}
+          runStatus={runQuery.data.status}
         />
       </>
     );
